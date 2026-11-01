@@ -58,6 +58,7 @@ Board-level config lives in `userpatches/` (this repo): wait-online `--any`, sys
 - **Video encoder RE** (`harness/research/ve-encoder/`): prior art (linux-sunxi RE, jemk/cedrus h264enc, Bootlin encoder work, vendor cedar_ve GPL driver), blob acquisition + static analysis plan, clean-room V4L2 encoder plan. Acceptance bar: equal or better than the vendor blob (PSNR/SSIM at matched bitrate, fps, latency, features), root-cause any gap.
 
 ## 4. Remaining after that (ordered)
+0. Hardware queue (user-supplied setups): USB-C host mode with board powered from header 5 V (single supply, on Test Plug 2); HDMI display; 13-pin expansion board; USB-C data cable; printer.
 1. Rebuild image with all pull-ins; flash; run `harness/verify-board.sh` (to write) + full test matrix (WiFi STA 2.4/5/DFS + iperf3, BT pair, HDMI + HDMI audio + CEC with a display, line-out, USB host devices, USB-C gadget, IR, PWM/I2C/SPI overlays, SPI-NOR boot, soak).
 2. U-Boot: AXP305 CPU-rail (SPL voltage warning); silence FAT env probe.
 3. cpuidle / suspend: TF-A H616 CPU_SUSPEND (idle states) — real project; decide scope.

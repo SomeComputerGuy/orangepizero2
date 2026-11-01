@@ -17,3 +17,6 @@ kernel-check/tmp/
 kernel-check/work-*/
 kernel-check/run*.log
 kernel-check/*.orig
+kernel-check/*.log
+kernel-check/dl-upstream/
+kernel-check/scratch*/

@@ -10,3 +10,6 @@ armbian-build/
 kernel-check/work/
 kernel-check/run.log
 *.img *.img.xz *.sha
+# downloaded third-party repos and agent worktrees
+harness/research/ve-encoder/dl/
+wt-*/

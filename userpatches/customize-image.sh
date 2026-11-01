@@ -22,12 +22,7 @@ RuntimeWatchdogSec=15
 RebootWatchdogSec=2min
 CONF
 
-# 3. UWE5622 Wi-Fi: firmware powers down mid-EAPOL/receive with powersave on (see harness/research/uwe5622-status.md).
-cat > /etc/modprobe.d/sprdwl_ng.conf <<'CONF'
-options sprdwl_ng disable_powersave=1
-CONF
-
-# 4. CUPS: reachable from the LAN, shared printers, web admin for the lpadmin group.
+# 3. CUPS: reachable from the LAN, shared printers, web admin for the lpadmin group.
 if command -v cupsd >/dev/null; then
 	cupsctl --remote-admin --remote-any --share-printers 2>/dev/null || true
 	systemctl enable cups cups-browsed ipp-usb avahi-daemon >/dev/null 2>&1 || true

@@ -21,7 +21,7 @@ Rule: every board feature must work, whether or not the print-server install use
 | WiFi (UWE5622, SDIO) | OK | Acceptance bar (user): SSID scan. Sees 2.4 + 5 GHz networks; AP mode supported. Driver pin was 13 commits behind (memory corruption on unload, OOB key write, rfkill oops, TCP stall) → bumped; 5 GHz regulatory fix + service hardening in progress. |
 | Bluetooth (UWE5622, UART) | PARTIAL | hci0 up, BR/EDR+LE scan finds devices. Depends on vendor `hciattach_opi` blob; `bt_wake` DT warning every boot. |
 | USB host (3× EHCI/OHCI) | OK\* | Controllers up; nothing was plugged in yet. |
-| USB-C | PARTIAL | No CC role switch on the board, so role is set by DT: peripheral (default) and host (overlay, in progress). Both must be tested; gadget mode untested so far (power-only cable). |
+| USB-C | PARTIAL | Peripheral (gadget) mode required; untested so far (power-only cable). Host mode: data lines reach OTG PHY0, but CC pins are tied to GND (sink-only, board power input) so the board cannot supply VBUS — host only works with self-powered devices; to be confirmed against the schematic before it counts as a feature. |
 | HDMI video (DE33/TCON/HDMI PHY) | OK\* | Pipeline bound, connector present; no display attached yet. 6× "pixel format with alpha ... blend mode not setup" warnings. |
 | HDMI audio | OK\* | ALSA card present (vendor AHUB); untestable without display. |
 | Analog audio codec | PARTIAL | Line-out card present (playback only). **Mic capture: no mainline source** (vendor-only). Untested — needs expansion board. |

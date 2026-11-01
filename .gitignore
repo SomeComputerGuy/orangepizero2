@@ -13,3 +13,7 @@ kernel-check/run.log
 # downloaded third-party repos and agent worktrees
 harness/research/ve-encoder/dl/
 wt-*/
+kernel-check/tmp/
+kernel-check/work-*/
+kernel-check/run*.log
+kernel-check/*.orig

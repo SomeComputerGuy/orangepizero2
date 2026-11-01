@@ -4,6 +4,11 @@
 # uwe5622 WiFi driver injection, linux-sunxi64-edge.config) without needing root.
 set -euo pipefail
 
+# STAGE=patch  : extract + apply series.conf + copy dt/overlay dirs, then stop (fast patch check)
+# STAGE=dtbs   : ... + olddefconfig + all allwinner DTBs/overlays (DT-only changes)
+# STAGE=all    : ... + Image + modules + Zero2 DTB + all DTBs/overlays (default)
+# DT_CHECK="pat1 pat2": after the build, grep these patterns in the decompiled Zero2 DTB
+STAGE="${STAGE:-all}"
 KVER="${KVER:-7.3.1}"
 ARMBIAN="${ARMBIAN:-/home/aruni/orangepizero2/armbian-build}"
 WORK="${WORK:-/home/aruni/orangepizero2/kernel-check/work}"
@@ -25,6 +30,15 @@ rm -rf "linux-$KVER"
 tar -xf "$TARBALL"
 cd "linux-$KVER"
 
+# 2a. uwe5622 WiFi driver first: Armbian injects drivers before series.conf (EXTRA_PATCH_FILES_FIRST), so patches.armbian may touch drivers/net/wireless/uwe5622
+UWESRC="$WORK/dl/uwe5622"
+[[ -d $UWESRC/.git ]] || git clone -q https://github.com/armbian/uwe5622 "$UWESRC"
+git -C "$UWESRC" -c advice.detachedHead=false checkout -q "$UWE_COMMIT"
+mkdir -p drivers/net/wireless/uwe5622
+cp -R "$UWESRC"/{tty-sdio,unisocwcn,unisocwifi,Kconfig,Makefile} drivers/net/wireless/uwe5622/
+echo 'obj-$(CONFIG_SPARD_WLAN_SUPPORT) += uwe5622/' >> drivers/net/wireless/Makefile
+sed -i '/source "drivers\/net\/wireless\/ti\/Kconfig"/a source "drivers\/net\/wireless\/uwe5622\/Kconfig"' drivers/net/wireless/Kconfig
+
 # 2. Apply series.conf (active entries only: skip comments and '-'-prefixed disabled lines)
 : > ../patch-failures.txt
 applied=0; failed=0
@@ -37,6 +51,7 @@ while read -r p; do
 	fi
 done < <(sed -e 's/#.*//' "$PATCHROOT/series.conf" | awk 'NF && $1 !~ /^-/ {print $1}')
 echo "patches applied: $applied, failed: $failed"
+[[ $failed -eq 0 ]] || { echo "patch failures (see $WORK/patch-failures.txt):"; grep '^===' ../patch-failures.txt; }
 
 # 3. Copy bare DT and overlay dirs, add new dts to Makefile (Armbian auto-patch-dt-makefile)
 DTDIR=arch/arm64/boot/dts/allwinner
@@ -51,21 +66,32 @@ if [[ -f $DTDIR/overlay/Makefile ]] && ! grep -q 'subdir-y.*overlay' "$DTDIR/Mak
 	echo 'subdir-y += overlay' >> "$DTDIR/Makefile"
 fi
 
-# 4. uwe5622 WiFi driver (same steps as driver_uwe5622 in drivers_network.sh)
-UWESRC="$WORK/dl/uwe5622"
-[[ -d $UWESRC/.git ]] || git clone -q https://github.com/armbian/uwe5622 "$UWESRC"
-git -C "$UWESRC" -c advice.detachedHead=false checkout -q "$UWE_COMMIT"
-mkdir -p drivers/net/wireless/uwe5622
-cp -R "$UWESRC"/{tty-sdio,unisocwcn,unisocwifi,Kconfig,Makefile} drivers/net/wireless/uwe5622/
-echo 'obj-$(CONFIG_SPARD_WLAN_SUPPORT) += uwe5622/' >> drivers/net/wireless/Makefile
-sed -i '/source "drivers\/net\/wireless\/ti\/Kconfig"/a source "drivers\/net\/wireless\/uwe5622\/Kconfig"' drivers/net/wireless/Kconfig
+
+[[ $STAGE == patch ]] && { echo "STAGE=patch done (tree in $PWD)"; exit "$failed"; }
 
 # 5. Configure & build
 cp "$ARMBIAN/config/kernel/linux-sunxi64-edge.config" .config
 make "${MAKE_CC[@]}" olddefconfig > ../olddefconfig.log 2>&1
-# dtbs needs mkimage (u-boot-tools) for overlay fixup .scr files; build only the Zero2 DTB here.
 rc=0
-make "${MAKE_CC[@]}" -j"$JOBS" Image modules allwinner/sun50i-h616-orangepi-zero2.dtb > ../build.log 2>&1 || rc=$?
-grep -E ' error:|Error [0-9]' ../build.log || true
-echo "build exit: $rc"
+if [[ $STAGE == all ]]; then
+	make "${MAKE_CC[@]}" -j"$JOBS" Image modules allwinner/sun50i-h616-orangepi-zero2.dtb > ../build.log 2>&1 || rc=$?
+	grep -E ' error:|Error [0-9]' ../build.log || true
+	echo "build exit: $rc; C warnings: $(grep -c 'warning:' ../build.log || true)"
+	grep 'warning:' ../build.log | sed 's/:[0-9]*:[0-9]*: warning:.*//' | sort | uniq -c | sort -rn | head -20 || true
+fi
+
+# 6. All allwinner DTBs + Armbian overlays (.dtbo) + fixup scripts (.scr, needs mkimage from u-boot-tools)
+drc=0
+make "${MAKE_CC[@]}" -j"$JOBS" dtbs > ../dtbs.log 2>&1 || drc=$?
+echo "dtbs exit: $drc; dtc warnings: $(grep -c 'Warning (' ../dtbs.log || true)"
+grep -E 'Warning \(|Error|error:' ../dtbs.log | head -30 || true
+ls "$DTDIR"/overlay/sun50i-h616-*.dtbo 2>/dev/null | wc -l | sed 's/^/h616 overlays built: /'
+
+# 7. Decompile the Zero2 DTB for inspection (WORK/zero2.dts) and check requested nodes
+scripts/dtc/dtc -q -I dtb -O dts -o ../zero2.dts "$DTDIR/sun50i-h616-orangepi-zero2.dtb" 2>../zero2-dtc.log || true
+for pat in ${DT_CHECK:-}; do
+	if grep -q -- "$pat" ../zero2.dts; then echo "DT_CHECK ok: $pat"; else echo "DT_CHECK MISSING: $pat"; rc=1; fi
+done
+[[ $drc -eq 0 ]] || rc=$drc
+echo "overall exit: $rc"
 exit "$rc"

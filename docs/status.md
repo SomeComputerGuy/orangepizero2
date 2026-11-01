@@ -17,7 +17,7 @@ Legend: **OK** verified on the board · **OK\*** driver present, not functionall
 | cpuidle | MISSING | `current_driver: none`. H616 has no ARISC; TF-A reports `PSCI: Suspend is unavailable`; no `idle-states` in DT. Needs TF-A CPU_SUSPEND work. |
 | Suspend (s2idle) | PARTIAL | `freeze` works: 11 s round trip with RTC wake, WiFi suspends/resumes, SSH alive. Shallow only (cores WFI); no deep sleep possible without TF-A support. systemd sleep disabled by Armbian default. |
 | Ethernet 1 GbE (RTL8211F) | OK | 1000/full, checksum offload. Minor: `Too many address, switching to promiscuous` (small MAC filter) — upstream 7.4 dwmac-sun8i fixes to pull. |
-| WiFi (UWE5622, SDIO) | PARTIAL | Scans 2.4 + 5 GHz, AP mode supported; not yet connected (no PSK given). Driver pin was 13 commits behind: missing fixes for memory corruption on unload, OOB key write, rfkill oops, TCP ACK stall. 5 GHz regulatory table bug. Pin bumped (branch pushed); rest in progress. |
+| WiFi (UWE5622, SDIO) | OK | Acceptance bar (user): SSID scan. Sees 2.4 + 5 GHz networks; AP mode supported. Driver pin was 13 commits behind (memory corruption on unload, OOB key write, rfkill oops, TCP stall) → bumped; 5 GHz regulatory fix + service hardening in progress. |
 | Bluetooth (UWE5622, UART) | PARTIAL | hci0 up, BR/EDR+LE scan finds devices. Depends on vendor `hciattach_opi` blob; `bt_wake` DT warning every boot. |
 | USB host (3× EHCI/OHCI) | OK\* | Controllers up; nothing was plugged in yet. |
 | USB-C | N/A / PARTIAL | Peripheral-only by DT (no CC role switch on the board). Gadget mode untested (power-only cable in use). A host-mode overlay is being added. |

@@ -26,13 +26,4 @@ else
 fi
 gh repo view SomeComputerGuy/orangepizero2 --json url -q .url
 
-echo "== 4. WiFi credentials for board tests (stored only in local.env, chmod 600, git-ignored)"
-if ! grep -q '^OPIZ2_WIFI_SSID=' local.env 2>/dev/null; then
-	read -rp "WiFi SSID for the board to join (Enter to skip): " ssid
-	if [[ -n $ssid ]]; then
-		read -rsp "WiFi password: " psk; echo
-		printf 'OPIZ2_WIFI_SSID=%s\nOPIZ2_WIFI_PSK=%s\n' "$ssid" "$psk" >> local.env
-		chmod 600 local.env
-	fi
-fi
 echo "done"

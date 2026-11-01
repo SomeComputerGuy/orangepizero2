@@ -2,7 +2,8 @@
 
 Date: 2026-11-01. Image: Armbian-unofficial 26.11.0-trunk, Ubuntu 26.10 (stonking), Linux 7.3.1-edge-sunxi64, U-Boot 2026.10, TF-A lts-v2.14.11. Board booted from SD, tested over serial (ttyUSB1/ttyOPIZ2) and the 10.56.0.0/24 test link.
 
-Legend: **OK** verified on the board · **OK\*** driver present, not functionally verified · **PARTIAL** works with a known gap · **MISSING** no working driver · **N/A** by hardware design.
+Legend: **OK** verified on the board · **OK\*** driver present, not functionally verified · **PARTIAL** works with a known gap · **MISSING** no working driver.
+Rule: every board feature must work, whether or not the print-server install uses it.
 
 ## 1. Where we are
 
@@ -20,7 +21,7 @@ Legend: **OK** verified on the board · **OK\*** driver present, not functionall
 | WiFi (UWE5622, SDIO) | OK | Acceptance bar (user): SSID scan. Sees 2.4 + 5 GHz networks; AP mode supported. Driver pin was 13 commits behind (memory corruption on unload, OOB key write, rfkill oops, TCP stall) → bumped; 5 GHz regulatory fix + service hardening in progress. |
 | Bluetooth (UWE5622, UART) | PARTIAL | hci0 up, BR/EDR+LE scan finds devices. Depends on vendor `hciattach_opi` blob; `bt_wake` DT warning every boot. |
 | USB host (3× EHCI/OHCI) | OK\* | Controllers up; nothing was plugged in yet. |
-| USB-C | N/A / PARTIAL | Peripheral-only by DT (no CC role switch on the board). Gadget mode untested (power-only cable in use). A host-mode overlay is being added. |
+| USB-C | PARTIAL | No CC role switch on the board, so role is set by DT: peripheral (default) and host (overlay, in progress). Both must be tested; gadget mode untested so far (power-only cable). |
 | HDMI video (DE33/TCON/HDMI PHY) | OK\* | Pipeline bound, connector present; no display attached yet. 6× "pixel format with alpha ... blend mode not setup" warnings. |
 | HDMI audio | OK\* | ALSA card present (vendor AHUB); untestable without display. |
 | Analog audio codec | PARTIAL | Line-out card present (playback only). **Mic capture: no mainline source** (vendor-only). Untested — needs expansion board. |
@@ -37,7 +38,7 @@ Legend: **OK** verified on the board · **OK\*** driver present, not functionall
 | LEDs | OK | green:power, red:status (heartbeat). |
 | PMIC AXP305 | OK | All rails present; some supplies (`vcc-pl`, `phy-io`, spi-nor `vcc`) use dummy regulators — DT cleanups. |
 | TV-out (CVBS) | MISSING | No mainline driver for H616 TV encoder (vendor 5.4 only). |
-| Deep sleep / crust | N/A | No ARISC/SCP on H616. |
+| Deep sleep / cpuidle | MISSING | No ARISC/SCP on H616, so this needs TF-A PSCI CPU_SUSPEND/SYSTEM_SUSPEND work for H616. Required, not optional. |
 | Print server (CUPS, drivers) | OK\* | CUPS 2.4.16, ipp-usb, HPLIP, all 20 printer-driver packages installed; printer not attached yet. |
 
 ## 2. Fixes made to the Armbian framework (fork: github.com/SomeComputerGuy/build)

@@ -15,3 +15,8 @@ PoolOffset=100
 PoolSize=50
 EmitDNS=yes
 DNS=192.168.107.1
+
+# Pin the Zero2 (U-Boot derives this MAC from the SoC ID, stable across reflashes) to a fixed address.
+[DHCPServerStaticLease]
+MACAddress=02:00:8a:27:57:7d
+Address=10.56.0.107

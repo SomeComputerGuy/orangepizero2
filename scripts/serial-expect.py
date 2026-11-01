@@ -10,7 +10,7 @@ import serial
 
 TOP = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 LOG = os.path.join(TOP, "harness", "serial.log")
-PORT = os.environ.get("OPIZ2_TTY", "/dev/ttyUSB1")
+PORT = os.environ.get("OPIZ2_TTY", "/dev/ttyOPIZ2" if os.path.exists("/dev/ttyOPIZ2") else "/dev/ttyUSB1")
 STRIP = re.compile(rb"\x1b\[[0-9;?]*[A-Za-z]|\x1b[()][A-Z0-9]|\r")
 
 

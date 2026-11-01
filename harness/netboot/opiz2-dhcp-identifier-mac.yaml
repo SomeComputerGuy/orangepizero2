@@ -1,0 +1,10 @@
+# Board side (Orange Pi Zero2, Armbian/netplan): make Linux use the same DHCP client identity as
+# U-Boot and the kernel's ip=dhcp (01:<MAC>), so a netboot attempt and the booted OS share one
+# lease on strict servers such as systemd-networkd. Merge into the existing ethernet definition:
+#   sudo netplan set ethernets.<id>.dhcp-identifier=mac && sudo netplan apply
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    all-eth-interfaces:
+      dhcp-identifier: mac

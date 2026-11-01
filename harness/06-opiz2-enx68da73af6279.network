@@ -15,6 +15,13 @@ PoolOffset=100
 PoolSize=50
 EmitDNS=yes
 DNS=192.168.107.1
+# U-Boot (netboot/PXE) never renews and sends no client identifier, so its lease is keyed by
+# 01:<MAC>. systemd's server refuses the static lease below to any *other* client identity
+# while that lease is bound (dhcp_server_process_discover(): -EADDRINUSE), which locked the
+# board's Linux (RFC 4361 DUID identity) out for the 1 h default. Keep firmware leases short;
+# the real fix is the board using ClientIdentifier=mac (netplan dhcp-identifier: mac) so
+# U-Boot, the kernel's ip=dhcp and networkd share one identity, see harness/netboot/README.
+DefaultLeaseTimeSec=5min
 
 # Pin the Zero2 (U-Boot derives this MAC from the SoC ID, stable across reflashes) to a fixed address.
 [DHCPServerStaticLease]

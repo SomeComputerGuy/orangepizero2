@@ -22,6 +22,18 @@ RuntimeWatchdogSec=15
 RebootWatchdogSec=2min
 CONF
 
+# DHCP: one identity (01:<MAC>) for U-Boot (netboot/PXE), kernel ip=dhcp and the OS. With the
+# default DUID client ID, a server that keys leases by client ID (systemd-networkd's) refuses the
+# OS its reserved address for the lease time after any U-Boot DHCP attempt.
+cat > /etc/netplan/20-dhcp-identifier-mac.yaml <<'NETPLAN'
+network:
+  version: 2
+  ethernets:
+    all-eth-interfaces:
+      dhcp-identifier: mac
+NETPLAN
+chmod 600 /etc/netplan/20-dhcp-identifier-mac.yaml
+
 # 3. CUPS: reachable from the LAN, shared printers, web admin for the lpadmin group.
 if command -v cupsd >/dev/null; then
 	cupsctl --remote-admin --remote-any --share-printers 2>/dev/null || true

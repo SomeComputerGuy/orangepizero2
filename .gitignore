@@ -1,0 +1,12 @@
+# secrets / per-host state — never commit
+local.env
+harness/id_ed25519
+harness/id_ed25519.pub
+harness/known_hosts
+harness/serial.log
+harness/.tz
+# large / generated
+armbian-build/
+kernel-check/work/
+kernel-check/run.log
+*.img *.img.xz *.sha

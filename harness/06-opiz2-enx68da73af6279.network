@@ -1,0 +1,17 @@
+# Orange Pi Zero2 test link: USB Realtek adapter wired directly to the board.
+# Host is 10.56.0.1; the board gets 10.56.0.100-149 by DHCP and NAT to the LAN.
+# Install: sudo cp harness/06-opiz2-enx68da73af6279.network /etc/systemd/network/ && sudo networkctl reload
+[Match]
+MACAddress=68:da:73:af:62:79
+
+[Network]
+Address=10.56.0.1/24
+DHCPServer=yes
+IPMasquerade=ipv4
+ConfigureWithoutCarrier=yes
+
+[DHCPServer]
+PoolOffset=100
+PoolSize=50
+EmitDNS=yes
+DNS=192.168.107.1

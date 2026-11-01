@@ -1,0 +1,5 @@
+# Orange Pi Zero2 serial console: the CP2102 on root-hub port 3-4 (the one added 2026-11-01).
+# The Orange Pi 5's CP2102 is on port 3-3 and is not matched here.
+# Both adapters report serial "0001", so /dev/serial/by-id cannot tell them apart; match the port.
+# Install: sudo cp harness/99-opiz2-serial.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger -s tty
+SUBSYSTEM=="tty", KERNELS=="3-4", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", OWNER="aruni", GROUP="dialout", MODE="0660", SYMLINK+="ttyOPIZ2"

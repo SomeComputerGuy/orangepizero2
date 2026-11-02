@@ -1,0 +1,16 @@
+# Orange Pi Zero2 WiFi test link: host Intel WiFi (wlo1) <-> board wlan0, isolated subnet.
+# Static addresses only: no DHCP client, no default route, never required for "online", so
+# the host's real connection (enp129s0) is never affected. Host 10.57.0.1, board 10.57.0.2.
+# Installed by harness/wifi-host-setup.sh
+[Match]
+MACAddress=34:13:e8:de:07:c9
+
+[Link]
+RequiredForOnline=no
+
+[Network]
+Address=10.57.0.1/24
+DHCP=no
+LinkLocalAddressing=no
+IPv6AcceptRA=no
+ConfigureWithoutCarrier=yes

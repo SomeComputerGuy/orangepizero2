@@ -1,0 +1,1847 @@
+struct VP9HW_DECODER_CONTEXT {
+	DecoderInterface           interface;            /*     0    88 */
+	/* --- cacheline 1 boundary (64 bytes) was 24 bytes ago --- */
+	VideoEngine *              pVideoEngine;         /*    88     8 */
+	VConfig                    vconfig;              /*    96   184 */
+	/* --- cacheline 4 boundary (256 bytes) was 24 bytes ago --- */
+	VideoStreamInfo            videoStreamInfo;      /*   280    64 */
+	/* --- cacheline 5 boundary (320 bytes) was 24 bytes ago --- */
+	void *                     pVp9HwDec;            /*   344     8 */
+	VideoFbmInfo *             pFbmInfo;             /*   352     8 */
+
+	/* size: 360, cachelines: 6, members: 6 */
+	/* last cacheline: 40 bytes */
+};
+struct DECODERINTERFACE {
+	int                        (*Init)(DecoderInterface *, VConfig *, VideoStreamInfo *, VideoFbmInfo *); /*     0     8 */
+	void                       (*Reset)(DecoderInterface *); /*     8     8 */
+	int                        (*SetSbm)(DecoderInterface *, SbmInterface *, int); /*    16     8 */
+	int                        (*GetFbmNum)(DecoderInterface *); /*    24     8 */
+	Fbm *                      (*GetFbm)(DecoderInterface *, int); /*    32     8 */
+	int                        (*Decode)(DecoderInterface *, int, int, int, int64_t); /*    40     8 */
+	void                       (*Destroy)(DecoderInterface *); /*    48     8 */
+	int                        (*SetSpecialData)(DecoderInterface *, void *); /*    56     8 */
+	/* --- cacheline 1 boundary (64 bytes) --- */
+	int                        (*SetExtraScaleInfo)(DecoderInterface *, int, int, int, int); /*    64     8 */
+	int                        (*SetPerformCmd)(DecoderInterface *, enum EVDECODERSETPERFORMCMD); /*    72     8 */
+	int                        (*GetPerformInfo)(DecoderInterface *, enum EVDECODERGETPERFORMCMD, VDecodePerformaceInfo * *); /*    80     8 */
+
+	/* size: 88, cachelines: 2, members: 11 */
+	/* last cacheline: 24 bytes */
+};
+struct VCONFIG {
+	int                        bScaleDownEn;         /*     0     4 */
+	int                        bRotationEn;          /*     4     4 */
+	int                        bSecOutputEn;         /*     8     4 */
+	int                        nHorizonScaleDownRatio; /*    12     4 */
+	int                        nVerticalScaleDownRatio; /*    16     4 */
+	int                        nSecHorizonScaleDownRatio; /*    20     4 */
+	int                        nSecVerticalScaleDownRatio; /*    24     4 */
+	int                        nRotateDegree;        /*    28     4 */
+	int                        bThumbnailMode;       /*    32     4 */
+	int                        eOutputPixelFormat;   /*    36     4 */
+	int                        eSecOutputPixelFormat; /*    40     4 */
+	int                        bNoBFrames;           /*    44     4 */
+	int                        bDisable3D;           /*    48     4 */
+	int                        bSupportMaf;          /*    52     4 */
+	int                        bDispErrorFrame;      /*    56     4 */
+	int                        nVbvBufferSize;       /*    60     4 */
+	/* --- cacheline 1 boundary (64 bytes) --- */
+	int                        nFrameBufferNum;      /*    64     4 */
+	int                        bSecureosEn;          /*    68     4 */
+	int                        bGpuBufValid;         /*    72     4 */
+	int                        nAlignStride;         /*    76     4 */
+	int                        bIsSoftDecoderFlag;   /*    80     4 */
+	int                        bVirMallocSbm;        /*    84     4 */
+	int                        bSupportPallocBufBeforeDecode; /*    88     4 */
+	int                        nDeInterlaceHoldingFrameBufferNum; /*    92     4 */
+	int                        nDisplayHoldingFrameBufferNum; /*    96     4 */
+	int                        nRotateHoldingFrameBufferNum; /*   100     4 */
+	int                        nDecodeSmoothFrameBufferNum; /*   104     4 */
+	int                        bIsTvStream;          /*   108     4 */
+	struct ScMemOpsS *         memops;               /*   112     8 */
+	eControlAfbcMode           eCtlAfbcMode;         /*   120     4 */
+	eControlIptvMode           eCtlIptvMode;         /*   124     4 */
+	/* --- cacheline 2 boundary (128 bytes) --- */
+	VeOpsS *                   veOpsS;               /*   128     8 */
+	void *                     pVeOpsSelf;           /*   136     8 */
+	int                        bConvertVp910bitTo8bit; /*   144     4 */
+	unsigned int               nVeFreq;              /*   148     4 */
+	int                        bCalledByOmxFlag;     /*   152     4 */
+	int                        bSetProcInfoEnable;   /*   156     4 */
+	int                        nSetProcInfoFreq;     /*   160     4 */
+	int                        nChannelNum;          /*   164     4 */
+	int                        nSupportMaxWidth;     /*   168     4 */
+	int                        nSupportMaxHeight;    /*   172     4 */
+	eCommonConfigFlag          commonConfigFlag;     /*   176     4 */
+
+	/* size: 184, cachelines: 3, members: 42 */
+	/* padding: 4 */
+	/* last cacheline: 56 bytes */
+};
+struct ScMemOpsS {
+	int                        (*open)(void);        /*     0     8 */
+	void                       (*close)(void);       /*     8     8 */
+	int                        (*total_size)(void);  /*    16     8 */
+	void *                     (*palloc)(int, void *, void *); /*    24     8 */
+	void                       (*pfree)(void *, void *, void *); /*    32     8 */
+	void                       (*flush_cache)(void *, int); /*    40     8 */
+	void *                     (*ve_get_phyaddr)(void *); /*    48     8 */
+	void *                     (*ve_get_viraddr)(void *); /*    56     8 */
+	/* --- cacheline 1 boundary (64 bytes) --- */
+	void *                     (*cpu_get_phyaddr)(void *); /*    64     8 */
+	void *                     (*cpu_get_viraddr)(void *); /*    72     8 */
+	int                        (*mem_set)(void *, int, size_t); /*    80     8 */
+	int                        (*mem_cpy)(void *, void *, size_t); /*    88     8 */
+	int                        (*mem_read)(void *, void *, size_t); /*    96     8 */
+	int                        (*mem_write)(void *, void *, size_t); /*   104     8 */
+	int                        (*setup)(void);       /*   112     8 */
+	int                        (*shutdown)(void);    /*   120     8 */
+	/* --- cacheline 2 boundary (128 bytes) --- */
+	void *                     (*palloc_secure)(int, void *, void *); /*   128     8 */
+	unsigned int               (*get_ve_addr_offset)(void); /*   136     8 */
+	int                        (*get_debug_info)(char *, int); /*   144     8 */
+
+	/* size: 152, cachelines: 3, members: 19 */
+	/* last cacheline: 24 bytes */
+};
+struct VeOpsS {
+	void *                     (*init)(VeConfig *);  /*     0     8 */
+	void                       (*release)(void *);   /*     8     8 */
+	int                        (*lock)(void *);      /*    16     8 */
+	int                        (*unlock)(void *);    /*    24     8 */
+	void                       (*reset)(void *);     /*    32     8 */
+	int                        (*waitInterrupt)(void *); /*    40     8 */
+	int                        (*getChipId)(void *); /*    48     8 */
+	uint64_t                   (*getIcVeVersion)(void *); /*    56     8 */
+	/* --- cacheline 1 boundary (64 bytes) --- */
+	void *                     (*getGroupRegAddr)(void *, int); /*    64     8 */
+	int                        (*getDramType)(void *); /*    72     8 */
+	unsigned int               (*getPhyOffset)(void *); /*    80     8 */
+	void                       (*setDramType)(void *); /*    88     8 */
+	void                       (*setDdrMode)(void *, int); /*    96     8 */
+	int                        (*setSpeed)(void *, unsigned int); /*   104     8 */
+	void                       (*setEnableAfbcFlag)(void *, int); /*   112     8 */
+	void                       (*setAdjustDramSpeedFlag)(void *, int); /*   120     8 */
+	/* --- cacheline 2 boundary (128 bytes) --- */
+	void                       (*enableVe)(void *);  /*   128     8 */
+	void                       (*disableVe)(void *); /*   136     8 */
+	void                       (*initEncoderPerformance)(void *, int); /*   144     8 */
+	void                       (*unInitEncoderPerformance)(void *, int); /*   152     8 */
+	int                        (*getIommuAddr)(void *, struct user_iommu_param *); /*   160     8 */
+	int                        (*freeIommuAddr)(void *, struct user_iommu_param *); /*   168     8 */
+	int                        (*setProcInfo)(void *, char *, unsigned int, unsigned char); /*   176     8 */
+	int                        (*stopProcInfo)(void *, unsigned char); /*   184     8 */
+	/* --- cacheline 3 boundary (192 bytes) --- */
+	int                        (*procInfoUpdate)(void *, char *, int, int); /*   192     8 */
+	int                        (*procInfoReset)(void *); /*   200     8 */
+
+	/* size: 208, cachelines: 4, members: 26 */
+	/* last cacheline: 16 bytes */
+};
+struct VeConfig {
+	int                        nDecoderFlag;         /*     0     4 */
+	int                        nEncoderFlag;         /*     4     4 */
+	int                        nFormat;              /*     8     4 */
+	int                        nWidth;               /*    12     4 */
+	int                        nEnableAfbcFlag;      /*    16     4 */
+	int                        nResetVeMode;         /*    20     4 */
+	unsigned int               nVeFreq;              /*    24     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	struct ScMemOpsS *         memops;               /*    32     8 */
+	int                        nJustIspFlag;         /*    40     4 */
+	int                        bNotSetVeFreq;        /*    44     4 */
+
+	/* size: 48, cachelines: 1, members: 10 */
+	/* sum members: 44, holes: 1, sum holes: 4 */
+	/* last cacheline: 48 bytes */
+};
+struct user_iommu_param {
+	int                        fd;                   /*     0     4 */
+	unsigned int               iommu_addr;           /*     4     4 */
+
+	/* size: 8, cachelines: 1, members: 2 */
+	/* last cacheline: 8 bytes */
+};
+struct VIDEOSTREAMINFO {
+	int                        eCodecFormat;         /*     0     4 */
+	int                        nWidth;               /*     4     4 */
+	int                        nHeight;              /*     8     4 */
+	int                        nFrameRate;           /*    12     4 */
+	int                        nFrameDuration;       /*    16     4 */
+	int                        nAspectRatio;         /*    20     4 */
+	int                        bIs3DStream;          /*    24     4 */
+	int                        nCodecSpecificDataLen; /*    28     4 */
+	char *                     pCodecSpecificData;   /*    32     8 */
+	int                        bSecureStreamFlag;    /*    40     4 */
+	int                        bSecureStreamFlagLevel1; /*    44     4 */
+	int                        bIsFramePackage;      /*    48     4 */
+	int                        h265ReferencePictureNum; /*    52     4 */
+	int                        bReOpenEngine;        /*    56     4 */
+	int                        bIsFrameCtsTestFlag;  /*    60     4 */
+
+	/* size: 64, cachelines: 1, members: 15 */
+};
+struct VIDEOFBMINFO {
+	unsigned int               nValidBufNum;         /*     0     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	void *                     pFbmFirst;            /*     8     8 */
+	void *                     pFbmSecond;           /*    16     8 */
+	FbmBufInfo                 pFbmBufInfo;          /*    24    56 */
+	/* --- cacheline 1 boundary (64 bytes) was 16 bytes ago --- */
+	unsigned int               bIs3DStream;          /*    80     4 */
+	unsigned int               bTwoStreamShareOneFbm; /*    84     4 */
+	VideoPicture *             pMajorDispFrame;      /*    88     8 */
+	VideoPicture *             pMajorDecoderFrame;   /*    96     8 */
+	unsigned int               nMinorYBufOffset;     /*   104     4 */
+	unsigned int               nMinorCBufOffset;     /*   108     4 */
+	int                        bIsFrameCtsTestFlag;  /*   112     4 */
+	int                        nExtraFbmBufferNum;   /*   116     4 */
+	int                        nDecoderNeededMiniFbmNum; /*   120     4 */
+	int                        nDecoderNeededMiniFbmNumSD; /*   124     4 */
+	/* --- cacheline 2 boundary (128 bytes) --- */
+	int                        bIsSoftDecoderFlag;   /*   128     4 */
+
+	/* size: 136, cachelines: 3, members: 15 */
+	/* sum members: 128, holes: 1, sum holes: 4 */
+	/* padding: 4 */
+	/* last cacheline: 8 bytes */
+};
+struct FBMBUFINFO {
+	int                        nBufNum;              /*     0     4 */
+	int                        nBufWidth;            /*     4     4 */
+	int                        nBufHeight;           /*     8     4 */
+	int                        ePixelFormat;         /*    12     4 */
+	int                        nAlignValue;          /*    16     4 */
+	int                        bProgressiveFlag;     /*    20     4 */
+	int                        bIsSoftDecoderFlag;   /*    24     4 */
+	int                        bHdrVideoFlag;        /*    28     4 */
+	int                        b10bitVideoFlag;      /*    32     4 */
+	int                        bAfbcModeFlag;        /*    36     4 */
+	int                        nTopOffset;           /*    40     4 */
+	int                        nBottomOffset;        /*    44     4 */
+	int                        nLeftOffset;          /*    48     4 */
+	int                        nRightOffset;         /*    52     4 */
+
+	/* size: 56, cachelines: 1, members: 14 */
+	/* last cacheline: 56 bytes */
+};
+struct VIDEOPICTURE {
+	int                        nID;                  /*     0     4 */
+	int                        nStreamIndex;         /*     4     4 */
+	int                        ePixelFormat;         /*     8     4 */
+	int                        nWidth;               /*    12     4 */
+	int                        nHeight;              /*    16     4 */
+	int                        nLineStride;          /*    20     4 */
+	int                        nTopOffset;           /*    24     4 */
+	int                        nLeftOffset;          /*    28     4 */
+	int                        nBottomOffset;        /*    32     4 */
+	int                        nRightOffset;         /*    36     4 */
+	int                        nFrameRate;           /*    40     4 */
+	int                        nAspectRatio;         /*    44     4 */
+	int                        bIsProgressive;       /*    48     4 */
+	int                        bTopFieldFirst;       /*    52     4 */
+	int                        bRepeatTopField;      /*    56     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	/* --- cacheline 1 boundary (64 bytes) --- */
+	int64_t                    nPts;                 /*    64     8 */
+	int64_t                    nPcr;                 /*    72     8 */
+	char *                     pData0;               /*    80     8 */
+	char *                     pData1;               /*    88     8 */
+	char *                     pData2;               /*    96     8 */
+	char *                     pData3;               /*   104     8 */
+	int                        bMafValid;            /*   112     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	char *                     pMafData;             /*   120     8 */
+	/* --- cacheline 2 boundary (128 bytes) --- */
+	int                        nMafFlagStride;       /*   128     4 */
+	int                        bPreFrmValid;         /*   132     4 */
+	int                        nBufId;               /*   136     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	size_addr                  phyYBufAddr;          /*   144     8 */
+	size_addr                  phyCBufAddr;          /*   152     8 */
+	void *                     pPrivate;             /*   160     8 */
+	int                        nBufFd;               /*   168     4 */
+	int                        nBufStatus;           /*   172     4 */
+	int                        bTopFieldError;       /*   176     4 */
+	int                        bBottomFieldError;    /*   180     4 */
+	int                        nColorPrimary;        /*   184     4 */
+	int                        bFrameErrorFlag;      /*   188     4 */
+	/* --- cacheline 3 boundary (192 bytes) --- */
+	void *                     pMetaData;            /*   192     8 */
+	VIDEO_FULL_RANGE_FLAG      video_full_range_flag; /*   200     4 */
+	VIDEO_TRANSFER             transfer_characteristics; /*   204     4 */
+	VIDEO_MATRIX_COEFFS        matrix_coeffs;        /*   208     4 */
+	u8                         colour_primaries;     /*   212     1 */
+
+	/* XXX 3 bytes hole, try to pack */
+
+	int                        nLower2BitBufSize;    /*   216     4 */
+	int                        nLower2BitBufOffset;  /*   220     4 */
+	int                        nLower2BitBufStride;  /*   224     4 */
+	int                        b10BitPicFlag;        /*   228     4 */
+	int                        bEnableAfbcFlag;      /*   232     4 */
+	int                        nBufSize;             /*   236     4 */
+	int                        nAfbcSize;            /*   240     4 */
+	int                        nDebugCount;          /*   244     4 */
+	VIDEO_FRM_STATUS_INFO      nCurFrameInfo;        /*   248    72 */
+
+	/* size: 320, cachelines: 5, members: 49 */
+	/* sum members: 305, holes: 4, sum holes: 15 */
+};
+struct VIDEO_FRM_STATUS_INFO {
+	VID_FRAME_TYPE             enVidFrmType;         /*     0     4 */
+	int                        nVidFrmSize;          /*     4     4 */
+	int                        nVidFrmDisW;          /*     8     4 */
+	int                        nVidFrmDisH;          /*    12     4 */
+	int                        nVidFrmQP;            /*    16     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	double                     nAverBitRate;         /*    24     8 */
+	double                     nFrameRate;           /*    32     8 */
+	int64_t                    nVidFrmPTS;           /*    40     8 */
+	VIDEO_FRM_MV_INFO          nMvInfo;              /*    48    20 */
+	/* --- cacheline 1 boundary (64 bytes) was 4 bytes ago --- */
+	int                        bDropPreFrame;        /*    68     4 */
+
+	/* size: 72, cachelines: 2, members: 10 */
+	/* sum members: 68, holes: 1, sum holes: 4 */
+	/* last cacheline: 8 bytes */
+};
+struct VIDEO_FRM_MV_INFO {
+	s16                        nMaxMv_x;             /*     0     2 */
+	s16                        nMinMv_x;             /*     2     2 */
+	s16                        nAvgMv_x;             /*     4     2 */
+	s16                        nMaxMv_y;             /*     6     2 */
+	s16                        nMinMv_y;             /*     8     2 */
+	s16                        nAvgMv_y;             /*    10     2 */
+	s16                        nMaxMv;               /*    12     2 */
+	s16                        nMinMv;               /*    14     2 */
+	s16                        nAvgMv;               /*    16     2 */
+	s16                        SkipRatio;            /*    18     2 */
+
+	/* size: 20, cachelines: 1, members: 10 */
+	/* last cacheline: 20 bytes */
+};
+struct SbmInterface {
+	int                        (*init)(SbmInterface *, SbmConfig *); /*     0     8 */
+	void                       (*destroy)(SbmInterface *); /*     8     8 */
+	void                       (*reset)(SbmInterface *); /*    16     8 */
+	void *                     (*getBufferAddress)(SbmInterface *); /*    24     8 */
+	int                        (*getBufferSize)(SbmInterface *); /*    32     8 */
+	int                        (*getStreamFrameNum)(SbmInterface *); /*    40     8 */
+	int                        (*getStreamDataSize)(SbmInterface *); /*    48     8 */
+	int                        (*requestBuffer)(SbmInterface *, int, char * *, int *); /*    56     8 */
+	/* --- cacheline 1 boundary (64 bytes) --- */
+	int                        (*addStream)(SbmInterface *, VideoStreamDataInfo *); /*    64     8 */
+	VideoStreamDataInfo *      (*requestStream)(SbmInterface *); /*    72     8 */
+	int                        (*returnStream)(SbmInterface *, VideoStreamDataInfo *); /*    80     8 */
+	int                        (*flushStream)(SbmInterface *, VideoStreamDataInfo *); /*    88     8 */
+	char *                     (*getBufferWritePointer)(SbmInterface *); /*    96     8 */
+	void *                     (*getBufferDataInfo)(SbmInterface *); /*   104     8 */
+	int                        (*setEos)(SbmInterface *, int); /*   112     8 */
+	int                        nType;                /*   120     4 */
+	int                        bUseNewVeMemoryProgram; /*   124     4 */
+	/* --- cacheline 2 boundary (128 bytes) --- */
+	int                        (*updateProcInfo)(SbmInterface *); /*   128     8 */
+
+	/* size: 136, cachelines: 3, members: 18 */
+	/* last cacheline: 8 bytes */
+};
+struct SbmConfig {
+	int                        bVirFlag;             /*     0     4 */
+	int                        nSbmBufferTotalSize;  /*     4     4 */
+	struct ScMemOpsS *         memops;               /*     8     8 */
+	VeOpsS *                   veOpsS;               /*    16     8 */
+	void *                     pVeOpsSelf;           /*    24     8 */
+	int                        bSecureVideoFlag;     /*    32     4 */
+	int                        nWidth;               /*    36     4 */
+	int                        nConfigSbmBufferSize; /*    40     4 */
+	int                        nNaluLength;          /*    44     4 */
+
+	/* size: 48, cachelines: 1, members: 9 */
+	/* last cacheline: 48 bytes */
+};
+struct VIDEOSTREAMDATAINFO {
+	char *                     pData;                /*     0     8 */
+	int                        nLength;              /*     8     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	int64_t                    nPts;                 /*    16     8 */
+	int64_t                    nPcr;                 /*    24     8 */
+	int                        bIsFirstPart;         /*    32     4 */
+	int                        bIsLastPart;          /*    36     4 */
+	int                        nID;                  /*    40     4 */
+	int                        nStreamIndex;         /*    44     4 */
+	int                        bValid;               /*    48     4 */
+	unsigned int               bVideoInfoFlag;       /*    52     4 */
+	void *                     pVideoInfo;           /*    56     8 */
+
+	/* size: 64, cachelines: 1, members: 11 */
+	/* sum members: 60, holes: 1, sum holes: 4 */
+};
+struct FRAMEBUFFERMANAGER {
+	pthread_mutex_t            mutex;                /*     0    40 */
+	int                        nMaxFrameNum;         /*    40     4 */
+	int                        nEmptyBufferNum;      /*    44     4 */
+	int                        nValidPictureNum;     /*    48     4 */
+	int                        nReleaseBufferNum;    /*    52     4 */
+	FrameNode *                pEmptyBufferQueue;    /*    56     8 */
+	/* --- cacheline 1 boundary (64 bytes) --- */
+	FrameNode *                pValidPictureQueue;   /*    64     8 */
+	FrameNode *                pReleaseBufferQueue;  /*    72     8 */
+	int                        bThumbnailMode;       /*    80     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	FrameNode *                pFrames;              /*    88     8 */
+	int                        bUseGpuBuf;           /*    96     4 */
+	int                        nAlignValue;          /*   100     4 */
+	void *                     pFbmInfo;             /*   104     8 */
+	int                        nDecoderHoldingNum;   /*   112     4 */
+	int                        nRenderHoldingNum;    /*   116     4 */
+	int                        nWaitForDispNum;      /*   120     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	/* --- cacheline 2 boundary (128 bytes) --- */
+	struct ScMemOpsS *         memops;               /*   128     8 */
+	VeOpsS *                   sVeops;               /*   136     8 */
+	void *                     pVeOpsSelf;           /*   144     8 */
+	int                        bShowLogFlag;         /*   152     4 */
+
+	/* size: 160, cachelines: 3, members: 20 */
+	/* sum members: 148, holes: 2, sum holes: 8 */
+	/* padding: 4 */
+	/* last cacheline: 32 bytes */
+};
+struct FRAMENODE {
+	FrameNodeFlag              Flag;                 /*     0    20 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	VideoPicture               vpicture;             /*    24   320 */
+	/* --- cacheline 5 boundary (320 bytes) was 24 bytes ago --- */
+	FrameNode *                pNext;                /*   344     8 */
+
+	/* size: 352, cachelines: 6, members: 3 */
+	/* sum members: 348, holes: 1, sum holes: 4 */
+	/* last cacheline: 32 bytes */
+};
+struct FRAMENODEFLAG {
+	int                        bUsedByDecoder;       /*     0     4 */
+	int                        bUsedByRender;        /*     4     4 */
+	int                        bInValidPictureQueue; /*     8     4 */
+	int                        bAlreadyDisplayed;    /*    12     4 */
+	int                        bNeedRelease;         /*    16     4 */
+
+	/* size: 20, cachelines: 1, members: 5 */
+	/* last cacheline: 20 bytes */
+};
+struct VID_PERFORMANCE {
+	unsigned int               nDropFrameNum;        /*     0     4 */
+	int                        nFrameDuration;       /*     4     4 */
+
+	/* size: 8, cachelines: 1, members: 2 */
+	/* last cacheline: 8 bytes */
+};
+struct VIDEOENGINE {
+	VConfig                    vconfig;              /*     0   184 */
+	/* --- cacheline 2 boundary (128 bytes) was 56 bytes ago --- */
+	VideoStreamInfo            videoStreamInfo;      /*   184    64 */
+	/* --- cacheline 3 boundary (192 bytes) was 56 bytes ago --- */
+	void *                     pLibHandle;           /*   248     8 */
+	/* --- cacheline 4 boundary (256 bytes) --- */
+	DecoderInterface *         pDecoderInterface;    /*   256     8 */
+	int                        bIsSoftwareDecoder;   /*   264     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	VideoFbmInfo               fbmInfo;              /*   272   136 */
+	/* --- cacheline 6 boundary (384 bytes) was 24 bytes ago --- */
+	u8                         nResetVeMode;         /*   408     1 */
+
+	/* XXX 7 bytes hole, try to pack */
+
+	VeOpsS *                   veOpsS;               /*   416     8 */
+	void *                     pVeOpsSelf;           /*   424     8 */
+	uint64_t                   nIcVeVersion;         /*   432     8 */
+	uint32_t                   ndecIpVersion;        /*   440     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	/* --- cacheline 7 boundary (448 bytes) --- */
+	SbmInterface *             pSbm[2];              /*   448    16 */
+	s32                        bEnableGoogleVp9Flag; /*   464     4 */
+	int                        nTrhandle;            /*   468     4 */
+	int                        nTrChannel;           /*   472     4 */
+	int                        bInitTrFlag;          /*   476     4 */
+
+	/* size: 480, cachelines: 8, members: 16 */
+	/* sum members: 465, holes: 3, sum holes: 15 */
+	/* last cacheline: 32 bytes */
+};
+struct Vp9Hw_DECODER {
+	void *                     pVeOpsSelf;           /*     0     8 */
+	VeOpsS *                   veOpsS;               /*     8     8 */
+	struct ScMemOpsS *         memops;               /*    16     8 */
+	VConfig *                  pConfig;              /*    24     8 */
+	Vp9Sbm                     sbmInfo;              /*    32    96 */
+	/* --- cacheline 2 boundary (128 bytes) --- */
+	Fbm *                      pFbm;                 /*   128     8 */
+	Fbm *                      pFbm_scaledown;       /*   136     8 */
+	size_addr                  nRegisterBaseAddr;    /*   144     8 */
+	size_addr                  nTopBaseAddr;         /*   152     8 */
+	u8                         bDebug;               /*   160     1 */
+	u8                         bConfigReg;           /*   161     1 */
+
+	/* XXX 2 bytes hole, try to pack */
+
+	u32                        nTempSbmSize;         /*   164     4 */
+	u8 *                       pTempSbmBuf;          /*   168     8 */
+	u8 *                       pStreamBufferBase;    /*   176     8 */
+	u32                        nStreamBufferSize;    /*   184     4 */
+	u8                         nDecStep;             /*   188     1 */
+	u8                         bEndOfStream;         /*   189     1 */
+	u8                         VP9PriLumaStrideAlignNum; /*   190     1 */
+	u8                         pack_pixel_to_msbs;   /*   191     1 */
+	/* --- cacheline 3 boundary (192 bytes) --- */
+	u32                        dec_status;           /*   192     4 */
+	u32                        asic_running;         /*   196     4 */
+	u32                        nDecFrmNum;           /*   200     4 */
+	u32                        resolution_change;    /*   204     4 */
+	u32                        bNeedConvert10bitTo8bit; /*   208     4 */
+	u32                        conceal;              /*   212     4 */
+	u32                        bThumbnailMode;       /*   216     4 */
+	u32                        picture_broken;       /*   220     4 */
+	u32                        intra_freeze;         /*   224     4 */
+	u32                        force_intra_freeze;   /*   228     4 */
+	s32                        nCur_Buffer_i;        /*   232     4 */
+	s32                        nPre_Buffer_i;        /*   236     4 */
+	s32                        bEnableAfbcFlag;      /*   240     4 */
+	int                        b10BitStreamFlag;     /*   244     4 */
+	int                        nAlignStride;         /*   248     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	/* --- cacheline 4 boundary (256 bytes) --- */
+	struct VpBoolCoder         bc;                   /*   256    48 */
+
+	/* XXX last struct has 4 bytes of padding, 1 hole */
+
+	VideoPicture *             pCurFrm;              /*   304     8 */
+	VideoPicture *             pCurSecFrm;           /*   312     8 */
+	/* --- cacheline 5 boundary (320 bytes) --- */
+	u32                        nWidth;               /*   320     4 */
+	u32                        nHeight;              /*   324     4 */
+	u32                        last_width;           /*   328     4 */
+	u32                        last_height;          /*   332     4 */
+	u32                        scaled_width;         /*   336     4 */
+	u32                        scaled_height;        /*   340     4 */
+	u32                        MBs;                  /*   344     4 */
+	u32                        mb_rows;              /*   348     4 */
+	u32                        mi_rows;              /*   352     4 */
+	u32                        mb_cols;              /*   356     4 */
+	u32                        mi_cols;              /*   360     4 */
+	u32                        mi_stride;            /*   364     4 */
+	u64                        CurFramePts;          /*   368     8 */
+	u64                        PreFramePts;          /*   376     8 */
+	/* --- cacheline 6 boundary (384 bytes) --- */
+	s32                        priPixelFormat;       /*   384     4 */
+	s32                        priPixelFormatReg;    /*   388     4 */
+	s32                        secPixelFormatReg;    /*   392     4 */
+	u32                        nDispCSize;           /*   396     4 */
+	u32                        nDispYLineStride;     /*   400     4 */
+	u32                        nDispCLineStride;     /*   404     4 */
+	u32                        vp_version;           /*   408     4 */
+	u32                        vp_profile;           /*   412     4 */
+	u32                        bit_depth;            /*   416     4 */
+	u32                        initial_bitdepth;     /*   420     4 */
+	u32                        key_frame;            /*   424     4 */
+	u32                        intra_only;           /*   428     4 */
+	u32                        prev_intra_only;      /*   432     4 */
+	u32                        prev_is_key_frame;    /*   436     4 */
+	u32                        show_frame;           /*   440     4 */
+	u32                        prev_show_frame;      /*   444     4 */
+	/* --- cacheline 7 boundary (448 bytes) --- */
+	u32                        show_existing_frame;  /*   448     4 */
+	u32                        show_existing_frame_index; /*   452     4 */
+	u32                        scaling_active;       /*   456     4 */
+	u32                        error_resilient;      /*   460     4 */
+	u32                        refresh_frame_flags;  /*   464     4 */
+	u32                        use_prev_frame_mvs;   /*   468     4 */
+	u32                        clamping;             /*   472     4 */
+	u32                        subsampling_x;        /*   476     4 */
+	u32                        subsampling_y;        /*   480     4 */
+	u32                        frame_context_idx;    /*   484     4 */
+	u32                        refresh_entropy_probs; /*   488     4 */
+	u32                        frame_parallel_decoding; /*   492     4 */
+	u32                        reset_frame_context;  /*   496     4 */
+	u32                        loop_filter_level;    /*   500     4 */
+	u32                        loop_filter_sharpness; /*   504     4 */
+	u32                        last_sharpness_level; /*   508     4 */
+	/* --- cacheline 8 boundary (512 bytes) --- */
+	u32                        loop_filter_enabled;  /*   512     4 */
+	u32                        skip_loop_filter;     /*   516     4 */
+	s32                        qp_yac;               /*   520     4 */
+	s32                        qp_ydc;               /*   524     4 */
+	s32                        qp_y2_ac;             /*   528     4 */
+	s32                        qp_ch_ac;             /*   532     4 */
+	s32                        qp_ch_dc;             /*   536     4 */
+	s32                        qp_y2_dc;             /*   540     4 */
+	s16                        y_dequant[8][2];      /*   544    32 */
+	/* --- cacheline 9 boundary (576 bytes) --- */
+	s16                        uv_dequant[8][2];     /*   576    32 */
+	u32                        lossless;             /*   608     4 */
+	u32                        transform_mode;       /*   612     4 */
+	u32                        allow_high_precision_mv; /*   616     4 */
+	u32                        allow_comp_inter_inter; /*   620     4 */
+	u32                        inter_filter_type;    /*   624     4 */
+	u32                        pred_filter_mode;     /*   628     4 */
+	u32                        comp_pred_mode;       /*   632     4 */
+	u32                        comp_fixed_ref;       /*   636     4 */
+	/* --- cacheline 10 boundary (640 bytes) --- */
+	u32                        comp_var_ref[2];      /*   640     8 */
+	u32                        log2_tile_columns;    /*   648     4 */
+	u32                        log2_tile_rows;       /*   652     4 */
+	u32                        segment_enabled;      /*   656     4 */
+	u32                        segment_map_update;   /*   660     4 */
+	u32                        segment_map_temporal_update; /*   664     4 */
+	u32                        segment_feature_mode; /*   668     4 */
+	u32                        offset_to_dct_parts;  /*   672     4 */
+	u32                        frame_tag_size;       /*   676     4 */
+	u32                        existing_ref_map;     /*   680     4 */
+	u32                        reset_frame_flags;    /*   684     4 */
+	u32                        refbu_pred_hits;      /*   688     4 */
+	u32                        probs_decoded;        /*   692     4 */
+	u32                        segment_map_size;     /*   696     4 */
+	u32                        seg_map_idx;          /*   700     4 */
+	/* --- cacheline 11 boundary (704 bytes) --- */
+	u32                        prev_seg_map_idx;     /*   704     4 */
+	u32                        MvColBufSize;         /*   708     4 */
+	u8 *                       pTopMvColBuf;         /*   712     8 */
+	size_addr                  MVFrameColPhyAddr;    /*   720     8 */
+	s32                        ref_frame_map[8];     /*   728    32 */
+	u32                        ref_frame_sign_bias[4]; /*   760    16 */
+	/* --- cacheline 12 boundary (768 bytes) was 8 bytes ago --- */
+	u32                        dct_partition_offsets[8]; /*   776    32 */
+	s32                        mb_ref_lf_delta[4];   /*   808    16 */
+	s32                        mb_mode_lf_delta[2];  /*   824     8 */
+	/* --- cacheline 13 boundary (832 bytes) --- */
+	s32                        active_ref_idx[3];    /*   832    12 */
+	s32                        segment_feature_data[8][4]; /*   844   128 */
+	/* --- cacheline 15 boundary (960 bytes) was 12 bytes ago --- */
+	u32                        feature_mask[8];      /*   972    32 */
+	u32                        segment_feature_enable[8][4]; /*  1004   128 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	/* --- cacheline 17 boundary (1088 bytes) was 48 bytes ago --- */
+	u8 *                       last_frame_seg_map;   /*  1136     8 */
+	u8 *                       current_frame_seg_map; /*  1144     8 */
+	/* --- cacheline 18 boundary (1152 bytes) --- */
+	Vp9FbmMap                  pFbmMap[16];          /*  1152   640 */
+	/* --- cacheline 28 boundary (1792 bytes) --- */
+	loop_filter_info_n         lf_info;              /*  1792    64 */
+	/* --- cacheline 29 boundary (1856 bytes) --- */
+	struct DWLLinearMem        prob_tbl;             /*  1856    24 */
+	struct DWLLinearMem        ctx_counters;         /*  1880    24 */
+	struct DWLLinearMem        segment_map[2];       /*  1904    48 */
+	/* --- cacheline 30 boundary (1920 bytes) was 32 bytes ago --- */
+	struct DWLLinearMem        segid_buffer;         /*  1952    24 */
+	struct DWLLinearMem        filter_mem;           /*  1976    24 */
+	/* --- cacheline 31 boundary (1984 bytes) was 16 bytes ago --- */
+	struct DWLLinearMem        pNeighbourInfoBuffer; /*  2000    24 */
+	enum Vp9ColorSpace         color_space;          /*  2024     4 */
+	struct Vp9EntropyCounts    ctx_ctr;              /*  2028 13196 */
+	/* --- cacheline 237 boundary (15168 bytes) was 56 bytes ago --- */
+	struct Vp9EntropyProbs     entropy;              /* 15224  3149 */
+	/* --- cacheline 287 boundary (18368 bytes) was 5 bytes ago --- */
+	struct Vp9EntropyProbs     entropy_last[4];      /* 18373 12596 */
+	/* --- cacheline 483 boundary (30912 bytes) was 57 bytes ago --- */
+	struct Vp9AdaptiveEntropyProbs prev_ctx;         /* 30969  2140 */
+
+	/* XXX 3 bytes hole, try to pack */
+
+	/* --- cacheline 517 boundary (33088 bytes) was 24 bytes ago --- */
+	TileInfo                   tile_info[512];       /* 33112  8192 */
+
+	/* size: 41304, cachelines: 646, members: 145 */
+	/* sum members: 41291, holes: 4, sum holes: 13 */
+	/* member types with holes: 1, total: 1 */
+	/* paddings: 1, sum paddings: 4 */
+	/* last cacheline: 24 bytes */
+};
+struct VP9_VBV {
+	SbmInterface *             pSbm;                 /*     0     8 */
+	VideoStreamDataInfo *      curStreamData;        /*     8     8 */
+	u8 *                       pSbmBuf;              /*    16     8 */
+	u8 *                       pSbmBufEnd;           /*    24     8 */
+	u8 *                       nVbvBufPhyAddr;       /*    32     8 */
+	u32                        nVbvBufEndPhyAddr;    /*    40     4 */
+	u32                        nSbmBufSize;          /*    44     4 */
+	u8 *                       pDataPtr;             /*    48     8 */
+	u32                        nDataSize;            /*    56     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	/* --- cacheline 1 boundary (64 bytes) --- */
+	u64                        validDataPts;         /*    64     8 */
+	u8                         nFrameNums;           /*    72     1 */
+
+	/* XXX 3 bytes hole, try to pack */
+
+	u32                        real_data_len[4];     /*    76    16 */
+
+	/* size: 96, cachelines: 2, members: 12 */
+	/* sum members: 85, holes: 2, sum holes: 7 */
+	/* padding: 4 */
+	/* last cacheline: 32 bytes */
+};
+struct VpBoolCoder {
+	u32                        lowvalue;             /*     0     4 */
+	u32                        range;                /*     4     4 */
+	u32                        value;                /*     8     4 */
+	s32                        count;                /*    12     4 */
+	u32                        pos;                  /*    16     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	const u8  *                buffer;               /*    24     8 */
+	u32                        BitCounter;           /*    32     4 */
+	u32                        stream_end_pos;       /*    36     4 */
+	u32                        strm_error;           /*    40     4 */
+
+	/* size: 48, cachelines: 1, members: 9 */
+	/* sum members: 40, holes: 1, sum holes: 4 */
+	/* padding: 4 */
+	/* last cacheline: 48 bytes */
+};
+struct VP9_FBM_BUFFER {
+	s32                        n_references;         /*     0     4 */
+	u32                        nCode_width;          /*     4     4 */
+	u32                        nCode_height;         /*     8     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	VideoPicture *             pVPicture;            /*    16     8 */
+	struct scale_factors       sf;                   /*    24    16 */
+
+	/* size: 40, cachelines: 1, members: 5 */
+	/* sum members: 36, holes: 1, sum holes: 4 */
+	/* last cacheline: 40 bytes */
+};
+struct scale_factors {
+	int                        x_scale_fp;           /*     0     4 */
+	int                        y_scale_fp;           /*     4     4 */
+	int                        x_step_q4;            /*     8     4 */
+	int                        y_step_q4;            /*    12     4 */
+
+	/* size: 16, cachelines: 1, members: 4 */
+	/* last cacheline: 16 bytes */
+};
+struct DWLLinearMem {
+	u8 *                       virtual_address;      /*     0     8 */
+	uintptr_t                  bus_address;          /*     8     8 */
+	u32                        size;                 /*    16     4 */
+	u32                        logical_size;         /*    20     4 */
+
+	/* size: 24, cachelines: 1, members: 4 */
+	/* last cacheline: 24 bytes */
+};
+struct Vp9EntropyCounts {
+	u32                        inter_mode_counts[7][3]; /*     0    84 */
+	/* --- cacheline 1 boundary (64 bytes) was 20 bytes ago --- */
+	u32                        sb_ymode_counts[4][10]; /*    84   160 */
+	/* --- cacheline 3 boundary (192 bytes) was 52 bytes ago --- */
+	u32                        uv_mode_counts[10][10]; /*   244   400 */
+	/* --- cacheline 10 boundary (640 bytes) was 4 bytes ago --- */
+	u32                        partition_counts[16][4]; /*   644   256 */
+	/* --- cacheline 14 boundary (896 bytes) was 4 bytes ago --- */
+	u32                        switchable_interp_counts[4][3]; /*   900    48 */
+	u32                        intra_inter_count[4][2]; /*   948    32 */
+	/* --- cacheline 15 boundary (960 bytes) was 20 bytes ago --- */
+	u32                        comp_inter_count[5][2]; /*   980    40 */
+	u32                        single_ref_count[5][2][2]; /*  1020    80 */
+	/* --- cacheline 17 boundary (1088 bytes) was 12 bytes ago --- */
+	u32                        comp_ref_count[5][2]; /*  1100    40 */
+	u32                        tx32x32_count[2][4];  /*  1140    32 */
+	/* --- cacheline 18 boundary (1152 bytes) was 20 bytes ago --- */
+	u32                        tx16x16_count[2][3];  /*  1172    24 */
+	u32                        tx8x8_count[2][2];    /*  1196    16 */
+	u32                        mbskip_count[3][2];   /*  1212    24 */
+	/* --- cacheline 19 boundary (1216 bytes) was 20 bytes ago --- */
+	struct NmvContextCounts    nmvcount;             /*  1236   424 */
+	/* --- cacheline 25 boundary (1600 bytes) was 60 bytes ago --- */
+	u32                        count_coeffs[2][2][6][6][4]; /*  1660  2304 */
+	/* --- cacheline 61 boundary (3904 bytes) was 60 bytes ago --- */
+	u32                        count_coeffs8x8[2][2][6][6][4]; /*  3964  2304 */
+	/* --- cacheline 97 boundary (6208 bytes) was 60 bytes ago --- */
+	u32                        count_coeffs16x16[2][2][6][6][4]; /*  6268  2304 */
+	/* --- cacheline 133 boundary (8512 bytes) was 60 bytes ago --- */
+	u32                        count_coeffs32x32[2][2][6][6][4]; /*  8572  2304 */
+	/* --- cacheline 169 boundary (10816 bytes) was 60 bytes ago --- */
+	u32                        count_eobs[4][2][2][6][6]; /* 10876  2304 */
+	/* --- cacheline 205 boundary (13120 bytes) was 60 bytes ago --- */
+	u32                        fill_data[4];         /* 13180    16 */
+
+	/* size: 13196, cachelines: 207, members: 20 */
+	/* last cacheline: 12 bytes */
+};
+struct NmvContextCounts {
+	u32                        joints[4];            /*     0    16 */
+	u32                        sign[2][2];           /*    16    16 */
+	u32                        classes[2][11];       /*    32    88 */
+	/* --- cacheline 1 boundary (64 bytes) was 56 bytes ago --- */
+	u32                        class0[2][2];         /*   120    16 */
+	/* --- cacheline 2 boundary (128 bytes) was 8 bytes ago --- */
+	u32                        bits[2][10][2];       /*   136   160 */
+	/* --- cacheline 4 boundary (256 bytes) was 40 bytes ago --- */
+	u32                        class0_fp[2][2][4];   /*   296    64 */
+	/* --- cacheline 5 boundary (320 bytes) was 40 bytes ago --- */
+	u32                        fp[2][4];             /*   360    32 */
+	/* --- cacheline 6 boundary (384 bytes) was 8 bytes ago --- */
+	u32                        class0_hp[2][2];      /*   392    16 */
+	u32                        hp[2][2];             /*   408    16 */
+
+	/* size: 424, cachelines: 7, members: 9 */
+	/* last cacheline: 40 bytes */
+};
+struct Vp9EntropyProbs {
+	u8                         kf_bmode_prob[10][10][8]; /*     0   800 */
+	/* --- cacheline 12 boundary (768 bytes) was 32 bytes ago --- */
+	u8                         kf_bmode_prob_b[10][10][1]; /*   800   100 */
+	/* --- cacheline 14 boundary (896 bytes) was 4 bytes ago --- */
+	u8                         ref_pred_probs[3];    /*   900     3 */
+	u8                         mb_segment_tree_probs[7]; /*   903     7 */
+	u8                         segment_pred_probs[3]; /*   910     3 */
+	u8                         ref_scores[4];        /*   913     4 */
+	u8                         prob_comppred[2];     /*   917     2 */
+	u8                         kf_uv_mode_prob[10][8]; /*   919    80 */
+	/* --- cacheline 15 boundary (960 bytes) was 39 bytes ago --- */
+	u8                         kf_uv_mode_prob_b[10][1]; /*   999    10 */
+	struct Vp9AdaptiveEntropyProbs a;                /*  1009  2140 */
+
+	/* size: 3149, cachelines: 50, members: 10 */
+	/* last cacheline: 13 bytes */
+};
+struct Vp9AdaptiveEntropyProbs {
+	u8                         inter_mode_prob[7][4]; /*     0    28 */
+	u8                         intra_inter_prob[4];  /*    28     4 */
+	u8                         tx8x8_prob[2][1];     /*    32     2 */
+	u8                         tx16x16_prob[2][2];   /*    34     4 */
+	u8                         tx32x32_prob[2][3];   /*    38     6 */
+	u8                         sb_ymode_prob_b[4][1]; /*    44     4 */
+	u8                         uv_mode_prob_b[10][1]; /*    48    10 */
+	u8                         sb_ymode_prob[4][9];  /*    58    36 */
+	/* --- cacheline 1 boundary (64 bytes) was 30 bytes ago --- */
+	u8                         uv_mode_prob[10][9];  /*    94    90 */
+	/* --- cacheline 2 boundary (128 bytes) was 56 bytes ago --- */
+	u8                         partition_prob[2][16][4]; /*   184   128 */
+	/* --- cacheline 4 boundary (256 bytes) was 56 bytes ago --- */
+	u8                         switchable_interp_prob[4][2]; /*   312     8 */
+	/* --- cacheline 5 boundary (320 bytes) --- */
+	u8                         comp_inter_prob[5];   /*   320     5 */
+	u8                         mbskip_probs[3];      /*   325     3 */
+	struct NmvContext          nmvc;                 /*   328    69 */
+	/* --- cacheline 6 boundary (384 bytes) was 13 bytes ago --- */
+	u8                         single_ref_prob[5][2]; /*   397    10 */
+	u8                         comp_ref_prob[5];     /*   407     5 */
+	u8                         prob_coeffs[2][2][6][6][3]; /*   412   432 */
+	/* --- cacheline 13 boundary (832 bytes) was 12 bytes ago --- */
+	u8                         prob_coeffs8x8[2][2][6][6][3]; /*   844   432 */
+	/* --- cacheline 19 boundary (1216 bytes) was 60 bytes ago --- */
+	u8                         prob_coeffs16x16[2][2][6][6][3]; /*  1276   432 */
+	/* --- cacheline 26 boundary (1664 bytes) was 44 bytes ago --- */
+	u8                         prob_coeffs32x32[2][2][6][6][3]; /*  1708   432 */
+
+	/* size: 2140, cachelines: 34, members: 20 */
+	/* last cacheline: 28 bytes */
+};
+struct NmvContext {
+	u8                         joints[3];            /*     0     3 */
+	u8                         sign[2];              /*     3     2 */
+	u8                         class0[2][1];         /*     5     2 */
+	u8                         fp[2][3];             /*     7     6 */
+	u8                         class0_hp[2];         /*    13     2 */
+	u8                         hp[2];                /*    15     2 */
+	u8                         classes[2][10];       /*    17    20 */
+	u8                         class0_fp[2][2][3];   /*    37    12 */
+	u8                         bits[2][10];          /*    49    20 */
+
+	/* size: 69, cachelines: 2, members: 9 */
+	/* last cacheline: 5 bytes */
+};
+struct TileInfo {
+	int                        mi_row_start;         /*     0     4 */
+	int                        mi_row_end;           /*     4     4 */
+	int                        mi_col_start;         /*     8     4 */
+	int                        mi_col_end;           /*    12     4 */
+
+	/* size: 16, cachelines: 1, members: 4 */
+	/* last cacheline: 16 bytes */
+};
+struct afbc_header {
+	uint32_t                   signature;            /*     0     4 */
+	uint16_t                   filehdr_size;         /*     4     2 */
+	uint16_t                   version;              /*     6     2 */
+	uint32_t                   body_size;            /*     8     4 */
+	uint8_t                    ncomponents;          /*    12     1 */
+	uint8_t                    header_layout;        /*    13     1 */
+	uint8_t                    yuv_transform;        /*    14     1 */
+	uint8_t                    block_split;          /*    15     1 */
+	uint8_t                    inputbits[4];         /*    16     4 */
+	uint16_t                   block_width;          /*    20     2 */
+	uint16_t                   block_height;         /*    22     2 */
+	uint16_t                   width;                /*    24     2 */
+	uint16_t                   height;               /*    26     2 */
+	uint8_t                    left_crop;            /*    28     1 */
+	uint8_t                    top_crop;             /*    29     1 */
+	uint16_t                   block_layout;         /*    30     2 */
+
+	/* size: 32, cachelines: 1, members: 16 */
+	/* last cacheline: 32 bytes */
+};
+struct FBMCREATEINFO {
+	int                        nFrameNum;            /*     0     4 */
+	int                        nDecoderNeededMiniFrameNum; /*     4     4 */
+	int                        nWidth;               /*     8     4 */
+	int                        nHeight;              /*    12     4 */
+	int                        ePixelFormat;         /*    16     4 */
+	int                        bThumbnailMode;       /*    20     4 */
+	int                        bGpuBufValid;         /*    24     4 */
+	int                        nAlignStride;         /*    28     4 */
+	int                        nBufferType;          /*    32     4 */
+	int                        bProgressiveFlag;     /*    36     4 */
+	int                        bIsSoftDecoderFlag;   /*    40     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	struct ScMemOpsS *         memops;               /*    48     8 */
+	int                        b10BitStreamFlag;     /*    56     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	/* --- cacheline 1 boundary (64 bytes) --- */
+	VeOpsS *                   veOpsS;               /*    64     8 */
+	void *                     pVeOpsSelf;           /*    72     8 */
+
+	/* size: 80, cachelines: 2, members: 15 */
+	/* sum members: 72, holes: 2, sum holes: 8 */
+	/* last cacheline: 16 bytes */
+};
+struct StrmData {
+	const u8  *                strm_buff_start;      /*     0     8 */
+	const u8  *                strm_curr_pos;        /*     8     8 */
+	u32                        bit_pos_in_word;      /*    16     4 */
+	u32                        strm_buff_size;       /*    20     4 */
+	u32                        strm_buff_read_bits;  /*    24     4 */
+	u32                        remove_emul3_byte;    /*    28     4 */
+	u32                        emul_byte_count;      /*    32     4 */
+
+	/* size: 40, cachelines: 1, members: 7 */
+	/* padding: 4 */
+	/* last cacheline: 40 bytes */
+};
+struct sunxi_metadata {
+	struct hdr_static_metadata hdr_smetada;          /*     0    28 */
+	struct afbc_header         afbc_head;            /*    28    32 */
+	uint32_t                   flag;                 /*    60     4 */
+
+	/* size: 64, cachelines: 1, members: 3 */
+};
+struct hdr_static_metadata {
+	struct display_master_data disp_master;          /*     0    24 */
+	uint16_t                   maximum_content_light_level; /*    24     2 */
+	uint16_t                   maximum_frame_average_light_level; /*    26     2 */
+
+	/* size: 28, cachelines: 1, members: 3 */
+	/* last cacheline: 28 bytes */
+};
+struct display_master_data {
+	uint16_t                   display_primaries_x[3]; /*     0     6 */
+	uint16_t                   display_primaries_y[3]; /*     6     6 */
+	uint16_t                   white_point_x;        /*    12     2 */
+	uint16_t                   white_point_y;        /*    14     2 */
+	uint32_t                   max_display_mastering_luminance; /*    16     4 */
+	uint32_t                   min_display_mastering_luminance; /*    20     4 */
+
+	/* size: 24, cachelines: 1, members: 6 */
+	/* last cacheline: 24 bytes */
+};
+struct VP9_HDR_SYN {
+	volatile unsigned int      tiles_enabled_flag:1; /*     0: 0  4 */
+	volatile unsigned int      frame_type:1;         /*     0: 1  4 */
+	volatile unsigned int      bit_depth_minus8:3;   /*     0: 2  4 */
+	volatile unsigned int      ref_frame_sign_bias_LAST_FRAME:1; /*     0: 5  4 */
+	volatile unsigned int      ref_frame_sign_bias_GOLDEN_FRAME:1; /*     0: 6  4 */
+	volatile unsigned int      ref_frame_sign_bias_ALTREF_FRAME:1; /*     0: 7  4 */
+	volatile unsigned int      use_high_precision_mv:1; /*     0: 8  4 */
+	volatile unsigned int      inter_filter_type:3;  /*     0: 9  4 */
+	volatile unsigned int      loop_filter_enabled:1; /*     0:12  4 */
+	volatile unsigned int      loop_filter_sharpness:3; /*     0:13  4 */
+	volatile unsigned int      lossless:1;           /*     0:16  4 */
+	volatile unsigned int      segment_enable:1;     /*     0:17  4 */
+	volatile unsigned int      segment_update_map:1; /*     0:18  4 */
+	volatile unsigned int      segment_temp_update:1; /*     0:19  4 */
+	volatile unsigned int      tx_mode:3;            /*     0:20  4 */
+	volatile unsigned int      inter_reference_mode:2; /*     0:23  4 */
+	volatile unsigned int      col_mv_enabled:1;     /*     0:25  4 */
+	volatile unsigned int      use_previous_segmen_id:1; /*     0:26  4 */
+	volatile unsigned int      entropy_decoding_counts_enabled:1; /*     0:27  4 */
+	volatile unsigned int      deblk_fbc_enable:1;   /*     0:28  4 */
+	volatile unsigned int      col_mv_compress_enable:1; /*     0:29  4 */
+	volatile unsigned int      reserve:1;            /*     0:30  4 */
+	volatile unsigned int      vp9_decoder_enabled:1; /*     0:31  4 */
+
+	/* size: 4, cachelines: 1, members: 23 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_PIC_SIZE {
+	volatile unsigned int      pic_width_in_luma_samples:14; /*     0: 0  4 */
+	volatile unsigned int      reserved0:2;          /*     0:14  4 */
+	volatile unsigned int      pic_height_in_luma_samples:14; /*     0:16  4 */
+	volatile unsigned int      reserved1:2;          /*     0:30  4 */
+
+	/* size: 4, cachelines: 1, members: 4 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_LAST_PIC_SIZE {
+	volatile unsigned int      pic_width_in_luma_samples:14; /*     0: 0  4 */
+	volatile unsigned int      reserved0:2;          /*     0:14  4 */
+	volatile unsigned int      pic_height_in_luma_samples:14; /*     0:16  4 */
+	volatile unsigned int      reserved1:2;          /*     0:30  4 */
+
+	/* size: 4, cachelines: 1, members: 4 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_GOLDEN_PIC_SIZE {
+	volatile unsigned int      pic_width_in_luma_samples:14; /*     0: 0  4 */
+	volatile unsigned int      reserved0:2;          /*     0:14  4 */
+	volatile unsigned int      pic_height_in_luma_samples:14; /*     0:16  4 */
+	volatile unsigned int      reserved1:2;          /*     0:30  4 */
+
+	/* size: 4, cachelines: 1, members: 4 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_ALTREF_PIC_SIZE {
+	volatile unsigned int      pic_width_in_luma_samples:14; /*     0: 0  4 */
+	volatile unsigned int      reserved0:2;          /*     0:14  4 */
+	volatile unsigned int      pic_height_in_luma_samples:14; /*     0:16  4 */
+	volatile unsigned int      reserved1:2;          /*     0:30  4 */
+
+	/* size: 4, cachelines: 1, members: 4 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_LAST_FRAME_SCALE_PARA0 {
+	volatile unsigned int      last_frame_step_x_minus1:5; /*     0: 0  4 */
+	volatile unsigned int      last_frame_scale_x:16; /*     0: 5  4 */
+	volatile unsigned int      reserved0:11;         /*     0:21  4 */
+
+	/* size: 4, cachelines: 1, members: 3 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_LAST_FRAME_SCALE_PARA1 {
+	volatile unsigned int      last_frame_step_y_minus1:5; /*     0: 0  4 */
+	volatile unsigned int      last_frame_scale_y:16; /*     0: 5  4 */
+	volatile unsigned int      reserved0:7;          /*     0:21  4 */
+	volatile unsigned int      pri_luma_stride_align:3; /*     0:28  4 */
+	volatile unsigned int      reserved1:1;          /*     0:31  4 */
+
+	/* size: 4, cachelines: 1, members: 5 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_GOLDEN_FRAME_SCALE_PARA0 {
+	volatile unsigned int      golden_frame_step_x_minus1:5; /*     0: 0  4 */
+	volatile unsigned int      golden_frame_scale_x:16; /*     0: 5  4 */
+	volatile unsigned int      reserved0:11;         /*     0:21  4 */
+
+	/* size: 4, cachelines: 1, members: 3 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_GOLDEN_FRAME_SCALE_PARA1 {
+	volatile unsigned int      golden_frame_step_y_minus1:5; /*     0: 0  4 */
+	volatile unsigned int      reserved0:11;         /*     0: 5  4 */
+	volatile unsigned int      golden_frame_scale_y:16; /*     0:16  4 */
+
+	/* size: 4, cachelines: 1, members: 3 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_ALTREF_FRAME_SCALE_PARA0 {
+	volatile unsigned int      altref_frame_step_x_minus1:5; /*     0: 0  4 */
+	volatile unsigned int      altref_frame_scale_x:16; /*     0: 5  4 */
+	volatile unsigned int      reserved0:11;         /*     0:21  4 */
+
+	/* size: 4, cachelines: 1, members: 3 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_ALTREF_FRAME_SCALE_PARA1 {
+	volatile unsigned int      altref_frame_step_y_minus1:5; /*     0: 0  4 */
+	volatile unsigned int      altref_frame_scale_y:16; /*     0: 5  4 */
+	volatile unsigned int      reserved0:11;         /*     0:21  4 */
+
+	/* size: 4, cachelines: 1, members: 3 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_FUNC_CTRL {
+	volatile unsigned int      finish_interrupt_en:1; /*     0: 0  4 */
+	volatile unsigned int      error_interrupt_en:1; /*     0: 1  4 */
+	volatile unsigned int      data_request_interrupt_en:1; /*     0: 2  4 */
+	volatile unsigned int      reserved0:5;          /*     0: 3  4 */
+	volatile unsigned int      not_wirte_recons_pic:1; /*     0: 8  4 */
+	volatile unsigned int      write_sc_rt_pic:1;    /*     0: 9  4 */
+	volatile unsigned int      mcri_cache_en:1;      /*     0:10  4 */
+	volatile unsigned int      vld_bypass_en:1;      /*     0:11  4 */
+	volatile unsigned int      tq_bypass_en:1;       /*     0:12  4 */
+	volatile unsigned int      reserved1:11;         /*     0:13  4 */
+	volatile unsigned int      eptb_detection_by_pass:1; /*     0:24  4 */
+	volatile unsigned int      startcode_detect_en:1; /*     0:25  4 */
+	volatile unsigned int      reserved2:5;          /*     0:26  4 */
+	volatile unsigned int      ddr_consistency_en:1; /*     0:31  4 */
+
+	/* size: 4, cachelines: 1, members: 14 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_TRIGGER_TYPE {
+	volatile unsigned int      trigger_type_pul:4;   /*     0: 0  4 */
+	volatile unsigned int      stcd_type:2;          /*     0: 4  4 */
+	volatile unsigned int      reserved0:2;          /*     0: 6  4 */
+	volatile unsigned int      n_bits:6;             /*     0: 8  4 */
+	volatile unsigned int      reserved1:18;         /*     0:14  4 */
+
+	/* size: 4, cachelines: 1, members: 5 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_FUNCTION_STATUS {
+	volatile unsigned int      slice_dec_finish:1;   /*     0: 0  4 */
+	volatile unsigned int      slice_dec_error:1;    /*     0: 1  4 */
+	volatile unsigned int      vld_data_req:1;       /*     0: 2  4 */
+	volatile unsigned int      overtime:1;           /*     0: 3  4 */
+	volatile unsigned int      reserved0:4;          /*     0: 4  4 */
+	volatile unsigned int      SWDEC_busy:1;         /*     0: 8  4 */
+	volatile unsigned int      MVP_busy:1;           /*     0: 9  4 */
+	volatile unsigned int      SAO_busy:1;           /*     0:10  4 */
+	volatile unsigned int      INTRA_busy:1;         /*     0:11  4 */
+	volatile unsigned int      DEBLK_DRAM_busy:1;    /*     0:12  4 */
+	volatile unsigned int      DEBLK_MAIN_busy:1;    /*     0:13  4 */
+	volatile unsigned int      VLD_busy:1;           /*     0:14  4 */
+	volatile unsigned int      reserved1:1;          /*     0:15  4 */
+	volatile unsigned int      more_data_flag:1;     /*     0:16  4 */
+	volatile unsigned int      inter_busy:1;         /*     0:17  4 */
+	volatile unsigned int      IQIT_busy:1;          /*     0:18  4 */
+	volatile unsigned int      bs_dma_busy:1;        /*     0:19  4 */
+	volatile unsigned int      wb_busy:1;            /*     0:20  4 */
+	volatile unsigned int      stcd_busy:1;          /*     0:21  4 */
+	volatile unsigned int      startcode_type:2;     /*     0:22  4 */
+	volatile unsigned int      startcode_type_detected:1; /*     0:24  4 */
+
+	/* XXX 7 bits hole, try to pack */
+
+	/* Force alignment to the next boundary: */
+	volatile unsigned int      :0;
+
+	volatile unsigned int      reserved2:8;          /*     4: 0  4 */
+
+	/* size: 8, cachelines: 1, members: 22 */
+	/* sum bitfield members: 33 bits, bit holes: 1, sum bit holes: 7 bits */
+	/* bit_padding: 24 bits */
+	/* last cacheline: 8 bytes */
+};
+struct VP9_DEC_CTB_NUM {
+	volatile unsigned int      crt_ctb_num:19;       /*     0: 0  4 */
+	volatile unsigned int      reserved0:13;         /*     0:19  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_BITS_BASE_ADDR {
+	volatile unsigned int      bitstream_base_addr:28; /*     0: 0  4 */
+	volatile unsigned int      data_valid:1;         /*     0:28  4 */
+	volatile unsigned int      data_last:1;          /*     0:29  4 */
+	volatile unsigned int      data_first:1;         /*     0:30  4 */
+	volatile unsigned int      reserved0:1;          /*     0:31  4 */
+
+	/* size: 4, cachelines: 1, members: 5 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_BITS_OFFSET_ADDR {
+	volatile unsigned int      bits_offset:30;       /*     0: 0  4 */
+	volatile unsigned int      reserved0:2;          /*     0:30  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_BITS_LEN_ADDR {
+	volatile unsigned int      bits_len:30;          /*     0: 0  4 */
+	volatile unsigned int      reserved0:2;          /*     0:30  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_BITS_END_ADDR {
+	volatile unsigned int      reserved0:2;          /*     0: 0  4 */
+	volatile unsigned int      bitstream_end_addr:30; /*     0: 2  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_SD_CTRL {
+	volatile unsigned int      reserved0:8;          /*     0: 0  4 */
+	volatile unsigned int      scale_precision:4;    /*     0: 8  4 */
+	volatile unsigned int      field_scale_mod:1;    /*     0:12  4 */
+	volatile unsigned int      bottom_field_sel:1;   /*     0:13  4 */
+	volatile unsigned int      reserved1:18;         /*     0:14  4 */
+
+	/* size: 4, cachelines: 1, members: 5 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_SD_YBUF_ADDR {
+	volatile unsigned int      sd_luma_buf_addr_hard_wired:2; /*     0: 0  4 */
+	volatile unsigned int      sd_luma_buf_addr:30;  /*     0: 2  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_SD_CBUF_ADDR {
+	volatile unsigned int      sd_chroma_buf_addr;   /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_SEGMENT_FEATURE {
+	volatile unsigned int      segment0_ref_paramter_enable:1; /*     0: 0  4 */
+	volatile unsigned int      segment1_ref_paramter_enable:1; /*     0: 1  4 */
+	volatile unsigned int      segment2_ref_paramter_enable:1; /*     0: 2  4 */
+	volatile unsigned int      segment3_ref_paramter_enable:1; /*     0: 3  4 */
+	volatile unsigned int      segment4_ref_paramter_enable:1; /*     0: 4  4 */
+	volatile unsigned int      segment5_ref_paramter_enable:1; /*     0: 5  4 */
+	volatile unsigned int      segment6_ref_paramter_enable:1; /*     0: 6  4 */
+	volatile unsigned int      segment7_ref_paramter_enable:1; /*     0: 7  4 */
+	volatile unsigned int      segment0_skip_paramter_enable:1; /*     0: 8  4 */
+	volatile unsigned int      segment1_skip_paramter_enable:1; /*     0: 9  4 */
+	volatile unsigned int      segment2_skip_paramter_enable:1; /*     0:10  4 */
+	volatile unsigned int      segment3_skip_paramter_enable:1; /*     0:11  4 */
+	volatile unsigned int      segment4_skip_paramter_enable:1; /*     0:12  4 */
+	volatile unsigned int      segment5_skip_paramter_enable:1; /*     0:13  4 */
+	volatile unsigned int      segment6_skip_paramter_enable:1; /*     0:14  4 */
+	volatile unsigned int      segment7_skip_paramter_enable:1; /*     0:15  4 */
+	volatile unsigned int      segment0_ref_paramter:2; /*     0:16  4 */
+	volatile unsigned int      segment1_ref_paramter:2; /*     0:18  4 */
+	volatile unsigned int      segment2_ref_paramter:2; /*     0:20  4 */
+	volatile unsigned int      segment3_ref_paramter:2; /*     0:22  4 */
+	volatile unsigned int      segment4_ref_paramter:2; /*     0:24  4 */
+	volatile unsigned int      segment5_ref_paramter:2; /*     0:26  4 */
+	volatile unsigned int      segment6_ref_paramter:2; /*     0:28  4 */
+	volatile unsigned int      segment7_ref_paramter:2; /*     0:30  4 */
+
+	/* size: 4, cachelines: 1, members: 24 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_NEIGHBOR_INFO_ADDR {
+	volatile unsigned int      neighbor_info_addr_hard_wired:2; /*     0: 0  4 */
+	volatile unsigned int      neighbor_info_addr:30; /*     0: 2  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_ENTRY_POINT_OFFSET_ADDR {
+	volatile unsigned int      entry_point_offset_addr_hard_wired:2; /*     0: 0  4 */
+	volatile unsigned int      entry_point_offset_addr:30; /*     0: 2  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_TILE_START_ADDR {
+	volatile unsigned int      CTB_x:9;              /*     0: 0  4 */
+	volatile unsigned int      reserved0:7;          /*     0: 9  4 */
+	volatile unsigned int      CTB_y:9;              /*     0:16  4 */
+	volatile unsigned int      reserved1:6;          /*     0:25  4 */
+	volatile unsigned int      tile_invalid:1;       /*     0:31  4 */
+
+	/* size: 4, cachelines: 1, members: 5 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_TILE_END_ADDR {
+	volatile unsigned int      CTB_x:9;              /*     0: 0  4 */
+	volatile unsigned int      reserved0:7;          /*     0: 9  4 */
+	volatile unsigned int      CTB_y:9;              /*     0:16  4 */
+	volatile unsigned int      reserved1:7;          /*     0:25  4 */
+
+	/* size: 4, cachelines: 1, members: 4 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_TQ_BYPASS_ADDR {
+	volatile unsigned int      tq_bypass_buffer_addr_hard_wired:2; /*     0: 0  4 */
+	volatile unsigned int      tq_bypass_buffer_addr:30; /*     0: 2  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_VLD_BYPASS_ADDR {
+	volatile unsigned int      vld_bypass_buffer_addr_hard_wired:2; /*     0: 0  4 */
+	volatile unsigned int      vld_bypass_buffer_addr:30; /*     0: 2  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_COL_MV_BUFFER_ADDR {
+	volatile unsigned int      col_mv_buffer_addr_hard_wired:2; /*     0: 0  4 */
+	volatile unsigned int      col_mv_buffer_addr:30; /*     0: 2  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_ALTREF_FRAME_REC_CBUF_ADDR {
+	volatile unsigned int      altref_frame_rec_chroma_buffer_addr_hard_wired:2; /*     0: 0  4 */
+	volatile unsigned int      altref_frame_rec_chroma_buffer_addr:30; /*     0: 2  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_ENTRY_OFFSET_LOW8BIT_ADDR {
+	volatile unsigned int      entry_offset_low_8bit:8; /*     0: 0  4 */
+	volatile unsigned int      reserved0:8;          /*     0: 8  4 */
+	volatile unsigned int      sd_chroma_below_8bit:8; /*     0:16  4 */
+	volatile unsigned int      pri_chroma_below_8bit:8; /*     0:24  4 */
+
+	/* size: 4, cachelines: 1, members: 4 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_OFFSET_ADDR_OF_FIRST_OUTPUT {
+	volatile unsigned int      first_lower_2bit_offset_addr:28; /*     0: 0  4 */
+	volatile unsigned int      reserved0:4;          /*     0:28  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_10BIT_CONFIGURE {
+	volatile unsigned int      first_output_lower_2bit_stride:12; /*     0: 0  4 */
+	volatile unsigned int      snd_low2_out_enable_or_P010_for_sec:1; /*     0:12  4 */
+	volatile unsigned int      snd_with_high10b:1;   /*     0:13  4 */
+	volatile unsigned int      reserved0:18;         /*     0:14  4 */
+
+	/* size: 4, cachelines: 1, members: 4 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_CUR_FRAME_REC_YBUF_ADDR {
+	volatile unsigned int      cur_frame_rec_luma_buffer_addr_hard_wired:2; /*     0: 0  4 */
+	volatile unsigned int      cur_frame_rec_luma_buffer_addr:30; /*     0: 2  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_CUR_FRAME_REC_CBUF_ADDR {
+	volatile unsigned int      cur_frame_rec_chroma_buffer_addr_hard_wired:2; /*     0: 0  4 */
+	volatile unsigned int      cur_frame_rec_chroma_buffer_addr:30; /*     0: 2  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_LAST_FRAME_REC_YBUF_ADDR {
+	volatile unsigned int      last_frame_rec_luma_buffer_addr_hard_wired:2; /*     0: 0  4 */
+	volatile unsigned int      last_frame_rec_luma_buffer_addr:30; /*     0: 2  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_LAST_FRAME_REC_CBUF_ADDR {
+	volatile unsigned int      last_frame_rec_chroma_buffer_addr_hard_wired:2; /*     0: 0  4 */
+	volatile unsigned int      last_frame_rec_chroma_buffer_addr:30; /*     0: 2  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_GOLDEN_FRAME_REC_YBUF_ADDR {
+	volatile unsigned int      golden_frame_rec_luma_buffer_addr_hard_wired:2; /*     0: 0  4 */
+	volatile unsigned int      golden_frame_rec_luma_buffer_addr:30; /*     0: 2  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_GOLDEN_FRAME_REC_CBUF_ADDR {
+	volatile unsigned int      golden_frame_rec_chroma_buffer_addr_hard_wired:2; /*     0: 0  4 */
+	volatile unsigned int      golden_frame_rec_chroma_buffer_addr:30; /*     0: 2  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_ALTREF_FRAME_REC_YBUF_ADDR {
+	volatile unsigned int      altref_frame_rec_luma_buffer_addr_hard_wired:2; /*     0: 0  4 */
+	volatile unsigned int      altref_frame_rec_luma_buffer_addr:30; /*     0: 2  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_DEBLK_BYPASS_ADDR {
+	volatile unsigned int      entropy_probs_addr_hard_wired:2; /*     0: 0  4 */
+	volatile unsigned int      entropy_probs_addr:30; /*     0: 2  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_FRAME_SEGMENT_ID_BUF_ADDR {
+	volatile unsigned int      frame_segment_id_data_addr_hard_wired:2; /*     0: 0  4 */
+	volatile unsigned int      frame_segment_id_data_addr:30; /*     0: 2  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_ERROR_CASE {
+	volatile unsigned int      reserved0;            /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_BASIC_BITS_RETURN_DATA {
+	volatile unsigned int      basic_bits_data;      /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_SRAM_PORT_OFFSET {
+	volatile unsigned int      sram_addr_hard_wired:2; /*     0: 0  4 */
+	volatile unsigned int      sram_addr:10;         /*     0: 2  4 */
+	volatile unsigned int      reserved0:20;         /*     0:12  4 */
+
+	/* size: 4, cachelines: 1, members: 3 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_SRAM_PORT_DATA {
+	volatile unsigned int      sram_data;            /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VP9_STCD_HW_BITOFFSET {
+	volatile unsigned int      stcd_hw_bitoffset;    /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REGISTER_LIST {
+	volatile vetop_reg_mode_sel_t  _00_mode_sel;     /*     0     4 */
+	vetop_reg_reset_t          _04_reset;            /*     4     4 */
+	vetop_reg_codec_cntr_t     _08_codec_cntr;       /*     8     4 */
+	vetop_reg_codec_overtime_t _0c_overtime;         /*    12     4 */
+	vetop_reg_mmc_req_wnum_t   _10_mmc_req;          /*    16     4 */
+	vetop_reg_cache_req_wnum_t _14_cache_req;        /*    20     4 */
+	unsigned int               _18_reserved0;        /*    24     4 */
+	vetop_reg_status_t         _1c_status;           /*    28     4 */
+	vetop_reg_dram_read_cntr_t _20_dram_read_cntr;   /*    32     4 */
+	vetop_reg_dram_write_cntr_t _24_dram_write_cntr; /*    36     4 */
+	vetop_reg_anaglyph_cntr_t  _28_anaglyph_cntr;    /*    40     4 */
+	unsigned int               _2c_reserved1;        /*    44     4 */
+	vetop_reg_maf_ctrl_t       _30_maf_ctrl;         /*    48     4 */
+	vetop_reg_maf_th_clip_t    _34_maf_th_clip;      /*    52     4 */
+	vetop_reg_maf_ref1_luma_addr_t _38_maf_ref1_luma_addr; /*    56     4 */
+	vetop_reg_maf_ref1_chroma_addr_t _3c_maf_ref1_chroma_addr; /*    60     4 */
+	/* --- cacheline 1 boundary (64 bytes) --- */
+	vetop_reg_cur_frame_maf_addr_t _40_cur_maf_addr; /*    64     4 */
+	vetop_reg_ref1_frame_maf_addr_t _44_ref1_maf_addr; /*    68     4 */
+	vetop_reg_ref2_frame_maf_addr_t _48_ref2_maf_addr; /*    72     4 */
+	vetop_reg_maf_max_group_diff_t _4c_maf_max_group_diff; /*    76     4 */
+	vetop_reg_deblk_intrapred_buf_ctrl_t _50_deblk_intrapred_buf_ctrl; /*    80     4 */
+	vetop_reg_deblk_dram_buf_addr_t _54_deblk_dram_buf; /*    84     4 */
+	vetop_reg_intrapred_dram_buf_addr_t _58_intrapred_dram_buf; /*    88     4 */
+	vetop_reg_argb_cmd_queue_start_t _5c_argb_cmd_queue_start; /*    92     4 */
+	vetop_reg_argb_src1_blk_addr_t _60_argb_src1_blk_addr; /*    96     4 */
+	vetop_reg_argb_src2_blk_addr_t _64_argb_src2_blk_addr; /*   100     4 */
+	vetop_reg_argb_target_blk_addr_t _68_argb_target_blk_addr; /*   104     4 */
+	vetop_reg_argb_scr_pix_stride_t _6c_argb_src_pix_stride; /*   108     4 */
+	vetop_reg_argb_target_pix_stride_t _70_argb_target_pix_stride; /*   112     4 */
+	vetop_reg_argb_blk_size_t  _74_argb_blk_size;    /*   116     4 */
+	vetop_reg_argb_value_to_fill_t _78_argb_value_to_fill; /*   120     4 */
+	vetop_reg_argb_blk_ctrl_t  _7c_argb_blk_ctrl;    /*   124     4 */
+	/* --- cacheline 2 boundary (128 bytes) --- */
+	vetop_reg_luma_hist_threshold_t _80_luma_hist_threshold[4]; /*   128    16 */
+	vetop_reg_luma_hist_value_t _90_luma_hist_value[12]; /*   144    48 */
+	/* --- cacheline 3 boundary (192 bytes) --- */
+	unsigned int               _c0_reserved;         /*   192     4 */
+	vetop_reg_pri_chroma_buf_len_t _c4_pri_chroma_buf_len; /*   196     4 */
+	vetop_reg_pri_buf_line_stride_t _c8_pri_buf_line_stride; /*   200     4 */
+	vetop_reg_sec_buf_line_stride_t _cc_sec_buf_line_stride; /*   204     4 */
+	vetop_reg_anaglyph_output_rbuf_addr_t _d0_anaglyph_output_rbuf_addr; /*   208     4 */
+	vetop_reg_anaglyph_output_gbuf_addr_t _d4_anaglyph_output_gbuf_addr; /*   212     4 */
+	vetop_reg_anaglyph_output_bbuf_addr_t _d8_anaglyph_output_bbuf_addr; /*   216     4 */
+	unsigned int               _dc_reserved[3];      /*   220    12 */
+	vetop_reg_chroma_buf_len0  _e8_chroma_buf_len0;  /*   232     4 */
+	vetop_reg_pri_output_format _ec_pri_output_format; /*   236     4 */
+	unsigned int               _f0_reserved[2];      /*   240     8 */
+	vetop_reg_dbg_ctrl_t       _f8_dbg_ctrl;         /*   248     4 */
+	vetop_reg_dbg_output_t     _fc_dbg_output;       /*   252     4 */
+
+	/* size: 256, cachelines: 4, members: 47 */
+};
+struct VETOP_REG_MODE_SELECT {
+	volatile unsigned int      mode:4;               /*     0: 0  4 */
+	volatile unsigned int      reserved0_compress_mode:1; /*     0: 4  4 */
+	volatile unsigned int      jpg_dec_en:1;         /*     0: 5  4 */
+	volatile unsigned int      enc_isp_enable:1;     /*     0: 6  4 */
+	volatile unsigned int      enc_enable:1;         /*     0: 7  4 */
+	volatile unsigned int      read_counter_sel:1;   /*     0: 8  4 */
+	volatile unsigned int      write_counter_sel:1;  /*     0: 9  4 */
+	volatile unsigned int      decclkgen:1;          /*     0:10  4 */
+	volatile unsigned int      encclkgen:1;          /*     0:11  4 */
+	volatile unsigned int      reserved1_bodybuf_1024_aligned:1; /*     0:12  4 */
+	volatile unsigned int      rabvline_spu_dis:1;   /*     0:13  4 */
+	volatile unsigned int      deblk_spu_dis:1;      /*     0:14  4 */
+	volatile unsigned int      mc_spu_dis:1;         /*     0:15  4 */
+	volatile unsigned int      ddr_mode:2;           /*     0:16  4 */
+	volatile unsigned int      sram_bist_sel:1;      /*     0:18  4 */
+	volatile unsigned int      mbcntsel:1;           /*     0:19  4 */
+	volatile unsigned int      rec_wr_mode:1;        /*     0:20  4 */
+	volatile unsigned int      pic_width_more_2048:1; /*     0:21  4 */
+	volatile unsigned int      pic_width_is_4096:1;  /*     0:22  4 */
+	volatile unsigned int      reserved3:3;          /*     0:23  4 */
+	volatile unsigned int      rgb_def_color_en:1;   /*     0:26  4 */
+	volatile unsigned int      min_val_wrap_en:1;    /*     0:27  4 */
+	volatile unsigned int      reserved4:1;          /*     0:28  4 */
+	volatile unsigned int      compress_en:1;        /*     0:29  4 */
+	volatile unsigned int      reserved5:1;          /*     0:30  4 */
+	volatile unsigned int      rampd:1;              /*     0:31  4 */
+
+	/* size: 4, cachelines: 1, members: 26 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_RESET {
+	volatile unsigned int      reset:1;              /*     0: 0  4 */
+	volatile unsigned int      reserved0:3;          /*     0: 1  4 */
+	volatile unsigned int      mem_sync_mask:1;      /*     0: 4  4 */
+	volatile unsigned int      wdram_clr:1;          /*     0: 5  4 */
+	volatile unsigned int      reserved1:2;          /*     0: 6  4 */
+	volatile unsigned int      write_dram_finish:1;  /*     0: 8  4 */
+	volatile unsigned int      ve_sync_idle:1;       /*     0: 9  4 */
+	volatile unsigned int      enc_sync_idle:1;      /*     0:10  4 */
+	volatile unsigned int      jpg_dec_sync_idle:1;  /*     0:11  4 */
+	volatile unsigned int      reserved2:4;          /*     0:12  4 */
+	volatile unsigned int      decoder_reset:1;      /*     0:16  4 */
+	volatile unsigned int      dec_req_mask_enable:1; /*     0:17  4 */
+	volatile unsigned int      dec_vebk_reset:1;     /*     0:18  4 */
+	volatile unsigned int      reserved3:5;          /*     0:19  4 */
+	volatile unsigned int      encoder_reset:1;      /*     0:24  4 */
+	volatile unsigned int      enc_req_mask_enable:1; /*     0:25  4 */
+	volatile unsigned int      reserved4:6;          /*     0:26  4 */
+
+	/* size: 4, cachelines: 1, members: 17 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_CODEC_COUNTER {
+	volatile unsigned int      counter:31;           /*     0: 0  4 */
+	volatile unsigned int      enable:1;             /*     0:31  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_CODEC_OVERTIME {
+	volatile unsigned int      overtime_value:31;    /*     0: 0  4 */
+	volatile unsigned int      reserved0:1;          /*     0:31  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_MMC_REQUEST_WNUM {
+	volatile unsigned int      wnum:24;              /*     0: 0  4 */
+	volatile unsigned int      reserved0:8;          /*     0:24  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_CACHE_REQ_WNUM {
+	volatile unsigned int      wnum:24;              /*     0: 0  4 */
+	volatile unsigned int      reserved0:8;          /*     0:24  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_STATUS {
+	volatile unsigned int      timeout_intr:1;       /*     0: 0  4 */
+	volatile unsigned int      isp_intr:1;           /*     0: 1  4 */
+	volatile unsigned int      ave_intr:1;           /*     0: 2  4 */
+	volatile unsigned int      mpe_intr:1;           /*     0: 3  4 */
+	volatile unsigned int      rv_intr:1;            /*     0: 4  4 */
+	volatile unsigned int      vc1_intr:1;           /*     0: 5  4 */
+	volatile unsigned int      avc_intr:1;           /*     0: 6  4 */
+	volatile unsigned int      mpg_intr:1;           /*     0: 7  4 */
+	volatile unsigned int      timeout_enable:1;     /*     0: 8  4 */
+	volatile unsigned int      graphic_intr:1;       /*     0: 9  4 */
+	volatile unsigned int      graphic_intr_enable:1; /*     0:10  4 */
+	volatile unsigned int      reserved1:5;          /*     0:11  4 */
+	volatile unsigned int      mem_sync_idle:1;      /*     0:16  4 */
+	volatile unsigned int      reserved0:11;         /*     0:17  4 */
+	volatile unsigned int      graphic_cmd_queue_busy:1; /*     0:28  4 */
+	volatile unsigned int      graphic_busy:1;       /*     0:29  4 */
+	volatile unsigned int      maf_busy:1;           /*     0:30  4 */
+	volatile unsigned int      esp_mode:1;           /*     0:31  4 */
+
+	/* size: 4, cachelines: 1, members: 18 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_DRAM_READ_COUNTER {
+	volatile unsigned int      counter:31;           /*     0: 0  4 */
+	volatile unsigned int      enable:1;             /*     0:31  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_DRAM_WRITE_COUNTER {
+	volatile unsigned int      counter:31;           /*     0: 0  4 */
+	volatile unsigned int      enable:1;             /*     0:31  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_ANAGLYPH_CONTROL {
+	volatile unsigned int      anaglyph_src_mode:2;  /*     0: 0  4 */
+	volatile unsigned int      reserved2:1;          /*     0: 2  4 */
+	volatile unsigned int      irec_is_right:1;      /*     0: 3  4 */
+	volatile unsigned int      anaglyph_proc_mode:3; /*     0: 4  4 */
+	volatile unsigned int      reserved1:1;          /*     0: 7  4 */
+	volatile unsigned int      yuv2rgb_mode:2;       /*     0: 8  4 */
+	volatile unsigned int      reserved0:21;         /*     0:10  4 */
+	volatile unsigned int      anaglyph_out_enable:1; /*     0:31  4 */
+
+	/* size: 4, cachelines: 1, members: 8 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_MAF_CONTROL {
+	volatile unsigned int      still_to_motion_threshold:4; /*     0: 0  4 */
+	volatile unsigned int      motion_to_still_threshold:4; /*     0: 4  4 */
+	volatile unsigned int      average_shifter_y:4;  /*     0: 8  4 */
+	volatile unsigned int      average_shifter_c:4;  /*     0:12  4 */
+	volatile unsigned int      reserved0:14;         /*     0:16  4 */
+	volatile unsigned int      maf_enable:1;         /*     0:30  4 */
+	volatile unsigned int      new_frame_bgn:1;      /*     0:31  4 */
+
+	/* size: 4, cachelines: 1, members: 7 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_MAF_THRESHOLD_CLIP {
+	volatile unsigned int      min_clip_value_y:8;   /*     0: 0  4 */
+	volatile unsigned int      max_clip_value_y:8;   /*     0: 8  4 */
+	volatile unsigned int      min_clip_value_c:8;   /*     0:16  4 */
+	volatile unsigned int      max_clip_value_c:8;   /*     0:24  4 */
+
+	/* size: 4, cachelines: 1, members: 4 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_MAF_REF1_FB_LUMA_ADDR {
+	volatile unsigned int      addr;                 /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_MAF_REF1_FB_CHROMA_ADDR {
+	volatile unsigned int      addr;                 /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_CURRENT_FRAME_MAF_ADDR {
+	volatile unsigned int      addr;                 /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_REF1_FRAME_MAF_ADDR {
+	volatile unsigned int      addr;                 /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_REF2_FRAME_MAF_ADDR {
+	volatile unsigned int      addr;                 /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_MAF_MAX_GROUP_DIFFERENCE {
+	volatile unsigned int      top_y_max_group_diff:8; /*     0: 0  4 */
+	volatile unsigned int      top_c_max_group_diff:8; /*     0: 8  4 */
+	volatile unsigned int      bottom_y_max_group_diff:8; /*     0:16  4 */
+	volatile unsigned int      bottom_c_max_group_diff:8; /*     0:24  4 */
+
+	/* size: 4, cachelines: 1, members: 4 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_DEBLK_INTRAPRED_BUF_CTRL {
+	volatile unsigned int      deblk_buf_ctrl:2;     /*     0: 0  4 */
+	volatile unsigned int      intrapred_buf_ctrl:2; /*     0: 2  4 */
+	volatile unsigned int      reserved0:28;         /*     0: 4  4 */
+
+	/* size: 4, cachelines: 1, members: 3 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_DEBLK_DRAM_BUF_ADDR {
+	volatile unsigned int      addr;                 /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_INTRAPRED_DRAM_BUF_ADDR {
+	volatile unsigned int      addr;                 /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_ARGB_COMMAND_QUEUE_START {
+	volatile unsigned int      cmd_num:6;            /*     0: 0  4 */
+	volatile unsigned int      reserved0:25;         /*     0: 6  4 */
+	volatile unsigned int      multi_cmd_start:1;    /*     0:31  4 */
+
+	/* size: 4, cachelines: 1, members: 3 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_ARGB_SOURCE1_BLOCK_ADDR {
+	volatile unsigned int      addr;                 /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_ARGB_SOURCE2_BLOCK_ADDR {
+	volatile unsigned int      addr;                 /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_ARGB_TARGET_BLOCK_ADDR {
+	volatile unsigned int      addr;                 /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_ARGB_SRC_PIXEL_STRIDE {
+	volatile unsigned int      stride_src1:16;       /*     0: 0  4 */
+	volatile unsigned int      stride_src2:16;       /*     0:16  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_ARGB_TARGET_PIXEL_STRIDE {
+	volatile unsigned int      stride_target:16;     /*     0: 0  4 */
+	volatile unsigned int      alpha_global:8;       /*     0:16  4 */
+	volatile unsigned int      reserved0:8;          /*     0:24  4 */
+
+	/* size: 4, cachelines: 1, members: 3 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_ARGB_BLOCK_SIZE {
+	volatile unsigned int      blk_size_x:16;        /*     0: 0  4 */
+	volatile unsigned int      blk_size_y:16;        /*     0:16  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_ARGB_VALUE_TO_FILL {
+	volatile unsigned int      argb_value;           /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_ARGB_BLOCK_CONTROL {
+	volatile unsigned int      blk_ctrl:2;           /*     0: 0  4 */
+	volatile unsigned int      alpha_mode:2;         /*     0: 2  4 */
+	volatile unsigned int      bottom_line_first:1;  /*     0: 4  4 */
+	volatile unsigned int      alpha_low_bits:1;     /*     0: 5  4 */
+	volatile unsigned int      reserved0:25;         /*     0: 6  4 */
+	volatile unsigned int      blk_start:1;          /*     0:31  4 */
+
+	/* size: 4, cachelines: 1, members: 6 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_LUMA_HISTOGRAM_THRESHOLD {
+	volatile unsigned int      threshold0:8;         /*     0: 0  4 */
+	volatile unsigned int      threshold1:8;         /*     0: 8  4 */
+	volatile unsigned int      threshold2:8;         /*     0:16  4 */
+	volatile unsigned int      threshold3:8;         /*     0:24  4 */
+
+	/* size: 4, cachelines: 1, members: 4 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_LUMA_HISTOGRAM_VALUE {
+	volatile unsigned int      value:20;             /*     0: 0  4 */
+	volatile unsigned int      reserved0:12;         /*     0:20  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_PRI_CHROMA_BUF_LEN {
+	volatile unsigned int      pri_chroma_buf_len;   /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_PRI_BUF_LINE_STRIDE {
+	volatile unsigned int      pri_luma_line_stride:16; /*     0: 0  4 */
+	volatile unsigned int      pri_chroma_line_stride:16; /*     0:16  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_SEC_BUF_LINE_STRIDE {
+	volatile unsigned int      sec_luma_line_stride:16; /*     0: 0  4 */
+	volatile unsigned int      sec_chroma_line_stride:16; /*     0:16  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_ANAGLYPH_RBUF_ADDR {
+	volatile unsigned int      anaglyph_out_rbuf_addr; /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_ANAGLYPH_GBUF_ADDR {
+	volatile unsigned int      anaglyph_out_gbuf_addr; /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_ANAGLYPH_BBUF_ADDR {
+	volatile unsigned int      anaglyph_out_bbuf_addr; /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_CHROMA_BUF_LEN0 {
+	volatile unsigned int      sdrt_chroma_buf_len:28; /*     0: 0  4 */
+	volatile unsigned int      luma_align_mode:1;    /*     0:28  4 */
+	volatile unsigned int      chroma_align_mode:1;  /*     0:29  4 */
+	volatile unsigned int      output_data_format:2; /*     0:30  4 */
+
+	/* size: 4, cachelines: 1, members: 4 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_PRI_OUTPUT_FORMAT {
+	volatile unsigned int      second_special_output_format:3; /*     0: 0  4 */
+	volatile unsigned int      reserved0:1;          /*     0: 3  4 */
+	volatile unsigned int      primary_output_format:3; /*     0: 4  4 */
+	volatile unsigned int      reserved1:25;         /*     0: 7  4 */
+
+	/* size: 4, cachelines: 1, members: 4 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_DEBUG_CONTROL {
+	volatile unsigned int      dbg_ctrl:15;          /*     0: 0  4 */
+	volatile unsigned int      reserved0:17;         /*     0:15  4 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+struct VETOP_REG_DEBUG_OUTPUT {
+	volatile unsigned int      dbg_output;           /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};

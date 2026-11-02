@@ -16,9 +16,9 @@ Every row must work and be board-verified against the stated number. Status: OK 
 | DDR3 1 GB | OK | |
 | TF card | OK | |
 | 2 MB SPI flash | OK | U-Boot boot from SPI verified |
-| Ethernet 10/100/1000 | PARTIAL | 1000 OK; RX-dead boots root-caused (RGMII RX delay) + DT fix rgmii-rxid pending image; then ≥10 cold boots + forced 10/100 tests |
+| Ethernet 10/100/1000 | PARTIAL | 1000 OK; RX-dead fixed (rgmii-rxid), 10/10 clean cold boots PASS on new image; forced 10/100 + iperf3 still to test |
 | WiFi 802.11 a/b/g/n/ac (859 chip) | PARTIAL | scan 2.4+5 GHz OK; STA association + ac rates + iperf to test |
-| BT 5.0 | PARTIAL | hci0 up, scan OK; LE 5.0 features + pairing to test |
+| BT 5.0 | PARTIAL | hci0 up without the vendor blob (in-kernel init + btattach), scan OK; LE 5.0 features + pairing to test |
 | Micro HDMI 2.0a 4K@60 | TODO | needs display; also HDMI audio + CEC |
 | TV CVBS PAL/NTSC (13-pin board) | TODO | new sun8i_tve driver built; needs TV |
 | Audio: HDMI | TODO | needs display |

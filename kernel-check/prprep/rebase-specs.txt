@@ -1,0 +1,40 @@
+# name | parent (pr/<x> or origin/main) | own commits (oldest first)
+feat/distro-ubuntu-stonking | origin/main | b74f658
+fix/uboot-sunxi64-host-tools-openssl4 | origin/main | 0f30781 4a8b8ef
+fix/apt-utils-upstream-pkg-fallback | origin/main | 7f9d87f
+fix/rootfs-armbian-gpg-symlink-on-host | origin/main | 1fbb97f
+fix/rootfs-dbus-launch-helper-guard | origin/main | a3cc645
+fix/sunxi-dwmac-sun8i-upstream-reset | origin/main | e04e429
+fix/sunxi-cedrus-h616-upstream | origin/main | 96a216e
+feat/sunxi-zero2-gpu-opp | origin/main | f24863d
+feat/sunxi-zero2-usb-otg-host-overlay | origin/main | d315966
+fix/sunxi-pm-s2idle-dpm-backports | origin/main | 3d287e0
+fix/uwe5622-bump-driver-pin | origin/main | ebcabca
+fix/uwe5622-services | origin/main | d380e99
+fix/uwe5622-powersave | origin/main | d189fa4
+fix/uwe5622-bt-wake | pr/fix/uwe5622-bump-driver-pin | 721a30c 1f7fdf3
+fix/uwe5622-regdomain | pr/fix/uwe5622-bump-driver-pin | 589775f
+fix/sunxi-zero2-regulators | origin/main | 70d6464 e2060b4
+fix/sunxi-drm-blend-mode | origin/main | 363a4c0
+fix/sunxi-h616-thermal-trips | origin/main | 332babe
+fix/bsp-systemd-boot-warnings | origin/main | ca5d512
+fix/sunxi64-edge-realtek-phy-hwmon | origin/main | 6d9361d
+fix/sunxi-zero2-mmc-aliases | origin/main | 72f0cb3
+fix/uboot-h616-spl-rsb | origin/main | 1c66bd7
+fix/uboot-zero2-env-nowhere | origin/main | de8e092
+feat/uboot-zero2-spi-nor | origin/main | b2471dd
+feat/uboot-zero2-usb-boot | origin/main | 2167a1d facf2f2
+fix/sunxi64-bootscript-boot-source | origin/main | cfc5f77
+feat/sunxi-h616-tv-encoder | pr/fix/sunxi-drm-blend-mode | cce6763 8f829e3 4f20d8a
+fix/sunxi-h616-gpu-cooling | origin/main | 761f64e
+fix/uboot-sunxi-ce-rng-kaslr | origin/main | 83ebfc1
+feat/uwe5622-bt-no-blob | origin/main | df08526 598ce8b
+feat/atf-h616-psci-cpu-suspend | origin/main | 056cb22
+feat/atf-h616-system-suspend | pr/feat/atf-h616-psci-cpu-suspend | 66c8d3f
+feat/sunxi-h616-cpuidle-dt | origin/main | 8f4186a
+fix/sunxi-h616-orangepi-zero2-emac-rxid | origin/main | 6bd792b
+fix/uwe5622-quiet-expected-log | origin/main | a56e848
+feat/sunxi-h616-vdec-spec | origin/main | cb3826a 4ce548b d92a201
+fix/sunxi-h616-vdd-sys-floor | origin/main | f206aa5
+fix/uwe5622-5ghz-ap | origin/main | 709f8b1
+fix/sunxi-h616-pwm-uart0-pins | origin/main | d6633f6

@@ -1,70 +1,65 @@
-# Orange Pi Zero2 — hardware bring-up status
+# Orange Pi Zero2: hardware bring-up status
 
-Date: 2026-11-01. Image: Armbian-unofficial 26.11.0-trunk, Ubuntu 26.10 (stonking), Linux 7.3.1-edge-sunxi64, U-Boot 2026.10, TF-A lts-v2.14.11. Board booted from SD, tested over serial (ttyUSB1/ttyOPIZ2) and the 10.56.0.0/24 test link.
+Date: 2026-11-02. Image on the board: Armbian-unofficial 26.11.0-trunk, Ubuntu 26.10 (stonking), Linux 7.3.1-edge-sunxi64,
+U-Boot 2026.10, TF-A lts-v2.14.11 + H616 suspend patches (clean BL31 b88ccfba76a6). Acceptance list:
+[spec-checklist.md](spec-checklist.md) (every row of the orangepi.org spec page). Details: `harness/research/impl-*.md`.
 
-Legend: **OK** verified on the board · **OK\*** driver present, not functionally verified · **PARTIAL** works with a known gap · **MISSING** no working driver.
-Rule: every board feature the hardware has must work, whether or not the print-server install uses it.
+Legend: **OK** verified on the board · **OK\*** driver present, not functionally verified · **PARTIAL** works with a
+known gap · **GAP** no driver anywhere.
 
-## 1. Where we are
+## 1. Status
 
 | Area | Status | Evidence / notes |
 |---|---|---|
-| Boot: SPL → TF-A → U-Boot → kernel | OK (new U-Boot, board-tested from SD) | SPL→kernel 6.5 s (was 8.5 s). "Failed to set core voltage" root cause: BL31 leaves the AXP305 in RSB mode, SPL only spoke I2C → on warm reboots the CPU stayed at 408 MHz through firmware. Fixed with RSB support in SPL. FAT env probe removed (ENV_IS_NOWHERE). All 6 USB host controllers scanned in parallel (1.5 s). |
-| SD card (mmc0) | OK | SDHC, 4-bit, 50 MHz high-speed (3.3 V only on this board, so no UHS). |
-| SPI NOR 2 MB (mtd0) | OK (board-tested) | U-Boot written with flashcp + read-back verify; with the SD bootloader invalid the BROM boots "sunxi SPI" and U-Boot boots Linux from SD. Fallback chain SD → USB → PXE → DHCP → prompt reached in ~11 s. USB boot (all ports incl. expansion header) and netboot: to test with a stick / TFTP server. |
+| Boot SPL → TF-A → U-Boot → kernel | OK | AXP305 over RSB in SPL: no "Failed to set core voltage", SPL→kernel 6.5 s (was 8.5 s). ENV_IS_NOWHERE. USB hosts scanned in parallel (1.5 s). |
+| SD card | OK | SDHC 4-bit 50 MHz (3.3 V only, no UHS). `mmc0` alias = SD. |
+| SPI NOR 2 MB | OK | U-Boot written + read-back verified; BROM boots "sunxi SPI"; fallback SD → USB → PXE → DHCP → prompt in ~11 s. |
+| USB boot / netboot | TODO | Built (all host ports); needs a stick / TFTP server. |
 | DRAM 1 GB | OK | |
-| CPU DVFS 480–1512 MHz, speed bin | OK | `sun50i_cpufreq_nvmem: speed bin speed3`; sustained 1512 MHz under 4-core stress, no throttling. |
-| Thermal (cpu/gpu/ve/ddr zones) | FIXED (pending image) | Vanilla trips 60/70 °C had no cooling maps → CPU never throttled, only 110 °C shutdown protected it. Now passive 85 °C mapped to cpu0-3, hot 100, critical 110. GPU cooling map follows (GPU OPP now merged). |
-| cpuidle | MISSING | `current_driver: none`. H616 has no ARISC; TF-A reports `PSCI: Suspend is unavailable`; no `idle-states` in DT. Needs TF-A CPU_SUSPEND work. |
-| Suspend (s2idle) | PARTIAL | `freeze` works: 11 s round trip with RTC wake, WiFi suspends/resumes, SSH alive. Shallow only (cores WFI); no deep sleep possible without TF-A support. systemd sleep disabled by Armbian default. |
-| Ethernet 1 GbE (RTL8211F) | FIXED (pending image) | Intermittent dead-RX boots (link up, TX ok, 0 RX) root-caused 2026-11-02: mainline DT uses MAC-side 3100 ps RX delay with PHY RXDLY off (marginal). Live fix on a bad boot (PHY RXDLY on, syscon ERXDC 0) restored RX instantly. DT now rgmii-rxid like Zero3 (branch fix/sunxi-h616-orangepi-zero2-emac-rxid). Minor: `Too many address, switching to promiscuous`. |
-| WiFi (UWE5622, SDIO) | OK | Acceptance bar (user): SSID scan. Sees 2.4 + 5 GHz networks; AP mode supported. Driver pin was 13 commits behind (memory corruption on unload, OOB key write, rfkill oops, TCP stall) → bumped; 5 GHz regulatory fix + service hardening in progress. |
-| Bluetooth (UWE5622, UART) | PARTIAL | hci0 up, BR/EDR+LE scan finds devices. Depends on vendor `hciattach_opi` blob; `bt_wake` DT warning every boot. |
-| USB host (3× EHCI/OHCI) | OK\* | Controllers up; nothing was plugged in yet. |
-| USB-C | PARTIAL | Peripheral (gadget) mode is the default and required; untested so far (power-only cable). Host mode works only when the board is powered from the GPIO header 5 V pins and the device is attached with a cable/adapter that ignores CC (CC pins are tied to GND; VBUS then comes from the header supply) — delivered as a DT overlay (dr_mode host + EHCI0/OHCI0), test in that setup. |
-| HDMI video (DE33/TCON/HDMI PHY) | OK\* | Pipeline bound, connector present; no display attached yet. 6× "pixel format with alpha ... blend mode not setup" warnings. |
-| HDMI audio | OK\* | ALSA card present (vendor AHUB); untestable without display. |
-| Analog audio codec | OK\* (line-out) | Playback-only by hardware: H616 codec is DAC-only (UM §8.4.1), Zero2 schematic has no MIC net, Orange Pi user guide: "does not support MIC Input". Line-out untested (needs expansion board). |
-| GPU Mali-G31 (panfrost) | PARTIAL | Works; fixed 432 MHz, **no OPP table → no DVFS**. Fix in progress. |
-| Video decode (Cedrus) | **OK** | MPEG-2/H.264/HEVC/VP8 all decode bit-exact; 1080p H.264 150 fps, 1080p HEVC 310 fps, 720p ~230–350 fps, IRQ-count-verified. Upstream H616 variant (adds IOMMU/SRAM) to pull in. |
-| Video encode (VE H.264) | **MISSING** | No open driver exists anywhere; vendor blob only. Dedicated reverse-engineering effort started (see §3). |
-| Crypto engine (sun8i-ce) + TRNG | OK | AES/DES3/SHA offload registered; `/dev/hwrng` = CE TRNG. |
-| RTC | OK | Works; no backup battery on board (fake-hwclock + NTP). |
-| Watchdog | OK | sunxi-wdt, 16 s max. systemd watchdog config added to build (15 s). |
-| IR receiver | PARTIAL | Only HDMI-CEC rc device; the H616 IR block is not enabled in the Zero2 DTS (overlay exists). Need to confirm whether the Zero2 has an on-board receiver or only the header pin. |
-| PWM | OK\* (overlay) | `pwm@300a000` disabled by default; overlays `sun50i-h616-pwm1..4-*` exist (vendor driver). A mainline-style driver (v10 series) is pending upstream. |
-| I2C / UART / SPI on headers | OK\* (overlay) | Overlays present for i2c0–4, uart2–5, spidev, spi-nor only on spi0 by default. |
-| GPIO | OK | Two gpiochips (32 + 288 lines). |
-| LEDs | OK | green:power, red:status (heartbeat). |
-| PMIC AXP305 | OK | All rails present; some supplies (`vcc-pl`, `phy-io`, spi-nor `vcc`) use dummy regulators — DT cleanups. |
-| TV-out (CVBS) | OK\* (new driver, build-tested) | New sun8i_tve DRM driver + DE33 YUV output + TCON-TOP clock select; PAL/NTSC; enabled by overlay `orangepi-zero2-expansion` (also IR). Needs a TV on the header TV-OUT pin. |
-| Deep sleep / cpuidle | PARTIAL (debug firmware) | 2026-11-02: cpuidle 30-min soak PASS; suspend-to-RAM with real DRAM self-refresh (STAT=3 during suspend) 11/11 PASS, RAM intact, after fixing the DRAM base (A133 0x04820000 → H616 0x047FB000). 100-cycle combined soak (cpuidle + suspend) PASS 100/100; clean production firmware b88ccfba76a6 verified (psci_idle + deep suspend). No power number: Meross MSS110 has no metering. |
-| Print server (CUPS, drivers) | OK\* | CUPS 2.4.16, ipp-usb, HPLIP, all 20 printer-driver packages installed; printer not attached yet. |
+| CPU DVFS 480–1512 MHz | OK | speed bin speed3; sustained 1512 MHz under 4-core stress. |
+| Thermal | OK | CPU passive 85 °C (cpu0-3), hot 100, critical 110; GPU passive 85 °C via devfreq cooling. |
+| cpuidle | OK | Native PSCI CPU_SUSPEND in TF-A + `cpu-sleep` idle state; 30-min soak PASS. |
+| Suspend to RAM | OK | Native SYSTEM_SUSPEND: DRAM software self-refresh (STAT 0x223), 100/100 rtcwake cycles with cpuidle, 200 MB tmpfs hash intact. Power saving not measured (Meross MSS110 has no metering). |
+| VDD-SYS (vdd-gpu-sys) | OK | Floor 900 mV: at 810 mV (GPU devfreq idle) 4K VE decode corrupted 6/13 runs; 0/6 at ≥ 890 mV. |
+| Ethernet 1 GbE (RTL8211F) | PARTIAL | Dead-RX boots fixed with `rgmii-rxid` (10/10 cold boots RX OK). **Open:** on the current debug kernels, bulk host→board TCP over end0 (scp, `ssh cat`) stalls at exactly 512 KiB while the same file passes over WiFi; 8000-byte pings lose ~33 % after ~1 h uptime. Small packets and ssh fine; RX/TX error counters 0, 6 TX drops. Neither retested on the image kernel. Forced 10/100 + iperf3 not tested. |
+| WiFi UWE5622 (SDIO) | PARTIAL | Scan 2.4 + 5 GHz OK. 5 GHz SoftAP fixed (driver never passed the channel): hostapd ch36 → VHT80 MCS9, iperf3 128 Mbit/s host→board, 96.5 board→host; 2.4 GHz AP 31.5 / 41.4 Mbit/s; wpa_supplicant AP works on both bands. Regdomain from cfg80211 (all countries); image sets it with `OPIZ2_WIFI_REGDOM` (2c5dd06). Firmware always picks the widest 20/40/80 MHz block. STA association + iperf as station to test. |
+| Bluetooth (UWE5622, UART) | PARTIAL | Blob-free: in-kernel vendor init + stock `btattach`; hci0 up, BR/EDR + LE scan OK. Pairing and LE 5.0 features to test. Blob kept as fallback (`vendor_init=0`). |
+| USB host (3× EHCI/OHCI) | OK\* | Controllers up; no device plugged in yet. |
+| USB-C | PARTIAL | Gadget mode untested (power-only cable). Host mode via overlay `sun50i-h616-usb-otg-host` (needs board powered from the header). |
+| HDMI video | OK\* | Pipeline bound; no display yet. Blend-mode warnings fixed (0). |
+| HDMI audio | OK\* | ALSA card present; needs a display. |
+| Analog audio | OK\* (line-out) | DAC-only by hardware (no MIC). Needs expansion board. |
+| GPU Mali-G31 (panfrost) | PARTIAL | devfreq 306–600 MHz. GLES 3.2 / OpenCL 2.0 exposure not yet verified. |
+| Video decode (Cedrus) | PARTIAL | Bit-exact: MPEG-2, H.264, HEVC, VP8, VP9 P2, HEVC Main10. H.264 4K 42.0 fps (spec 4K30 OK); HEVC 8-bit 4K 81.8 fps, 6K 30.2 fps; HEVC Main10 4K 24.5 fps and VP9 P2 4K 35.6 fps via P010, vs. spec 4K60 (AFBC 10-bit path unmeasured); Main10 6K OOM. Uses Jernej Skrabec's unposted H616 work. |
+| AVS2 decode | GAP | No uAPI, driver or userspace anywhere. Research/implementation in progress. |
+| Video encode (H.264, JPEG) | GAP | No open driver; reverse-engineering effort (`harness/research/ve-encoder/`). |
+| Crypto engine + TRNG | OK | `/dev/hwrng` = CE TRNG. U-Boot CE TRNG → KASLR seed built; board check of KASLR pending. |
+| RTC / watchdog | OK | No backup battery; sunxi-wdt 16 s, systemd watchdog 15 s. |
+| IR receiver | TODO | On the expansion board; overlay `orangepi-zero2-expansion`. |
+| TV-out CVBS | OK\* | New sun8i_tve driver, build-tested; needs a TV. |
+| PWM | OK\* (overlay) | Overlays for PH2/PH3 (header pins 8/10) apply cleanly; PWM3/PWM4 on PH0/PH1 now release UART0 (debug console) — fix on `fix/sunxi-h616-pwm-uart0-pins`. PI variants collide with RGMII on this board. |
+| I2C / UART / SPI / GPIO headers | OK\* (overlay) | Overlays present; loopback tests to do. |
+| LEDs, PMIC AXP305 | OK | No dummy regulators left for spi-nor / phy-io. |
+| Print server (CUPS) | OK\* | CUPS 2.4.16, ipp-usb, HPLIP, drivers installed; no printer attached yet. |
 
-## 2. Fixes made to the Armbian framework (fork: github.com/SomeComputerGuy/build)
-Integration branch `stonking-orangepizero2`; one PR branch each:
-- `feat/distro-ubuntu-stonking` — add Ubuntu 26.10.
-- `fix/uboot-sunxi64-host-tools-openssl4` — U-Boot host tools vs OpenSSL 4 (needs widening to all `v2026.10*` dirs before PR).
-- `fix/apt-utils-upstream-pkg-fallback` — base-files lookup falls back to the distro Packages index.
-- `fix/rootfs-armbian-gpg-symlink-on-host` — uutils `ln -f` needs /dev/urandom (absent in early chroot).
-- `fix/rootfs-dbus-launch-helper-guard` — path gone on 26.10.
-- `fix/uwe5622-bump-driver-pin` — WiFi driver to armbian/uwe5622 master.
+## 2. Armbian fork (github.com/SomeComputerGuy/build)
 
-Board-level config lives in `userpatches/` (this repo): wait-online `--any`, systemd watchdog, `sprdwl_ng disable_powersave=1`, CUPS sharing, extra tools.
+- `stonking-orangepizero2` (9eadcc0fe): integration on armbian/build 27a7f72; the current images come from it.
+- `stonking-orangepizero2-rebased` (556b18714): the same topic branches rebased onto armbian/build main c2908d2,
+  plus the OpenSSL-4 widening and the PWM/UART0 fix. Tree differs from the integration only by upstream changes
+  and those two commits.
+- `pr/<topic>`: 39 single-topic branches on c2908d2; `pr/group/*`: 7 grouped branches for PRs.
+- PR drafts and the not-ready list: [docs/prs/README.md](prs/README.md). Nothing opened.
+- Pre-PR report: `harness/research/pre-pr-cleanup.md`; EMAC1 vs. Linux 7.4: `harness/research/prprep-emac1.md`.
 
-## 3. Work in progress (fable agents, isolated worktrees)
-- **Kernel pull-ins** (`wt-kernel`): dwmac-sun8i upstream fixes; upstream Cedrus H616 variant + VE node; GPU OPP/DVFS; USB-C host overlay; IR decision; pending-upstream PWM v10 / UART FIFO v5 / AHUB v1 evaluation; s2idle + DPM-watchdog backports.
-- **WiFi/BT** (`wt-wifi`): compile-check new pin; 5 GHz regulatory fix; service hardening; power-save policy; bt_wake DT; design note for blob-free Bluetooth.
-- **Video encoder RE** (`harness/research/ve-encoder/`): prior art (linux-sunxi RE, jemk/cedrus h264enc, Bootlin encoder work, vendor cedar_ve GPL driver), blob acquisition + static analysis plan, clean-room V4L2 encoder plan. Acceptance bar: equal or better than the vendor blob (PSNR/SSIM at matched bitrate, fps, latency, features), root-cause any gap.
+Board-level config lives in `userpatches/` (this repo).
 
-## 4. Remaining after that (ordered)
-0. Hardware queue (user-supplied setups): USB-C host mode with board powered from header 5 V (single supply, on Test Plug 2); HDMI display; 13-pin expansion board; USB-C data cable; printer.
-1. Rebuild image with all pull-ins; flash; run `harness/verify-board.sh` (to write) + full test matrix (WiFi STA 2.4/5/DFS + iperf3, BT pair, HDMI + HDMI audio + CEC with a display, line-out, USB host devices, USB-C gadget, IR, PWM/I2C/SPI overlays, SPI-NOR boot, soak).
-2. U-Boot: AXP305 CPU-rail (SPL voltage warning); silence FAT env probe.
-3. cpuidle / suspend: TF-A H616 CPU_SUSPEND (idle states) — real project; decide scope.
-4. Analog mic capture: port from vendor sun50iw9-codec (no mainline source).
-5. TV-out CVBS: vendor-only; lowest priority.
-6. Encoder: execute §3 plan (PoC → V4L2 M2M driver → GStreamer/ffmpeg → upstream).
-7. Thermal trip review; DT dummy-regulator cleanups; DRM blend-mode warnings.
-8. Printer: attach, verify driverless + HPLIP paths, LAN sharing; document.
-9. Armbian PRs for §2 (user sends/approves).
+## 3. Next
+
+0. Hardware the user has to supply: HDMI display, 13-pin expansion board, USB stick, USB-C data cable, TV, printer,
+   metering plug.
+1. Rebuild the image from the rebased integration; retest Ethernet bulk TCP + large pings on the image kernel.
+2. Full board matrix: WiFi STA 2.4/5/DFS + iperf3, BT pair, HDMI + audio + CEC, line-out, USB host + USB boot,
+   USB-C gadget, IR, PWM/I2C/SPI overlays, KASLR, GPU GLES/OpenCL.
+3. Decode: AFBC 10-bit 4K60; AVS2. Encoder: §1.
+4. Open the Armbian PRs (user sends/approves).

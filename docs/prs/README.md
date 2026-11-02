@@ -36,3 +36,9 @@ integration, except where a later branch in the integration changes the same fil
 | pr/fix/uboot-sunxi-ce-rng-kaslr | KASLR seed board test (different `_stext` across boots) not recorded |
 | pr/fix/sunxi64-bootscript-boot-source | Touches the shared `boot-sun50i-next.cmd` for every sun50i board; sandbox-verified for H616/A64/A133/A523, the SPI-boot board check ("U-boot loaded from SPI") not recorded |
 | pr/fix/sunxi64-edge-realtek-phy-hwmon | Abandoned: the RTL8211F has no hwmon; the integration reverts it |
+
+## User decisions (2026-11-02)
+- OpenSSL 4 fix lives in `lib/functions/compilation/uboot.sh` (framework level): accepted.
+- AI attribution: unify. At PR prep, every commit gets one trailer form, `Assisted-by: Claude` (no model suffix); stray `Claude-Session:` lines are removed. Done on fresh PR branches, never by rewriting pushed refs.
+- Jernej Škrabec's decode patches: no advance ask; they keep his authorship.
+- Still open: PR grouping (§ above); squash/reword items (openssl 2→1, regulators 2→1, distro subject).

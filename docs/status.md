@@ -17,7 +17,7 @@ Rule: every board feature the hardware has must work, whether or not the print-s
 | Thermal (cpu/gpu/ve/ddr zones) | FIXED (pending image) | Vanilla trips 60/70 °C had no cooling maps → CPU never throttled, only 110 °C shutdown protected it. Now passive 85 °C mapped to cpu0-3, hot 100, critical 110. GPU cooling map follows (GPU OPP now merged). |
 | cpuidle | MISSING | `current_driver: none`. H616 has no ARISC; TF-A reports `PSCI: Suspend is unavailable`; no `idle-states` in DT. Needs TF-A CPU_SUSPEND work. |
 | Suspend (s2idle) | PARTIAL | `freeze` works: 11 s round trip with RTC wake, WiFi suspends/resumes, SSH alive. Shallow only (cores WFI); no deep sleep possible without TF-A support. systemd sleep disabled by Armbian default. |
-| Ethernet 1 GbE (RTL8211F) | OK | 1000/full, checksum offload. Minor: `Too many address, switching to promiscuous` (small MAC filter) — upstream 7.4 dwmac-sun8i fixes to pull. |
+| Ethernet 1 GbE (RTL8211F) | FIXED (pending image) | Intermittent dead-RX boots (link up, TX ok, 0 RX) root-caused 2026-11-02: mainline DT uses MAC-side 3100 ps RX delay with PHY RXDLY off (marginal). Live fix on a bad boot (PHY RXDLY on, syscon ERXDC 0) restored RX instantly. DT now rgmii-rxid like Zero3 (branch fix/sunxi-h616-orangepi-zero2-emac-rxid). Minor: `Too many address, switching to promiscuous`. |
 | WiFi (UWE5622, SDIO) | OK | Acceptance bar (user): SSID scan. Sees 2.4 + 5 GHz networks; AP mode supported. Driver pin was 13 commits behind (memory corruption on unload, OOB key write, rfkill oops, TCP stall) → bumped; 5 GHz regulatory fix + service hardening in progress. |
 | Bluetooth (UWE5622, UART) | PARTIAL | hci0 up, BR/EDR+LE scan finds devices. Depends on vendor `hciattach_opi` blob; `bt_wake` DT warning every boot. |
 | USB host (3× EHCI/OHCI) | OK\* | Controllers up; nothing was plugged in yet. |
@@ -38,7 +38,7 @@ Rule: every board feature the hardware has must work, whether or not the print-s
 | LEDs | OK | green:power, red:status (heartbeat). |
 | PMIC AXP305 | OK | All rails present; some supplies (`vcc-pl`, `phy-io`, spi-nor `vcc`) use dummy regulators — DT cleanups. |
 | TV-out (CVBS) | OK\* (new driver, build-tested) | New sun8i_tve DRM driver + DE33 YUV output + TCON-TOP clock select; PAL/NTSC; enabled by overlay `orangepi-zero2-expansion` (also IR). Needs a TV on the header TV-OUT pin. |
-| Deep sleep / cpuidle | MISSING | No ARISC/SCP on H616, so this needs TF-A PSCI CPU_SUSPEND/SYSTEM_SUSPEND work for H616. Required, not optional. |
+| Deep sleep / cpuidle | PARTIAL (debug firmware) | 2026-11-02: cpuidle 30-min soak PASS; suspend-to-RAM with real DRAM self-refresh (STAT=3 during suspend) 11/11 PASS, RAM intact, after fixing the DRAM base (A133 0x04820000 → H616 0x047FB000). 100-cycle combined soak (cpuidle + suspend) PASS 100/100; clean production firmware b88ccfba76a6 verified (psci_idle + deep suspend). No power number: Meross MSS110 has no metering. |
 | Print server (CUPS, drivers) | OK\* | CUPS 2.4.16, ipp-usb, HPLIP, all 20 printer-driver packages installed; printer not attached yet. |
 
 ## 2. Fixes made to the Armbian framework (fork: github.com/SomeComputerGuy/build)

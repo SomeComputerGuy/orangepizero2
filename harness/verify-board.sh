@@ -37,7 +37,7 @@ ok dhcp-client-id-mac "networkctl status end0 --no-pager | grep -q 'Client ID: 0
 ok cups "systemctl is-active -q cups && lpstat -r | grep -q running" "$(cupsd -v 2>/dev/null | head -1)"
 ok watchdog "[ -e /dev/watchdog0 ]" "$(systemctl show -p RuntimeWatchdogUSec --value)"
 ok hwrng "grep -q . /sys/class/misc/hw_random/rng_current" "$(cat /sys/class/misc/hw_random/rng_current)"
-r INFO kernel-warnings "$(dmesg -l err,warn | wc -l) err/warn lines: $(dmesg -l err,warn | cut -c16- | sed 's/[0-9a-f]\{8,\}//g' | sort | uniq -c | sort -rn | head -6 | sed 's/^ *//' | tr '\n' '|')"
+r INFO kernel-warnings "$(dmesg -l err,warn | wc -l) err/warn lines: $(dmesg -l err,warn | cut -c16- | sed -E 's/0x[0-9a-f]+|\b[0-9a-f]{16}\b//g' | sort | uniq -c | sort -rn | head -6 | sed 's/^ *//' | tr '\n' '|')"
 if [ "$SUSPEND" = 1 ]; then
   t0=$(date +%s); rtcwake -m freeze -s 10 >/dev/null 2>&1; rc=$?; dt=$(( $(date +%s) - t0 ))
   ok s2idle "[ $rc -eq 0 ] && [ $dt -lt 30 ]" "rc=$rc ${dt}s; wifi after: $(ip -br link show wlan0 | awk '{print $2}')"

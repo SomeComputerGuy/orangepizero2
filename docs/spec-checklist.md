@@ -7,10 +7,10 @@ Every row must work and be board-verified against the stated number. Status: OK 
 | CPU H616 quad A53 | OK | DVFS 480–1512 MHz; cpuidle + suspend-to-RAM (DRAM self-refresh) PASS incl. 100-cycle soak; clean firmware verified; merge pending |
 | GPU Mali G31 MP2, OpenGL ES 1.0/2.0/3.2 | TODO | panfrost + devfreq OK; verify GLES version exposed by Mesa (glmark2-es2 / es2_info / eglinfo); 3.2 must be reached |
 | GPU OpenCL 2.0 | TODO | Mesa rusticl on panfrost; clinfo + a conformance subset |
-| Decode H.265 Main10@L5.1 4K@60 / 6K@30 | WIP | Cedrus 8-bit 1080p OK; 10-bit + 4K: vdec agent |
-| Decode VP9 Profile 2 4K@60 | GAP/WIP | vdec agent (Hantro G2-like block?) |
-| Decode AVS2 JiZhun 10-bit 4K@60 | GAP/WIP | vdec agent |
-| Decode H.264 BP/MP/HP@L4.2 4K@30 | WIP | 1080p 150 fps OK; 4K throughput to verify |
+| Decode H.265 Main10@L5.1 4K@60 / 6K@30 | PARTIAL | 8-bit 4K 81.8 fps, 6K 30.2 fps bit-exact; Main10 4K bit-exact but 24.5 fps via P010 (AFBC10 path unmeasured); Main10 6K OOM |
+| Decode VP9 Profile 2 4K@60 | PARTIAL | runs on the VE (no G2 on H616); bit-exact, 35.6 fps via P010; AFBC10 unmeasured |
+| Decode AVS2 JiZhun 10-bit 4K@60 | GAP | no uAPI/driver/userspace anywhere; plan in impl-vdec.md §5 |
+| Decode H.264 BP/MP/HP@L4.2 4K@30 | OK (pending image) | 42.0 fps tiled, bit-exact 300/300 |
 | Encode H.264 BP/MP/HP 4K@25 / 1080p@60 | GAP | encoder effort (last), harness/research/ve-encoder/SPEC.md |
 | Encode JPEG snapshot 1080p@60 | GAP | encoder effort (last) |
 | DDR3 1 GB | OK | |

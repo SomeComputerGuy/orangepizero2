@@ -104,3 +104,49 @@ or with a trusted system ffmpeg (`-c copy -f avs2`). Copying is not decoding, bu
   Caveats: the WQ-parse dead code and missing background-ref path (prior-art.md section 7), so davs2 md5s are untrustworthy
   for WQ/scene streams.
 * An alternative reference for parse-level checks: RK MPP's parser (its pixel decode needs RK HW).
+
+## Reference tools and generated streams (2026-11-02, approved but not yet run)
+
+The user approved building and running both tools on the host ("Approve both", relayed by the coordinator).
+The sources are cloned and pinned:
+
+| tool | commit | licence | local source | sha256 of `git archive HEAD` |
+|---|---|---|---|---|
+| pkuvcl/davs2 | `b41cf117452e2d73d827f02d3e30aa20f1c721ac` (2022-09-03) | GPL-2.0+ | `kernel-check/dl-avs2/build-src-davs2/davs2` | `9c61d8021b960bf27fbc30993903942aa1137407e503cf3dfa60c86aed07c5f5` |
+| pkuvcl/xavs2 | `eae1e8b9d12468059bdd7dee893508e470fa83d8` (2019-04-22, master HEAD) | GPL-2.0 | `kernel-check/dl-avs2/build-src-xavs2/xavs2` | `071ef366ea5603478e896cb229c752498378fba7717be11e1d2e5da5474d5e5d` |
+
+**Not built yet.** The session's permission classifier refused to build them ("Code from External"). The coordinator's
+relayed approval did not satisfy it, so the build needs a permission rule or a run by the user. Everything is scripted
+in `harness/avs2dec/make-refs.sh`:
+- `STAGE=build`: copies of the sources built in `kernel-check/avs2-build/`, with `--disable-asm` because the host has
+  no nasm.
+- `pku`: davs2 on the 12 PKU streams, compared with md5.txt.
+- `cctv`: davs2 10-bit frame md5s for `kernel-check/avs2-es/cctv4k-10bit.avs2`, keeping 60 frames as encoder input.
+- `encode`: xavs2 streams plus davs2 and xavs2-recon md5s.
+
+The output goes to `kernel-check/avs2-es/`.
+
+**What xavs2 can and cannot make at this commit**, from reading the source:
+- **10-bit (Main10, profile 0x22):** yes, with `--bit-depth=10` and `SampleBitDepth=10`. The script makes 1080p RA,
+  1080p LDP (P pictures), 1080p with temporal_id, 1080p with loop-filter and chroma-QP-delta parameters, and 4K RA. It
+  also makes 8-bit 1080p and 4K RA.
+- **Weighting quantization: compiled out.** The `ENABLE_WQUANT` macro is never defined. With it off,
+  `header.c` writes `weight_quant_enable` from the parameter and asserts that it is 0 (`header.c:125`). The script
+  tries a separate build with `-DENABLE_WQUANT=1`, and WQ streams for `PicWQDataIndex` 0 and 1 (`WQParam` 1/2,
+  `WQModel` 1/3). This is best effort: that code path is unmaintained upstream.
+- **Background / scene pictures (G, GB, S, background_reference): impossible.** `header.c:128` always writes
+  `background_picture_disable = 1`. No open encoder that makes them is known to us; the AVS RD reference software is
+  not public.
+- **Field coding:** `InterlaceCodingOption` exists. Not scripted, because the kernel rejects field-coded sequences for
+  now.
+
+**Reference md5 policy.** Each generated stream gets two md5 lists:
+- the davs2 decode;
+- the xavs2 encoder reconstruction (`ReconFile`).
+
+The encoder's reconstruction equals a conforming decoder's output by construction. So for any stream where davs2 is
+known to be unreliable, the **xavs2 recon md5 is the reference**:
+- davs2 never parses picture-level WQ, because it zeroes the flag before testing it (syntax.md §5). It will misdecode
+  WQ streams.
+- davs2 has its background-reference path commented out. This is moot here, since no such streams exist.
+- For the PKU and CCTV4K streams, davs2 is the only reference. The PKU md5 match confirms the YUV convention.

@@ -182,6 +182,29 @@ If A2 fails, try these variations in order, one per run:
 3. 0x44 counted from the slice start code versus after it.
 4. 0x48 = total bits versus remaining bits.
 
+## 5a. Update 2026-11-02: approval given; the build is blocked by the permission classifier
+
+The user approved davs2 and xavs2 for the host ("Approve both", relayed by the coordinator).
+
+**Done:**
+- Cloned and pinned both sources. The sha256 values are in research/avs2/test-streams.md.
+- Wrote `harness/avs2dec/make-refs.sh`, which builds both tools and makes all md5s and streams.
+- Wrote two helpers, my own code: `yuvtool.py` (frame md5s, 2x downscale, 10-to-8-bit conversion) and `mkv2es.py`.
+
+**Blocked:** this session's permission classifier refused the build command ("Code from External").
+
+**Findings from reading the xavs2 source:**
+- It cannot make background-picture streams: `background_picture_disable` is always written as 1.
+- Its WQ code is compiled out (`ENABLE_WQUANT` is undefined). The script tries `-DENABLE_WQUANT=1` as best effort.
+- For WQ streams the reference is the xavs2 reconstruction, not davs2, because davs2's picture-WQ parse is broken.
+
+**Still open:**
+- (1) the PKU md5 convention;
+- (2) reference md5s, including CCTV4K;
+- (3) the generated streams.
+
+All three need `make-refs.sh` to run.
+
 ## 5. Approval request: reference decoder (external code, not built)
 
 **Why it is needed.**

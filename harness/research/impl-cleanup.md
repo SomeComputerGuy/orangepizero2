@@ -152,3 +152,20 @@ All on `wt-cleanup-integration` (final head `1a297ed`), `WORK=/home/aruni/orange
 * `STAGE=dtbs` after adding the mmc-alias commit (`run-cleanup-dtbs2.log`): 694 patches applied, 0 failed; dtbs exit 0 (17 dtc warnings, all pre-existing in other boards' files); `DT_CHECK ok`: `mmc0 mmc1 vcc-pl-supply vcc-supply cpu-alert cooling-maps`. Decompiled Zero2 DTB: `aliases { ethernet0; mmc0 = /soc/mmc@4020000; mmc1 = /soc/mmc@4021000; serial0 }`, `vcc-pl-supply`/flash `vcc-supply` = ALDO1 phandle, cpu-thermal trips 85000/100000/110000 with a 4-CPU cooling map.
 
 Not yet done (needs hardware, coordinator): boot test of each item per the "Test" paragraphs above; an image rebuild is needed for the BSP drop-ins (item 6) and the kernel config (item 7).
+
+---
+
+## 9. Follow-ups after board testing (branch `wt-cleanup-2`, from `stonking-orangepizero2` @ `88948c3`)
+
+Board results on the merged integration (coordinator): mmc aliases PASS, CPU trips 85/100/110 + cdevs PASS, 0 blend-mode warnings PASS, 0 BSP journal warnings PASS, spi-nor vcc PASS.
+
+**Regression (fixed by coordinator, `88948c3`):** `&r_pio { vcc-pl-supply = <&reg_aldo1>; }` created a dependency cycle: the AXP305 sits on RSB whose pins are in the PL bank of `r_pio`, so `r_pio` now depended on a regulator that can only probe after `r_pio` → "Fixed dependency cycle(s) with .../pmic@745/regulators/aldo1", RSB/AXP never probed, no MMC/Ethernet. The patch now adds only the SPI-NOR supply; the `vcc-pl` dummy-regulator line stays (this is why no mainline H616 board with an RSB PMIC sets `vcc-pl-supply`; avaota-a1 comments it out for the same reason). **Lesson: before wiring a pinctrl/bus supply, check that the regulator's own bus does not run through that pinctrl bank.**
+
+| commit | change |
+|---|---|
+| `33f52a0` | Revert `CONFIG_REALTEK_PHY_HWMON=y` (item 7): no hwmon appears on the board — the realtek driver's hwmon support is RTL822x-only, the RTL8211F has no temperature readout. Config back to baseline. |
+| `761f64e` | New `patches.armbian/arm64-dts-sun50i-h616-thermal-gpu-cooling.patch` (series line 578, right after the CPU thermal patch): `#cooling-cells = <2>` on the `gpu` node; `gpu-thermal` gets passive `gpu_alert` 85 °C (hyst 2 °C) → `<&gpu THERMAL_NO_LIMIT THERMAL_NO_LIMIT>`, critical 110 °C kept (relabelled `gpu-crit`). 85 °C = the CPU alert level set in item 4 and mainline H6's `gpu_alert0`; the vendor sun50iw9 BSP throttles the GPU from its 90 °C CPU target. No-op on boards without GPU OPPs (panfrost registers no devfreq cooling device, map stays unbound). |
+
+**Test (GPU cooling).** `cat /sys/class/thermal/thermal_zone<gpu>/type` = `gpu-thermal`, `trip_point_0_temp`=85000 `type`=passive, `trip_point_1_temp`=110000; `ls /sys/class/thermal/thermal_zone<gpu>/ | grep cdev` → `cdev<N>` whose `type` is `devfreq-1800000.gpu` (or similar) and `cdev<N>_trip_point`=0; `cat /sys/class/devfreq/1800000.gpu/available_frequencies` lists 306000000..600000000; `cat /sys/class/thermal/cooling_device<N>/max_state` ≥ 1. Under `glmark2-es2-drm`/`stress-ng --gpu` heat (unlikely to reach 85 °C), `cur_state` rises only above 85 °C and `cur_freq` drops; at idle `cur_state`=0.
+
+**Compile check (`wt-cleanup-2`, `run-cleanup2-dtbs.log`, WORK=kernel-check/work-cleanup2, TMPDIR on disk):** STAGE=dtbs, 708 patches applied / 0 failed, dtbs exit 0 (17 pre-existing dtc warnings), `DT_CHECK ok: gpu-alert cooling-cells`; decompiled Zero2 DTB has `gpu-alert` 85000 passive with a cooling map to the gpu node and `#cooling-cells = <2>` on `gpu@1800000`. DT-only change, no C rebuild needed.

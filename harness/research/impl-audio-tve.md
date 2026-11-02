@@ -138,3 +138,7 @@ sudo cat /sys/kernel/debug/dri/0/state | grep -A30 'connector\[.*Composite'
 Expected: `clk_summary` shows `tve0` at 216000000 under `pll-video1` (432 MHz or another multiple), `tcon-top-tv1` enabled; the TV shows the modetest colour bars with correct colours (red/green/blue order) and stable sync. Capture (A) cannot be tested — see §1.
 
 Debug knobs if it fails: `drm.debug=0x1f` on the cmdline (`DRM_DEBUG_DRIVER` lines "Enabling the TV Output", "Switching mixer output to YUV"); `/sys/kernel/debug/regmap/6524000.tv-encoder-tve/registers` and `.../6524000.tv-encoder-tve-top/registers` for live register dumps.
+
+## 9. Integration follow-up (2026-11-02)
+
+The coordinator merged the series onto `stonking-orangepizero2` (topic renamed `feat/sunxi-h616-tv-encoder`). In the combined tree `drm-sun4i-mixer-support-yuv-output-on-de33.patch` lost one `sun8i_mixer.h` hunk to the cleanup agent's earlier `drm-sun4i-add-pixel-blend-mode-property.patch` (it rewrote the comment after `SUN8I_MIXER_BLEND_COLOR_BLACK`). Fixup commit **`01b57f7`** on `wt-audio-rebase` (branched from `stonking-orangepizero2`) refreshes that hunk's context only; no code change. Semantics are independent: the blend-mode patch drives per-pipe `BLD_PREMUL_CTL`, the YUV patch drives `OUT_CTL` fmt_space and the background/fill colours. Validation in `kernel-check/work-audio2` (`TMPDIR` on disk): 707 patches applied / 0 failed, `build exit: 0`, 8 C warnings none in drm/sun4i, clk/sunxi-ng or DTS, dtbs exit 0 (17 pre-existing a64/h5 warnings), 55 H616 overlays, `DT_CHECK ok: tv-encoder@6524000`.

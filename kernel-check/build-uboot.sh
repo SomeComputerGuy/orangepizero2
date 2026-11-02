@@ -13,6 +13,9 @@
 # STAGE=all   : ... + defconfig + build u-boot-sunxi-with-spl.bin (default)
 # CFG_CHECK="CONFIG_A=y CONFIG_B" : after configuring, grep these in .config
 # ARMBIAN     : tree whose patch/u-boot/<BOOTPATCHDIR> is used (default: wt-uboot worktree)
+# ATFPATCHDIR : patch/atf/<dir> of that tree, applied to TF-A like Armbian does (default:
+#               atf-sunxi64; *.patch top-level + board_<BOARD>/, LC_ALL=C sorted). bl31 is
+#               rebuilt only when the set of patches changes (hash in $WORK/atf-patches.sha).
 set -euo pipefail
 
 STAGE="${STAGE:-all}"
@@ -28,6 +31,8 @@ WORK="${WORK:-/home/aruni/orangepizero2/kernel-check/work-uboot}"
 CACHE="${CACHE:-/home/aruni/orangepizero2/armbian-build/cache}"
 JOBS="${JOBS:-$(nproc)}"
 PATCHROOT="$ARMBIAN/patch/u-boot/$BOOTPATCHDIR"
+ATFPATCHDIR="${ATFPATCHDIR:-atf-sunxi64}"
+ATFPATCHROOT="$ARMBIAN/patch/atf/$ATFPATCHDIR"
 export CROSS_COMPILE=aarch64-linux-gnu-
 MAKE_CC=(); command -v ccache > /dev/null && MAKE_CC=(CC="ccache aarch64-linux-gnu-gcc" HOSTCC="ccache gcc")
 
@@ -45,13 +50,35 @@ if [[ ! -d arm-trusted-firmware/.git ]]; then
 		git clone -q --depth 1 -b "$ATF_TAG" https://github.com/ARM-software/arm-trusted-firmware arm-trusted-firmware
 fi
 
-# 2. BL31 (cached)
+# 2. BL31 (cached). Armbian applies patch/atf/<ATFPATCHDIR>/*.patch (+ board_<BOARD>/) to
+# TF-A before building; mirror that on a pristine tree and rebuild bl31 only when the
+# applied patch set differs from the one the cached bl31 was built from.
 BL31="$WORK/arm-trusted-firmware/build/$ATF_PLAT/debug/bl31.bin"
-if [[ ! -f $BL31 || -n ${ATF_REBUILD:-} ]]; then
+atf_patches=$( { ls "$ATFPATCHROOT"/*.patch "$ATFPATCHROOT/board_$BOARD"/*.patch 2> /dev/null || true; } | xargs -rn1 basename | LC_ALL=C sort -u)
+atf_sha=$( { for name in $atf_patches; do for d in "$ATFPATCHROOT/board_$BOARD" "$ATFPATCHROOT"; do [[ -f $d/$name ]] && { cat "$d/$name"; break; }; done; done; } | sha256sum | cut -c1-16)
+if [[ ! -f $BL31 || -n ${ATF_REBUILD:-} || $(cat "$WORK/atf-patches.sha" 2> /dev/null) != "$atf_sha" ]]; then
+	( cd arm-trusted-firmware && git reset -q --hard && git clean -qfdx -e /build )
+	atf_failed=0
+	for name in $atf_patches; do
+		for d in "$ATFPATCHROOT/board_$BOARD" "$ATFPATCHROOT"; do
+			p="$d/$name"
+			[[ -f $p ]] || continue
+			if patch -d arm-trusted-firmware --batch -p1 -N --quiet --reject-file=- -i "$p" > atf-patch-last.log 2>&1; then
+				echo "TF-A patch applied: $name"
+			else
+				atf_failed=$((atf_failed + 1))
+				echo "TF-A patch FAILED: $name"; cat atf-patch-last.log
+			fi
+			break
+		done
+	done
+	[[ $atf_failed -eq 0 ]] || { echo "TF-A patches failed: $atf_failed"; exit 1; }
+	rm -f "$BL31"
 	make -C arm-trusted-firmware -s "${MAKE_CC[@]}" PLAT="$ATF_PLAT" DEBUG=1 -j"$JOBS" bl31 > atf-build.log 2>&1 ||
 		{ echo "TF-A build failed (see $WORK/atf-build.log)"; tail -20 atf-build.log; exit 1; }
+	echo "$atf_sha" > "$WORK/atf-patches.sha"
 fi
-echo "bl31.bin: $(stat -c %s "$BL31") bytes"
+echo "bl31.bin: $(stat -c %s "$BL31") bytes (TF-A patches: $(echo $atf_patches | wc -w), set $atf_sha)"
 
 # 3. Reset the U-Boot tree to the pristine tag and apply patches the way Armbian does:
 # names from <dir>/*.patch and <dir>/board_<BOARD>/*.patch, LC_ALL=C sorted by basename,

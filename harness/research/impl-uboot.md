@@ -14,12 +14,13 @@ TF-A `lts-v2.14.11` (`PLAT=sun50i_h616 DEBUG=1 bl31`). Nothing pushed. Board unt
 | `sunxi/uboot-spi-nor` (item 3) | b2471dd | `board_orangepizero2/0003-…spi-nor-flash-ids.patch`, `write_uboot_platform_mtd()` in `sunxi64_common.inc`, README section |
 | `sunxi/uboot-usb-boot` (items 3/4) | 2167a1d, facf2f2 | `board_orangepizero2/0004-…no-usb-ether-gadget.patch`, `0005-dts-…enable-expansion-board-usb-ports.patch`; then `usb-hub-yield-during-port-debounce.patch` + `0006-…scan-usb-buses-in-parallel.patch` (UTHREAD) |
 | `sunxi/uboot-bootscript-recovery` (round 3) | cfc5f77 | `sunxi-export-boot-source-env.patch` (U-Boot exports `${boot_source}`), `config/bootscripts/boot-sun50i-next.cmd`: SoC-correct boot-source report + defaults for manual sourcing |
-| **`wt-uboot-integration`** | 27a7f72 → c2de4e6 → 6b7a803 → 24e11b8 → 31ec259 → 32692ca → 9394e96 → 3ac64a0 | linear, all of the above |
+| `fix/uboot-sunxi-ce-rng-kaslr` (round 4) | 83ebfc1 | `clk-sunxi-add-h6-h616-ce-gates-and-reset.patch` (upstream v9 series, J. Hilliard), `rng-add-allwinner-sun8i-ce-trng-driver.patch` (new DM_RNG driver), `sunxi-board-rng-seed-from-dm-rng.patch`, `board_orangepizero2/0007-…enable-dm-rng-for-kaslr-seed.patch` |
+| **`wt-uboot-integration`** | 27a7f72 → c2de4e6 → 6b7a803 → 24e11b8 → 31ec259 → 32692ca → 9394e96 → 3ac64a0 → fc0a8d8 | linear, all of the above |
 
 Every topic branch applies standalone and the integration set applies in Armbian's
 LC_ALL=C name order (`board_orangepizero2/000N-*` sort before the top-level `sunxi-*`
 patches); verified with `STAGE=patch kernel-check/build-uboot.sh` per branch
-(13/12/12/15/13 patches, 0 failures; integration 21/21).
+(13/12/12/15/13/15 patches, 0 failures; integration 25/25).
 
 ## Build (rootless, cached): `kernel-check/build-uboot.sh`
 
@@ -41,10 +42,10 @@ Integration result (`kernel-check/work-uboot/out/`, sha256 in `.sha256` next to 
 | file | bytes |
 |---|---|
 | `spl/sunxi-spl.bin` | 40960 (SPL_MAX_SIZE 0xbfa0 = 49056) |
-| `u-boot-nodtb.bin` | 754960 (was 772704; RNDIS gadget gone, uthread added) |
+| `u-boot-nodtb.bin` | 763560 (was 772704; RNDIS gadget gone, uthread + CE TRNG driver added) |
 | `u-boot.dtb` | 35336 |
 | `bl31.bin` | 53364 |
-| **`u-boot-sunxi-with-spl.bin`** | **886609 = 865 KiB** — fits the 2 MiB SPI NOR with 1.1 MiB spare; sha256 `217b89266c7391b3118476ef6b3220a6d24b207b9a51e6a059e3204f00b30ac6` (round 3, adds the `boot_source` env export; round 2 e9776c2c… = parallel USB scan, round 1 886377 B / ffa022a5…) |
+| **`u-boot-sunxi-with-spl.bin`** | **895209 = 874 KiB** — fits the 2 MiB SPI NOR with 1.1 MiB spare; sha256 `44dffad841c50bc6f26c33f422a1ccb1c2eb38bab8507c160aa3ebf9f81dc7e6` (round 4, CE TRNG + kaslr/rng-seed; round 3 886609 B / 217b8926… boot_source export; round 2 e9776c2c… parallel USB scan; round 1 886377 B / ffa022a5…) |
 
 `CFG_CHECK` confirmed in the final `.config`: `SYS_I2C_SUN8I_RSB=y`, `SPL_I2C=y`,
 `R_I2C_ENABLE`/`SYS_I2C_MVTWSI` off, `DM_I2C=y`, `PMIC_AXP=y`, `ENV_IS_NOWHERE=y`,
@@ -273,6 +274,53 @@ the SD in and boot.scr hidden → interrupt → `load mmc 0:1 ${scriptaddr} /boo
 source ${scriptaddr}` must print `U-boot loaded from SPI` and boot; normal SD boot must still
 print `U-boot loaded from SD`.
 
+### Round 4 — KASLR: /chosen/kaslr-seed and rng-seed from the H616 Crypto Engine TRNG
+Linux: `KASLR disabled due to lack of seed` (arm64 `RANDOMIZE_BASE` reads `/chosen/kaslr-seed`,
+which the bootloader must supply). U-Boot v2026.10 adds it automatically: `fdt_chosen()`
+(boot/fdt_support.c, called from `image_setup_libfdt()` on the booti/bootm path that Armbian's
+boot.scr uses) runs `fdt_kaslrseed()` whenever `CONFIG_DM_RNG` is enabled (and no measured
+boot / ARMV8_SEC_FIRMWARE), reading 8 bytes from the first UCLASS_RNG device; with
+`CONFIG_BOARD_RNG_SEED` it also adds `rng-seed` (64 bytes) via `board_rng_seed()`. The
+`kaslrseed` command is obsolete for this ("automatically added … when booted via
+booti/bootm/bootz"). What was missing is an RNG driver: upstream has none for sunxi
+(main/next as of 2026-11-01: only a new airoha driver; patchwork: the pending
+"crypto: allwinner: enable sun8i-ce FIT crypto" v9 series, 2026-10-17, adds AES/hash/ECDSA on
+the Crypto Engine plus the CE clock gates/reset, but no TRNG).
+
+Branch `fix/uboot-sunxi-ce-rng-kaslr` (83ebfc1):
+- `clk-sunxi-add-h6-h616-ce-gates-and-reset.patch`: patch 13/17 of that series (James
+  Hilliard, Reviewed-by Simon Glass), unchanged: `CLK_CE` 0x680/31, `CLK_BUS_CE` 0x68c/0,
+  `CLK_MBUS_CE` 0x804/2, `RST_BUS_CE` 0x68c/16 for H6 and H616.
+- `rng-add-allwinner-sun8i-ce-trng-driver.patch`: new `drivers/rng/sun8i_ce_rng.c`
+  (`RNG_SUN8I_CE`, default y with DM_RNG on sunxi), bound to `allwinner,sun50i-h6-crypto` /
+  `allwinner,sun50i-h616-crypto` (node `crypto@1904000` is in the U-Boot DTB). Per Linux
+  `sun8i-ce-trng.c`: TRNG "V2" algorithm 0x1c, length in bytes, 32-byte granules, task
+  descriptor on flow 3, completion polled in `CE_ISR`, 8-bit per-flow error field in
+  `CE_ESR`; H616 uses word (>>2) addresses in the descriptor. Probe takes the DT clocks
+  (bus/mod/ram from the CCU, trng = IOSC from the RTC clock driver) and reset, and programs
+  the H616 CE module clock to PLL_PERI0(2X)/4 = 300 MHz through the CCU register exactly as
+  the pending series does (the sunxi CCU driver has no set_rate). Cache maintenance:
+  descriptor and buffer flushed before, buffer invalidated after the DMA; the output buffer
+  is zeroed before free.
+- `sunxi-board-rng-seed-from-dm-rng.patch`: `board_rng_seed()` in board/sunxi/board.c (64
+  bytes from UCLASS_RNG, same as Xilinx/Rockchip), required by `BOARD_RNG_SEED`.
+- `0007`: `CONFIG_DM_RNG=y`, `CONFIG_BOARD_RNG_SEED=y`, `CONFIG_CMD_RNG=y`.
+Build: driver and `board_rng_seed`/`fdt_kaslrseed` linked (`u-boot.map`), +8.6 KB.
+The series integration note: when the upstream sun8i-ce core lands, this TRNG should become a
+child of its core driver (same compatible); the register handling is already identical.
+
+Board test (round 4 binary 44dffad8…, SD at 8 KiB as before):
+1. Stop autoboot: `rng` → 64 random bytes hexdump, different on each call; `rng 0 32`;
+   no "sun8i-ce TRNG: …" error line. (`dm tree | grep -i rng` shows `sun8i-ce-rng` under
+   `crypto@1904000`.)
+2. Boot Linux twice: `dmesg | grep -i kaslr` must NOT show "KASLR disabled due to lack of seed";
+   `sudo grep ' _stext\| _text$' /proc/kallsyms` (as root; kptr_restrict) gives a different
+   address on the two boots; `cat /proc/device-tree/chosen/kaslr-seed | xxd` is all zero
+   (the kernel wipes it after use) and `/proc/device-tree/chosen/rng-seed` is 64 bytes;
+   `dmesg | grep -i 'random:'` should show the CRNG seeded early ("crng init done" before
+   userspace) rather than waiting for entropy.
+3. Sanity: boot time unchanged within noise (one TRNG task ≈ microseconds).
+
 ## Item 5 — upstream check
 
 U-Boot: GitHub `master` (ece349a, "Prepare v2026.07") is a stale mirror — the project
@@ -300,7 +348,7 @@ done, as instructed.
 ## Board test steps (coordinator; expected serial output)
 
 Artifact: `/home/aruni/orangepizero2/kernel-check/work-uboot/out/u-boot-sunxi-with-spl.bin`
-(current: round 3, sha256 217b8926…; file `…/out/u-boot-sunxi-with-spl.bin.sha256`; banner `U-Boot SPL
+(current: round 4, sha256 44dffad8…; file `…/out/u-boot-sunxi-with-spl.bin.sha256`; banner `U-Boot SPL
 2026.10_armbian-check…`). The Armbian-built package from `wt-uboot-integration` yields the
 same content with the `_armbian-<version>` banner.
 
@@ -426,5 +474,6 @@ built-in-only. `ROOTMODE=nfs` is documented in the script but needs an initramfs
 - `/home/aruni/orangepizero2/harness/netboot-setup.sh`, `harness/netboot-stage.sh`, `harness/06-opiz2-enx68da73af6279.network`
   (DefaultLeaseTimeSec), `harness/netboot/{README.md,dnsmasq-opiz2-tftp.conf,opiz2-dhcp-identifier-mac.yaml,06-opiz2-enx68da73af6279.network.d/netboot.conf}`.
 - Patches: `wt-uboot/patch/u-boot/v2026.10-sunxi64/sunxi-h616-rsb-pmic-bus.patch`,
-  `…/board_orangepizero2/0001…0006`, `…/usb-hub-yield-during-port-debounce.patch`, `…/sunxi-export-boot-source-env.patch`,
+  `…/board_orangepizero2/0001…0007`, `…/usb-hub-yield-during-port-debounce.patch`, `…/sunxi-export-boot-source-env.patch`,
+  `…/clk-sunxi-add-h6-h616-ce-gates-and-reset.patch`, `…/rng-add-allwinner-sun8i-ce-trng-driver.patch`, `…/sunxi-board-rng-seed-from-dm-rng.patch`,
   `wt-uboot/config/sources/families/include/sunxi64_common.inc`, `wt-uboot/config/bootscripts/boot-sun50i-next.cmd`.

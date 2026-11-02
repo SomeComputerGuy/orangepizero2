@@ -160,3 +160,9 @@ for 4K.
   printed.
 - Outputs go to `kernel-check/avs2-es/`: `*.avs2`, `*.xavs2-recon.framemd5`, `*.davs2-8.framemd5`, `pku/*.framemd5`,
   `make-refs-summary.txt` and `SHA256SUMS`.
+
+## Run results (2026-11-02, user ran make-refs.sh, run3 after the GCC 14 flag fix)
+- PKU: 12/12 davs2-8 decodes match the published md5.txt (convention: 8-bit I420, output order).
+- probe10: davs2-8 refuses the CCTV4K Main10 capture (rc=0, 0 bytes output). Expected; confirms no 10-bit software reference.
+- xavs2 8-bit encodes: recon framemd5 == davs2-8 framemd5 for main-1080p-{ra,ldp,tid,lf} and main-2160p-ra.
+- **Weight-quant streams are not real WQ streams:** wq-seqdef-1080p and wq-param1-1080p are byte-identical to main-1080p-ra (stream md5 340d0c1e), and wq-param2-2160p is byte-identical to main-2160p-ra (186cfccb). The -DENABLE_WQUANT=1 build accepts the WQ options but emits no WQ syntax. Weight quant remains untested; needs a different source of WQ streams.

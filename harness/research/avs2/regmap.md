@@ -205,7 +205,8 @@ Each reference also carries its own reference-POC list, 7 × 9 bits packed littl
 Entry 7 is the current picture:
 - pic[7][0] = luma >> 5;
 - pic[7][1] = poc & 0x1ff | bottom << 16;
-- pic[7][2] = chroma >> 5 (the vendor writes Y here for AFBC);
+- pic[7][2] = chroma >> 5 (the vendor writes Y here for AFBC, `bEnableAfbcFlag` at decoder+264; the driver does this for
+  the current picture and for the references whenever the reconstruction is AFBC, i.e. P010 capture since patch 30);
 - its own reference-POC list goes in ref_poc[6].
 
 How a picture's reference-POC list is built:
@@ -238,8 +239,12 @@ The vendor never uses P010. It writes:
 - 0x84 = offset of the 2-bit plane;
 - 0x8C = stride \| bit 13 (`high10_bit_for_P010` / `snd_with_high10b` in the vendor bitfield dump).
 
+`Avs2Set10BitReg` has no AFBC branch; with scale-down or rotation (`VConfig.bScaleDownEn/bRotationEn`) it writes 0x8C =
+0x2000 only and skips 0x84.
+
 The cedrus H.265 and VP9 P010 path sets bit 12 (P010) and never bit 13. The driver does this:
-- **P010 capture**: bit 12, as for H.265, with the hidden NV12 reconstruction and the secondary output.
+- **P010 capture**: bit 12, as for H.265, with the hidden AFBC reconstruction (since patch 30; before that, the hidden
+  NV12 + 2-bit one) and the secondary output. 0x84 = 0, as the AFBC surface has no 2-bit plane.
 - **8-bit-plus-2-bit capture** (the NV12 family at depth 10): bit 13, as the vendor does.
 
 **[board]** Do bit 12 and bit 13 behave for AVS2 as they do for H.265?

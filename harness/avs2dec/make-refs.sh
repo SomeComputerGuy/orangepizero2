@@ -99,14 +99,16 @@ build_one() {
 	touch "$d/.ok"
 }
 
+# xavs2 (2019) predates GCC 14, which made -Wincompatible-pointer-types an error
+# (xavs2_threadpool_run callers in encoder.c); downgrade it back to a warning.
 stage_build() {
 	# davs2 has no supported 10-bit build; remove the failed first attempt
 	rm -rf "${B:?}/davs2-10"
 	step build:davs2-8  build_one davs2-8  "$SRC/build-src-davs2/davs2" "" $DAVS2_SHA
-	step build:xavs2-8  build_one xavs2-8  "$SRC/build-src-xavs2/xavs2" "" $XAVS2_SHA
+	step build:xavs2-8  build_one xavs2-8  "$SRC/build-src-xavs2/xavs2" "-Wno-error=incompatible-pointer-types" $XAVS2_SHA
 	# xavs2 compiles weighting quantization out (ENABLE_WQUANT is never
 	# defined). Best effort: the WQ code may not build or may not work.
-	step build:xavs2-8wq build_one xavs2-8wq "$SRC/build-src-xavs2/xavs2" "-DENABLE_WQUANT=1" $XAVS2_SHA
+	step build:xavs2-8wq build_one xavs2-8wq "$SRC/build-src-xavs2/xavs2" "-DENABLE_WQUANT=1 -Wno-error=incompatible-pointer-types" $XAVS2_SHA
 }
 
 # ------------------------------------------------------------------ pku

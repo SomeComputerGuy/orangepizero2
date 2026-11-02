@@ -182,28 +182,67 @@ If A2 fails, try these variations in order, one per run:
 3. 0x44 counted from the slice start code versus after it.
 4. 0x48 = total bits versus remaining bits.
 
-## 5a. Update 2026-11-02: approval given; the build is blocked by the permission classifier
+## 5a. Update 2026-11-02: reference tools (approved)
 
-The user approved davs2 and xavs2 for the host ("Approve both", relayed by the coordinator).
+Both tools are cloned and pinned (research/avs2/test-streams.md). The first user run of `make-refs.sh` stopped at the
+davs2 10-bit configure.
 
-**Done:**
-- Cloned and pinned both sources. The sha256 values are in research/avs2/test-streams.md.
-- Wrote `harness/avs2dec/make-refs.sh`, which builds both tools and makes all md5s and streams.
-- Wrote two helpers, my own code: `yuvtool.py` (frame md5s, 2x downscale, 10-to-8-bit conversion) and `mkv2es.py`.
+**Both tools turn out to be 8-bit only:**
+- davs2's configure rejects 10-bit; its `HIGH_BIT_DEPTH` path is untested upstream and is not forced on.
+- xavs2 has no 16-bit pixel type at all.
 
-**Blocked:** this session's permission classifier refused the build command ("Code from External").
+The script was reworked:
+- 8-bit only;
+- independent, non-fatal and idempotent stages;
+- a per-step summary.
 
-**Findings from reading the xavs2 source:**
-- It cannot make background-picture streams: `background_picture_disable` is always written as 1.
-- Its WQ code is compiled out (`ENABLE_WQUANT` is undefined). The script tries `-DENABLE_WQUANT=1` as best effort.
-- For WQ streams the reference is the xavs2 reconstruction, not davs2, because davs2's picture-WQ parse is broken.
+It now makes:
+- the PKU md5-convention check;
+- the davs2-8 Main10 probe;
+- 8-bit xavs2 streams (1080p RA/LDP/temporal_id/LF-params, 4K RA, and WQ if the `-DENABLE_WQUANT=1` build works), with
+  the encoder reconstruction as the reference and davs2-8 as a cross-check.
 
-**Still open:**
-- (1) the PKU md5 convention;
-- (2) reference md5s, including CCTV4K;
-- (3) the generated streams.
+xavs2 cannot make background (G/GB/S) streams.
 
-All three need `make-refs.sh` to run.
+User command:
+
+```
+cd /home/aruni/orangepizero2 && harness/avs2dec/make-refs.sh 2>&1 | tee kernel-check/avs2-build-run2.log
+```
+
+The expected run time is roughly 10-30 min on the 20-core host. This is not measured: everything is C-only because the
+host has no nasm.
+
+## 5b. The 10-bit reference gap (cctv4k-10bit, spec row "10-bit 4K@60")
+
+No open, trustworthy 10-bit AVS2 software decoder is known:
+- davs2 has 10-bit disabled.
+- uavs3d (https://github.com/uavs3/uavs3d, BSD-3-Clause) is an **AVS3** decoder, not AVS2, so it is not usable.
+- FFmpeg has no native AVS2 decoder. Its libdavs2 wrapper is davs2 itself.
+- The AVS2 RD reference software (RD19.x) is not public.
+- Rockchip MPP, Amlogic and libva PR #738 are hardware paths, not software decoders.
+
+A search on 2026-11-02 found nothing else (sources: https://github.com/uavs3/uavs3d,
+https://github.com/intel/libva/pull/738, https://github.com/pkuvcl/davs2).
+
+Options, for the user to decide:
+1. **davs2 with `HIGH_BIT_DEPTH` forced** (patch out the configure check). Upstream disabled it as untested, so its
+   md5s would not be trusted on their own.
+2. **Another hardware decoder as the reference.** A Rockchip RK3588 board (Orange Pi 5) runs MPP AVS2 Main10: the other
+   harness has an opi5. Two independent decoders agreeing would be strong evidence. This needs MPP on that board, which
+   is another external-code approval.
+3. **No bit-exact reference.** Fall back to self-consistency checks on the H616:
+   - repeat runs give identical md5s;
+   - P010 output matches NV12 plus the 2-bit plane;
+   - frame-by-frame visual inspection;
+   - no error status;
+   - 8-bit streams prove the pipeline bit-exact, and 10-bit differs only in REG04 depth and 0x84/0x8C.
+
+Until one of these is chosen, the 10-bit row can be claimed only as "decodes, visually correct", not bit-exact.
+
+**The sample- versus encoding-precision question (regmap §8) stays open.** It needs an 8-bit-source stream coded at
+10 bits (sample_precision 1, encoding_precision 2). xavs2 could only write that header (`encoder.c:1200`) with a real
+10-bit build, which it does not have.
 
 ## 5. Approval request: reference decoder (external code, not built)
 

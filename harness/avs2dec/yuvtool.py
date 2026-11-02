@@ -7,6 +7,10 @@
                                            the first N frames in `copy`
   yuvtool.py half W H BPS in out         2x2 box downscale (for 4K -> 1080p)
   yuvtool.py to8 W H in out              16-bit LE 10-bit samples -> 8-bit (>>2, rounded)
+  yuvtool.py to10 W H in out             8-bit -> 16-bit LE 10-bit (<<2 plus a fixed
+                                           2-bit ordered dither, so the low bits vary)
+  yuvtool.py up2 W H BPS in out          2x upscale by pixel repetition (1080p -> 4K)
+  yuvtool.py head W H BPS N in out       keep the first N frames
 
 BPS is bytes per sample: 1 (8-bit) or 2 (16-bit little endian, 10-bit values).
 """
@@ -71,6 +75,54 @@ def to8(w, h, src, dst):
             o.write(np.minimum((a + 2) >> 2, 255).astype(np.uint8).tobytes())
 
 
+def to10(w, h, src, dst):
+    import numpy as np
+    fs = frame_size(w, h, 1)
+    cw, ch = (w + 1) // 2, (h + 1) // 2
+
+    def dither(pw, ph):
+        y, x = np.mgrid[0:ph, 0:pw]
+        return ((x + 2 * y) & 3).astype(np.uint16)
+    dy, dc = dither(w, h), dither(cw, ch)
+    with open(src, 'rb') as f, open(dst, 'wb') as o:
+        while True:
+            buf = f.read(fs)
+            if len(buf) < fs:
+                break
+            a = np.frombuffer(buf, dtype=np.uint8).astype(np.uint16)
+            y = (a[:w * h].reshape(h, w) << 2) | dy
+            u = (a[w * h:w * h + cw * ch].reshape(ch, cw) << 2) | dc
+            v = (a[w * h + cw * ch:].reshape(ch, cw) << 2) | dc
+            for p in (y, u, v):
+                o.write(p.astype('<u2').tobytes())
+
+
+def up2(w, h, bps, src, dst):
+    import numpy as np
+    dt = np.uint8 if bps == 1 else np.dtype('<u2')
+    fs = frame_size(w, h, bps)
+    cw, ch = (w + 1) // 2, (h + 1) // 2
+    with open(src, 'rb') as f, open(dst, 'wb') as o:
+        while True:
+            buf = f.read(fs)
+            if len(buf) < fs:
+                break
+            a = np.frombuffer(buf, dtype=dt)
+            for p in (a[:w * h].reshape(h, w), a[w * h:w * h + cw * ch].reshape(ch, cw),
+                      a[w * h + cw * ch:].reshape(ch, cw)):
+                o.write(np.repeat(np.repeat(p, 2, axis=0), 2, axis=1).tobytes())
+
+
+def head(w, h, bps, n, src, dst):
+    fs = frame_size(w, h, bps)
+    with open(src, 'rb') as f, open(dst, 'wb') as o:
+        for _ in range(n):
+            buf = f.read(fs)
+            if len(buf) < fs:
+                sys.exit('source has fewer frames than requested')
+            o.write(buf)
+
+
 def main(a):
     if a[0] == 'md5':
         md5(int(a[1]), int(a[2]), int(a[3]), a[4])
@@ -80,6 +132,12 @@ def main(a):
         half(int(a[1]), int(a[2]), int(a[3]), a[4], a[5])
     elif a[0] == 'to8':
         to8(int(a[1]), int(a[2]), a[3], a[4])
+    elif a[0] == 'to10':
+        to10(int(a[1]), int(a[2]), a[3], a[4])
+    elif a[0] == 'up2':
+        up2(int(a[1]), int(a[2]), int(a[3]), a[4], a[5])
+    elif a[0] == 'head':
+        head(int(a[1]), int(a[2]), int(a[3]), int(a[4]), a[5], a[6])
     else:
         sys.exit(__doc__)
 

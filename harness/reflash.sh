@@ -40,6 +40,7 @@ step() { printf '\n== %s\n' "$*"; }
 would() { echo "[dry-run] would: $*"; }
 SSH() { "$HARNESS/ssh.sh" "$@"; }
 SRV=""
+RESETARG=()
 cleanup() {
 	[[ -n $SRV ]] && kill "$SRV" 2> /dev/null || true
 	restore_cfg
@@ -130,9 +131,10 @@ else
 	elif [[ $POWERCYCLE == 1 ]]; then
 		python3 -I "$TOP/scripts/board-power.py" cycle 5
 	else
-		echo "board not reachable over ssh; reboot it by hand (or --power-cycle if serial is dead too)"
+		echo "board not reachable over ssh: sending 'reset' on the serial console (U-Boot prompt assumed)"
+		RESETARG=(--reset)
 	fi
-	python3 -I "$HARNESS/serialcon.py" uboot-pxe --timeout 240 --server "$HOST_IP" || { echo "U-Boot pxe step failed"; exit 1; }
+	python3 -I "$HARNESS/serialcon.py" uboot-pxe --timeout 240 --server "$HOST_IP" "${RESETARG[@]}" || { echo "U-Boot pxe step failed"; exit 1; }
 	restore_cfg # the flasher kernel is running: a later reboot must not come back here
 fi
 

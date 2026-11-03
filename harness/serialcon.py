@@ -116,6 +116,8 @@ def cmd_uboot_pxe(a):
         say('dry-run: would wait for "U-Boot SPL"/"Hit any key to stop autoboot", send Ctrl-C/space until "=> ",')
         say('         then send:', ' ; '.join(cmds), '; and wait for "Starting kernel"')
         return 0
+    if a.reset:  # board is sitting at a U-Boot prompt (e.g. a previous failed run): restart it
+        c.write(b'\x03'); time.sleep(0.3); c.write('reset\r')
     say(f'waiting up to {a.timeout}s for U-Boot on the console ...')
     if not c.wait(r'U-Boot SPL|U-Boot 20\d\d|Hit any key to stop autoboot', a.timeout, poll=0.05):
         say('no U-Boot banner seen'); return 2
@@ -133,12 +135,18 @@ def cmd_uboot_pxe(a):
     bad = {'dhcp': r'Retry count exceeded|TIMEOUT|Abort|No ethernet found',
            'pxe get': r'Config file not found|not set|Error|TIMEOUT'}
     for cmd in cmds[:-1]:
-        c.write(cmd + '\n')
-        if not c.wait(r'=> ', 90, echo=True):
+        # Wait for our own echo first, then for the NEXT prompt after it. Matching a bare '=> '
+        # hit the prompt in front of the echoed command, so every command was sent while the
+        # previous one (dhcp!) was still running and U-Boot dropped it.
+        c.write(cmd + '\r')
+        if not c.wait(re.escape(cmd), 10, echo=True):
+            say(f'no echo of {cmd!r}'); return 4
+        if not c.wait(r'\n=>', 90, echo=True):
             say(f'no prompt after {cmd!r}'); return 4
+        time.sleep(0.2)
         if cmd in bad and re.search(bad[cmd], c.seen):
             say(f'{cmd!r} failed'); return 5
-    c.write(cmds[-1] + '\n')
+    c.write(cmds[-1] + '\r')
     if c.wait(r'Starting kernel', 180, echo=True):
         say('kernel started'); return 0
     say('kernel did not start'); return 6
@@ -185,7 +193,7 @@ def cmd_firstlogin(a):
                 if ans is None:
                     say('first login done: root shell ready'); return 0
                 say('prompt:', p)
-                c.write(ans + '\n', show=False)
+                c.write(ans + '\r', show=False)
                 c.buf = ''
                 time.sleep(1.5)
                 break
@@ -198,7 +206,7 @@ def cmd_firstlogin(a):
 def cmd_shell(a):
     c = Console()
     tag = f'__done_{int(time.time())}__'
-    c.write(a.cmd + f'; echo {tag} rc=$?\n')
+    c.write(a.cmd + f'; echo {tag} rc=$?\r')
     m = c.wait(re.escape(tag) + r' rc=(\d+)', a.timeout, echo=True)
     if not m:
         say('no completion marker'); return 2
@@ -210,7 +218,7 @@ def cmd_shell(a):
 def main():
     ap = argparse.ArgumentParser()
     sp = ap.add_subparsers(dest='sub', required=True)
-    p = sp.add_parser('uboot-pxe'); p.add_argument('--timeout', type=int, default=180); p.add_argument('--dry-run', action='store_true'); p.add_argument('--server', default='10.56.0.1')
+    p = sp.add_parser('uboot-pxe'); p.add_argument('--timeout', type=int, default=180); p.add_argument('--dry-run', action='store_true'); p.add_argument('--server', default='10.56.0.1'); p.add_argument('--reset', action='store_true')
     p = sp.add_parser('wait-flasher'); p.add_argument('--timeout', type=int, default=1800)
     p = sp.add_parser('firstlogin'); p.add_argument('--timeout', type=int, default=600); p.add_argument('--dry-run', action='store_true')
     p = sp.add_parser('shell'); p.add_argument('cmd'); p.add_argument('--timeout', type=int, default=60); p.add_argument('--expect')

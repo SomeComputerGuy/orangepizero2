@@ -392,3 +392,25 @@ so this risk is low, but it is not zero.
 unchanged panic rate still gives 0 panics 38% of the time, so 20 runs cannot show a fix. **60 runs**
 (about 2.7 h) brings that to about 5%. The "(training retried: pass N, M ms)" events are the more
 sensitive signal: each one is a transient that v1 might not have survived.
+
+## 11. v2 board results (2026-11-03, raw: `dram-warm-reset/board-v2-2026-11-03.txt`)
+
+| build | reboot / cold | hot holder resets | 1024 MiB | retried | "not supported" panic | 512 MiB |
+|---|---|---|---|---|---|---|
+| A (backoff) | 10 / 3, all 1024 MiB | 21 (stopped after the panic) | 21 | 7 | **1** (run 20) | 0 |
+| B (A + JEDEC delays) | 3 / 1, all 1024 MiB | 60 | 60 | 21 | **0** | 0 |
+
+The temperature when petting stopped was 66-77 °C cpu.
+
+**A, run 20.** All 8 passes failed (about 1.3 s), so the SPL panicked. The SPL after the panic reset needed pass 6 (1310 ms). The glitch therefore lasted about 3 s or more.
+
+**B.** It recovered every time. The retries were spread out:
+- 9 resolved by pass 2 (17-160 ms).
+- 4 at pass 3 (167-329 ms).
+- 4 at pass 4 (336-659 ms).
+- 4 at pass 5 (666-988 ms).
+- **3 needed pass 7-8 (1325, 1647 and 1655 ms).** That is at the edge of the 8-pass, 1.26 s backoff budget.
+
+So B's 0/60 is real but has little margin. Whether the JEDEC delays help is not proven: 0/60 against 1/21 is not significant, and the retry rate is the same (35% against 33%).
+
+**Recommendation.** Merge A+B and raise the budget: `MCTL_MAX_PASSES` 12, about 2.5 s more of 320 ms waits. Healthy boots still cost nothing extra. The SD was left on B per the keep rule. The queue reflash then replaces it with the 5cc24a7c8 image's U-Boot.

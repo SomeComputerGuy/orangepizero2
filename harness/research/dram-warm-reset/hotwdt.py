@@ -20,7 +20,7 @@ def wait_ssh(limit=600):
         if r and r.returncode == 0: return r.stdout.strip()
         time.sleep(2)
     return None
-holder = open('/tmp/claude-scripts/wdhold.py').read()
+holder = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'wdhold.py')).read()
 STRESS = 'stress-ng --cpu 4 --cpu-method matrixprod --vm 2 --vm-bytes 100% --vm-keep --bigheap 1 -t 900s'
 for i in range(1, N + 1):
     bid0 = wait_ssh()
@@ -70,7 +70,7 @@ for i in range(1, N + 1):
     else:
         gap = 'n/a'; stemp = 'n/a'
     pm = re.findall(r'\[(\d\d:\d\d:\d\d\.\d+)\][^\n]*Kernel panic - not syncing: ([^\n]{0,60})', pre)
-    if pm: gap = '%.1f(panic->SPL; panic=%s)' % (spl_s - ts2sec(pm[-1][0]), pm[-1][1].strip())
+    if pm: gap = '%.1f(panic->SPL; panic=%s)' % (spl_s - ts2sec(pm[0][0]), pm[0][1].strip())
     lastgap = '%.1f' % (spl_s - ts2sec(last[0])) if last[0] != '?' else '?'
     mt = ssh('grep MemTotal /proc/meminfo; systemctl show -p RuntimeWatchdogUSec; fuser /dev/watchdog0 2>&1', t=20)
     mt = mt.stdout.replace('\n', ' ').strip() if mt else '?'

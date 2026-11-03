@@ -271,3 +271,121 @@ for.
   example tens of ms, so the retries span the transient), and/or the §7 items (JEDEC DDR3 init timing,
   detection at a lower DRAM clock). Re-run this test (`hotwdt.py hot-wdt 20 holder 5 90 ...`) and look for
   the "not supported" count to reach 0.
+
+## 10. v2: retry with backoff, JEDEC init delays, and the board plan (host-only so far)
+
+The goal is no "not supported" panic in the hot case. In §9 run 14, all 12 attempts of the v1 fix
+(3 back-to-back passes over 4 geometries, a few ms in total) failed. The board was only saved by the
+panic reset about 0.5 s later. So retries have to last longer than the transient.
+
+### What the code already does per attempt
+
+Every `mctl_core_init()` runs `mctl_sys_init()`, which:
+- asserts the MBUS, DRAM and PLL5 resets and gates;
+- switches PLL5 off, re-programs it and waits for lock;
+- re-enables the clocks.
+
+`mctl_ctrl_init()` then runs the uMCTL2 init with skip_dram_init=0. That drives the DDR3 RESET# and CKE
+sequence and the MR writes, then DFI init and PHY training. A "full controller/PHY reset and re-init
+(clock/PLL re-lock) per retry" is therefore already there. What v1 lacked is **time** between attempts.
+
+### Vendor boot0/libdram (`orangepi-build/.../sun50iw9/bin/boot0_sdcard.fex`, Thumb-2, load 0x20000, disassembled)
+
+- `init_DRAM` at 0x27254:
+  - sets the same PRCM RES_CAL/OHMS240 bits as mainline;
+  - sets VCC-DRAM (DDR3 default 1500 mV, `0x24500`);
+  - runs `auto_scan` (`0x26f84`: rank/width at `0x26eec`, then size) **only if dram_tpr13 bits 0 and 11 are clear**;
+  - then runs one `mctl_core_init` (`0x26d28`, "DRAM initial error : 1 !" on failure) and a simple memtest;
+  - if the memtest fails, it does one more full init plus memtest.
+  - After a scan it sets tpr13 |= 0x6001, and the vendor U-Boot writes the found para1/para2/tpr13 back
+    into the boot0 header. **Later vendor boots, warm resets included, never re-detect the geometry.** That
+    is why the vendor stack cannot come up at 512 MiB after a bad scan, a risk that mainline's scan on
+    every boot creates.
+- PHY training (`0x27058`): with **tpr10 bit 19** set, each step (write leveling, read calibration,
+  read and write training) gets up to 5 tries; mainline does this unconditionally. If any step still
+  fails, the vendor code **recursively re-runs the whole `mctl_core_init`, up to 10 times** (global
+  counter, then "retraining final error"). The Zero2's tpr10 = 0xf83438 has bit 19 set, so the vendor
+  does up to 10 full re-inits. Mainline never re-inits. There is no delay between them.
+- During the rank/width scan the vendor sets tpr10 bit 28 and restores it afterwards.
+- A warm-path special case exists only for **standby resume**. If RTC 0x070001f8 bit 16 is set, para1,
+  para2, tpr13 and the trained tpr6/tpr11/tpr12 are read back from RTC GP registers 8-15 ("Use rtc to
+  store dram tuning para"). Nothing is specific to a watchdog reset.
+- `mctl_sys_init` (`0x26c3c`) is the same as mainline: 5 us reset holds and a PLL re-lock. For DDR3, INIT1
+  is 0x420000 and INIT0 keeps the controller default, both the same as mainline. So the vendor is **not**
+  JEDEC-compliant on pre_cke either.
+
+### v2 changes (fix branch `fix/sunxi-h616-dram-warm-reset`, worktree `wt-dram`)
+
+- `50035418f` (patch A, updates `sunxi-dram-retry-transient-training-failures.patch`):
+  - Once something has trained, the behaviour is v1's: 2 more fast passes for the more demanding
+    combinations, with no added cost on a healthy board.
+  - **While nothing has trained**, retry with backoff of 20, 40, 80, 160, 320, 320 and 320 ms
+    (8 passes, 1.26 s of delay) before the panic. After a delay was needed, the 2 extra passes are
+    delayed too.
+  - The size probe and the final init use the same backoff, 8 tries.
+  - The DRAM line now reads `DRAM: (training retried: pass N, M ms) 1024 MiB`, so the length of the
+    transient is measured. "(training retried)" stays greppable.
+  - Built SPL is 37088 B (+240 B; max 0xbfa0 = 49056 B).
+- `ed4e53b0c` (patch B, new `sunxi-dram-h616-ddr3-jedec-init-delays.patch`): H616 DDR3 INIT0.pre_cke =
+  550 us (0xc2) and INIT1.dram_rstn = 200 us (0x47), both derived from the clock. It is kept separate so
+  its effect can be told apart from A's.
+- Detection at a lower DRAM clock (A523 style) was **not** done. The run-14 failure was a total failure
+  of every geometry, and keep-widest already covers the wrong-geometry risk. The final 720 MHz init would
+  still need the retry. On H616 the PHY setup branches on clk (<=672 and >500 MHz), so the change carries
+  LPDDR3/LPDDR4 risk without data. It is the next step only if A+B still panic.
+
+**Timing cost.** On a healthy boot, A adds 0 ms: it runs the same attempts as v1. B adds about
+0.33 ms per init x 7 inits, about 2.3 ms. In a transient, the cost is 20 ms+ per delayed pass, plus up
+to 2 delayed passes for wider geometries. If nothing trains at all, the panic comes after about 1.3 s
+of backoff plus 32 failing inits. There is no watchdog running in the SPL after a reset, so this time
+is not constrained.
+
+Artifacts:
+
+| build | patches | sha256 |
+|---|---|---|
+| A, `kernel-check/work-dram/out-A/u-boot-sunxi-with-spl.bin` | retry/backoff only | c6d8425fdfea25c32157bdbadf4adea59c5e60d064c6885c30bc599089f2af7e |
+| B, `kernel-check/work-dram/out-B/u-boot-sunxi-with-spl.bin` | A + JEDEC delays | c9fa17a72b9fba14f46751aa8dc07b08b756b22824d2d68c61e6191daf4b3bb1 |
+
+Both images are 899305 B. The SPL banner reads `U-Boot SPL 2026.10_armbian-check (Nov 03 2026 - 08:1x)`,
+which tells them apart from the image's `Nov 03 2026 - 01:42:44` SPL.
+
+### Board plan (when the board is handed over; SD only, SPI NOR left untouched as the fallback)
+
+```sh
+H=/home/aruni/orangepizero2/harness; K="-i $H/id_ed25519 -o UserKnownHostsFile=$H/known_hosts -o StrictHostKeyChecking=no"
+# 0. sanity: SD = mmcblk0, rootfs on it, first partition starts above the U-Boot area
+$H/ssh.sh 'lsblk -o NAME,SIZE,MOUNTPOINT /dev/mmcblk0; cat /sys/block/mmcblk0/mmcblk0p1/start; dd if=/dev/mmcblk0 bs=1 skip=8196 count=8 2>/dev/null; echo'
+#    expect p1 start >= 8192 (4 MiB) and "eGON.BT0"
+# 1. backup of the current SD copy (8 KiB .. 4 MiB), kept on the board and on the host
+$H/ssh.sh 'dd if=/dev/mmcblk0 of=/root/sd-uboot-4321861ff.bin bs=1024 skip=8 count=4088 && sha256sum /root/sd-uboot-4321861ff.bin'
+scp $K root@10.56.0.107:/root/sd-uboot-4321861ff.bin $H/research/dram-warm-reset/
+# 2. write build A
+scp $K /home/aruni/orangepizero2/kernel-check/work-dram/out-A/u-boot-sunxi-with-spl.bin root@10.56.0.107:/root/u-boot-A.bin
+$H/ssh.sh 'sha256sum /root/u-boot-A.bin && dd if=/root/u-boot-A.bin of=/dev/mmcblk0 bs=1024 seek=8 conv=fsync,notrunc && sync &&
+  cmp -n 899305 /root/u-boot-A.bin <(dd if=/dev/mmcblk0 bs=1024 skip=8 count=879 2>/dev/null) && echo WRITE-OK'
+# 3. reboot; serial.log must show the new SPL banner (08:1x build), "DRAM: 1024 MiB", Linux up, MemTotal 997768 kB
+# 4. 10x reboot, 3x cold boot (poweroff + scripts/board-power.py off/on on Test Plug 2 .240 only), all 1024 MiB
+# 5. python3 harness/research/dram-warm-reset/hotwdt.py hot-wdt 60 holder 5 90 <out>   (reads wdhold.py from its own dir)
+#    accept: 0 x "not supported", 0 x 512 MiB; record each "(training retried: pass N, M ms)"
+# 6. only if step 5 shows a panic: repeat 2-5 with out-B (A + JEDEC delays)
+```
+
+**Restore** the original SD copy (the image's SPL "01:42:44"):
+
+```sh
+harness/ssh.sh 'dd if=/root/sd-uboot-4321861ff.bin of=/dev/mmcblk0 bs=1024 seek=8 conv=fsync,notrunc && sync && echo RESTORED'
+```
+
+If the board's copy is gone, push the host copy back first:
+`scp $K harness/research/dram-warm-reset/sd-uboot-4321861ff.bin root@10.56.0.107:/root/`.
+
+**Risk.** BROM falls back to SPI NOR only when the SD has no valid eGON header. A new SPL that
+hangs would therefore not fall back, and recovery would need physical access or FEL. The healthy path
+of A and B runs the same code as the tested v1 (A) or differs only in two init register values (B),
+so this risk is low, but it is not zero.
+
+**Sample size.** The §9 baseline was 1 panic and 3 transient events in 21 resets. With 20 runs, an
+unchanged panic rate still gives 0 panics 38% of the time, so 20 runs cannot show a fix. **60 runs**
+(about 2.7 h) brings that to about 5%. The "(training retried: pass N, M ms)" events are the more
+sensitive signal: each one is a transient that v1 might not have survived.

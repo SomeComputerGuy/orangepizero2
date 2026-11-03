@@ -8,6 +8,7 @@
  *   avs2dec [-d /dev/videoN] [-m /dev/mediaN] [-o out.yuv] [-f] [-n bufs]
  *           [-c frames] [-v] stream.avs2
  *   avs2dec -p [-v] stream.avs2          parse only, no V4L2 (host test)
+ *   curl -s URL | avs2dec ... -          stream from a pipe (read to EOF)
  *
  * The output is planar 4:2:0 (I420) cropped to the display size: 8 bits
  * per sample for 8-bit streams, 16-bit little endian samples for 10-bit
@@ -790,6 +791,88 @@ static void xioctl(int fd, unsigned long req, void *arg, const char *name)
 		die("%s: %s", name, strerror(errno));
 }
 
+/*
+ * Board experiment (env AVS2_ALF_MODE): alternative luma region map
+ * layouts, to find the one the engine uses. 0 = as derived (coding
+ * order regions).
+ */
+static void alf_experiment(struct v4l2_ctrl_avs2_alf *a)
+{
+	static const uint8_t tab[16] = { 0, 1, 4, 5, 15, 2, 3, 6,
+					 14, 11, 10, 7, 13, 12, 9, 8 };
+	const char *e = getenv("AVS2_ALF_MODE");
+	int mode = e ? atoi(e) : 0;
+	uint8_t idx[16], m[16];
+	int16_t c[16][9];
+	unsigned int i;
+
+	if (!mode)
+		return;
+	memcpy(idx, a->luma_region_filter, 16);
+	memcpy(c, a->luma_coeff, sizeof(c));
+	for (i = 0; i < 16; i++) {
+		switch (mode) {
+		case 1: m[i] = idx[tab[i]]; break;	/* raster -> region */
+		case 2: m[tab[i]] = idx[i]; break;	/* inverse */
+		case 3: m[i] = idx[i ^ 1]; break;	/* nibble swap */
+		default: m[i] = idx[i]; break;
+		}
+	}
+	if (mode == 11) {
+		/* every slot filter 0, slot AVS2_ALF_SLOT the identity filter */
+		const char *se = getenv("AVS2_ALF_SLOT");
+		int slot = se ? atoi(se) : -1;
+
+		for (i = 0; i < 16; i++) {
+			memcpy(a->luma_coeff[i], c[0], sizeof(c[0]));
+			if ((int)i == slot)
+				memset(a->luma_coeff[i], 0, sizeof(c[0]));
+			m[i] = i;
+		}
+		a->num_luma_filters = 16;
+		memcpy(a->luma_region_filter, m, 16);
+		return;
+	}
+	if (mode >= 10) {
+		/* slot r gets the filter of spec region perm[r], identity map */
+		const char *pe = getenv("AVS2_ALF_PERM");
+		unsigned int perm[16];
+
+		for (i = 0; i < 16; i++)
+			perm[i] = i;
+		for (i = 0; pe && i < 16; i++)
+			perm[i] = strtoul(pe, (char **)&pe, 10) & 15;
+		for (i = 0; i < 16; i++) {
+			memcpy(a->luma_coeff[i], c[idx[perm[i]]], sizeof(c[0]));
+			m[i] = i;
+		}
+		a->num_luma_filters = 16;
+		memcpy(a->luma_region_filter, m, 16);
+		return;
+	}
+	if (mode == 4 || mode == 5 || mode == 6) {
+		/* one filter per region, identity map */
+		for (i = 0; i < 16; i++) {
+			unsigned int r = mode == 5 ? tab[i] : i;
+			unsigned int src = idx[r];
+
+			if (mode == 6) {
+				r = i;
+				src = idx[tab[i]];
+			}
+			memcpy(a->luma_coeff[i], c[src], sizeof(c[0]));
+			m[i] = i;
+		}
+		if (mode == 5) {
+			/* filter i = region tab[i]'s filter, map region r -> position */
+			for (i = 0; i < 16; i++)
+				m[tab[i]] = i;
+		}
+		a->num_luma_filters = 16;
+	}
+	memcpy(a->luma_region_filter, m, 16);
+}
+
 static void fill_sequence_ctrl(const struct seq *s, struct v4l2_ctrl_avs2_sequence *c)
 {
 	memset(c, 0, sizeof(*c));
@@ -874,15 +957,30 @@ static struct v4l2_ctx *v4l2_open(const char *video, const char *media,
 	fill_sequence_ctrl(s, &sc);
 	set_ctrls(v->video_fd, -1, &c, 1);
 
-	v->p010 = s->sample_precision > 1;
+	/*
+	 * 10-bit pictures go to P010 unless AVS2_CAP=NV12, which selects the
+	 * 8-bit planes of the NV12 + 2-bit layout (a separate linear
+	 * reconstruction path, for cross-checking the P010 output).
+	 */
+	v->p010 = s->sample_precision > 1 &&
+		  !(getenv("AVS2_CAP") && !strcmp(getenv("AVS2_CAP"), "NV12"));
 	memset(&fmt, 0, sizeof(fmt));
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	fmt.fmt.pix.pixelformat = v->p010 ? V4L2_PIX_FMT_P010 : V4L2_PIX_FMT_NV12;
+	/* AVS2_CAP=ST12: tiled NV12_32L32, throughput runs only (AVS2_NOOUT=1). */
+	if (getenv("AVS2_CAP") && !strcmp(getenv("AVS2_CAP"), "ST12")) {
+		if (!getenv("AVS2_NOOUT"))
+			die("AVS2_CAP=ST12 needs AVS2_NOOUT=1");
+		v->p010 = false;
+		fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_NV12_32L32;
+	}
 	fmt.fmt.pix.width = s->width;
 	fmt.fmt.pix.height = s->height;
 	xioctl(v->video_fd, VIDIOC_S_FMT, &fmt, "VIDIOC_S_FMT(CAPTURE)");
 	if (fmt.fmt.pix.pixelformat !=
-	    (v->p010 ? V4L2_PIX_FMT_P010 : V4L2_PIX_FMT_NV12))
+	    (v->p010 ? V4L2_PIX_FMT_P010 :
+	     (getenv("AVS2_CAP") && !strcmp(getenv("AVS2_CAP"), "ST12")) ?
+	     V4L2_PIX_FMT_NV12_32L32 : V4L2_PIX_FMT_NV12))
 		die("capture format %s not available", v->p010 ? "P010" : "NV12");
 	v->cap_fmt = fmt.fmt.pix;
 
@@ -1004,12 +1102,40 @@ static int v4l2_decode(struct v4l2_ctx *v, const uint8_t *data, size_t len,
 /* ------------------------------------------------------------------ */
 /* Output                                                             */
 
+/*
+ * Board test options (environment):
+ * AVS2_OUT8=1   write 10-bit P010 pictures as their upper 8 bits (I420),
+ *               to compare with the 8-bit planes of NV12 capture;
+ * AVS2_DUMP=a,b only write output frames a, b, ... to the -o file (the
+ *               md5s still cover every frame);
+ * AVS2_NOOUT=1  skip reading the pictures back (no md5): throughput runs.
+ */
+static bool out8;
+static bool dump_this = true;
+
+static bool dump_wanted(unsigned int n)
+{
+	const char *e = getenv("AVS2_DUMP");
+	char *end;
+
+	if (!e)
+		return true;
+	while (*e) {
+		if (strtoul(e, &end, 10) == n && end != e)
+			return true;
+		if (end == e)
+			break;
+		e = *end ? end + 1 : end;
+	}
+	return false;
+}
+
 static void put(struct decoder *d, const void *p, size_t n)
 {
 	md5_update(&d->md5, p, n);
 	if (d->frame_md5)
 		md5_update(&d->frame_md5_ctx, p, n);
-	if (d->out && fwrite(p, 1, n, d->out) != n)
+	if (d->out && dump_this && fwrite(p, 1, n, d->out) != n)
 		die("write: %s", strerror(errno));
 }
 
@@ -1021,11 +1147,13 @@ static void output_frame(struct decoder *d, int idx)
 	char sum[33];
 
 	f->out_index = d->out_count++;
+	dump_this = dump_wanted(f->out_index);
 
 	if (verbose)
 		fprintf(stderr, "output poc %d (doi %" PRId64 ")\n", f->poc,
 			f->doi);
-	if (!v)
+	/* AVS2_NOOUT=1: no readback or md5 (throughput runs). */
+	if (!v || (getenv("AVS2_NOOUT") && atoi(getenv("AVS2_NOOUT"))))
 		return;
 
 	if (d->frame_md5)
@@ -1038,18 +1166,39 @@ static void output_frame(struct decoder *d, int idx)
 		unsigned int bps = v->p010 ? 2 : 1;
 		uint8_t *row = d->rowbuf;
 
+		/*
+		 * The capture mapping is not cached: copy each row into a
+		 * cached buffer with wide loads before touching single bytes.
+		 */
+		static uint8_t *cached;
+		static size_t cached_len;
+
+		if (cached_len < bpl) {
+			free(cached);
+			cached = malloc(bpl);
+			if (!cached)
+				die("out of memory");
+			cached_len = bpl;
+		}
+
 		for (y = 0; y < h; y++) {
-			const uint8_t *src = base + (size_t)y * bpl;
+			const uint8_t *src = cached;
+
+			memcpy(cached, base + (size_t)y * bpl, bpl);
 
 			if (v->p010) {
 				for (x = 0; x < w; x++) {
 					unsigned int s = src[2 * x] | src[2 * x + 1] << 8;
 
 					s >>= 6;
+					if (out8) {
+						row[x] = s >> 2;
+						continue;
+					}
 					row[2 * x] = s & 0xff;
 					row[2 * x + 1] = s >> 8;
 				}
-				put(d, row, 2 * w);
+				put(d, row, out8 ? w : 2 * w);
 			} else {
 				put(d, src, w);
 			}
@@ -1057,20 +1206,26 @@ static void output_frame(struct decoder *d, int idx)
 
 		for (c = 0; c < 2; c++) {
 			for (y = 0; y < (h + 1) / 2; y++) {
-				const uint8_t *src = chroma + (size_t)y * bpl;
+				const uint8_t *src = cached;
+
+				memcpy(cached, chroma + (size_t)y * bpl, bpl);
 
 				for (x = 0; x < (w + 1) / 2; x++) {
 					if (v->p010) {
 						const uint8_t *s = src + 4 * x + 2 * c;
 						unsigned int val = (s[0] | s[1] << 8) >> 6;
 
+						if (out8) {
+							row[x] = val >> 2;
+							continue;
+						}
 						row[2 * x] = val & 0xff;
 						row[2 * x + 1] = val >> 8;
 					} else {
 						row[x] = src[2 * x + c];
 					}
 				}
-				put(d, row, bps * ((w + 1) / 2));
+				put(d, row, (out8 ? 1 : bps) * ((w + 1) / 2));
 			}
 		}
 	}
@@ -1217,6 +1372,7 @@ static void decode_picture(struct decoder *d, const uint8_t *data, size_t len,
 	memcpy(alf.luma_coeff, p.alf.luma, sizeof(alf.luma_coeff));
 	memcpy(alf.chroma_coeff, p.alf.chroma, sizeof(alf.chroma_coeff));
 	memcpy(alf.luma_region_filter, p.alf.region, 16);
+	alf_experiment(&alf);
 
 	if (verbose) {
 		static const char tn[] = "IPBF";
@@ -1332,15 +1488,47 @@ int main(int argc, char **argv)
 	}
 	if (optind + 1 != argc || d.num_bufs < 2 || d.num_bufs > MAX_BUFS)
 		usage();
+	out8 = getenv("AVS2_OUT8") && atoi(getenv("AVS2_OUT8"));
 
-	fd = open(argv[optind], O_RDONLY);
+	/* "-" or any non-regular file (a pipe from curl) is read to EOF. */
+	if (!strcmp(argv[optind], "-"))
+		fd = STDIN_FILENO;
+	else
+		fd = open(argv[optind], O_RDONLY);
 	if (fd < 0 || fstat(fd, &st))
 		die("%s: %s", argv[optind], strerror(errno));
-	len = st.st_size;
-	data = malloc(len + 4);
-	if (!data || read(fd, data, len) != (ssize_t)len)
-		die("read %s failed", argv[optind]);
-	close(fd);
+	if (S_ISREG(st.st_mode)) {
+		len = st.st_size;
+		data = malloc(len + 4);
+		if (!data || read(fd, data, len) != (ssize_t)len)
+			die("read %s failed", argv[optind]);
+	} else {
+		size_t cap = 1 << 20;
+		ssize_t n;
+
+		len = 0;
+		data = malloc(cap + 4);
+		while (data) {
+			if (len == cap) {
+				cap *= 2;
+				data = realloc(data, cap + 4);
+				if (!data)
+					break;
+			}
+			n = read(fd, data + len, cap - len);
+			if (n < 0 && errno == EINTR)
+				continue;
+			if (n < 0)
+				die("read %s: %s", argv[optind], strerror(errno));
+			if (!n)
+				break;
+			len += n;
+		}
+		if (!data)
+			die("out of memory reading %s", argv[optind]);
+	}
+	if (fd != STDIN_FILENO)
+		close(fd);
 
 	if (outname) {
 		d.out = fopen(outname, "wb");

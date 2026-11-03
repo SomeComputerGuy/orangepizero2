@@ -1,9 +1,11 @@
 # AVS2 hardware decode on the H616 (cedrus): implementation notes
 
-**Status (2026-11-02): the code is written and compile-checked only. Nothing has run on the board.**
+**Status (2026-11-03): board-tested on the Orange Pi Zero2 (§7).** 8-bit AVS2 is bit-exact on all 17 reference streams
+(after an ALF table fix found on the board). 10-bit is **self-consistent, not reference-verified** (§7.3). 4K Main10 P010
+decodes at 58.5 fps VE-bound.
 
 - **Goal:** the spec row "AVS2 JiZhun 10-bit 4K@60" (docs/spec-checklist.md).
-- **Branch (current):** `feat/sunxi-h616-avs2-dec-v2` (commit `3a7feba0e`, pushed to `fork`), in the worktree `wt-avs2-v2`.
+- **Branch (current):** `feat/sunxi-h616-avs2-dec-v2` (commit `62c28d143` = `3a7feba0e` + board fixes, pushed to `fork`), in the worktree `wt-avs2-v2`.
   It is based on `feat/sunxi-h616-vdec-spec` at `5a078800a` (patch 30, AFBC reconstruction for P010). See §0.
 - **Old branch:** `feat/sunxi-h616-avs2-dec` (`05081511c`, worktree `wt-avs2`, based on `d92a201f3`). Kept unchanged; superseded.
 - **Kernel patches:** the series block `h616-vdec`, after patch 30 (`media-cedrus-reconstruct-10-bit-pictures-into-AFBC-for-P010-output.patch`).
@@ -214,7 +216,7 @@ Prerequisites:
 | A3 | full `_ai` streams (3) | md5 equals md5.txt (8-bit I420 in output order; the format is assumed until it matches) | intra, ALF table layout, centre tap, region nibbles, SAO disable bit |
 | A4 | `_ld` streams (3, F pictures) | md5 match | reference table words and >>5 addresses, col-MV in/out, REG14 num refs |
 | A5 | `_ra` streams (3), BQMall, PartyScene, ParkScene 1080p | md5 match | B pictures, the B swap of the ref-POC list, POC > 255 (ParkScene has 200 pictures; the 9-bit wrap needs > 511, so loop a stream twice or concatenate), the width-hack bit 31 (none of these widths is in 129-192: craft or skip) |
-| A6 | CCTV4K Main10, P010 capture: `avs2dec -f`, then view frames on the host (first, middle and last pictures of the GOP) | stable decode, plausible pictures, no drift along the GOP (no reference md5) | 10-bit: REG04 depth, 0x8C bit 12, P010 secondary output, AFBC hidden reference and its address words (§0 items 1-3) |
+| A6 | CCTV4K Main10, P010 capture: `avs2dec -f`, then view frames on the host (first, middle and last pictures of the GOP) | the §7.3 self-consistency set: repeat runs identical, P010 == NV12-path upper bits on every frame, no drift across GOPs, PNG check | 10-bit: REG04 depth, 0x8C bit 12, P010 secondary output, AFBC hidden reference and its address words (§0 items 1-3) |
 | A7 | the same stream with NV12 capture at depth 10 (needs a small avs2dec option, or v4l2-ctl), comparing the 8-bit planes and the 2-bit plane against A6 | identical up to rounding | bit 13 versus bit 12 |
 | A8 | 4K throughput: time 300 pictures of CCTV4K with P010 (AFBC hidden reference), VE-bound with `ve-busy-cmd.sh` | ≥ 50 fps for the stream's rate, 60 for the spec row | spec row "4K@60". H.265 Main10 P010 with the AFBC reference reaches 60.3 fps (impl-vdec-main10-perf.md) |
 | A9 | cross-codec: an H.265 or VP9 job interleaved with AVS2 in two processes | both correct | VE reset on switch |
@@ -322,6 +324,64 @@ Until one of these is chosen, the 10-bit row can be claimed only as "decodes, vi
 So it is not a reference for WQ or background streams.
 
 **Optional, a separate approval:** build `pkuvcl/xavs2` (GPL-2.0) to encode short Main10 and WQ/background test streams (A5/A6 coverage). I would give a pinned commit once approved; I have not looked it up yet.
+
+## 7. Board results (2026-11-03)
+
+Kernel: the `stonking-orangepizero2` cf62ac65a series (integration = image a2371fdc1 + patch 30 + AVS2 v2), built
+incrementally in `kernel-check/work-board/linux-7.3.1` (copy of work-avs2 + the 20 integration-only source files,
+config from the integration branch; olddefconfig identical), `7.3.1 #11`; then `#12` with the two fixes below
+(Image md5 `9217ef8f347df23813d818b652733475`). Installed with `vdec-perf/install-kernel.sh` (Image + matching modules,
+fallback armed to `vmlinuz-7.3.1-edge-sunxi64`). Streams were streamed over HTTP (`curl ... | avs2dec ... -`), never
+copied to the board. Board scripts: `harness/avs2dec/board-avs2-8bit.sh`, `board-avs2-10bit.sh`, `board-avs2-misc.sh`,
+`board-regress-vdec.sh`; host-side results in `kernel-check/avs2-board/`.
+
+### 7.1 Bugs found and fixed (commit `62c28d143`)
+1. **ALF region map offset.** First run: every picture with ≥ 2 luma ALF filters wrong (luma only, max error 9);
+   ALF-off, chroma-only and 1-filter pictures bit-exact (correlated per picture over 3 intra streams). Userspace probes
+   (avs2dec `AVS2_ALF_MODE`, kept for reference) showed the slot coefficients are all read correctly and that no
+   permutation of the 16 regions fixes it; a per-slot identity-filter probe on a 1080p I picture mapped which LCUs the
+   engine filters with which slot: the engine reads the 16 nibbles at **table byte 168**, not 164 where the vendor
+   builds them (regmap §5.1). Fixed: 6 reserved bytes after the chroma centre taps, table 176 bytes.
+2. **Default AVS2 sequence control invalid** (size 0 fails its own validation; v4l2-compliance TRY_EXT_CTRLS). Default
+   now 176x144. (The HEVC SPS and VC-1 sequence defaults fail the same way; that is pre-existing, not touched.)
+
+### 7.2 Results per test
+| # | result |
+|---|---|
+| A1 | `AVS2` listed in `--list-formats-out`; the 4 controls are listed. v4l2-compliance 43/49: the 6 failures are series-wide (MG2S not in ENUM_FMT for G/TRY/S_FMT, duplicate `AS01`, DECODER_CMD, TRY_EXT_CTRLS from the HEVC SPS / VC-1 defaults); see the baseline line in §7.4. |
+| A2 | IRQ, engine select (REG04 [31:30] = 1), VE_MODE plain H.265 without RAMPD, 0x38 = 0x80100, bitstream regs, EPTB bypass: all work (first picture decoded, plausible). |
+| A3-A5 | **All 17 8-bit streams bit-exact, every frame** (per-frame md5 against davs2-8 / official PKU md5s): 12 PKU (ai/ld/ra at 416x240, BQMall/PartyScene 832x480, ParkScene 1080p 200 frames incl. POC > 255) and main-1080p-{ra,ldp,tid,lf}, main-2160p-ra; 1860 pictures. Covers I/P/F/B, the B ref-POC swap, col-MV, multi-filter ALF, SAO, temporal layers. Not covered by any stream: WQ (the wq-* streams are identical to the non-WQ ones), background/S pictures, field coding, POC wrap > 511, widths 129-192 (bit 31). |
+| A6 | cctv4k-10bit (3840x2160 Main10, 292 pictures, 6 GOPs of I + 6x(P + 7B), no SAO/ALF), P010 with the **AFBC hidden reference**: decodes, see §7.3. REG04 depth from sample_precision, 0x84 = 0 and 0x8C = stride \| bit 12 under AFBC, and pic[i][2] = AFBC address for current and references are all accepted. |
+| A7 | NV12 capture at 10 bits (linear NV12 + 2-bit reconstruction, 0x8C bit 13): decodes, upper 8 bits equal to the P010 path on all 292 frames (§7.3). |
+| A8 | VE-bound (ftrace `cedrus_device_run`→`cedrus_irq`, VE 600 MHz, avs2dec `AVS2_NOOUT=1`): **4K Main10 P010 (AFBC ref) 58.5 fps** (17.1 ms/picture; avs2dec pipeline 40 fps, single request in flight + stream parsing); same stream NV12+2-bit linear ref 47.2 fps; 8-bit 4K main-2160p-ra NV12 linear 33.0 fps, NV12_32L32 tiled **79.0 fps**; 1080p ParkScene NV12 198 fps. The stream itself is 50p; the "4K@60" spec row is met by the 8-bit tiled path and missed by 2.5 % for 10-bit P010 (native AFBC capture for AVS2, §6, would add headroom as for H.265: 60 → 84 fps). |
+| A9 | PartyScene AVS2 decoded 3x back to back while FFmpeg decoded 300 frames of 4K HEVC Main10 P010 in another process: AVS2 md5 = reference all 3 times, HEVC 300 framemd5 = reference. (A first attempt with VP9 4K as a third parallel decoder, while another agent's GPU tests ran, ran the board out of memory; the 15 s watchdog reset it. Not a VE fault: no cedrus timeout. After that warm reset the SPL reported "This DRAM setup is currently not supported" and then 512 MiB; a normal reboot restored 1 GiB. Reported to the coordinator.) |
+| A10 | Truncated stream: clean stop. 40 corrupted bytes in slice data: per-picture "decode error" (error IRQ → buffer error), no hang, no watchdog; next stream decodes bit-exact. |
+| A11 | Not needed (A6 passed). |
+
+### 7.3 10-bit verification: self-consistency (decided with the user, option 3)
+There is no open 10-bit AVS2 reference decoder (§5b), so the 10-bit spec row is claimed as
+**"self-consistent on the H616, not reference-verified"**, backed by bit-exact 8-bit (§7.2 A3-A5) and these checks on
+cctv4k-10bit (and on any other 10-bit AVS2 stream added later):
+1. **Repeatability:** two P010 runs give identical per-frame md5s on all 292 frames; a third (interrupted) run matches on
+   the first 226. No two frames share an md5 (no stuck output).
+2. **Two independent reference paths agree:** P010 output (AFBC hidden reference) vs NV12 capture at 10 bits (linear
+   NV12 + low-2-bit reference): upper 8 bits identical on **all 292 frames** (avs2dec `AVS2_OUT8=1` vs `AVS2_CAP=NV12`).
+   The low 2 bits of a reference feed the upper bits of later P/B pictures through MC rounding, so a lossy or misaddressed
+   AFBC reference would have shown up here. Only the low 2 bits of the output itself are covered by repeatability alone
+   (the NV12 path's 2-bit plane is not read back).
+3. **No drift across GOPs:** check 2 holds for all 6 GOPs, including the last B pictures of each 48-picture chain.
+4. **Visual:** frames 0 (I), 1, 2, 100 (B in GOP 3) converted to PNG on the host (`kernel-check/avs2-board/out10/*.png`,
+   full frame at 1280x720 and a 960x540 crop at 1:1): clean, no blocking, smearing or colour shift.
+
+### 7.4 Regression of the other codecs on the same kernel
+Same kernel #12, `harness/avs2dec/board-regress-vdec.sh` (FFmpeg v4l2request, whole-stream md5 vs host software decode):
+H.265 Main10 → P010 `e57bc497…` PASS, VP9 P2 → P010 `1e40c2b3…` PASS, H.265 8-bit → NV12 `3bbb2852…` PASS,
+VP9 P0 → NV12 `9368ae9b…` PASS, H.264 High 4K → NV12 `2f51f88f…` PASS. Rates VE-bound: H.265 Main10 P010 59.8 fps,
+AFBC10 83.9, VP9 P2 P010 56.9 (as impl-vdec-main10-perf.md §2.3). So patch 30 + AVS2 together break no other codec.
+v4l2-compliance: 43/49 on the test kernel and on the image kernel #8 alike (same 6 pre-existing failures; on #8 the
+AVS2 default also fails TRY_EXT_CTRLS, fixed in #12).
+
+Board restored afterwards: image kernel `7.3.1-edge-sunxi64 #8`, `/boot/vdec-trial` removed, 1 GiB, network up.
 
 ## 6. Follow-ups
 

@@ -149,7 +149,7 @@ bytes from the CPU cache; the driver uses a coherent allocation instead.
 
 | offset | size | content |
 |---|---|---|
-| 0x000 | 172 | ALF (`REG_AVS2_ALF`) |
+| 0x000 | 176 | ALF (`REG_AVS2_ALF`; the vendor copies 172 bytes, but the engine reads the region map at +168, see 5.1) |
 | 0x0B0 | 80 | weighting quant matrices (`REG_AVS2_WQM`) |
 | 0x100 | 184 | reference list (`REG_AVS2_REF`) |
 
@@ -161,14 +161,26 @@ bytes from the CPU cache; the driver uses a coherent allocation instead.
 | +128 | s8 [2][8] | Cb and Cr, c0..c7 |
 | +144 | u8 [16] | luma centre tap: 64 − 2·Σ(c0..c7) + c8 |
 | +160 | u8 [2] | chroma centre taps, same formula |
-| +162 | 2 bytes | reserved |
-| +164 | u8 [8] | region → filter map: byte k = idx[2k] \| idx[2k+1] << 4 |
+| +162 | 6 bytes | reserved (zero) |
+| +168 | u8 [8] | region → filter map: byte k = idx[2k] \| idx[2k+1] << 4. **Measured on the board** (2026-11-03) |
+
+**The region map is at +168, not at +164 where the vendor library puts it.** The vendor builds a 172-byte table on the
+stack with the map at bytes 164..171 and copies 0xac bytes of it to the pointer at DecInf+7688
+(`Avs2UpdateAlfPraramToEntryPointBuf`, dis 0xce60). A plain 4-byte shift of the whole table cannot explain it: the
+coefficients and centre taps work at the vendor offsets. With that layout every picture with two or
+more luma filters decoded wrongly on the H616 (luma only, max error 9; chroma and single-filter pictures were
+bit-exact). A probe (all 16 luma slots = filter 0, slot s = the identity filter, identity map; one 1080p I picture
+per s) showed which LCUs the engine filters with which slot: slots 8..15 and 0, in the spec's region order
+(`regionTable`, syntax.md §8), which is exactly what the engine sees if it reads the 16 nibbles from +168
+(the old map's bytes 4..7 hold regions 8..15, then 4 zero bytes). With the map at +168 all 17 8-bit reference streams
+are bit-exact. Why the vendor layout differs (another IP revision, or a vendor bug that only shows with multi-filter
+ALF) is not known.
 
 The region map is built as: idx[0] = 0; idx[k] = idx[k−1] + (pattern[k] ≠ 0) when there are at least
 2 filters, otherwise 0. `pattern` comes from alf_region_distance.
 
 The centre value overflows 8 bits for large c8; the vendor stores it as a byte all the same.
-**[board]** Check this with an ALF stream that has large coefficients.
+**[board]** Not specifically exercised: the reference streams pass, but whether any of their centre taps exceed 8 bits was not checked.
 
 ### 5.2 WQM (offset 0x0B0)
 

@@ -28,6 +28,9 @@ ve_off() { echo 0 > $T/tracing_on
 	     END{if(n) printf "VE jobs=%d busy=%.2fs avg=%.2fms => VE-bound fps %.1f\n",n,b,b/n*1000,n/b}' $T/trace
 	echo nop > $T/current_tracer; echo > $T/set_ftrace_filter; }
 
+# The fake EDID is requested before the rootfs is mounted when DRM is
+# built in; force a re-probe so it is loaded from /lib/firmware/edid now.
+for c in /sys/class/drm/card*-HDMI-A-*; do echo on > $c/status; done
 dmesg > dmesg-start.txt
 uname -a | tee -a summary.txt
 cat /proc/cmdline | tee -a summary.txt

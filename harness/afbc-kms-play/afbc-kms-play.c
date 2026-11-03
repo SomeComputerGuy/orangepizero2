@@ -171,9 +171,31 @@ static int64_t prop_enum(int fd, uint32_t obj, uint32_t type, const char *name,
 	return v;
 }
 
+/*
+ * IN_FORMATS blob walk. The sysroot libdrm's drmModeFormatModifierBlobIterNext()
+ * mis-reports format/modifier pairs (e.g. YTR on YUYV), so parse it here.
+ */
+static bool blob_has(const drmModePropertyBlobRes *blob, uint32_t fmt, uint64_t mod)
+{
+	const struct drm_format_modifier_blob *h = blob->data;
+	const uint32_t *fmts = (const uint32_t *)((const char *)h + h->formats_offset);
+	const struct drm_format_modifier *mods =
+		(const void *)((const char *)h + h->modifiers_offset);
+
+	for (uint32_t f = 0; f < h->count_formats; f++) {
+		if (fmts[f] != fmt)
+			continue;
+		for (uint32_t m = 0; m < h->count_modifiers; m++)
+			if (mods[m].modifier == mod && f >= mods[m].offset &&
+			    f < mods[m].offset + 64 &&
+			    (mods[m].formats >> (f - mods[m].offset) & 1))
+				return true;
+	}
+	return false;
+}
+
 static bool plane_supports(int fd, uint32_t plane, uint32_t fmt, uint64_t mod)
 {
-	drmModeFormatModifierIterator it = { 0 };
 	drmModePropertyBlobRes *blob;
 	bool found, ok = false;
 	uint64_t blob_id;
@@ -192,9 +214,7 @@ static bool plane_supports(int fd, uint32_t plane, uint32_t fmt, uint64_t mod)
 	blob = drmModeGetPropertyBlob(fd, blob_id);
 	if (!blob)
 		return false;
-	while (drmModeFormatModifierBlobIterNext(blob, &it))
-		if (it.fmt == fmt && it.mod == mod)
-			ok = true;
+	ok = blob_has(blob, fmt, mod);
 	drmModeFreePropertyBlob(blob);
 	return ok;
 }
@@ -206,7 +226,6 @@ static void list_planes(int fd)
 	if (!pr)
 		return;
 	for (uint32_t i = 0; i < pr->count_planes; i++) {
-		drmModeFormatModifierIterator it = { 0 };
 		drmModePropertyBlobRes *blob;
 		drmModePlane *p = drmModeGetPlane(fd, pr->planes[i]);
 		uint64_t type, blob_id;
@@ -220,13 +239,29 @@ static void list_planes(int fd)
 		       p->count_formats);
 		blob_id = prop_value(fd, p->plane_id, DRM_MODE_OBJECT_PLANE, "IN_FORMATS", &found);
 		if (found && blob_id && (blob = drmModeGetPropertyBlob(fd, blob_id))) {
-			while (drmModeFormatModifierBlobIterNext(blob, &it)) {
-				char *mn = drmGetFormatModifierName(it.mod);
+			/*
+			 * Walk the blob by hand: the sysroot libdrm's
+			 * drmModeFormatModifierBlobIterNext() mis-reports
+			 * format/modifier pairs on this kernel.
+			 */
+			const struct drm_format_modifier_blob *h = blob->data;
+			const uint32_t *fmts = (const uint32_t *)((const char *)h + h->formats_offset);
+			const struct drm_format_modifier *mods =
+				(const void *)((const char *)h + h->modifiers_offset);
 
-				printf("  %.4s 0x%016" PRIx64 " %s\n", (char *)&it.fmt,
-				       it.mod, mn ? mn : "?");
-				free(mn);
-			}
+			for (uint32_t f = 0; f < h->count_formats; f++)
+				for (uint32_t m = 0; m < h->count_modifiers; m++) {
+					const struct drm_format_modifier *md = &mods[m];
+					char *mn;
+
+					if (f < md->offset || f >= md->offset + 64 ||
+					    !(md->formats >> (f - md->offset) & 1))
+						continue;
+					mn = drmGetFormatModifierName(md->modifier);
+					printf("  %.4s 0x%016" PRIx64 " %s\n", (const char *)&fmts[f],
+					       (uint64_t)md->modifier, mn ? mn : "?");
+					free(mn);
+				}
 			drmModeFreePropertyBlob(blob);
 		}
 		drmModeFreePlane(p);

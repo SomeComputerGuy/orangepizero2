@@ -682,3 +682,843 @@ static void parse_slice_header(const struct seq *s, const struct pic *p,
 	bits_free(&b);
 }
 
+/* ------------------------------------------------------------------ */
+/* V4L2                                                                */
+
+struct v4l2_ctx {
+	int video_fd, media_fd;
+	int req_fd[NUM_OUT_BUFS];
+	void *out_map[NUM_OUT_BUFS];
+	size_t out_size[NUM_OUT_BUFS];
+	void *cap_map[MAX_BUFS];
+	size_t cap_len[MAX_BUFS];
+	struct v4l2_pix_format cap_fmt;
+	unsigned int next_out;
+	bool tiled;
+};
+
+static void xioctl(int fd, unsigned long req, void *arg, const char *name)
+{
+	if (ioctl(fd, req, arg) < 0)
+		die("%s: %s", name, strerror(errno));
+}
+
+static void fill_sequence_ctrl(const struct seq *s,
+			       struct v4l2_ctrl_avs_sequence *c)
+{
+	memset(c, 0, sizeof(*c));
+	if (s->progressive)
+		c->flags |= V4L2_AVS_SEQUENCE_FLAG_PROGRESSIVE_SEQUENCE;
+	if (s->low_delay)
+		c->flags |= V4L2_AVS_SEQUENCE_FLAG_LOW_DELAY;
+	c->horizontal_size = s->width;
+	c->vertical_size = s->height;
+	c->profile_id = s->profile;
+	c->level_id = s->level;
+	/*
+	 * Streams of the pre-final revision (FATE cavs.mpg) code 0 here;
+	 * they are 8-bit 4:2:0.
+	 */
+	c->chroma_format = s->chroma_format ? s->chroma_format : 1;
+	c->sample_precision = s->sample_precision ? s->sample_precision : 1;
+	c->aspect_ratio = s->aspect_ratio;
+	c->frame_rate_code = s->frame_rate_code;
+}
+
+static void set_ctrls(int fd, int req_fd, struct v4l2_ext_control *c,
+		      unsigned int n)
+{
+	struct v4l2_ext_controls ctrls = {
+		.which = req_fd >= 0 ? V4L2_CTRL_WHICH_REQUEST_VAL : 0,
+		.request_fd = req_fd,
+		.count = n,
+		.controls = c,
+	};
+
+	xioctl(fd, VIDIOC_S_EXT_CTRLS, &ctrls, "VIDIOC_S_EXT_CTRLS");
+}
+
+static struct v4l2_ctx *v4l2_open(const char *video, const char *media,
+				  const struct seq *s, size_t max_pic,
+				  unsigned int num_cap, bool tiled)
+{
+	struct v4l2_ctx *v = calloc(1, sizeof(*v));
+	struct v4l2_ctrl_avs_sequence sc;
+	struct v4l2_ext_control c = {
+		.id = V4L2_CID_STATELESS_AVS_SEQUENCE,
+		.size = sizeof(sc),
+		.ptr = &sc,
+	};
+	uint32_t cap_pixfmt = tiled ? V4L2_PIX_FMT_NV12_32L32 :
+				       V4L2_PIX_FMT_NV12;
+	struct v4l2_format fmt = { 0 };
+	struct v4l2_requestbuffers rb = { 0 };
+	enum v4l2_buf_type type;
+	unsigned int i;
+
+	if (!v)
+		die("out of memory");
+	v->tiled = tiled;
+	v->video_fd = open(video, O_RDWR);
+	if (v->video_fd < 0)
+		die("%s: %s", video, strerror(errno));
+	v->media_fd = open(media, O_RDWR);
+	if (v->media_fd < 0)
+		die("%s: %s", media, strerror(errno));
+
+	fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_AVS_FRAME;
+	fmt.fmt.pix.width = s->width;
+	fmt.fmt.pix.height = s->height;
+	fmt.fmt.pix.sizeimage = (max_pic + 64 * 1024 + 4095) & ~4095u;
+	xioctl(v->video_fd, VIDIOC_S_FMT, &fmt, "VIDIOC_S_FMT(OUTPUT)");
+	if (fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_AVS_FRAME)
+		die("the driver has no AVS_FRAME output format");
+
+	fill_sequence_ctrl(s, &sc);
+	set_ctrls(v->video_fd, -1, &c, 1);
+
+	memset(&fmt, 0, sizeof(fmt));
+	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	fmt.fmt.pix.pixelformat = cap_pixfmt;
+	fmt.fmt.pix.width = s->width;
+	fmt.fmt.pix.height = s->height;
+	xioctl(v->video_fd, VIDIOC_S_FMT, &fmt, "VIDIOC_S_FMT(CAPTURE)");
+	if (fmt.fmt.pix.pixelformat != cap_pixfmt)
+		die("capture format %s not available", tiled ? "NV12_32L32" : "NV12");
+	v->cap_fmt = fmt.fmt.pix;
+	if (verbose)
+		fprintf(stderr, "capture %ux%u bytesperline %u sizeimage %u\n",
+			v->cap_fmt.width, v->cap_fmt.height,
+			v->cap_fmt.bytesperline, v->cap_fmt.sizeimage);
+
+	rb.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+	rb.memory = V4L2_MEMORY_MMAP;
+	rb.count = NUM_OUT_BUFS;
+	xioctl(v->video_fd, VIDIOC_REQBUFS, &rb, "VIDIOC_REQBUFS(OUTPUT)");
+	if (rb.count < NUM_OUT_BUFS)
+		die("too few output buffers");
+	for (i = 0; i < NUM_OUT_BUFS; i++) {
+		struct v4l2_buffer buf = {
+			.type = V4L2_BUF_TYPE_VIDEO_OUTPUT,
+			.memory = V4L2_MEMORY_MMAP,
+			.index = i,
+		};
+
+		xioctl(v->video_fd, VIDIOC_QUERYBUF, &buf, "VIDIOC_QUERYBUF");
+		v->out_size[i] = buf.length;
+		v->out_map[i] = mmap(NULL, buf.length, PROT_READ | PROT_WRITE,
+				     MAP_SHARED, v->video_fd, buf.m.offset);
+		if (v->out_map[i] == MAP_FAILED)
+			die("mmap: %s", strerror(errno));
+		xioctl(v->media_fd, MEDIA_IOC_REQUEST_ALLOC, &v->req_fd[i],
+		       "MEDIA_IOC_REQUEST_ALLOC");
+	}
+
+	memset(&rb, 0, sizeof(rb));
+	rb.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	rb.memory = V4L2_MEMORY_MMAP;
+	rb.count = num_cap;
+	xioctl(v->video_fd, VIDIOC_REQBUFS, &rb, "VIDIOC_REQBUFS(CAPTURE)");
+	if (rb.count < num_cap)
+		die("only %u capture buffers", rb.count);
+	for (i = 0; i < num_cap; i++) {
+		struct v4l2_buffer buf = {
+			.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+			.memory = V4L2_MEMORY_MMAP,
+			.index = i,
+		};
+
+		xioctl(v->video_fd, VIDIOC_QUERYBUF, &buf, "VIDIOC_QUERYBUF");
+		v->cap_len[i] = buf.length;
+		v->cap_map[i] = mmap(NULL, buf.length, PROT_READ, MAP_SHARED,
+				     v->video_fd, buf.m.offset);
+		if (v->cap_map[i] == MAP_FAILED)
+			die("mmap: %s", strerror(errno));
+	}
+
+	type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+	xioctl(v->video_fd, VIDIOC_STREAMON, &type, "VIDIOC_STREAMON(OUTPUT)");
+	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	xioctl(v->video_fd, VIDIOC_STREAMON, &type, "VIDIOC_STREAMON(CAPTURE)");
+
+	return v;
+}
+
+/* One request per picture; waits for it. Returns -1 on a decode error. */
+static int v4l2_decode(struct v4l2_ctx *v, const uint8_t *data, size_t len,
+		       uint64_t ts, unsigned int cap_index,
+		       struct v4l2_ext_control *ctrls, unsigned int nctrls)
+{
+	unsigned int out = v->next_out;
+	int req = v->req_fd[out];
+	struct v4l2_buffer buf = { 0 };
+	struct pollfd pfd = { .fd = req, .events = POLLPRI };
+	int ret, error = 0;
+
+	v->next_out = (out + 1) % NUM_OUT_BUFS;
+
+	if (len > v->out_size[out])
+		die("picture of %zu bytes does not fit the %zu byte buffer",
+		    len, v->out_size[out]);
+	memcpy(v->out_map[out], data, len);
+
+	set_ctrls(v->video_fd, req, ctrls, nctrls);
+
+	buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+	buf.memory = V4L2_MEMORY_MMAP;
+	buf.index = out;
+	buf.bytesused = len;
+	buf.flags = V4L2_BUF_FLAG_REQUEST_FD;
+	buf.request_fd = req;
+	buf.timestamp.tv_sec = ts / 1000000000;
+	buf.timestamp.tv_usec = (ts % 1000000000) / 1000;
+	xioctl(v->video_fd, VIDIOC_QBUF, &buf, "VIDIOC_QBUF(OUTPUT)");
+
+	memset(&buf, 0, sizeof(buf));
+	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	buf.memory = V4L2_MEMORY_MMAP;
+	buf.index = cap_index;
+	xioctl(v->video_fd, VIDIOC_QBUF, &buf, "VIDIOC_QBUF(CAPTURE)");
+
+	xioctl(req, MEDIA_REQUEST_IOC_QUEUE, NULL, "MEDIA_REQUEST_IOC_QUEUE");
+
+	ret = poll(&pfd, 1, 5000);
+	if (ret <= 0)
+		die("request timed out");
+
+	memset(&buf, 0, sizeof(buf));
+	buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+	buf.memory = V4L2_MEMORY_MMAP;
+	xioctl(v->video_fd, VIDIOC_DQBUF, &buf, "VIDIOC_DQBUF(OUTPUT)");
+
+	memset(&buf, 0, sizeof(buf));
+	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	buf.memory = V4L2_MEMORY_MMAP;
+	xioctl(v->video_fd, VIDIOC_DQBUF, &buf, "VIDIOC_DQBUF(CAPTURE)");
+	if (buf.index != cap_index)
+		die("dequeued capture buffer %u, expected %u", buf.index,
+		    cap_index);
+	if (buf.flags & V4L2_BUF_FLAG_ERROR)
+		error = -1;
+
+	xioctl(req, MEDIA_REQUEST_IOC_REINIT, NULL, "MEDIA_REQUEST_IOC_REINIT");
+
+	return error;
+}
+
+/* ------------------------------------------------------------------ */
+/* Decoder: reference history, output order                            */
+
+struct frame {
+	bool ref;		/* R0 or R1 */
+	bool pending;		/* waiting to be output */
+	uint64_t ts;
+	int dec_index;
+	unsigned int type, distance;
+};
+
+struct ref {
+	bool valid;
+	int slot;
+	uint64_t ts;
+	unsigned int distance;
+	unsigned int flags;	/* V4L2_AVS_REF_FLAG_ */
+};
+
+struct decoder {
+	struct seq seq;
+	struct frame frames[MAX_BUFS];
+	unsigned int num_frames;
+	struct ref r[3];	/* R0 newest .. R2 */
+	int held;		/* I/P picture waiting for the next I/P */
+	struct v4l2_ctx *v4l2;
+	bool dry_run, vld_at_header;
+	FILE *yuv, *crc, *md5f;
+	struct md5 md5;
+	unsigned int out_count, dec_count, errors, skipped;
+	unsigned int count[3], field_pics, weighted_pics, pseudo, aec_pics,
+		     enhanced_b, wq_pics, no_slice_sc;
+	uint8_t *row;
+	char order[4096];
+	size_t order_len;
+};
+
+static const char type_char[] = "IPB";
+
+static void tb_of(unsigned int frc, unsigned int *num, unsigned int *den)
+{
+	static const unsigned int rate[9][2] = {
+		{ 25, 1 }, { 24000, 1001 }, { 24, 1 }, { 25, 1 },
+		{ 30000, 1001 }, { 30, 1 }, { 50, 1 }, { 60000, 1001 },
+		{ 60, 1 },
+	};
+
+	if (frc > 8)
+		frc = 0;
+	*num = rate[frc][1];
+	*den = rate[frc][0];
+}
+
+static void print_headers(struct decoder *d)
+{
+	unsigned int num, den;
+
+	tb_of(d->seq.frame_rate_code, &num, &den);
+	if (d->md5f)
+		fprintf(d->md5f, "#format: frame checksums\n#version: 2\n#hash: MD5\n");
+	if (d->crc)
+		fprintf(d->crc, "#tb 0: %u/%u\n#media_type 0: video\n#codec_id 0: rawvideo\n#dimensions 0: %ux%u\n#sar 0: 0/1\n",
+			num, den, d->seq.width, d->seq.height);
+	if (d->md5f)
+		fprintf(d->md5f, "#tb 0: %u/%u\n#media_type 0: video\n#codec_id 0: rawvideo\n#dimensions 0: %ux%u\n#sar 0: 0/1\n#stream#, dts,        pts, duration,     size, hash\n",
+			num, den, d->seq.width, d->seq.height);
+}
+
+static const uint8_t *cap_pixel_row(struct v4l2_ctx *v, const uint8_t *plane,
+				    unsigned int y, unsigned int width,
+				    uint8_t *tmp)
+{
+	unsigned int bpl = v->cap_fmt.bytesperline, x;
+
+	if (!v->tiled) {
+		memcpy(tmp, plane + (size_t)y * bpl, width);
+		return tmp;
+	}
+
+	/* NV12_32L32: 32x32 byte tiles, in rows of bpl / 32 tiles */
+	for (x = 0; x < width; x += 32) {
+		size_t off = ((size_t)(y / 32) * (bpl / 32) + x / 32) * 1024 +
+			     (y % 32) * 32;
+		unsigned int n = width - x < 32 ? width - x : 32;
+
+		memcpy(tmp + x, plane + off, n);
+	}
+	return tmp;
+}
+
+static void output_frame(struct decoder *d, int slot)
+{
+	struct frame *f = &d->frames[slot];
+	unsigned int w = d->seq.width, h = d->seq.height, cw = (w + 1) / 2;
+	unsigned int size = w * h + 2 * cw * ((h + 1) / 2);
+	unsigned int idx = d->out_count++;
+	struct md5 fm;
+	struct adler ad;
+	char sum[33];
+	int n;
+
+	f->pending = false;
+	n = snprintf(d->order + d->order_len, sizeof(d->order) - d->order_len,
+		     "%c%u ", type_char[f->type], f->distance);
+	if (n > 0 && d->order_len + n < sizeof(d->order))
+		d->order_len += n;
+
+	if (d->dry_run) {
+		if (verbose)
+			printf("output %u: picture %d (%c, distance %u)\n", idx,
+			       f->dec_index, type_char[f->type], f->distance);
+		return;
+	}
+
+	md5_init(&fm);
+	adler_init(&ad);
+	{
+		struct v4l2_ctx *v = d->v4l2;
+		const uint8_t *luma = v->cap_map[slot];
+		const uint8_t *chroma = luma + (size_t)v->cap_fmt.bytesperline *
+					v->cap_fmt.height;
+		uint8_t *tmp = d->row, *out = d->row + v->cap_fmt.bytesperline + 64;
+		unsigned int x, y, c;
+
+		for (y = 0; y < h; y++) {
+			const uint8_t *r = cap_pixel_row(v, luma, y, w, tmp);
+
+			md5_update(&fm, r, w);
+			md5_update(&d->md5, r, w);
+			adler_update(&ad, r, w);
+			if (d->yuv && fwrite(r, 1, w, d->yuv) != w)
+				die("write: %s", strerror(errno));
+		}
+		for (c = 0; c < 2; c++) {
+			for (y = 0; y < (h + 1) / 2; y++) {
+				const uint8_t *r = cap_pixel_row(v, chroma, y,
+								 2 * cw, tmp);
+
+				for (x = 0; x < cw; x++)
+					out[x] = r[2 * x + c];
+				md5_update(&fm, out, cw);
+				md5_update(&d->md5, out, cw);
+				adler_update(&ad, out, cw);
+				if (d->yuv && fwrite(out, 1, cw, d->yuv) != cw)
+					die("write: %s", strerror(errno));
+			}
+		}
+	}
+	md5_final(&fm, sum);
+
+	if (d->crc)
+		fprintf(d->crc, "0, %10u, %10u, %8d, %8u, 0x%08x\n", idx, idx, 1,
+			size, adler_final(&ad));
+	if (d->md5f)
+		fprintf(d->md5f, "0, %10u, %10u, %8d, %8u, %s\n", idx, idx, 1,
+			size, sum);
+	if (verbose)
+		fprintf(stderr, "output %u: picture %d (%c, distance %u) md5 %s\n",
+			idx, f->dec_index, type_char[f->type], f->distance, sum);
+}
+
+static int get_free_frame(struct decoder *d)
+{
+	unsigned int i;
+
+	for (i = 0; i < d->num_frames; i++)
+		if (!d->frames[i].ref && !d->frames[i].pending)
+			return i;
+	die("no free capture buffer");
+	return -1;
+}
+
+static void fill_ref(struct v4l2_avs_ref_pic *c, const struct ref *r)
+{
+	memset(c, 0, sizeof(*c));
+	if (!r->valid)
+		return;
+	c->timestamp = r->ts;
+	c->picture_distance = r->distance;
+	c->flags = r->flags;
+}
+
+static void print_ref(const char *name, const struct v4l2_avs_ref_pic *c)
+{
+	if (!(c->flags & V4L2_AVS_REF_FLAG_VALID)) {
+		printf(" %s=-", name);
+		return;
+	}
+	printf(" %s={ts %" PRIu64 " dist %u flags 0x%x}", name, (uint64_t)c->timestamp,
+	       c->picture_distance, c->flags);
+}
+
+/*
+ * One picture: data is the OUTPUT buffer content, from the picture start
+ * code to the end of its last slice; first_slice is the offset of the
+ * first slice start code in it (0 if there is none).
+ */
+static void decode_picture(struct decoder *d, const struct pic *p,
+			   const uint8_t *data, size_t len, size_t first_slice)
+{
+	struct v4l2_ctrl_avs_sequence sc;
+	struct v4l2_ctrl_avs_picture pc = { 0 };
+	struct v4l2_ctrl_avs_weight_quant wc = { 0 };
+	struct v4l2_ext_control c[3] = {
+		{ .id = V4L2_CID_STATELESS_AVS_SEQUENCE, .size = sizeof(sc), .ptr = &sc },
+		{ .id = V4L2_CID_STATELESS_AVS_PICTURE, .size = sizeof(pc), .ptr = &pc },
+		{ .id = V4L2_CID_STATELESS_AVS_WEIGHT_QUANT, .size = sizeof(wc), .ptr = &wc },
+	};
+	int index = d->dec_count++;
+	bool is_ref = p->type != V4L2_AVS_PICTURE_TYPE_B;
+	struct frame *f;
+	unsigned int i;
+	int slot;
+
+	d->count[p->type]++;
+	if (!p->structure)
+		d->field_pics++;
+	if (p->weighted_slices)
+		d->weighted_pics++;
+	if (p->aec)
+		d->aec_pics++;
+	if (p->wq)
+		d->wq_pics++;
+	if (p->pb_field_enhanced && !p->structure &&
+	    p->type == V4L2_AVS_PICTURE_TYPE_B)
+		d->enhanced_b++;
+	d->pseudo += p->pseudo;
+	if (p->no_slice_start_code)
+		d->no_slice_sc++;
+
+	/* Missing references (open GOP, stream start): skip the picture. */
+	if ((p->type == V4L2_AVS_PICTURE_TYPE_P && !d->r[0].valid) ||
+	    (p->type == V4L2_AVS_PICTURE_TYPE_B &&
+	     (!d->r[0].valid || !d->r[1].valid))) {
+		printf("picture %d (%c, distance %u): reference missing, skipped\n",
+		       index, type_char[p->type], p->distance);
+		d->skipped++;
+		return;
+	}
+
+	fill_sequence_ctrl(&d->seq, &sc);
+
+	if (p->type == V4L2_AVS_PICTURE_TYPE_B) {
+		fill_ref(&pc.refs[V4L2_AVS_REF_FORWARD], &d->r[1]);
+		fill_ref(&pc.refs[V4L2_AVS_REF_BACKWARD], &d->r[0]);
+		fill_ref(&pc.refs[V4L2_AVS_REF_SECOND_FORWARD], &d->r[2]);
+	} else {
+		fill_ref(&pc.refs[V4L2_AVS_REF_FORWARD], &d->r[0]);
+		fill_ref(&pc.refs[V4L2_AVS_REF_SECOND_FORWARD], &d->r[1]);
+	}
+
+	if (d->vld_at_header || !first_slice)
+		pc.data_offset = 4;
+	else
+		pc.data_offset = first_slice;
+	if (p->progressive_frame)
+		pc.flags |= V4L2_AVS_PICTURE_FLAG_PROGRESSIVE_FRAME;
+	if (p->structure)
+		pc.flags |= V4L2_AVS_PICTURE_FLAG_PICTURE_STRUCTURE;
+	if (p->top_field_first)
+		pc.flags |= V4L2_AVS_PICTURE_FLAG_TOP_FIELD_FIRST;
+	if (p->repeat_first_field)
+		pc.flags |= V4L2_AVS_PICTURE_FLAG_REPEAT_FIRST_FIELD;
+	if (p->fixed_qp)
+		pc.flags |= V4L2_AVS_PICTURE_FLAG_FIXED_PICTURE_QP;
+	if (p->ref_flag)
+		pc.flags |= V4L2_AVS_PICTURE_FLAG_PICTURE_REFERENCE;
+	if (p->skip_mode)
+		pc.flags |= V4L2_AVS_PICTURE_FLAG_SKIP_MODE;
+	if (p->adv_pred_disable)
+		pc.flags |= V4L2_AVS_PICTURE_FLAG_ADVANCED_PRED_MODE_DISABLE;
+	if (p->lf_disable)
+		pc.flags |= V4L2_AVS_PICTURE_FLAG_LOOP_FILTER_DISABLE;
+	if (p->no_forward_ref)
+		pc.flags |= V4L2_AVS_PICTURE_FLAG_NO_FORWARD_REFERENCE;
+	if (p->pb_field_enhanced)
+		pc.flags |= V4L2_AVS_PICTURE_FLAG_PB_FIELD_ENHANCED;
+	if (p->wq)
+		pc.flags |= V4L2_AVS_PICTURE_FLAG_WEIGHTING_QUANT;
+	if (p->aec)
+		pc.flags |= V4L2_AVS_PICTURE_FLAG_AEC;
+	pc.picture_type = p->type;
+	pc.picture_distance = p->distance;
+	pc.picture_qp = p->qp;
+	pc.alpha_c_offset = p->alpha;
+	pc.beta_offset = p->beta;
+
+	if (p->wq) {
+		if (p->chroma_qp_disable)
+			wc.flags |= V4L2_AVS_WEIGHT_QUANT_FLAG_CHROMA_QUANT_PARAM_DISABLE;
+		wc.chroma_quant_param_delta_cb = p->cb;
+		wc.chroma_quant_param_delta_cr = p->cr;
+		wc.weighting_quant_param_index = p->wq_index;
+		wc.weighting_quant_model = p->wq_model;
+		for (i = 0; i < 6; i++) {
+			wc.weighting_quant_param_delta1[i] = p->delta1[i];
+			wc.weighting_quant_param_delta2[i] = p->delta2[i];
+		}
+	}
+
+	slot = get_free_frame(d);
+	f = &d->frames[slot];
+	f->ts = (uint64_t)(index + 1) * 1000;
+	f->dec_index = index;
+	f->type = p->type;
+	f->distance = p->distance;
+
+	if (d->dry_run) {
+		printf("picture %d: %c dist %u size %zu data_offset %u flags 0x%04x qp %u alpha %d beta %d slices %u pseudo %u buf %d ts %" PRIu64,
+		       index, type_char[p->type], p->distance, len, pc.data_offset,
+		       pc.flags, pc.picture_qp, pc.alpha_c_offset, pc.beta_offset,
+		       p->slices, p->pseudo, slot, f->ts);
+		print_ref("fwd", &pc.refs[V4L2_AVS_REF_FORWARD]);
+		print_ref("fwd2", &pc.refs[V4L2_AVS_REF_SECOND_FORWARD]);
+		print_ref("bwd", &pc.refs[V4L2_AVS_REF_BACKWARD]);
+		if (p->wq)
+			printf(" wq{flags 0x%x cb %d cr %d index %u model %u}",
+			       wc.flags, wc.chroma_quant_param_delta_cb,
+			       wc.chroma_quant_param_delta_cr,
+			       wc.weighting_quant_param_index,
+			       wc.weighting_quant_model);
+		if (p->weighted_slices)
+			printf(" weighted_slices %u", p->weighted_slices);
+		printf("\n");
+	} else if (v4l2_decode(d->v4l2, data, len, f->ts, slot, c,
+			       p->wq ? 3 : 2) < 0) {
+		fprintf(stderr, "picture %d (%c, distance %u): decode error\n",
+			index, type_char[p->type], p->distance);
+		d->errors++;
+	}
+
+	if (!is_ref) {
+		output_frame(d, slot);
+		return;
+	}
+
+	/* An I/P picture is output when the next I/P picture is decoded. */
+	if (d->held >= 0) {
+		output_frame(d, d->held);
+		d->held = -1;
+	}
+
+	if (d->r[1].valid && d->r[1].slot >= 0)
+		d->frames[d->r[1].slot].ref = false;
+	d->r[2] = d->r[1];
+	d->r[2].slot = -1;	/* no longer read, only its distance */
+	d->r[1] = d->r[0];
+	d->r[0].valid = true;
+	d->r[0].slot = slot;
+	d->r[0].ts = f->ts;
+	d->r[0].distance = p->distance;
+	d->r[0].flags = V4L2_AVS_REF_FLAG_VALID;
+	if (p->type == V4L2_AVS_PICTURE_TYPE_I)
+		d->r[0].flags |= V4L2_AVS_REF_FLAG_INTRA;
+	if (p->structure)
+		d->r[0].flags |= V4L2_AVS_REF_FLAG_PICTURE_STRUCTURE;
+	if (p->top_field_first)
+		d->r[0].flags |= V4L2_AVS_REF_FLAG_TOP_FIELD_FIRST;
+	f->ref = true;
+
+	if (d->seq.low_delay) {
+		output_frame(d, slot);
+	} else {
+		f->pending = true;
+		d->held = slot;
+	}
+}
+
+/* ------------------------------------------------------------------ */
+/* Main                                                                */
+
+static size_t next_start_code(const uint8_t *p, size_t len, size_t from)
+{
+	size_t i;
+
+	for (i = from; i + 3 < len; i++)
+		if (!p[i] && !p[i + 1] && p[i + 2] == 1)
+			return i;
+	return len;
+}
+
+static void usage(void)
+{
+	fprintf(stderr,
+		"usage: avs1dec [-d video] [-m media] [-t es|ts|ps] [-o out.yuv] [-c crc] [-5 md5]\n"
+		"               [-n bufs] [-l pictures] [-T] [-H] [-v] [--dry-run] stream\n");
+	exit(2);
+}
+
+int main(int argc, char **argv)
+{
+	const char *video = "/dev/video0", *media = "/dev/media0";
+	const char *kind = NULL, *yuv = NULL, *crc = NULL, *md5n = NULL;
+	unsigned int num_cap = 6, limit = 0;
+	struct decoder d = { .held = -1 };
+	struct buf in = { 0 }, es = { 0 };
+	const uint8_t *s;
+	size_t n, i, max_pic = 0;
+	bool tiled = false;
+	FILE *fp;
+	int opt;
+
+	for (i = 1; i < (size_t)argc; i++)
+		if (!strcmp(argv[i], "--dry-run"))
+			d.dry_run = true;
+
+	while ((opt = getopt(argc, argv, "d:m:t:o:c:5:n:l:THv-:")) != -1) {
+		switch (opt) {
+		case 'd': video = optarg; break;
+		case 'm': media = optarg; break;
+		case 't': kind = optarg; break;
+		case 'o': yuv = optarg; break;
+		case 'c': crc = optarg; break;
+		case '5': md5n = optarg; break;
+		case 'n': num_cap = atoi(optarg); break;
+		case 'l': limit = atoi(optarg); break;
+		case 'T': tiled = true; break;
+		case 'H': d.vld_at_header = true; break;
+		case 'v': verbose++; break;
+		case '-':
+			if (strcmp(optarg, "dry-run"))
+				usage();
+			break;
+		default: usage();
+		}
+	}
+	if (optind != argc - 1)
+		usage();
+	if (num_cap < 3 || num_cap > MAX_BUFS)
+		die("-n must be 3 to %d", MAX_BUFS);
+
+	fp = strcmp(argv[optind], "-") ? fopen(argv[optind], "rb") : stdin;
+	if (!fp)
+		die("%s: %s", argv[optind], strerror(errno));
+	for (;;) {
+		uint8_t chunk[65536];
+		size_t r = fread(chunk, 1, sizeof(chunk), fp);
+
+		if (!r)
+			break;
+		buf_put(&in, chunk, r);
+	}
+	if (fp != stdin)
+		fclose(fp);
+
+	if (!kind) {
+		if (in.len >= 376 && in.p[0] == 0x47 && in.p[188] == 0x47)
+			kind = "ts";
+		else if (in.len >= 4 && !in.p[0] && !in.p[1] && in.p[2] == 1 &&
+			 in.p[3] == 0xba)
+			kind = "ps";
+		else
+			kind = "es";
+	}
+	if (!strcmp(kind, "ts"))
+		ts_to_es(in.p, in.len, &es);
+	else if (!strcmp(kind, "ps"))
+		ps_to_es(in.p, in.len, &es);
+	else if (!strcmp(kind, "es"))
+		es = in;
+	else
+		usage();
+	s = es.p;
+	n = es.len;
+	if (verbose)
+		fprintf(stderr, "%s input, %zu elementary stream bytes\n", kind, n);
+
+	/* First sequence header, and the largest picture. */
+	for (i = next_start_code(s, n, 0); i < n;
+	     i = next_start_code(s, n, i + 3)) {
+		size_t end = next_start_code(s, n, i + 3);
+
+		if (s[i + 3] == SC_SEQ_START && !d.seq.valid) {
+			struct bits b;
+
+			bits_init(&b, s + i + 4, end - i - 4, NULL);
+			if (parse_sequence_header(&b, &d.seq))
+				die("bad sequence header");
+			bits_free(&b);
+		}
+		if (s[i + 3] == SC_I_PICTURE || s[i + 3] == SC_PB_PICTURE) {
+			size_t j = end;
+
+			while (j < n && s[j + 3] <= SC_SLICE_MAX)
+				j = next_start_code(s, n, j + 3);
+			if (j - i > max_pic)
+				max_pic = j - i;
+		}
+	}
+	if (!d.seq.valid)
+		die("no sequence header");
+	if (!d.seq.chroma_format || !d.seq.sample_precision)
+		printf("warning: chroma_format %u sample_precision %u (pre-final revision stream?), passed as 1\n",
+		       d.seq.chroma_format, d.seq.sample_precision);
+
+	printf("sequence: profile 0x%02x level 0x%02x %ux%u %s chroma_format %u sample_precision %u frame_rate_code %u low_delay %d\n",
+	       d.seq.profile, d.seq.level, d.seq.width, d.seq.height,
+	       d.seq.progressive ? "progressive" : "interlaced",
+	       d.seq.chroma_format, d.seq.sample_precision,
+	       d.seq.frame_rate_code, d.seq.low_delay);
+
+	if (crc)
+		d.crc = strcmp(crc, "-") ? fopen(crc, "w") : stdout;
+	if (md5n)
+		d.md5f = strcmp(md5n, "-") ? fopen(md5n, "w") : stdout;
+	if (yuv)
+		d.yuv = fopen(yuv, "wb");
+	if ((crc && !d.crc) || (md5n && !d.md5f) || (yuv && !d.yuv))
+		die("cannot open an output file: %s", strerror(errno));
+	if (d.dry_run && (yuv || crc || md5n))
+		die("--dry-run writes no pictures or checksums");
+
+	d.num_frames = num_cap;
+	md5_init(&d.md5);
+	if (!d.dry_run) {
+		d.v4l2 = v4l2_open(video, media, &d.seq, max_pic, num_cap, tiled);
+		d.row = malloc(2 * d.v4l2->cap_fmt.bytesperline + 128);
+		if (!d.row)
+			die("out of memory");
+	}
+	print_headers(&d);
+
+	for (i = next_start_code(s, n, 0); i < n;) {
+		size_t end = next_start_code(s, n, i + 3);
+		unsigned int code = s[i + 3];
+		size_t j, first_slice = 0, last = end;
+		struct bits b;
+		struct pic p;
+
+		if (code == SC_SEQ_START) {
+			struct seq ns;
+
+			bits_init(&b, s + i + 4, end - i - 4, NULL);
+			if (!parse_sequence_header(&b, &ns) &&
+			    (ns.width != d.seq.width || ns.height != d.seq.height ||
+			     ns.profile != d.seq.profile))
+				die("sequence change at %zu is not supported", i);
+			bits_free(&b);
+			i = end;
+			continue;
+		}
+		if (code != SC_I_PICTURE && code != SC_PB_PICTURE) {
+			i = end;
+			continue;
+		}
+
+		bits_init(&b, s + i + 4, end - i - 4, NULL);
+		if (parse_picture_header(&b, &d.seq, code, &p))
+			die("bad picture header at %zu", i);
+		bits_free(&b);
+
+		/*
+		 * The picture runs to its last slice; extensions and user data
+		 * between the header and the first slice belong to it.
+		 */
+		for (j = end; j < n; j = next_start_code(s, n, j + 3)) {
+			unsigned int c = s[j + 3];
+			size_t e = next_start_code(s, n, j + 3);
+			struct bits sb;
+
+			if (c <= SC_SLICE_MAX) {
+				if (!first_slice)
+					first_slice = j - i;
+				p.slices++;
+				bits_init(&sb, s + j + 4, e - j - 4, &p.pseudo);
+				bits_free(&sb);
+				parse_slice_header(&d.seq, &p, c, s + j + 4,
+						   e - j - 4, &p, d.dec_count);
+				last = e;
+				continue;
+			}
+			if ((c == SC_EXTENSION || c == SC_USER_DATA) &&
+			    !first_slice) {
+				last = e;
+				continue;
+			}
+			break;
+		}
+		if (!first_slice) {
+			/* pre-final revision streams: data follows the header */
+			p.no_slice_start_code = true;
+			bits_init(&b, s + i + 4, end - i - 4, &p.pseudo);
+			bits_free(&b);
+		}
+
+		decode_picture(&d, &p, s + i, last - i, first_slice);
+		i = last;
+		if (limit && d.dec_count >= limit)
+			break;
+	}
+
+	if (d.held >= 0)
+		output_frame(&d, d.held);
+
+	printf("pictures %u (I %u P %u B %u), field coded %u, AEC %u, enhanced field B %u, WQ %u, with slice weighting %u, pseudo start codes %u, without slice start code %u, skipped %u, errors %u\n",
+	       d.dec_count, d.count[0], d.count[1], d.count[2], d.field_pics,
+	       d.aec_pics, d.enhanced_b, d.wq_pics, d.weighted_pics, d.pseudo,
+	       d.no_slice_sc, d.skipped, d.errors);
+	printf("output %u frames, display order: %.*s\n", d.out_count,
+	       (int)d.order_len, d.order);
+	if (!d.dry_run) {
+		char sum[33];
+
+		md5_final(&d.md5, sum);
+		printf("md5 %s\n", sum);
+	}
+	if (d.crc && d.crc != stdout)
+		fclose(d.crc);
+	if (d.md5f && d.md5f != stdout)
+		fclose(d.md5f);
+	if (d.yuv)
+		fclose(d.yuv);
+
+	return d.errors ? 1 : 0;
+}

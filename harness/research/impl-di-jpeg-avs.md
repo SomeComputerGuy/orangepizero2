@@ -15,7 +15,7 @@ Build trees:
   resynced to the base sources.
 - `kernel-check/work-video-patch`: the `STAGE=patch` check tree.
 
-**Nothing in this file has run on the board yet.**
+**Nothing in this file has run on the board yet.** The single test kernel for all three features is `kernel-check/work-video/linux-7.3.1` (Image md5 `87011f73b3cd0c80a7c9b8b1536b47f0`, plus modules and dtbs). Its sources equal branch `feat/sunxi-h616-di-jpeg-avs` at `d5f4c3d35` (pushed to `fork`).
 
 ---
 
@@ -264,3 +264,111 @@ frozen after the first good run.
 Open register questions: the FORCE_420 filter, 4:1:1 output, grey chroma, whether CTRL bits 7/8 are needed (try
 without on H616), MCU field width above 2048 px, VE_MODE width bits for JPEG, the throughput cost of the MMIO Huffman
 upload.
+
+---
+
+## 3. AVS1 (JiZhun) / AVS+ (Guangdian) decode in the VE (cedrus)
+
+### 3.1 Sources and design
+
+- Research (clean-room, register offsets, bit fields and write order only, from the vendor `libawavs.so`, which has
+  DWARF): `harness/research/avs1/` (`regmap.md`, `syntax.md`, `uapi-proposal.md`, `prior-art.md`, `test-streams.md`).
+  There is no prior open AVS1 driver or stateless uAPI anywhere.
+- **Engine:** the H.264 register bank (VE+0x200), VE_MODE 1 (`VE_MODE_DEC_H264`), CTRL bit 28 `isAvs`, the same
+  arrangement as VP8. One trigger (0x17, then 0x19) decodes a whole picture, because the engine parses the slice
+  headers and removes annex A pseudo start codes itself (CTRL bit 26). It has no SRAM tables. AVS+ weighting-quant
+  matrices are derived in the engine from the coded parameters.
+- **uAPI (downstream, like AVS2):**
+  - pixel format `V4L2_PIX_FMT_AVS_FRAME` 'AVSF': one picture per OUTPUT buffer, raw;
+  - controls `V4L2_CID_STATELESS_AVS_SEQUENCE` / `_PICTURE` / `_WEIGHT_QUANT` = STATELESS_BASE + 1000..1002, types
+    0x02d0..0x02d2;
+  - sizes 16 / 64 / 32 B, no holes (checked with pahole on aarch64);
+  - the PICTURE control carries 3 resolved reference descriptors (forward, second forward, backward) with timestamp,
+    picture_distance and structure/tff/intra flags;
+  - the WQ deltas are s16 (the coded value can exceed s8). The driver truncates them to the 8-bit hardware field.
+- **cedrus:**
+  - `cedrus_avs.c`, `CEDRUS_CAPABILITY_AVS_DEC` = BIT(11);
+  - a 48 KiB MB-info buffer (16 KiB aligned) per context, and a col-MV buffer per capture buffer (I/P write their own,
+    B reads its backward reference's);
+  - VE reset on codec switches involving AVS;
+  - request validation of the required controls;
+  - limit 16..1920 x 16..1088;
+  - NV12 / NV12_32L32 and the other cedrus capture formats through the existing top-register path.
+
+### 3.2 Patch block `patches.media/h616-avs/` (3 patches, ours)
+
+1. media: uapi: add AVS stateless decoder pixel format and controls (uAPI, ctrl core, docs: biblio, ext-ctrls,
+   pixfmt, queryctrl, g-ext-ctrls, exceptions).
+2. media: cedrus: add AVS decoding.
+3. media: cedrus: enable AVS decoding on the H616.
+
+### 3.3 Build status (host)
+
+| check | result |
+|---|---|
+| `W=1` on `drivers/staging/media/sunxi/cedrus/` and `drivers/media/v4l2-core/` | no warnings |
+| checkpatch | patch 3 clean. Patch 2: MAINTAINERS note only. Patch 1: 3 `pr_cont` warnings and 1 table-style ERROR in the `v4l2-ioctl.c` descr table, the same as the AVS2 patch |
+| `STAGE=patch` | **771 applied, 0 failed** (`kernel-check/run-video-avs-patch.log`). cedrus, v4l2-core, uapi headers and media docs are identical to the scratch tree |
+| Full incremental `Image modules dtbs` (`work-video`) | rc 0, 0 warnings. **Image md5 `87011f73b3cd0c80a7c9b8b1536b47f0`** (this kernel has DI + JPEG + AVS) |
+
+### 3.4 Test decoder and references
+
+- `harness/avs1dec/` (MIT, own code):
+  - `make` builds static aarch64 `avs1dec`; `make host` builds `avs1dec-host`;
+  - parses ES/TS/PS input, sequence and picture headers (AVS+ fields included), keeps a 3-slot reference history,
+    sends one request per picture, and writes output in display order;
+  - `-c` writes FFmpeg framecrc lines (adler32), `-5` framemd5, `-o` I420; `-T` captures tiled; `-H` sets
+    data_offset to just after the picture start code (vendor style) instead of the first slice start code;
+  - `--dry-run -v` prints the control values for every picture.
+- Dry run on the host, all 4 streams:
+
+  | stream | pictures | order |
+  |---|---|---|
+  | `bunny` | 60 (I 2 / P 16 / B 42) | order identical to FFmpeg |
+  | test card | 5, field-coded, AEC, 2 enhanced field B, 15 pseudo start codes | order identical to FFmpeg |
+  | `cavs.mpg` | 170 with `-l 170` | order identical to FFmpeg |
+  | `AVSFileFormat.es` | 105 | — |
+
+  - `cavs.mpg`: the file is truncated, so it needs `-l 170`. It is an old revision with no slice start codes.
+  - `AVSFileFormat.es`: its 12 `00 00 02` candidates are all outside slice data.
+- References:
+  - **FFmpeg master `N-128344-gaab6cec3e8` (`aab6cec3e8415154b3f0570f8d131db07a9901de`)**, built and installed by the
+    user at `/usr/local/bin/ffmpeg`. Its output is in `kernel-check/avs1-refs-master/` (framecrc + framemd5, `SOURCE`,
+    `SHA256SUMS`). The test card and `cavs.mpg` equal FATE.
+  - **`bunny` differs from FATE in 51 of 60 frames.** The first difference is display 2, an all-skip B at half
+    distance. It is **not** slice weighting: no P/B slice in bunny sets slice_weighting_flag, and 8.1's "weighted
+    prediction" warning comes from the I pictures. FFmpeg 8.1 = FATE references are in `kernel-check/avs1-refs/`.
+    The H616 output (A4) decides which is right.
+  - `AVSFileFormat.es`: neither FFmpeg decodes it, so it has no reference.
+
+### 3.5 Board test plan (AVS)
+
+Setup:
+- Host: serve `kernel-check/dl-avs1` as `http://10.56.0.1:8643/avs1/` (the AVS2 server) and copy
+  `harness/avs1dec/avs1dec` to `/root/avs1/`.
+- Board: `U=http://10.56.0.1:8643/avs1; O=/root/avs1/out; mkdir -p $O`. Find cedrus with `v4l2-ctl --list-devices`,
+  then `V=/dev/videoN M=/dev/mediaN D="-d $V -m $M"`.
+- To compare, run `diff <(grep -v '^#' ours) <(grep -v '^#' ref)`.
+
+| # | test | pass | answers |
+|---|---|---|---|
+| A1 | `v4l2-compliance -d $V -s`; `--list-formats-out` shows AVSF; `-l` shows 3 AVS controls | no new compliance failures | uAPI, B1 |
+| A2 | `curl -sS $U/fate-bunny/bunny.mp4 \| avs1dec $D -l 1 -c $O/b1.crc -v -` | rc 0, first frame 0xe9f1474e, dmesg clean. If it fails, retry with `-H` | B1, B2, B3 (B2, 0x19 without 0x17, needs a debug kernel and only matters if both fail) |
+| A3 | full bunny with and without `-H` | record which data_offset convention decodes. That becomes the uAPI rule (doc follows) | B3 |
+| A4 | bunny 60 frames vs `avs1-refs-master/bunny.mp4.framecrc` **and** `avs1-refs/bunny.framecrc` (FATE) | frames 0, 1, 3, 4, 30-34 match both; note which reference matches the rest. A first mismatch at a P points to col-MV / second ref, at a B only to distances | B5, B6, B7, and the FFmpeg master/FATE disagreement |
+| A5 | test card (TS) vs `avs1-refs-master/avsplus-1080i-testcard.ts.framecrc` (= FATE), also with `-H` | 5 frames equal | B4 pseudo start codes, B8 one trigger per field-coded picture, B9 AEC, B11 MB-info, B13 enhanced field B |
+| A6 | A4 and A5 again with `-T` (NV12_32L32) | total md5 equals the NV12 run | B12 |
+| A7 | `cavs.mpg -l 170` vs master framecrc | expected to fail (pre-final revision); record rc / first bad frame | B14, informative |
+| A8 | `AVSFileFormat.es -5 ... -o $O/aff.yuv` | completes; visual check | no reference exists |
+| A9 | bunny → an H.264 test → one 8-bit AVS2 stream (avs2dec) → bunny again; also two avs1dec instances in parallel | all equal their references | VE reset on codec switch, context isolation |
+| A10 | truncated bunny (`head -c 20000`); OUTPUT format 2560x1440 (clamped ≤ 1920x1088) | no hang, rate-limited warning, next run correct | error paths |
+| A11 | throughput: test card ×20 and bunny looped | 1080 lines: report fps (spec 1080p60, so ≥ 60 fields/s for 1080i) | performance row (B10 WQ remains untested, no stream) |
+
+Open questions:
+- B1-B14, which only the board can answer.
+- The data_offset convention (A3).
+- A per-field trigger, if A5 frame 0 fails. That would need a second-slice offset in the uAPI.
+- WQ delta width: s16 vs s8.
+- The validation ranges: alpha/beta −8..8, chroma deltas −32..31, sample_precision 1.
+- Interlaced MB height: the vendor's (h+15)/16 vs FFmpeg's ((h+31)>>5)<<1. They agree at 1080.
+- Which bunny reference is correct.

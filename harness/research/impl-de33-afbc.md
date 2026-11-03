@@ -169,3 +169,51 @@ Doable without a display: IN_FORMATS, the IOMMU/fbcon boot, the flip rate and se
 
 None of these spec rows ("H.265 MP10 4K@60" and "VP9 P2 4K@60" on display) can be marked
 met yet.
+
+## Board results, round 2 (image 16cdd50a9, 7.3.1-edge-sunxi64 #11, Stage A merged), 2026-11-03
+
+Raw data: harness/afbc-kms-play/results-2026-11-03-image16cdd50a9/de33-out/. No kernel was installed, only
+the fake-EDID extraargs, which have since been restored. Afterwards the board was rebooted: serial shows `DRAM: 1024 MiB`, the image
+kernel is running, and the boot shows 0 IOMMU faults.
+
+**Display-engine IOMMU:** planes and the VE are in IOMMU group 0. There are no master-0 faults. One master -1 fault
+(0xfff00000) appears at fbcon takeover.
+
+**IN_FORMATS:** the libdrm iterator bug is fixed in the client (it now parses the blob by hand). VI plane 35 offers
+SPARSE and SPLIT|SPARSE for YU08, YU10, YUYV and Y210, and YTR only on RGB. This matches the driver table, so the
+round-1 claim "YU08 has no SPLIT" was a client bug.
+
+**XR24 4K pattern on the primary plane (draw-once client):**
+- 60.04 flips/s; 1498 of 1499 intervals in the 16.2–17.2 ms bucket.
+- Commits land a mean 1.50 ms after vblank (vblank is 0.667 ms). Every commit lands during active scanout.
+
+**NV12 linear 4K on VI plane 35:** 59.34 flips/s, 598 of 600 in-bucket, commit phase mean 1.84 ms.
+
+**VE throughput (HEVC Main10 4K60, AS01 to null):**
+
+| Condition | VE-bound fps |
+|---|---|
+| No scanout | 83.9 |
+| 4K XR24 scanout | 63.0 |
+| During AFBC playback through the client | 49.9 (20.0 ms per job) |
+
+**AFBC10 HEVC Main10 2160p60** (YU10, modifier 0x...61 = SPLIT|SPARSE, accepted by atomic commit):
+- 48.7 flips/s with 131 sequence gaps.
+- 182 flips found the queue empty, so the decoder is the limit, not KMS. With 9 buffers in the queue, receive_frame
+  latency is ≈0.
+- 468 of 600 intervals were in-bucket.
+- Commit phase: mean 6.1 ms after vblank, and 223 of 599 commits landed after the blanking. The remainder landed
+  inside it because the commits were late; they are not phase-aligned.
+
+**Open problems, not explained:**
+1. The debugfs state captured 5 s into the AFBC run shows plane 35 with fb 86 as **P010, modifier 0x0, pitch 7680**,
+   allocated by afbc-kms-play. Yet the client logged YU10/AFBC and 42,118,176-byte dmabufs. That size is larger than
+   AFBC10 4K (17.2 MB) and P010 (24.9 MB). Either the descriptor path fell back to linear P010 (check fb_for_desc
+   and the FFmpeg fork's descriptor), or the state was read during a different commit.
+   **Until this is resolved, the AFBC scanout path is NOT proven.**
+2. The FBD register dump at 0x01105000–0x0110505c read all zeros during playback. This fits (1), i.e. no AFBC
+   on the plane, but my base address may also be wrong.
+3. Tearing: the DE33 path without DBUFF commits during active scanout (1.5–6 ms after vblank). Whether the DE33
+   latches at vblank cannot be decided without a sink. **A real display is needed.**
+
+**Not run, cut by the time box:** VP9 P2 (interrupted at start), OSD, AS12 8-bit, TVE.

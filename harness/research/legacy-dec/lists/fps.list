@@ -1,0 +1,23 @@
+g-mpeg2-mphl-1080i30 gen/mpeg2-mphl-1080i30.m2v
+g-mpeg2-mphl-1080p60 gen/mpeg2-mphl-1080p60.m2v
+g-mpeg4-asp-bf-qpel-1080p60 gen/mpeg4-asp-bf-qpel-1080p60.avi
+g-mpeg4-asp-ilace-1080i30 gen/mpeg4-asp-ilace-1080i30.avi
+g-mpeg4-sp-1080p60 gen/mpeg4-sp-1080p60.avi
+g-xvid-bf-1080p60 gen/xvid-bf-1080p60.avi
+g-xvid-gmc-1080p60 gen/xvid-gmc-1080p60.avi
+g-xvid-gmc-pan-1080p60 gen/xvid-gmc-pan-1080p60.avi
+g-xvid-gmc-rot-1080p60 gen/xvid-gmc-rot-1080p60.avi
+g-xvid-qpel-1080p60 gen/xvid-qpel-1080p60.avi
+g-xvid-qpel-gmc-1080p60 gen/xvid-qpel-gmc-1080p60.avi
+g-flv1-spark-1080p60 gen/flv1-spark-1080p60.flv
+g-vp8-1080p60 gen/vp8-1080p60.webm
+g-h264-high-1080i-mbaff gen/h264-high-1080i-mbaff.mkv
+g-h264-high-1080p60 gen/h264-high-1080p60.mkv
+g-h264-high-cavlc-1080p60 gen/h264-high-cavlc-1080p60.mkv
+g-h263-bp-16cif gen/h263-bp-16cif.h263 -f h263
+g-h263-bp-4cif gen/h263-bp-4cif.h263 -f h263
+g-h264-high-2160p30 vdec/h264-high-2160p30.mkv
+vc1-ilaced_twomv vc1/ilaced_twomv.vc1 -f vc1
+vc1-SA10143 vc1/SA10143.vc1 -f vc1
+wmv3-SMM0015 vc1/SMM0015.rcv -f vc1test
+m2-tcela-10-fieldpic mpeg2/tcela-10.bits -f mpegvideo

@@ -1,0 +1,5 @@
+g-vp8-1080p60	gen/vp8-1080p60.webm	rc=0	irqs=300	PASS	match=300/300	hw_frames=300	first_bad=-
+g-h264-high-1080i-mbaff	gen/h264-high-1080i-mbaff.mkv	rc=0	irqs=300	PASS	match=300/300	hw_frames=300	first_bad=-
+g-h264-high-1080p60	gen/h264-high-1080p60.mkv	rc=0	irqs=300	PASS	match=300/300	hw_frames=300	first_bad=-
+g-h264-high-cavlc-1080p60	gen/h264-high-cavlc-1080p60.mkv	rc=0	irqs=300	PASS	match=300/300	hw_frames=300	first_bad=-
+g-h264-high-2160p30	vdec/h264-high-2160p30.mkv	rc=0	irqs=300	PASS	match=300/300	hw_frames=300	first_bad=-

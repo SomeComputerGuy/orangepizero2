@@ -5,7 +5,7 @@
 # -> NV12 framemd5 via hwdownload (fails if FFmpeg fell back to SW, so a PASS proves HW decode); VE IRQ delta; host SW framemd5 with the
 # same input options; compare per-frame md5 (pts ignored). Writes <outdir>/<tag>.{hw,sw}.framemd5, .err, summary.tsv.
 H=$(cd "$(dirname "$0")/../../.." && pwd); SSH=$H/harness/ssh.sh; SERVE=$H/kernel-check/legacy-serve
-L=$1; O=$2; mkdir -p "$O"; [ -n "$SWONLY" ] || : > "$O/summary.tsv"   # env SWONLY=1: host refs only
+L=$1; O=$2; mkdir -p "$O"; [ -n "$SWONLY" ] || [ -n "$RESUME" ] || : > "$O/summary.tsv"; touch "$O/summary.tsv"   # env RESUME=1: skip tags already in summary.tsv   # env SWONLY=1: host refs only
 FF="-nostdin -hide_banner -loglevel warning"
 OUT="-fps_mode passthrough -noautoscale -pix_fmt nv12 -f framemd5 -"
 waitfree() { while $SSH -n "pgrep -x 'avs2dec|gst-launch-1.0|ffmpeg' >/dev/null"; do sleep 30; done; }
@@ -15,6 +15,7 @@ while read -r tag rel opts; do
   url="http://10.56.0.1:8644/$rel"
   [ -s "$O/$tag.sw.framemd5" ] || ffmpeg $FF $opts -i "$SERVE/$rel" $OUT > "$O/$tag.sw.framemd5" 2> "$O/$tag.sw.err"
   [ -n "$SWONLY" ] && continue
+  [ -n "$RESUME" ] && grep -q "^$tag	" "$O/summary.tsv" && continue
   waitfree; i0=$(irq)
   $SSH -n "/root/vp/ffmpeg $FF -hwaccel v4l2request -hwaccel_output_format drm_prime $opts -i $url -fps_mode passthrough -noautoscale -vf hwdownload,format=nv12 -f framemd5 -" > "$O/$tag.hw.framemd5" 2> "$O/$tag.err"
   rc=$?; i1=$(irq)

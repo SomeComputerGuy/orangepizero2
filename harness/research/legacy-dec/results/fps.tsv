@@ -1,0 +1,29 @@
+g-mpeg2-mphl-1080i30	gen/mpeg2-mphl-1080i30.m2v	rc=0 jobs=300 wall=2.65s ve_busy=2.17s avg=7.22ms max=18.12ms => hw-bound fps 138.4, pipeline fps 113.2
+g-mpeg2-mphl-1080p60	gen/mpeg2-mphl-1080p60.m2v	rc=0 jobs=300 wall=2.33s ve_busy=2.00s avg=6.65ms max=8.02ms => hw-bound fps 150.3, pipeline fps 128.7
+g-mpeg4-asp-bf-qpel-1080p60	gen/mpeg4-asp-bf-qpel-1080p60.avi	rc=0 jobs=300 wall=3.20s ve_busy=0.24s avg=0.78ms max=1.01ms => hw-bound fps 1274.4, pipeline fps 93.7
+g-mpeg4-asp-ilace-1080i30	gen/mpeg4-asp-ilace-1080i30.avi	rc=0 jobs=300 wall=2.72s ve_busy=0.20s avg=0.67ms max=0.93ms => hw-bound fps 1497.9, pipeline fps 110.4
+g-mpeg4-sp-1080p60	gen/mpeg4-sp-1080p60.avi	rc=0 jobs=300 wall=2.06s ve_busy=0.16s avg=0.53ms max=0.91ms => hw-bound fps 1903.0, pipeline fps 145.6
+g-xvid-bf-1080p60	gen/xvid-bf-1080p60.avi	rc=0 jobs=299 wall=2.37s ve_busy=2.24s avg=7.50ms max=10.34ms => hw-bound fps 133.3, pipeline fps 126.2
+g-xvid-gmc-1080p60	gen/xvid-gmc-1080p60.avi	rc=0 jobs=299 wall=2.59s ve_busy=2.46s avg=8.22ms max=47.20ms => hw-bound fps 121.6, pipeline fps 115.4
+g-xvid-gmc-pan-1080p60	gen/xvid-gmc-pan-1080p60.avi	rc=0 jobs=299 wall=2.42s ve_busy=2.29s avg=7.67ms max=10.12ms => hw-bound fps 130.4, pipeline fps 123.4
+g-xvid-gmc-rot-1080p60	gen/xvid-gmc-rot-1080p60.avi	rc=0 jobs=299 wall=2.74s ve_busy=2.61s avg=8.73ms max=36.58ms => hw-bound fps 114.5, pipeline fps 109.2
+g-xvid-qpel-1080p60	gen/xvid-qpel-1080p60.avi	rc=0 jobs=299 wall=2.67s ve_busy=2.49s avg=8.33ms max=12.99ms => hw-bound fps 120.0, pipeline fps 112.0
+g-xvid-qpel-gmc-1080p60	gen/xvid-qpel-gmc-1080p60.avi	rc=0 jobs=299 wall=6.53s ve_busy=6.40s avg=21.41ms max=48.45ms => hw-bound fps 46.7, pipeline fps 45.8
+g-flv1-spark-1080p60	gen/flv1-spark-1080p60.flv	rc=0 jobs=300 wall=2.37s ve_busy=1.84s avg=6.13ms max=7.90ms => hw-bound fps 163.1, pipeline fps 126.7
+g-vp8-1080p60	gen/vp8-1080p60.webm	rc=0 jobs=300 wall=2.13s ve_busy=1.97s avg=6.58ms max=35.97ms => hw-bound fps 152.1, pipeline fps 140.8
+g-h264-high-1080i-mbaff	gen/h264-high-1080i-mbaff.mkv	rc=0 jobs=300 wall=3.09s ve_busy=2.51s avg=8.36ms max=41.15ms => hw-bound fps 119.5, pipeline fps 97.0
+g-h264-high-1080p60	gen/h264-high-1080p60.mkv	rc=0 jobs=300 wall=2.92s ve_busy=2.42s avg=8.08ms max=18.78ms => hw-bound fps 123.8, pipeline fps 102.6
+g-h264-high-cavlc-1080p60	gen/h264-high-cavlc-1080p60.mkv	rc=0 jobs=300 wall=2.53s ve_busy=2.13s avg=7.11ms max=29.74ms => hw-bound fps 140.7, pipeline fps 118.3
+g-h263-bp-16cif	gen/h263-bp-16cif.h263	rc=0 jobs=300 wall=1.75s ve_busy=1.37s avg=4.58ms max=6.10ms => hw-bound fps 218.5, pipeline fps 171.4
+g-h263-bp-4cif	gen/h263-bp-4cif.h263	rc=0 jobs=300 wall=0.62s ve_busy=0.38s avg=1.26ms max=1.74ms => hw-bound fps 792.2, pipeline fps 485.9
+g-h264-high-2160p30	vdec/h264-high-2160p30.mkv	rc=0 jobs=300 wall=10.59s ve_busy=10.15s avg=33.84ms max=45.18ms => hw-bound fps 29.6, pipeline fps 28.3
+vc1-ilaced_twomv	vc1/ilaced_twomv.vc1	rc=0 jobs=19 wall=0.38s ve_busy=0.16s avg=8.66ms max=14.51ms => hw-bound fps 115.5, pipeline fps 49.5
+vc1-SA10143	vc1/SA10143.vc1	rc=0 jobs=60 wall=0.16s ve_busy=0.06s avg=0.99ms max=1.20ms => hw-bound fps 1013.2, pipeline fps 376.9
+wmv3-SMM0015	vc1/SMM0015.rcv	rc=0 jobs=25 wall=0.12s ve_busy=0.03s avg=1.29ms max=2.28ms => hw-bound fps 773.3, pipeline fps 205.9
+m2-tcela-10-fieldpic	mpeg2/tcela-10.bits	rc=0 jobs=122 wall=0.30s ve_busy=0.16s avg=1.30ms max=1.47ms => hw-bound fps 770.1, pipeline fps 411.6
+# tiled (V4L2REQUEST_PIXFMT=ST12) vs linear NV12, image kernel #11, 2026-11-03:
+# vdec/h264-high-2160p30.mkv ST12 hw-bound 41.6 pipeline 38.9 | NV12 29.5 / 28.0
+# gen/xvid-qpel-gmc-1080p60.avi ST12 50.9 / 49.5 | NV12 47.0 / 45.6
+# gen/xvid-qpel-1080p60.avi ST12 146.0 / 137.4 | NV12 119.4 / 112.4
+# gen/mpeg2-mphl-1080p60.m2v ST12 171.7 / 143.1 | NV12 147.0 / 125.8
+# gen/vp8-1080p60.webm ST12 152.3 / 140.8 | NV12 152.1 / 140.8

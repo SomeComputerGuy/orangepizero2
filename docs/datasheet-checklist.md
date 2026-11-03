@@ -90,23 +90,20 @@ Cedrus `/dev/video0` OUTPUT formats on the board (2026-11-03): `MG2S S264 S265 V
 | H.265 Main10@L5.1 | 4K@60 or 6K@30 | `S265` (+P010/AS01 out) | upstream + Jernej P010 + ours (6K, AFBC recon) | **yes**: 4K Main 600/600, Main10 P010 600/600 (`e57bc497…`), 8-bit 6K 120/120 (impl-vdec §9, impl-vdec-main10-perf §0) | PARTIAL | tracked (6K Main10 OOM, 60 Hz display) |
 | VP9 Profile 2 | 4K@60 | `VP9F` | Jernej VP9 + P010 | **yes**: P2 600/600 (`1e40c2b3…`), P0 600/600 | PARTIAL | tracked |
 | AVS2 JiZhun 10-bit | 4K@60 | `AVS2` | ours (`media-cedrus-add-AVS2-decoding`), non-upstream uAPI | **no** (first board runs in progress. No 10-bit reference decoder) | PARTIAL (WIP) | tracked |
-| H.264 BP/MP/HP@L4.2 | 4K@30 | `S264` | upstream + 256-bit DDR fix | **yes**: 4K High 300/300 (`2f51f88f…`), 42.0 fps | OK | tracked |
-| H.263 BP | 1080p@60 | `S263` | Jernej `h616-mpeg4` (non-upstream uAPI) | **none** | OK\* | **W2** |
-| MPEG-4 SP/ASP@L5 | 1080p@60 | `MG4S` | Jernej `h616-mpeg4` | **none** | OK\* | **W2** |
-| MPEG-2 MP/HL | 1080p@60 | `MG2S` | upstream + `mpeg2-fix-field-pictures` | early only: "MPEG-2 … bit-exact" in the first status (bfb5155, 2026-11-01). That was on the pre-series kernel, no vector list or md5 is recorded, and there was no field-picture test | OK\* | **W2** (re-run with the current series, include field pictures) |
-| MPEG-1 MP/HL | 1080p@60 | `MG2S` (the MPEG-2 engine decodes MPEG-1. The V4L2 MPEG-2 uAPI has no MPEG-1 flag) | upstream | **none**. Mapping **unconfirmed**: needs a userspace that sends MPEG-1 through the MPEG-2 stateless API (GStreamer `v4l2slmpeg2dec` caps / FFmpeg v4l2request mpeg1 hwaccel to check) | OK\* (unconfirmed) | **W2** |
-| Xvid | 1080p@60 | `MG4S` (Xvid = MPEG-4 ASP) | Jernej `h616-mpeg4` | **none** | OK\* | **W2** |
-| Sorenson Spark | 1080p@60 | `SPKS` | Jernej `h616-mpeg4` | **none** | OK\* | **W2** |
-| VP8 | 1080p@60 | `VP8F` | upstream + Jernej (>2048 px, frame-size check) | early only: "VP8 … bit-exact" (bfb5155, pre-series kernel, 720p/1080p, no vectors recorded). Patch says Jernej tested 2560x1440/3840x2160 on H616 | OK\* | **W2** |
+| H.264 BP/MP/HP@L4.2 | 4K@30 | `S264` | upstream + 256-bit DDR fix | **yes**: 4K High 300/300; JVT-AVC_V1 130/130 BP/MP/HP, FR-EXT 44/46 (8x8, CABAC/CAVLC, PAFF, MBAFF, field). 4K30 41.6 fps tiled, 29.6 linear NV12 | OK | 4:0:0 monochrome (High profile) rejected by try_ctrl (2 FR-EXT vectors) |
+| H.263 BP | 1080p@60 | `S263` | Jernej `h616-mpeg4` (non-upstream uAPI) | **yes** (generated; no free conformance set): 16CIF + 4CIF within the IDCT envelope (max 3); 16CIF 219 fps VE-bound. 1080p does not exist in H.263 BP (16CIF is the largest) | OK | — (harness/research/impl-legacy-decode.md) |
+| MPEG-4 SP/ASP@L5 | 1080p@60 | `MG4S` | Jernej `h616-mpeg4` | **partial**: SP and ASP progressive B + qpel OK (1080p60, pipeline 94–146 fps). **Interlaced B-VOPs wrong**. ISO SP vectors use data partitioning, which the driver rejects. Static sprites unsupported. ISO ASP zips not fetched (licence gate) | PARTIAL | harness/research/impl-legacy-decode.md §3.2, §5 |
+| MPEG-2 MP/HL | 1080p@60 | `MG2S` | upstream + `mpeg2-fix-field-pictures` | **yes**: ISO 13818-4 37/37 within the IDCT envelope (incl. 9 field-picture and dual-prime). 147 fps at 1080p60. **1080-line streams wrong at the bottom MB row**: root-caused, fix patch on `fix/sunxi-h616-legacy-dec` (not HW-tested) | PARTIAL | test the fix (harness/research/impl-legacy-decode.md §4) |
+| MPEG-1 MP/HL | 1080p@60 | `MG2S` (HW has `TRIGGER_MPEG1` + full-pel bits, unused) | upstream | **no path**: the MPEG-2 uAPI has no MPEG-1 flag/full_pel, the driver always triggers MPEG-2, GStreamer caps are mpegversion=2, and the FFmpeg fork has no mpeg1 hwaccel. 6 ISO MPEG-1 vectors ready | GAP | **W2b**: uAPI flag + cedrus trigger + FFmpeg hwaccel (harness/research/impl-legacy-decode.md §2.2) |
+| Xvid | 1080p@60 | `MG4S` (Xvid = MPEG-4 ASP) | Jernej `h616-mpeg4` | **partial**: libxvid B, qpel, qpel+GMC, rotation GMC OK. **Half-pel GMC stream wrong** (top-left of S-VOPs). qpel+GMC stream **47–51 fps** (< 60), others 114–146 | PARTIAL | harness/research/impl-legacy-decode.md §3.3–3.4 |
+| Sorenson Spark | 1080p@60 | `SPKS` | Jernej `h616-mpeg4` | **yes** (generated FLV1 1080p60, within the IDCT envelope), 163 fps VE-bound | OK | — |
+| VP8 | 1080p@60 | `VP8F` | upstream + Jernej (>2048 px, frame-size check) | **yes**: libvpx vectors 60/61 bit-exact (= suite md5); 1080p60 300/300, 152 fps. The miss is mid-stream upscaling (FFmpeg fork does not reallocate) | OK | — |
 | AVS/AVS+ JiZhun | 1080p@60 | **none** | nothing anywhere (vendor libVE: AVS runs in the H.264 engine, mode 1, impl-vdec §1) | — | **GAP** | **W20**: new uAPI + cedrus backend, RE from `libawavs.so`/libVE |
-| WMV9/VC-1 SP/MP/AP | 1080p@60 | `SVC1` (WMV9 = VC-1 Main) | Jernej `h616-cedrus` (non-upstream uAPI) | **none** on our board (Jernej's commit cites SMPTE conformance streams) | OK\* | **W2** |
+| WMV9/VC-1 SP/MP/AP | 1080p@60 | `SVC1` (WMV9 = VC-1 Main) | Jernej `h616-cedrus` (non-upstream uAPI) | **AP yes**: SMPTE 6/6 bit-exact incl. 480i and 1080i interlaced, 116 fps 1080i. **MP 1/2**: SMM0005 B-frames wrong at the right edge. **SP untested** (no stream) | PARTIAL | harness/research/impl-legacy-decode.md §3.1 |
 | JPEG ("HFIF" [sic]) | 45 MPPS | **none** | VE JPEG block at VE+0xE00 (`VE_MODE` bit 5, vendor `cedar_ve` IRQ path). No V4L2 driver on any sunxi | — | **GAP** | **W21**: stateful/stateless JPEG decode in cedrus |
 | Decode up to 4K@60 (general) | 4K@60 | — | see rows above | 8-bit HEVC 81.8 fps tiled, AFBC10 83.9 fps (VE-bound) | PARTIAL | tracked |
 
-**Formats with no bit-exact test evidence on our board:** H.263, MPEG-4 SP/ASP, Xvid, Sorenson Spark, VC-1/WMV9 (all have a
-driver), MPEG-1 (mapping unconfirmed), AVS2 (runs in progress), AVS/AVS+ and JPEG (no driver). MPEG-2 and VP8 have only an early
-undocumented pass on the old kernel. Userspace: GStreamer 1.28 has no VC-1/MPEG-4/H.263/Spark/AVS2 elements, so these need the
-Jernej FFmpeg fork (`v4l2request-mpeg4`) that `harness/research/vdec-perf/build-ffmpeg.sh` already builds statically.
+**W2 result (2026-11-03, harness/research/impl-legacy-decode.md):** with the Jernej FFmpeg fork, bit-exact (normative transforms) or within the IEEE 1180 IDCT envelope: MPEG-2 (incl. field pictures), H.263 BP, Spark, VP8, VC-1 AP, H.264 High features, MPEG-4 SP/ASP progressive, and Xvid without half-pel GMC. 1080p@60 speed is met by every format with a HW path except Xvid qpel+GMC (47–51 fps). Open: the MPEG-2 1080-line MC boundary (fix patch), MPEG-1 (no path), MPEG-4 interlaced B, Xvid half-pel GMC, WMV9 MP B-frames, MPEG-4 data partitioning, VC-1 SP (no stream). Still without a driver: AVS/AVS+ and JPEG.
 
 ### 2.4.2 Video encoding
 
@@ -325,10 +322,10 @@ Counted over the rows above (the decode table counts one row per datasheet forma
 
 | Status | Rows |
 |---|---|
-| OK | 32 |
-| OK\* | 45 |
-| PARTIAL | 15 |
-| GAP | 40 |
+| OK | 35 |
+| OK\* | 37 |
+| PARTIAL | 19 |
+| GAP | 41 |
 | N/A | 16 |
 | **Total** | **148** |
 
@@ -353,7 +350,8 @@ referenced from the tables above.
 | W16 | S | HDMI IEC 61937 passthrough test (needs an AVR) | 2.7.2 |
 | W11 | S | DE33 plane/channel count and Porter-Duff check on a display | 2.5.1 |
 | W5 | S–M | SPI dual I/O for the H616 (check the register, add a cfg) | 2.10.4 |
-| **W2** | **M** | **Decode conformance for the formats without evidence**: MPEG-1, MPEG-2 (incl. field pictures), MPEG-4 SP/ASP, Xvid, H.263, Sorenson Spark, VC-1 SP/MP/AP (WMV9), VP8. Bit-exact md5 against FFmpeg software + 1080p@60 fps, using the existing static Jernej FFmpeg build and fluster where suites exist | 2.4.1 |
+| **W2** | **M** | **Legacy decode conformance**: done 2026-11-03 (`harness/research/impl-legacy-decode.md`). Open: test the MPEG-2 1080-line MC-boundary fix (`fix/sunxi-h616-legacy-dec`); root-cause MPEG-4 interlaced B-VOPs, Xvid half-pel GMC, WMV9 MP B-frames; ISO 14496-4 ASP zips (licence gate); VC-1 SP stream; H.264 4:0:0; MPEG-4 data partitioning | 2.4.1 |
+| W2b | M | MPEG-1 decode: uAPI MPEG-1/full-pel flags, cedrus `TRIGGER_MPEG1`, FFmpeg `mpeg1_v4l2request` hwaccel | 2.4.1 |
 | W15 | M | TVE plug detection (DAC load detect) | 2.7.1 |
 | W18 | M | AHUB I2S3 on the 26-pin header (overlay + test). Enable the DAM path | 2.8 |
 | W30 | M | USB2 standby wake-up from suspend | 2.10.1 |

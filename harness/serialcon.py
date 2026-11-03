@@ -175,6 +175,8 @@ def cmd_firstlogin(a):
         (r'[Cc]reate user \(.*\) password', pw), (r'[Rr]epeat user \(.*\) password', pw),
         (r'[Pp]rovide your real name', 'Arun Iyengar'),
         (r'language based on your location', 'n'),
+        # locale menu: pick its "N) Skip generating locales" entry (N changes with the locale list)
+        (r'Please enter your choice', 'SKIPLOCALE'),
         (r'\[Y/n\]|\[y/N\]', 'n'),
         (r'root@orangepizero2:~#\s*$', None),
     ]
@@ -196,6 +198,9 @@ def cmd_firstlogin(a):
                 if ans is None:
                     say('first login done: root shell ready'); return 0
                 say('prompt:', p)
+                if ans == 'SKIPLOCALE':
+                    m = re.findall(r'(\d+)\) Skip generating locales', c.buf)
+                    ans = m[-1] if m else ''
                 c.write(ans + '\r', show=False)
                 c.buf = ''
                 time.sleep(1.5)

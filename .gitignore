@@ -12,6 +12,7 @@ kernel-check/run.log
 *.img *.img.xz *.sha
 # downloaded third-party repos and agent worktrees
 harness/research/ve-encoder/dl/
+harness/research/gpu-src/
 wt-*/
 kernel-check/tmp/
 kernel-check/work-*/

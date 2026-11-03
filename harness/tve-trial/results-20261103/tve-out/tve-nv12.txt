@@ -1,0 +1,9 @@
+connector Composite-1 (77) connected, 2 modes
+mode 720x576i 13500 kHz 720x576 total 864x625 -> 25.0000 Hz
+crtc 72, plane 53 (primary 60), format NV12 modifier 0x0000000000000000
+commit phase after previous vblank: mean 0.434 ms max 6.309 ms, 1 of 99 later than the 3.136 ms vertical blanking
+flips 100, 49.994 flips/s over 1.980 s, mode refresh 25.0000 Hz
+frame interval mean 20.002 ms, sd 0.033 ms
+vblank sequence gaps >1: 0 (0 vblanks repeated a frame)
+queue empty at flip (decoder late): 0
+dt histogram: [<15 ms] 0 [15-16.2 ms] 0 [16.2-17.2 ms] 0 [17.2-18 ms] 0 [18-34 ms] 99 [34-51 ms] 0 [>=51 ms] 0

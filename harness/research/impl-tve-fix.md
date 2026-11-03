@@ -1,7 +1,7 @@
 # H616 TV-out (TVE) boot loop: root cause and fix
 
 Branch `fix/sunxi-h616-tve` (worktree `/home/aruni/orangepizero2/wt-tve`), based on stonking-orangepizero2 6b59b07c6.
-Status: host-built (see "Host checks"), **not run on the board yet**. The one-shot board plan is in harness/tve-trial/.
+Status: built, and **verified on the board on 2026-11-03** (trial kernel Image.tve1 on the image-4321861ff rootfs; see "Board trial").
 
 ## Symptom (board, 2026-11-03, image 4321861ff)
 
@@ -113,3 +113,40 @@ Branch commit: `fix/sunxi-h616-tve` 6936ed2f9 (author Arun, `Assisted-by: Claude
    - restores the original armbianEnv, the Image symlink to vmlinuz-7.3.1-edge-sunxi64, and removes the trial
      modules (7.3.1 dir);
    - reboots and checks `DRAM: 1024 MiB` plus the image kernel.
+
+
+## Board trial (2026-11-03, 08:0x–08:33 UTC)
+
+Run with harness/tve-trial/run-trial.sh in order: install, phaseA, phaseB, observe, restore. `recover` was not
+needed. Raw data: harness/tve-trial/results-20261103/tve-out/.
+
+- **phaseA** (trial kernel 7.3.1, no overlay): boots; 0 flip_done/vblank/WARN/Oops; HDMI connector present
+  (disconnected, no sink).
+- **phaseB** (`overlays=orangepi-zero2-expansion`): tv-encoder `okay`; **uptime 123 s, no watchdog loop (PASS)**.
+  With no TV, Composite-1 is *disconnected*, so fbcon did not touch it.
+- **observe**:
+
+| Observable | Idle (no TV) | Composite forced on | After release |
+|---|---|---|---|
+| TCON TOP GATE_SRC | 0x00000000 | **0x00200000 (bit 21)** | 0x00000000 |
+| TCON TOP TV_SETUP / PORT_SEL | 0 / 0 | 0x10 (TV1 clock from TVE) / 0x30 (DE1 → TCON TV1) | 0x10 / 0x30 |
+| TCON TV1 line counter (0x065160FC) | 0x10000000 static | **0x5000003F → 0x500000F3 (running)** | static (disabled) |
+| IRQ 99 (6516000.lcd-controller) | 0 | **262**, then 375 | 375 |
+| TVE AUTO_DETECT_EN / STATUS | 0x80000001 / 0x0 | 0x80000001 / 0x0 | 0x80000001 / 0x0 |
+| Composite-1 | disconnected | connected (forced) | disconnected |
+
+- **Forced flips, 720x576i PAL, 100 flips each:**
+  - XR24 on the mixer1 primary plane: 49.999 flips/s, sd 0.034 ms, 0 gaps.
+  - NV12 on the mixer1 VI plane (the DE33 YUV-output path): 49.994 flips/s, 0 gaps.
+  - One flip per field (50 fields/s), as expected for interlaced output.
+  - No flip_done, vblank-wait or WARN messages.
+- **restore:** original armbianEnv; Image → vmlinuz-7.3.1-edge-sunxi64; `/lib/modules/7.3.1` restored to the
+  jpegfix modules another agent had left there (saved at install and moved back); trial files removed. After the
+  reboot, serial shows `DRAM: 1024 MiB` and the image kernel is running.
+
+**Result:**
+- Fix 1 (GATE_SRC bit 21) makes TCON TV1 run and raise vblanks.
+- Fix 2 keeps Composite off when no TV is attached, so the expansion overlay (TV-out + IR) boots.
+- **Still pending (needs a TV + the 13-pin board):**
+  - the picture itself (levels, colour, PAL/NTSC timing);
+  - load detection reporting *connected* with a TV attached.

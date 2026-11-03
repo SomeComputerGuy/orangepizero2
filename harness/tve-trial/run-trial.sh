@@ -15,6 +15,8 @@ wait_ssh() { for i in $(seq 1 ${1:-60}); do $SSH -o ConnectTimeout=3 true 2>/dev
 case "${1:-}" in
 install)
 	$SSH "test \"\$(readlink /boot/Image)\" = $IMG" || { echo "board not on the image kernel"; exit 1; }
+	# keep whatever another agent left in /lib/modules/7.3.1 (install-kernel.sh replaces it)
+	$SSH 'set -e; if [ -d /lib/modules/7.3.1 ] && [ ! -e /root/tve-saved-modules-7.3.1 ]; then cp -a /lib/modules/7.3.1 /root/tve-saved-modules-7.3.1; fi; ls -d /root/tve-saved-modules-7.3.1 2>/dev/null || true'
 	bash $H/harness/research/vdec-perf/install-kernel.sh tve1
 	$S $H/harness/afbc-kms-play/out/afbc-kms-play /root/afbc/afbc-kms-play
 	NOXZ=1 $S $H/harness/research/vdec-perf/devmem.py /root/afbc/devmem.py
@@ -45,7 +47,9 @@ recover)
 restore)
 	$SSH "set -e; cp /boot/armbianEnv.txt.tve-orig /boot/armbianEnv.txt && rm -f /boot/armbianEnv.txt.tve-orig
 		ln -sfn $IMG /boot/Image; rm -f /boot/vdec-trial /boot/vmlinuz-7.3.1-vdec-tve1
-		rm -rf /lib/modules/7.3.1 /lib/modules/7.3.1.good; sync; systemctl reboot" || true
+		rm -rf /lib/modules/7.3.1 /lib/modules/7.3.1.good
+		if [ -d /root/tve-saved-modules-7.3.1 ]; then mv /root/tve-saved-modules-7.3.1 /lib/modules/7.3.1; fi
+		sync; systemctl reboot" || true
 	sleep 40; wait_ssh || { echo "no ssh after restore"; exit 1; }
 	$SSH 'uname -r; uptime'
 	L=$(grep -a -n 'U-Boot SPL' $H/harness/serial.log | tail -1 | cut -d: -f1)

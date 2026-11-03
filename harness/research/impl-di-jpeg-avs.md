@@ -686,3 +686,34 @@ the cedrus and DI sources equal the scratch tree.
   J1–J13. If none does: also (step 4) on the image kernel check `gst-inspect-1.0 v4l2jpegdec` and a
   `gst-launch-1.0 filesrc ! jpegparse ! decodebin ! fakesink` / `playbin` run on a grey and a colour JPEG, to
   decide whether the GStreamer fallback patch is needed.
+
+### 7.5 Fallback if no probe variant decodes greyscale: keep GStreamer off v4l2jpegdec for grey
+
+Facts these options rely on (gst 1.28.7 sources):
+- The `v4l2jpegdec` sink template is `image/jpeg, parsed=true`, so `jpegparse` (rank PRIMARY) always sits in front
+  of it.
+- `jpegparse` adds `sampling` to its caps: "GRAYSCALE", "RGB", or "YCbCr-4:4:4/4:2:2/4:2:0/4:4:0/4:1:0/4:1:1".
+- Autoplugging matches those caps against each factory's sink template and ranks. `jpegdec` is PRIMARY;
+  `v4l2jpegdec` is PRIMARY+1.
+
+| | A: rank override (no code) | B: caps patch (code) |
+|---|---|---|
+| what | `GST_PLUGIN_FEATURE_RANK=v4l2jpegdec:MARGINAL`, set in `/etc/environment` and in the systemd `DefaultEnvironment` drop-ins (system and user); draft hook `harness/research/jpeg/gst-jpeg-rank-hook.sh.draft` | for driver "cedrus", `gstv4l2.c` limits the image/jpeg sink template to `sampling={YCbCr-4:2:0, 4:2:2, 4:4:4, 4:1:1}`; draft `harness/research/jpeg/gst-v4l2-cedrus-jpeg-sampling.patch.draft` (≈40 lines, not compiled: the host has no GStreamer dev files) |
+| result | every autoplugged JPEG goes to `jpegdec` (software, correct for all samplings). `v4l2jpegdec` still works in explicit pipelines | colour JPEGs the driver can decode still go to cedrus; greyscale, RGB, 4:4:0 and 4:1:0 go to `jpegdec`. Also fixes the RGB (Adobe) case, which cedrus would decode with wrong colours |
+| cost | one config hook, same pattern as `RUSTICL_ENABLE`; no binary; survives apt upgrades; trivially reversible | a rebuilt `libgstvideo4linux2.so` for the image's exact gst-plugins-good version, installed with `dpkg-divert` (as the libclc fix), rebuilt on every plugins-good update. Not upstreamable as is: upstream would want the driver to report its samplings, which V4L2 cannot do |
+| feature loss | autoplugged hardware JPEG decode in GStreamer (the V4L2 decoder itself and explicit use remain) | none |
+
+**Pick: A now; switch to B only if the board shows `v4l2jpegdec` decodes colour JPEGs correctly via playbin.**
+- `v4l2jpegdec` expects the stateful decoder protocol: SOURCE_CHANGE, capture format from the driver, and a
+  DEC_CMD_STOP/LAST-buffer drain. Cedrus JPEG offers a plain m2m interface with none of that, and it is untested
+  with GStreamer.
+- If that combination fails, colour JPEGs break too, and A is needed anyway. B would then add nothing.
+- If it works, B keeps hardware decode for colour in autoplugging, which the never-drop-a-feature rule favours. It
+  costs a carried binary, so it is worth paying only once the hardware path is shown to work end to end.
+- FFmpeg-based players need neither option: they never use the cedrus JPEG decoder.
+
+Board check for this decision (§7.4 step 3), on the image kernel, with `g.jpg` grey and `c.jpg` colour:
+1. Run `gst-inspect-1.0 v4l2jpegdec`.
+2. Run `gst-launch-1.0 -v filesrc location=X ! jpegparse ! decodebin ! videoconvert ! filesink location=out.raw`,
+   once as is and once with `GST_PLUGIN_FEATURE_RANK=v4l2jpegdec:MARGINAL` set.
+3. For each run, record which decoder was chosen (`-v` output) and compare the output to `ffmpeg -i X -f rawvideo`.

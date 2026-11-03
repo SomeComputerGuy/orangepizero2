@@ -1,0 +1,17 @@
+# DRAFT for userpatches/config-opiz2-printserver.conf (impl-di-jpeg-avs.md 7.5, option A).
+# Autoplugging (playbin, decodebin, gst-play) prefers the software jpegdec (rank PRIMARY)
+# over the cedrus v4l2jpegdec (PRIMARY+1 by default), because cedrus refuses greyscale
+# JPEG and GStreamer drops a refused frame instead of falling back. v4l2jpegdec stays
+# installed and usable in explicit pipelines. Login sessions read /etc/environment;
+# system and user services get the same value through systemd's DefaultEnvironment.
+function image_specific_armbian_env_ready__opiz2_gst_jpeg_rank() {
+	local v='GST_PLUGIN_FEATURE_RANK=v4l2jpegdec:MARGINAL'
+	grep -q '^GST_PLUGIN_FEATURE_RANK=' "${SDCARD}/etc/environment" 2>/dev/null ||
+		echo "${v}" >> "${SDCARD}/etc/environment"
+	local d
+	for d in system.conf.d user.conf.d; do
+		mkdir -p "${SDCARD}/etc/systemd/${d}"
+		printf '[Manager]\nDefaultEnvironment="%s"\n' "${v}" \
+			> "${SDCARD}/etc/systemd/${d}/60-opiz2-gst-jpeg-rank.conf"
+	done
+}

@@ -1,0 +1,54 @@
+# DRAFT (not compiled: no GStreamer dev files on the host). gst-plugins-good 1.28.7, sys/v4l2/gstv4l2.c.
+# Restricts the cedrus v4l2jpegdec sink template to the samplings the driver decodes (see impl-di-jpeg-avs.md 7.5).
+--- a/subprojects/gst-plugins-good/sys/v4l2/gstv4l2.c	2026-11-03 08:45:39.916743235 +0000
++++ b/subprojects/gst-plugins-good/sys/v4l2/gstv4l2.c	2026-11-03 08:45:39.934987995 +0000
+@@ -62,6 +62,34 @@
+ #define GST_CAT_DEFAULT v4l2_debug
+ 
+ #ifdef GST_V4L2_ENABLE_PROBE
++static void
++gst_v4l2_restrict_jpeg_sampling (GstCaps * caps)
++{
++  GValue list = G_VALUE_INIT;
++  static const gchar *sampling[] = {
++    "YCbCr-4:2:0", "YCbCr-4:2:2", "YCbCr-4:4:4", "YCbCr-4:1:1",
++  };
++  guint i;
++
++  g_value_init (&list, GST_TYPE_LIST);
++  for (i = 0; i < G_N_ELEMENTS (sampling); i++) {
++    GValue v = G_VALUE_INIT;
++
++    g_value_init (&v, G_TYPE_STRING);
++    g_value_set_static_string (&v, sampling[i]);
++    gst_value_list_append_and_take_value (&list, &v);
++  }
++
++  for (i = 0; i < gst_caps_get_size (caps); i++) {
++    GstStructure *s = gst_caps_get_structure (caps, i);
++
++    if (gst_structure_has_name (s, "image/jpeg"))
++      gst_structure_set_value (s, "sampling", &list);
++  }
++
++  g_value_unset (&list);
++}
++
+ static gboolean
+ gst_v4l2_probe_and_register (GstPlugin * plugin)
+ {
+@@ -127,6 +155,14 @@
+     src_caps = gst_v4l2_object_probe_template_caps (it->device_path,
+         video_fd, capture_type);
+ 
++    /* cedrus (Allwinner VE) decodes 3-component Y'CbCr JPEG with 4:2:0,
++     * 4:2:2, 4:4:4 or 4:1:1 sampling only. Advertise that through the
++     * "sampling" field set by jpegparse, so that decodebin hands
++     * greyscale, RGB, 4:4:0 and 4:1:0 pictures to a software decoder
++     * instead of a decoder that fails them. */
++    if (g_str_equal ((const gchar *) vcap.driver, "cedrus"))
++      gst_v4l2_restrict_jpeg_sampling (sink_caps);
++
+     /* Skip devices without any supported formats */
+     if (gst_caps_is_empty (sink_caps) || gst_caps_is_empty (src_caps)) {
+       gst_caps_unref (sink_caps);

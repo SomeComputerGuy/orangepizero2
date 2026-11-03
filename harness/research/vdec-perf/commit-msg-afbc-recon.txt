@@ -1,0 +1,29 @@
+media: cedrus: reconstruct 10-bit pictures into AFBC for P010 output
+
+With P010 capture the decoder writes the userspace picture through the
+secondary output engine and keeps its reconstruction, which later
+pictures use as reference, in a hidden surface behind it. That surface
+was linear NV12 plus the appended low-2-bit plane.
+
+Linear references are slow on the H616. Measured on an Orange Pi
+Zero2 (DDR3-1440, VE 600 MHz) with 4K HEVC Main10, the reference-read
+port (MBUS VE1, IOMMU master 2) moves 3.2 times the data of an AFBC
+reconstruction and 1.7 times that of a tiled one, and its IOMMU TLB hit
+rate drops from ~90 % to 50 % (average translation latency per access
+171 cycles instead of 3.5). Decoding runs at 24 fps. With the IOMMU out
+of the way (iommu.passthrough=1), 8-bit linear references still only
+reach 40 instead of 34 fps against 78 fps tiled, so the access pattern
+costs more than the TLB misses.
+
+Reconstruct into a 10-bit AFBC surface instead, as the vendor library
+does for big pictures, and keep the P010 secondary output. AFBC is
+lossless, and the references are read back compressed. The same 4K
+stream now decodes at 60 fps (VE-bound) instead of 24, and 4K VP9
+Profile 2 at 57 fps instead of 36, both with bit-exact P010 output
+(whole-stream md5 against a software decode). A 32x32 tiled NV12
+reconstruction would also work (49 fps) but AFBC is faster and its
+size is about the same (17.3 MB vs 15.5 MB at 4K).
+
+Native AFBC capture is unchanged.
+
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>

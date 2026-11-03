@@ -1,0 +1,19 @@
+diff --git a/libavutil/hwcontext_v4l2request.c b/libavutil/hwcontext_v4l2request.c
+index b6633d9..8903a64 100644
+--- a/libavutil/hwcontext_v4l2request.c
++++ b/libavutil/hwcontext_v4l2request.c
+@@ -264,6 +264,14 @@ static int v4l2request_select_capture_format(AVHWFramesContext *hwfc)
+         .type = type,
+     };
+ 
++    // Local test override (Zero2 throughput experiment): force a CAPTURE fourcc
++    {
++        const char *env = getenv("V4L2REQUEST_PIXFMT");
++        if (env && strlen(env) == 4)
++            return v4l2request_set_format(hwfc, type,
++                                          v4l2_fourcc(env[0], env[1], env[2], env[3]), 0);
++    }
++
+     // Get the driver preferred (or default) format
+     if (ioctl(fctxi->video_fd, VIDIOC_G_FMT, &format) < 0)
+         return AVERROR(errno);

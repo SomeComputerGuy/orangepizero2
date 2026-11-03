@@ -187,6 +187,37 @@ the same libpoly plumbing, and carry the patches in Armbian as a Mesa build unti
 default. To satisfy the row's literal number, pick A (long, upstreamable) or B (fast, proprietary,
 a separate driver variant). With A, GLES 3.2 stays a documented GAP until the work lands. Decision needed from you.
 
+## 2b. Vulkan 1.1 (H616 datasheet §2.2: "G31 ... Vulkan 1.1")
+`mesa-vulkan-drivers 26.2.4-1ubuntu1` and `vulkan-tools 1.4.341.0` were apt-installed on the board for testing
+on 2026-11-03 (the image gets them from project commit 005aa71). Dumps:
+`harness/analysis/gpu/vulkaninfo-26.2.4.txt` and `vulkaninfo-26.2.4-override1.1.txt`.
+
+| Check | Result |
+|---|---|
+| Default (no env) | **panvk refuses to load:** `WARNING: panvk is not well-tested on v7, pass PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1 if you know what you're doing. (VK_ERROR_INCOMPATIBLE_DRIVER)`. `vkEnumeratePhysicalDevices` fails, so the board has **no usable Vulkan device by default** |
+| `PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1` | `deviceName = Mali-G31 MC1`, `driverName = panvk`, **`apiVersion = 1.0.354`**, `conformanceVersion = 0.0.0.0`, "panvk is not a conformant Vulkan implementation, testing use only" |
+| Vulkan 1.1 promoted extensions | **all 18 present** (16bit_storage, bind_memory2, dedicated_allocation, descriptor_update_template, device_group, external_fence/memory/semaphore, get_memory_requirements2, maintenance1-3, multiview, relaxed_block_layout, sampler_ycbcr_conversion, shader_draw_parameters, storage_buffer_storage_class, variable_pointers). The features `multiview`, `variablePointers(StorageBuffer)`, `samplerYcbcrConversion` and `storageBuffer16BitAccess` are all true |
+| `MESA_VK_VERSION_OVERRIDE=1.1` | reports `apiVersion = 1.1.354`. This is an override, not a claim the driver makes; see the dEQP-VK subset below |
+
+Why 1.0, from the source:
+* `src/panfrost/vulkan/panvk_physical_device.c:405` at 26.2.4 lists `case 6: case 7: case 14:` and refuses to load
+  without `PAN_I_WANT_A_BROKEN_VULKAN_DRIVER`. **This is unchanged on main** (2026-11-02, where v11 was added to the list).
+* `panvk_vX_physical_device.c get_api_version()` at 26.2.4 returns 1.4 for `PAN_ARCH >= 10` and **1.0 for everything else**.
+* Mesa commit **ba09d293e54 "panvk: expose vulkan 1.3 on bifrost"** (Erik Faye-Lund, 2026-07-27, MR !43245:
+  "All major features needed for Vulkan 1.3 should already be fixed") changes the fallback to 1.3. It is **in
+  mesa-26.3.0-rc3**. `docs/features.txt` at 26.3 lists panvk (not just panvk/v10+) under Vulkan 1.1, 1.2 and 1.3
+  "all DONE". The docs table at 26.3 shows Bifrost v7 at Vulkan 1.3, still "experimental" (refuses to load
+  without the env var).
+* Conformance: Mesa's docs footnote only the **Mali-G610 Vulkan 1.4** submission for panvk (Khronos
+  conformant-products #939, 2025-08-18; also #906 1.1 and #913 1.2 on G610). The Khronos Vulkan list has **no
+  panvk/Bifrost entry**. **Arm's proprietary driver is conformant on Mali-G31 for Vulkan 1.3**
+  (submission #691, 2022-06-29, CTS 1.3.1.x)
+  (<https://www.khronos.org/conformance/adopters/conformant-products/vulkan>, fetched 2026-11-03).
+
+What is missing for "Vulkan 1.1" with open drivers: in 26.2.4 only the version gate, and the
+experimental load gate on v7. The feature set is present. Mesa 26.3 removes the version gate (it reports 1.3). The load gate
+stays, and there is no conformance submission. The dEQP-VK subset below measures how well it actually works.
+
 ## 3. OpenCL "2.0"
 
 ### 3.1 What it means
@@ -263,31 +294,42 @@ sqrt/exp/log/pow/atan/tanh   PASS                     PASS (same ULPs)
 ```
 So the fork is a confirmed drop-in fix. Branch prepared (§6).
 
-### 3.5 Conformance subset (needs your approval: external suite)
-Plan: build Khronos **OpenCL-CTS** on the host. Cross-compile with `aarch64-linux-gnu-gcc`;
-the arm64 sysroot comes from `dpkg -x` of the Ubuntu 26.10 arm64 debs `ocl-icd-opencl-dev` and
-`opencl-headers`, so no sudo is needed. Run the subset Mesa CI uses for rusticl,
-`opencl_conformance_tests_mesa.csv` (Mesa CI job `deqp-panfrost-g610-opencl-cts-quick.toml`), in wimpy
-mode: basic, api, compiler, computeinfo, buffers, images (2D/3D subsets), half, integer_ops quick,
-atomics, conversions -w, math_brute_force -w, relationals, commonfns, geometrics, vectors, printf,
-select, spirv_new, workgroups. The CTS checks 2.0 features only when the device claims them, so it
-measures 3.0/1.2-C correctness. Expected runtime on one G31 core: 2-6 h. Build cache: keep
-the CTS build dir under `harness/research/gpu-src/` and rebuild incrementally.
+### 3.5 / 4. Conformance suites: built, staged, waiting for a board slot
+Approved 2026-11-03. Everything is cross-built on the host (ccache), with pins and sha256s recorded. Nothing has a
+complete board result yet. The first attempt was OOM-killed while the AVS2 agent's decoder used about 700 MB, and that
+contributed to the 01:15 watchdog reset, so the runners now gate on free memory (see below).
 
-## 4. GLES conformance with no display (needs your approval: external suite)
-* **dEQP (VK-GL-CTS)** with the `surfaceless` target, the same configuration Mesa CI uses (`--deqp-surface-type=pbuffer
-  --deqp-visibility=hidden --deqp-gl-config-name=rgba8888d24s8ms0`, 256x256). Cross-build
-  `deqp-gles2`, `deqp-gles3`, `deqp-gles31` and `glcts` on the host (`-DDEQP_TARGET=surfaceless`;
-  sysroot by `dpkg -x` of libegl-dev, libgles-dev, libgbm-dev, libpng-dev, zlib1g-dev arm64). Run
-  gles2/3/31-main mustpass plus KHR-GLES31 with deqp-runner (Rust, cross-built) or a shard
-  loop, using `--fraction 4` for a first pass. Also run dEQP-GLES31/KHR-GLES32 to record exactly which 3.2
-  tests are "NotSupported". Compare against Mesa CI's G52 baseline (0 expected fails).
-* **glmark2:** upstream has no surfaceless flavour. Without a display the options are
-  `glmark2-es2-wayland` under `weston --backend=headless --renderer=gl` (two Ubuntu packages,
-  installed with apt), or a real HDMI sink. Ask before installing.
-* What already ran with no display (`gles-func.py`): compute shader → SSBO (64k) PASS, 1080p
-  RGBA8 FBO render + readback PASS, glGetError clean. Fill rate: noise shader 111 fps at 1080p (230 Mpix/s),
-  flat colour 461 fps (956 Mpix/s, 1.59 pix/clk at 600 MHz); devfreq went up to 600 MHz.
+| Item | Pin / source | Location (`harness/research/gpu-src/`, git-ignored) |
+|---|---|---|
+| VK-GL-CTS | tag `opengl-es-cts-3.2.14.1` = 067e8832315e, plus Mesa CI's GLES backports (Mesa main a1c054214a4 `build-deqp.sh`). 9 of 10 cherry-picked; **e39758bc9262 skipped** (conflicts in the shallow clone; it is a GL4 atomic-counter leak fix, no GLES impact). Also Mesa's 2 CTS patches | `dl-vk-gl-cts-opengl-es-cts-3.2.14.1/` |
+| zlib 1.2.13 / libpng 1.6.50 | sha256 b3a24de9... / 71158e53... (pins from deqp `fetch_sources.py`) | `dl-zlib-1.2.13/`, `dl-libpng-1.6.50/` |
+| SPIRV-Tools / glslang / SPIRV-Headers / amber / jsoncpp | 65b2ace21293 / 7881226269b1 / babee77020ff / 83c140b6f67f / 9059f5cad030 (deqp pins) | `dl-vkcts-*/` |
+| OpenCL-CTS | 43111c0c7c7f (Mesa CI `build-opencl-cts.sh` pin), profile `.gitlab-ci/opencl_conformance_tests_mesa.csv` | `dl-opencl-cts-43111c0c/` |
+| CMake 4.3.4 | Ubuntu 26.10 debs (`apt-get download`), sha256 in `debs.sha256` | `dl-cmake-4.3.4/` |
+| aarch64 g++ 15.3.0 | the Mesa agent's already-downloaded cross debs (copied, sha256 in `debs.sha256`) | `tools-cross-gxx-15.3.0/` |
+| Target libs | libEGL/libGLESv2/libGLdispatch/libOpenCL copied from the board, Mesa 26.2.4 headers | `sysroot-board/` |
+
+Builds: `build-deqp-gles` (surfaceless: deqp-gles2/3/31 + glcts), `build-deqp-vk` (**vulkan_headless**; the surfaceless
+target says "Vulkan is not supported"), `build-opencl-cts` (49 binaries, every binary the Mesa profile needs).
+Stripped trees with MANIFEST.sha256: `stage-deqp-gles` (251 MB), `stage-opencl-cts` (53 MB), `stage-deqp-vk` (84 MB).
+
+Board setup the suites need (handled by the restage script): `EGL_PLATFORM=surfaceless`, and `LD_LIBRARY_PATH` pointing at
+unversioned `libEGL.so`/`libGLESv2.so`/`libvulkan.so` symlinks (dEQP dlopen()s them; the image has no -dev packages).
+The fixed libclc is bind-mounted into the unit only. Smoke tests passed before the reset: dEQP-GLES2.info 6/6,
+GLES31 compute.basic 41/41, OpenCL basic 3/3. gles2-main got 10 300/17 165 cases, all Pass, before the OOM.
+
+How to run:
+* `harness/analysis/gpu/cts-restage.sh [--start]` (host, idempotent). It copies only the trees whose manifests do not verify on the
+  board, verifies the libclc and the queue script, makes the symlinks, apt-installs mesa-vulkan-drivers and vulkan-tools if
+  missing, runs one sanity case per API and syncs. With `--start` it launches the `cts` unit (MemoryMax=320M,
+  OOMScoreAdjust=1000, Restart=on-failure).
+* `run-cts-queue.sh` (board) runs gles2/3/31-main, then the Khronos gles2/3/31/32 lists, then the OpenCL-CTS Mesa profile, then the
+  dEQP-VK subset (5 227 cases: api/memory/compute/subgroups.basic/multiview/... groups plus 1/2000 of vk-main,
+  `stage-deqp-vk/mustpass/vk-subset.txt`, sha256 071d2ebd...). Every step resumes.
+* `deqp-run.py` / `clcts-run.py` never start a test process while `avs2dec` runs or MemAvailable < 350 MB. A case the
+  OOM killer took is retried, not recorded as Crash. Output goes to `/root/cts/results/<suite>/results.csv` (dEQP:
+  test,status,duration,detail; OpenCL: binaries.csv plus per-subtest results.csv). Pull the results into
+  `harness/analysis/gpu/cts/` as the regression baseline for the route-A Mesa work.
 
 ## 5. Recommended plan
 
@@ -310,7 +352,7 @@ the CTS build dir under `harness/research/gpu-src/` and rebuild incrementally.
 6. Fix the inaccurate comment in `userpatches/config-opiz2-printserver.conf:48` ("panfrost GLES 3.2"),
    which is included in the prepared branch.
 
-## 6. Prepared branch (not merged, not pushed, image not rebuilt)
+## 6. libclc branch: merged into main as 8cb2037 (pushed by the coordinator), build-time download approved
 `/home/aruni/orangepizero2` repo, branch **`feat/gpu-mesa-libclc`** (worktree `wt-gpu`), off `main` 35ea99f:
 * `userpatches/config-opiz2-printserver.conf`: new `post_customize_image__opiz2_mesa_libclc`. It fetches
   mesa-libclc `${OPIZ2_MESA_LIBCLC_VER}` = 22.1.8.3 `spirv64-mesa3d-.spv` once into

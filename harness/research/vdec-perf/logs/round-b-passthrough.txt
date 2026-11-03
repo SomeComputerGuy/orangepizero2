@@ -1,0 +1,30 @@
+cmdline: iommu.passthrough=1 cma=320M 
+[dmesg] [    0.000000] cma: Reserved 320 MiB at 0x000000006bc00000
+[dmesg] [    0.128268] iommu: Default domain type: Passthrough (set via kernel command line)
+CmaTotal:         327680 kB CmaFree:          325656 kB 
+[pt-h265-8-tiled] rc=0 jobs=600 wall=8.58s ve_busy=7.67s avg=12.78ms max=18.79ms => hw-bound fps 78.2, pipeline fps 69.9
+[pt-h265-8-tiled] ve/job rd=1698954 wr=1857600 mmc=0 cache=0 jobs=600 | mbus m0=5356347 m3=12435582 m10=12663660 m11=0 m13=234018 | iommu lat2=0/max0 lat3=0/max0
+[pt-h265-8-linear] rc=0 jobs=600 wall=15.50s ve_busy=15.17s avg=25.28ms max=39.93ms => hw-bound fps 39.6, pipeline fps 38.7
+[pt-h265-8-linear] ve/job rd=1675174 wr=1857600 mmc=0 cache=0 jobs=600 | mbus m0=5340834 m3=12435583 m10=24219225 m11=0 m13=0 | iommu lat2=0/max0 lat3=0/max0
+[pt-h264-8-linear] rc=0 jobs=300 wall=10.81s ve_busy=10.25s avg=34.17ms max=52.20ms => hw-bound fps 29.3, pipeline fps 27.8
+[pt-h264-8-linear] ve/job rd=1799059 wr=2082391 mmc=0 cache=0 jobs=300 | mbus m0=4048629 m3=6775452 m10=11145546 m11=0 m13=0 | iommu lat2=0/max0 lat3=0/max0
+[pt-h264-8-tiled] rc=0 jobs=300 wall=7.79s ve_busy=7.25s avg=24.16ms max=36.49ms => hw-bound fps 41.4, pipeline fps 38.5
+[pt-h264-8-tiled] ve/job rd=1834486 wr=2082391 mmc=0 cache=0 jobs=300 | mbus m0=2121065 m3=6775452 m10=5747793 m11=0 m13=0 | iommu lat2=0/max0 lat3=0/max0
+[pt-h265-10-p010] rc=0 jobs=0 wall=64.58s ve_busy=0.00s avg=+nanms max=0.00ms => hw-bound fps +nan, pipeline fps 0.0
+[pt-h265-10-p010] ve/job rd=0 wr=0 mmc=0 cache=0 jobs=1 | mbus m0=102598154 m3=0 m10=0 m11=0 m13=0 | iommu lat2=0/max0 lat3=0/max0
+[pt-h265-10-afbc] rc=0 jobs=600 wall=7.58s ve_busy=7.17s avg=11.95ms max=20.41ms => hw-bound fps 83.7, pipeline fps 79.1
+[pt-h265-10-afbc] ve/job rd=1232394 wr=632639 mmc=0 cache=0 jobs=600 | mbus m0=5297671 m3=8241608 m10=8866391 m11=0 m13=0 | iommu lat2=0/max0 lat3=0/max0
+[md5 pt h265-8 NV12] MD5=3bbb28527f5294b84818a10b545998b1 ref=3bbb28527f5294b84818a10b545998b1
+CmaTotal:         327680 kB CmaFree:          304344 kB 
+[dmesg] [    5.916562] systemd[1]: Queued start job for default target graphical.target.
+[dmesg] [  123.941316] cma: __cma_alloc_frozen: reserved: alloc failed, req-size: 10283 pages, ret: -16
+[dmesg] [  123.941372] cma: number of available pages: 
+[dmesg] [  123.941375] cma: range 0: +60@68+213@10795+213@21291+469@31787+213@42539+213@53035+213@63531+7893@74027
+[dmesg] [  123.941424] cma: 
+[dmesg] [  123.949721] cedrus 1c0e000.video-codec: dma alloc of size 42119168 failed
+ROUND-B-DONE
+CmaFree:          232128 kB
+[pt-h265-10-p010] rc=0 jobs=0 wall=66.50s ve_busy=0.00s avg=+nanms max=0.00ms => hw-bound fps +nan, pipeline fps 0.0
+[pt-h265-10-p010] ve/job rd=0 wr=0 mmc=0 cache=0 jobs=1 | mbus m0=102993739 m3=0 m10=0 m11=0 m13=0 | iommu lat2=0/max0 lat3=0/max0
+[  305.618657] => 9487 free of 81920 total pages
+[  305.618670] cedrus 1c0e000.video-codec: dma alloc of size 42119168 failed

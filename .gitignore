@@ -23,3 +23,14 @@ kernel-check/dl-upstream/
 kernel-check/scratch*/
 docs/vendor/
 images/
+# local build trees, downloads, test data and binaries (not redistributed)
+mesa-work/
+kernel-check/*/
+kernel-check/*.bak-*
+harness/__pycache__/
+harness/known_hosts.old
+harness/afbc-kms-play/out/
+harness/di300test/di300test
+harness/jpegtest/jpegtest
+userpatches/config-example.conf
+harness/research/*/dl/

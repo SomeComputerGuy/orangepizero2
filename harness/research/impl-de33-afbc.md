@@ -322,3 +322,10 @@ forced the connector on, and ran the client with a timeout:
 - Harness (repo main, this commit): the client's descriptor logging and non-AFBC warning; `tools/uboot-noovl.py`;
   the round 2 and 3 results; this report. The draw-once pattern and the manual IN_FORMATS parse were already
   in main's 8132696.
+
+### Decision 2026-11-03: tearing (option C)
+
+The user chose to change nothing until tearing is confirmed. No vblank-deferred writes and no RCQ port for now.
+Confirm with a real 4K60 display or an HDMI capture device: moving vertical-bar pattern, matched against
+afbc-kms-play's per-flip commit-phase CSV. If tearing shows, revisit: option A (defer writes to the vblank IRQ) or
+B (RCQ port, LE 0223–0230). Either one needs the user's OK first.

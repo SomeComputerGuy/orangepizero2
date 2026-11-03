@@ -11,6 +11,14 @@ Both kernels expose `MG2S S264 S265 VP8F VP9F AVS2 SVC1 MG4S S263 SPKS`. VE at 6
 
 ## 0. Answer
 
+> **Board update (2026-11-03, image 4321861ff = fix/sunxi-h616-legacy-dec 7828d5a1f, image kernel; details in §6):**
+> - **MPEG-1: 7/7 OK.** The 6 ISO vectors plus 1080p30; ccm1 is bit-exact. D-pictures (tcela-18) are bit-exact (31/31) against an exact DC-only reference.
+> - **MPEG-2 1080-line fix confirmed:** 1080p60 and 1080i are now within the envelope (max 3, was 21-22).
+> - **ISO 14496-4 ASP: 21/30 OK.** 19 pass the envelope criterion, and 2 (vcon-asp5L0, vcon-asp14L1, 1-point GMC at accuracy 0) are **FFmpeg reference bugs**: the HW matches a fixed FFmpeg within 1-3. 1 more is IDCT-marginal (vcon_a1ge_13_asp_l2, max 4 against an envelope of 3).
+>   8 fail: they are interlaced (field direct mode in B-VOPs, chroma of field qpel MBs).
+> - **SP:** ti_* rejected (data partitioning); nok_720p has no reference, because FFmpeg itself cannot decode it.
+> - **Xvid frame 24:** the coded GMC MBs at the start of the VOP get a garbage prediction (flat Y 166, V near 0), not a lost residual.
+
 | Format (datasheet) | Streams | Bit-exact (x/y) | Within IDCT envelope¹ | fps 1080p (VE-bound / pipeline)² | Verdict vs datasheet |
 |---|---|---|---|---|---|
 | **MPEG-2 MP/HL** 1080p@60 | ISO 13818-4 main profile: 37 MPEG-2 vectors, incl. 9 field-picture and 1 dual-prime. Generated MP@HL 1080p60, 1080i, 1088p60 | 3/37 conformance streams fully, all frames of 4. FFmpeg's IDCT is not the VE's (§2.1) | **37/37** conformance, 1088p OK. **1080p/1080i FAIL** (bottom-edge MC, root-caused, fix patch §4) | 147 / 126 (1080p60), 138 / 113 (1080i, 60 fields), tiled 172 / 143 | Speed **meets**. Correctness **meets for MB-aligned heights**; 1080-line streams need the fix patch (untested on HW) |
@@ -246,6 +254,72 @@ writing a grey chroma plane, is [U]). Bit-exact coverage:
 - **Not verified on the board** (no kernel installs allowed). To verify: install a kernel with the patch, re-run
   `FRAMES=120 run-raw.sh lists/gen-raw.list` for the two mpeg2 1080 streams and `run-raw.sh lists/mpeg2.list` (no regression).
   Expected: max |diff| ≤ 3.
+
+## 6. Board run on image 4321861ff (2026-11-03)
+Image kernel 4321861ff, which includes fix/sunxi-h616-legacy-dec 7828d5a1f. No trial kernel. Board FFmpeg: `/root/vp/ffmpeg-m1` (fork plus
+`legacy-dec/ffmpeg-mpeg1-v4l2request.patch`, sha256 f158cac1...) and `ffmpeg-m1d`, the same plus D-picture passthrough (983bb931...).
+The runs are `legacy-dec/board-slot.sh tests` and `gmc-f24.sh`, with results in `legacy-dec/results/board-4321861ff-*`.
+
+### 6.1 MPEG-1 (W2b): 7/7
+| Stream | Result |
+|---|---|
+| ccm1 (16x16) | bit-exact 129/129 frames (md5 PASS) |
+| MEI.stream16, MEI.stream16v2, tcela-16, tcela-19 | within the envelope (max 2 against envelope 2-3) |
+| g-mpeg1-1080p30 | max 3 against envelope 4, 300 frames |
+| tcela-18 (31 **D-pictures**) | **bit-exact 31/31** against `legacy-dec/m1-dpic.py` |
+- `legacy-dec/m1-dpic.py` is a D-picture decoder: each block is flat at its DC, so the result is exact whatever the IDCT.
+- FFmpeg's parser rejects D-pictures. `ffmpeg-m1d` carries them as I-pictures and the hwaccel passes `PIC_CODING_TYPE_D`; this is in the patch
+  (`mpeg1_d_picture`).
+- Not isolated: whether the MPEG-1 trigger is what makes the mismatch control right. The driver now always uses it for MPEG-1, and the results
+  are within the envelope and bit-exact on ccm1.
+
+### 6.2 MPEG-2 1080-line recheck: fixed
+1080p60 and 1080i30: max 3, within the envelope (3). Before the clamp patch the errors reached 21-22 in MB rows 66-67. 1088p60 is unchanged (max 3).
+
+### 6.3 ISO 14496-4 ASP (30) and SP (3)
+- **OK (19):**
+  - a1ge12_L1-L3 (progressive qpel B);
+  - vcon_a1ge_10_l1-l3 (qpel P);
+  - vcon_a1ge_13_l1, l3, l4 (qpel B, up to 1920x1088);
+  - vcon-asp11L0-L3 (3-point GMC);
+  - vcon-asp14L0 (3-point GMC + B);
+  - vcon-asp3L4/L5 (**interlaced** 3-point GMC P);
+  - vcon-asp6L0 (2-point);
+  - vcon-asp7L0, vcon-asp8L0.
+- **OK, FFmpeg reference wrong (2): vcon-asp5L0, vcon-asp14L1** (1 warping point, sprite_warping_accuracy 0).
+  - Errors are whole pixel columns in non-GMC inter MBs whose MV predictor includes a GMC MB.
+  - Root cause, in FFmpeg: `get_amv()` uses `RSHIFT(x, 0)`, and RSHIFT gives x-1 for negative x when b == 0. So the GMC predictor is
+    du-1 (-4 instead of -3 half-pel).
+  - With `legacy-dec/ffmpeg-gmc1-amv-rshift-fix.patch` (host build `kernel-check/ffmpeg-hostfix`), the HW matches FFmpeg within max 1 (5L0)
+    and max 2 (14L1).
+  - That fix is worth sending upstream to FFmpeg.
+- **IDCT-marginal (1): vcon_a1ge_13_asp_l2**, max 4 against an envelope of 3 (PSNR 52). The same content passes at l1, l3 and l4.
+- **FAIL (8), all interlaced:**
+  - **Field direct mode in B-VOPs** (vcon_ge_1_asp_l4, half-pel, 1080).
+    - FFmpeg `-debug mb_type`: 1530 of 1531 `D-=` (interlaced direct) MBs and 11 of 11 `d-=` MBs are wrong; other B MB types are right.
+    - TRD = 10 frames (trd_field 20). The field TRB/TRD we pass equal the vendor library's `trbi/trdi` (mp4_header.c).
+    - SW variants did not reproduce the HW output: no per-field adjustment, the opposite top-field-first adjustment, frame times, forward
+      same-parity select, backward co-located select, frame direct instead of field direct. Root cause **[U]**.
+    - Next step: per-MB HW dump of one direct MB, checked against the co-located field MVs.
+    - The same mode probably explains a1ge4 (B), vcon-asp14L4 (interlaced GMC + B: B-VOPs only) and the earlier FFmpeg-encoded interlaced B.
+  - **Chroma of field-predicted qpel MBs:**
+    - a1ge2_L4 (interlaced P, every MB field-predicted `>-=`): luma within drift (max 6). Chroma errors reach max 40, 80% on odd lines (bottom field).
+    - a1ge9_L1-L4 (interlaced qpel B): chroma-only errors in B-VOPs.
+    - Variants of FFmpeg's field chroma vector derivation (`/2` against `>>1`, with and without `|&1`) all match the HW worse. Root cause **[U]**.
+- **SP:**
+  - ti_sdtv and ti_vga are refused (data partitioning, as before).
+  - **nok_720p has no reference.** FFmpeg's own SW decode conceals errors in every frame ("Error at MB"), on the host and on the board.
+    xvid differs as well.
+- **No kernel patch changes** came out of this run: the 1-point GMC case is an FFmpeg bug, and the interlaced cases are still [U].
+
+### 6.4 Xvid half-pel GMC frame 24
+- The HW is wrong in exactly MBs 0-6 of row 0 (x < 112) plus 2 pixels of MB 7. These are the coded GMC MBs.
+- HW luma there is **flat 166** with a few ±4 textures, and chroma V is 0-11. SW and the prediction (frame 22 shifted down 2 px, accurate to 3
+  on the skipped MBs) are natural content.
+- So the **prediction fetch is wrong** (garbage source), not a lost residual. It happens only for coded GMC MBs at the start of the VOP; coded GMC
+  MBs elsewhere and skipped GMC MBs are right.
+- Root cause **[U]** (HW state at the VOP start for mcsel MBs). Next step: a driver experiment, e.g. re-initialising the GMC/MV state registers
+  before the trigger.
 
 ## 5. Open / needs a decision
 1. ISO 14496-4 ASP/SP zips: accept ISO's click-through copyright licence? This is needed for MPEG-4 ASP conformance (B, qpel, GMC,

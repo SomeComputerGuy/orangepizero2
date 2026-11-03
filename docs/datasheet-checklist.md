@@ -92,10 +92,10 @@ Cedrus `/dev/video0` OUTPUT formats on the board (2026-11-03): `MG2S S264 S265 V
 | AVS2 JiZhun 10-bit | 4K@60 | `AVS2` | ours (`media-cedrus-add-AVS2-decoding`), non-upstream uAPI | **no** (first board runs in progress. No 10-bit reference decoder) | PARTIAL (WIP) | tracked |
 | H.264 BP/MP/HP@L4.2 | 4K@30 | `S264` | upstream + 256-bit DDR fix | **yes**: 4K High 300/300; JVT-AVC_V1 130/130 BP/MP/HP, FR-EXT 44/46 (8x8, CABAC/CAVLC, PAFF, MBAFF, field). 4K30 41.6 fps tiled, 29.6 linear NV12 | OK | 4:0:0 monochrome (High profile) rejected by try_ctrl (2 FR-EXT vectors) |
 | H.263 BP | 1080p@60 | `S263` | Jernej `h616-mpeg4` (non-upstream uAPI) | **yes** (generated; no free conformance set): 16CIF + 4CIF within the IDCT envelope (max 3); 16CIF 219 fps VE-bound. 1080p does not exist in H.263 BP (16CIF is the largest) | OK | — (harness/research/impl-legacy-decode.md) |
-| MPEG-4 SP/ASP@L5 | 1080p@60 | `MG4S` | Jernej `h616-mpeg4` | **partial**: SP and ASP progressive B + qpel OK (1080p60, pipeline 94–146 fps). **Interlaced B-VOPs wrong**. ISO SP vectors use data partitioning, which the driver rejects. Static sprites unsupported. ISO ASP zips not fetched (licence gate) | PARTIAL | harness/research/impl-legacy-decode.md §3.2, §5 |
-| MPEG-2 MP/HL | 1080p@60 | `MG2S` | upstream + `mpeg2-fix-field-pictures` | **yes**: ISO 13818-4 37/37 within the IDCT envelope (incl. 9 field-picture and dual-prime). 147 fps at 1080p60. **1080-line streams wrong at the bottom MB row**: root-caused, fix patch on `fix/sunxi-h616-legacy-dec` (not HW-tested) | PARTIAL | test the fix (harness/research/impl-legacy-decode.md §4) |
-| MPEG-1 MP/HL | 1080p@60 | `MG2S` (HW has `TRIGGER_MPEG1` + full-pel bits, unused) | upstream | **no path**: the MPEG-2 uAPI has no MPEG-1 flag/full_pel, the driver always triggers MPEG-2, GStreamer caps are mpegversion=2, and the FFmpeg fork has no mpeg1 hwaccel. 6 ISO MPEG-1 vectors ready | GAP | **W2b**: implemented and build-tested on fix/sunxi-h616-legacy-dec 7828d5a1f, plus the FFmpeg mpeg1_v4l2request hwaccel; board test pending (impl-legacy-decode.md §2.2b) |
-| Xvid | 1080p@60 | `MG4S` (Xvid = MPEG-4 ASP) | Jernej `h616-mpeg4` | **partial**: libxvid B, qpel, qpel+GMC, rotation GMC OK. **Half-pel GMC stream wrong** (top-left of S-VOPs). qpel+GMC stream **47–51 fps** (< 60), others 114–146 | PARTIAL | harness/research/impl-legacy-decode.md §3.3–3.4 |
+| MPEG-4 SP/ASP@L5 | 1080p@60 | `MG4S` | Jernej `h616-mpeg4` | **partial**: ISO 14496-4 ASP **21/30** OK (2 of them only after fixing an FFmpeg reference bug), 1 IDCT-marginal, **8 interlaced FAIL** (field direct mode in B-VOPs, chroma of field qpel MBs). Progressive B/qpel/GMC 1-3 points and interlaced GMC P are OK. SP: data partitioning rejected (ti_*); nok_720p has no reference (FFmpeg cannot decode it). Static sprites unsupported | PARTIAL | harness/research/impl-legacy-decode.md §6.3 |
+| MPEG-2 MP/HL | 1080p@60 | `MG2S` | upstream + `mpeg2-fix-field-pictures` + MC clamp (fix/sunxi-h616-legacy-dec) | **yes**: ISO 13818-4 37/37 within the IDCT envelope (incl. 9 field-picture and dual-prime). 147 fps at 1080p60. 1080-line bottom-row bug **fixed and confirmed on HW** (image 4321861ff: 1080p60/1080i max 3) | OK | harness/research/impl-legacy-decode.md §4, §6.2 |
+| MPEG-1 MP/HL | 1080p@60 | `MG2S` with `V4L2_MPEG2_SEQ_FLAG_MPEG1` (cedrus MPEG-1 mode) | fix/sunxi-h616-legacy-dec 7828d5a1f (in image 4321861ff) | **yes**: 6 ISO 13818-4 MPEG-1 vectors and 1080p30 within the IDCT envelope (ccm1 bit-exact); D-pictures bit-exact (tcela-18). Needs the FFmpeg `mpeg1_v4l2request` hwaccel (harness/research/legacy-dec/ffmpeg-mpeg1-v4l2request.patch); 1080p60 speed not measured separately (MPEG-2 path: 147 fps) | OK* | harness/research/impl-legacy-decode.md §6.1 |
+| Xvid | 1080p@60 | `MG4S` (Xvid = MPEG-4 ASP) | Jernej `h616-mpeg4` | **partial**: libxvid B, qpel, qpel+GMC, rotation GMC OK. **Half-pel GMC stream wrong**: coded GMC MBs at the start of an S-VOP get a garbage prediction (§6.4). qpel+GMC stream **47–51 fps** (< 60), others 114–146 | PARTIAL | harness/research/impl-legacy-decode.md §3.3–3.4 |
 | Sorenson Spark | 1080p@60 | `SPKS` | Jernej `h616-mpeg4` | **yes** (generated FLV1 1080p60, within the IDCT envelope), 163 fps VE-bound | OK | — |
 | VP8 | 1080p@60 | `VP8F` | upstream + Jernej (>2048 px, frame-size check) | **yes**: libvpx vectors 60/61 bit-exact (= suite md5); 1080p60 300/300, 152 fps. The miss is mid-stream upscaling (FFmpeg fork does not reallocate) | OK | — |
 | AVS/AVS+ JiZhun | 1080p@60 | **none** | nothing anywhere (vendor libVE: AVS runs in the H.264 engine, mode 1, impl-vdec §1) | — | **GAP** | **W20**: new uAPI + cedrus backend, RE from `libawavs.so`/libVE |
@@ -322,10 +322,10 @@ Counted over the rows above (the decode table counts one row per datasheet forma
 
 | Status | Rows |
 |---|---|
-| OK | 35 |
-| OK\* | 37 |
-| PARTIAL | 19 |
-| GAP | 41 |
+| OK | 36 |
+| OK\* | 38 |
+| PARTIAL | 18 |
+| GAP | 40 |
 | N/A | 16 |
 | **Total** | **148** |
 

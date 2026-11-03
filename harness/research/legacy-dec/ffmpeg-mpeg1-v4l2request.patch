@@ -36,7 +36,7 @@ index 94b8773..1f88024 100644
  extern const struct FFHWAccel ff_mpeg1_videotoolbox_hwaccel;
  extern const struct FFHWAccel ff_mpeg2_d3d11va_hwaccel;
 diff --git a/libavcodec/mpeg12dec.c b/libavcodec/mpeg12dec.c
-index c65e9e3..564b269 100644
+index c65e9e3..1a52f87 100644
 --- a/libavcodec/mpeg12dec.c
 +++ b/libavcodec/mpeg12dec.c
 @@ -794,6 +794,9 @@ static const enum AVPixelFormat mpeg1_hwaccel_pixfmt_list_420[] = {
@@ -49,7 +49,20 @@ index c65e9e3..564b269 100644
  #endif
      AV_PIX_FMT_YUV420P,
      AV_PIX_FMT_NONE
-@@ -2665,6 +2668,9 @@ const FFCodec ff_mpeg1video_decoder = {
+@@ -991,6 +994,12 @@ static int mpeg1_decode_picture(AVCodecContext *avctx, const uint8_t *buf,
+ 
+     ref = get_bits(gb, 10); /* temporal ref */
+     s->pict_type = get_bits(gb, 3);
++    s->mpeg1_d_picture = 0;
++    /* D-pictures: only a hwaccel can decode them; carry them as I-pictures. */
++    if (s->pict_type == 4 && avctx->hwaccel) {
++        s->mpeg1_d_picture = 1;
++        s->pict_type       = AV_PICTURE_TYPE_I;
++    }
+     if (s->pict_type == 0 || s->pict_type > 3)
+         return AVERROR_INVALIDDATA;
+ 
+@@ -2665,6 +2674,9 @@ const FFCodec ff_mpeg1video_decoder = {
  #endif
  #if CONFIG_MPEG1_VIDEOTOOLBOX_HWACCEL
                                 HWACCEL_VIDEOTOOLBOX(mpeg1),
@@ -59,8 +72,20 @@ index c65e9e3..564b269 100644
  #endif
                                 NULL
                             },
+diff --git a/libavcodec/mpegvideo.h b/libavcodec/mpegvideo.h
+index d448ac6..989a78c 100644
+--- a/libavcodec/mpegvideo.h
++++ b/libavcodec/mpegvideo.h
+@@ -269,6 +269,7 @@ typedef struct MpegEncContext {
+ 
+     int progressive_frame;
+     int full_pel[2];
++    int mpeg1_d_picture;    ///< MPEG-1 D-picture (DC only); decoded as I by the code here, only hwaccels decode it
+     int interlaced_dct;
+     int first_field;         ///< is 1 for the first field of a field picture 0 otherwise
+ 
 diff --git a/libavcodec/v4l2_request_mpeg2.c b/libavcodec/v4l2_request_mpeg2.c
-index 5d89b71..7c52db4 100644
+index 5d89b71..28b625e 100644
 --- a/libavcodec/v4l2_request_mpeg2.c
 +++ b/libavcodec/v4l2_request_mpeg2.c
 @@ -17,6 +17,7 @@
@@ -85,7 +110,7 @@ index 5d89b71..7c52db4 100644
  typedef struct V4L2RequestControlsMPEG2 {
      V4L2RequestPictureContext pic;
      struct v4l2_ctrl_mpeg2_sequence sequence;
-@@ -58,6 +66,14 @@ static int v4l2_request_mpeg2_start_frame(AVCodecContext *avctx,
+@@ -58,9 +66,17 @@ static int v4l2_request_mpeg2_start_frame(AVCodecContext *avctx,
      if (s->progressive_sequence)
          controls->sequence.flags |= V4L2_MPEG2_SEQ_FLAG_PROGRESSIVE;
  
@@ -99,7 +124,11 @@ index 5d89b71..7c52db4 100644
 +
      controls->picture = (struct v4l2_ctrl_mpeg2_picture) {
          /* ISO/IEC 13818-2, ITU-T Rec. H.262: Picture header */
-         .picture_coding_type = s->pict_type,
+-        .picture_coding_type = s->pict_type,
++        .picture_coding_type = s->mpeg1_d_picture ? V4L2_MPEG2_PIC_CODING_TYPE_D : s->pict_type,
+ 
+         /* ISO/IEC 13818-2, ITU-T Rec. H.262: Picture coding extension */
+         .f_code[0][0] = s->mpeg_f_code[0][0],
 @@ -95,6 +111,13 @@ static int v4l2_request_mpeg2_start_frame(AVCodecContext *avctx,
      if (s->progressive_frame)
          controls->picture.flags |= V4L2_MPEG2_PIC_FLAG_PROGRESSIVE;

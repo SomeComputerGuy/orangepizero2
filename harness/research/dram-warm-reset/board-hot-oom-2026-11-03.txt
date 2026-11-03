@@ -1,0 +1,106 @@
+# Hot-OOM hardware-watchdog resets, Orange Pi Zero2 (H616, 1 GiB), 2026-11-03 06:44-08:05 UTC
+# Image 4321861ff; SD SPL "U-Boot SPL 2026.10_armbian-2026.10-S5508-P71b7-Hf8df-V1b9e-Bcd80-R448a (Nov 03 2026 - 01:42:44 +0000)"
+# = fix/sunxi-h616-dram-warm-reset 5e3896880 (retry training, keep widest, "(training retried)").
+# Scripts: hotwdt.py (host driver), wdhold.py (board-side /dev/watchdog0 holder / temperature logger), same directory.
+# Load in every run: stress-ng --cpu 4 --cpu-method matrixprod --vm 2 --vm-bytes 100% --vm-keep --bigheap 1
+#   (4 cores busy, 2 vm workers rewriting all free RAM, bigheap growing through RAM + 487 MiB zram until the
+#    kernel OOM-kills it, repeatedly: 11-20 real "Out of memory: Killed process" events per run)
+# Modes:
+#   holder   : systemd's RuntimeWatchdog released at runtime (busctl RuntimeWatchdogUSec=0, not persisted),
+#              wdhold.py opens /dev/watchdog0, WDIOC_SETTIMEOUT=TMO, pets for HEAT s under load, then stops
+#              petting without closing the fd and keeps logging temps to /dev/kmsg (serial) every 1 s.
+#   oompanic : systemd keeps the watchdog (15 s); vm.panic_on_oom=1, kernel.panic=0 (runtime sysctl only):
+#              the first real kernel OOM panics and hangs, systemd stops petting, sunxi-wdt fires.
+# Fields: temp-at-stop = cpu/ddr thermal zone (m°C) when petting stopped; last-temp-before-reset = last
+#   temperature line on serial before the SPL banner; stop->SPL = serial-timestamp gap (logger granularity
+#   ~0.5 s; for oompanic, from the "end Kernel panic" line, see corrected values below); spl-passes = SPL banners
+#   before Linux; dram = SPL + U-Boot proper DRAM lines; ssh-up = first successful ssh after the SPL banner.
+
+validate 1: mode=holder tmo=10 heat=60 temp-at-stop=[cpu=71099 ddr=62351] last-temp-before-reset=[cpu=72314 ddr=63323] (logged 2.0s before SPL) stop->SPL=9.5s oom-kills=15 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=27.5s-after-SPL newboot=True setup=[holder=4749 /dev/watchdog0:       4749 started]
+hot-wdt 1: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=72719 ddr=62675] last-temp-before-reset=[cpu=73124 ddr=63566] (logged 1.0s before SPL) stop->SPL=4.5s oom-kills=16 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=26.5s-after-SPL newboot=True setup=[holder=2007 /dev/watchdog0:       2007 started]
+hot-wdt 2: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=72314 ddr=63728] last-temp-before-reset=[cpu=66644 ddr=62027] (logged 1.0s before SPL) stop->SPL=4.5s oom-kills=17 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=26.6s-after-SPL newboot=True setup=[holder=1894 /dev/watchdog0:       1894 started]
+hot-wdt 3: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=73124 ddr=64376] last-temp-before-reset=[cpu=72476 ddr=63404] (logged 1.0s before SPL) stop->SPL=4.5s oom-kills=12 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=28.7s-after-SPL newboot=True setup=[holder=1886 /dev/watchdog0:       1886 started]
+hot-wdt 4: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=73367 ddr=65024] last-temp-before-reset=[cpu=74096 ddr=65186] (logged 1.0s before SPL) stop->SPL=4.0s oom-kills=13 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=28.7s-after-SPL newboot=True setup=[holder=1886 /dev/watchdog0:       1886 started]
+hot-wdt 5: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=73853 ddr=65834] last-temp-before-reset=[cpu=73934 ddr=66320] (logged 1.0s before SPL) stop->SPL=4.5s oom-kills=18 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=30.3s-after-SPL newboot=True setup=[holder=2052 /dev/watchdog0:       2052 started]
+hot-wdt 6: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=73853 ddr=65510] last-temp-before-reset=[cpu=73934 ddr=64781] (logged 1.0s before SPL) stop->SPL=4.0s oom-kills=15 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=28.3s-after-SPL newboot=True setup=[holder=1886 /dev/watchdog0:       1886 started]
+hot-wdt 7: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=73853 ddr=65834] last-temp-before-reset=[cpu=74906 ddr=64943] (logged 1.0s before SPL) stop->SPL=4.0s oom-kills=11 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=26.5s-after-SPL newboot=True setup=[holder=1884 /dev/watchdog0:       1884 started]
+hot-wdt 8: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=74258 ddr=65834] last-temp-before-reset=[cpu=71423 ddr=64538] (logged 0.5s before SPL) stop->SPL=4.0s oom-kills=18 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=26.0s-after-SPL newboot=True setup=[holder=1885 /dev/watchdog0:       1885 started]
+hot-wdt 9: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=74177 ddr=65267] last-temp-before-reset=[cpu=74339 ddr=65510] (logged 1.0s before SPL) stop->SPL=4.0s oom-kills=16 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=26.8s-after-SPL newboot=True setup=[holder=1888 /dev/watchdog0:       1888 started]
+hot-wdt 10: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=74420 ddr=65429] last-temp-before-reset=[cpu=71990 ddr=66239] (logged 1.0s before SPL) stop->SPL=4.0s oom-kills=16 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=28.6s-after-SPL newboot=True setup=[holder=1893 /dev/watchdog0:       1893 started]
+hot-wdt 11: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=75392 ddr=65996] last-temp-before-reset=[cpu=74987 ddr=66482] (logged 0.5s before SPL) stop->SPL=4.0s oom-kills=16 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=26.4s-after-SPL newboot=True setup=[holder=1894 /dev/watchdog0:       1894 started]
+hot-wdt 12: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=74582 ddr=65672] last-temp-before-reset=[cpu=75392 ddr=65915] (logged 0.0s before SPL) stop->SPL=5.0s oom-kills=18 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=26.7s-after-SPL newboot=True setup=[holder=1896 /dev/watchdog0:       1896 started]
+hot-wdt 13: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=74015 ddr=65348] last-temp-before-reset=[cpu=75311 ddr=66563] (logged 1.0s before SPL) stop->SPL=4.0s oom-kills=18 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=28.6s-after-SPL newboot=True setup=[holder=1885 /dev/watchdog0:       1885 started]
+hot-wdt 14: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=74987 ddr=66806] last-temp-before-reset=[cpu=75554 ddr=66725] (logged 1.0s before SPL) stop->SPL=4.0s oom-kills=11 reboot-msg=False spl-passes=2 dram=['DRAM:This DRAM setup is currently not supported.', 'resetting ...', 'DRAM: (training retried) 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=29.4s-after-SPL newboot=True setup=[holder=1885 /dev/watchdog0:       1885 started]
+hot-wdt 15: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=75473 ddr=65348] last-temp-before-reset=[cpu=75635 ddr=66482] (logged 1.0s before SPL) stop->SPL=4.0s oom-kills=16 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=26.5s-after-SPL newboot=True setup=[holder=1894 /dev/watchdog0:       1894 started]
+hot-wdt 16: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=74582 ddr=65753] last-temp-before-reset=[cpu=76445 ddr=66482] (logged 1.0s before SPL) stop->SPL=4.0s oom-kills=15 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=28.8s-after-SPL newboot=True setup=[holder=1885 /dev/watchdog0:       1885 started]
+hot-wdt 17: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=74420 ddr=66401] last-temp-before-reset=[cpu=75392 ddr=66158] (logged 0.0s before SPL) stop->SPL=4.0s oom-kills=13 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=28.9s-after-SPL newboot=True setup=[holder=1893 /dev/watchdog0:       1893 started]
+hot-wdt 18: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=74744 ddr=65591] last-temp-before-reset=[cpu=74420 ddr=65510] (logged 1.0s before SPL) stop->SPL=4.0s oom-kills=20 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=28.7s-after-SPL newboot=True setup=[holder=1893 /dev/watchdog0:       1893 started]
+hot-wdt 19: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=75554 ddr=65105] last-temp-before-reset=[cpu=74825 ddr=65105] (logged 0.0s before SPL) stop->SPL=4.0s oom-kills=16 reboot-msg=False spl-passes=1 dram=['DRAM: (training retried) 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=27.0s-after-SPL newboot=True setup=[holder=1885 /dev/watchdog0:       1885 started]
+hot-wdt 20: mode=holder tmo=5 heat=90 temp-at-stop=[cpu=75068 ddr=65267] last-temp-before-reset=[cpu=71099 ddr=64457] (logged 0.5s before SPL) stop->SPL=4.0s oom-kills=13 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=28.8s-after-SPL newboot=True setup=[holder=1895 /dev/watchdog0:       1895 started]
+oom-panic 1: mode=oompanic tmo=15 heat=0 temp-at-stop=[n/a] last-temp-before-reset=[cpu=72476 ddr=63566] (logged 9.0s before SPL) stop->SPL=8.5(panic->SPL; panic=Out of memory: system-wide panic_on_oom is enabled ]---)s oom-kills=0 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=26.7s-after-SPL newboot=True setup=[1 0 /dev/watchdog0:          1 started]
+oom-panic 2: mode=oompanic tmo=15 heat=0 temp-at-stop=[n/a] last-temp-before-reset=[cpu=75311 ddr=65834] (logged 12.6s before SPL) stop->SPL=12.1(panic->SPL; panic=Out of memory: system-wide panic_on_oom is enabled ]---)s oom-kills=0 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=28.2s-after-SPL newboot=True setup=[1 0 /dev/watchdog0:          1 started]
+oom-panic 3: mode=oompanic tmo=15 heat=0 temp-at-stop=[n/a] last-temp-before-reset=[cpu=73772 ddr=64700] (logged 11.4s before SPL) stop->SPL=10.5(panic->SPL; panic=Out of memory: system-wide panic_on_oom is enabled ]---)s oom-kills=0 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=28.8s-after-SPL newboot=True setup=[1 0 /dev/watchdog0:          1 started]
+oom-panic 4: mode=oompanic tmo=15 heat=0 temp-at-stop=[n/a] last-temp-before-reset=[cpu=72152 ddr=63728] (logged 13.6s before SPL) stop->SPL=13.1(panic->SPL; panic=Out of memory: system-wide panic_on_oom is enabled ]---)s oom-kills=0 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=26.4s-after-SPL newboot=True setup=[1 0 /dev/watchdog0:          1 started]
+oom-panic 5: mode=oompanic tmo=15 heat=0 temp-at-stop=[n/a] last-temp-before-reset=[cpu=67049 ddr=61136] (logged 10.6s before SPL) stop->SPL=10.0(panic->SPL; panic=Out of memory: system-wide panic_on_oom is enabled ]---)s oom-kills=0 reboot-msg=False spl-passes=1 dram=['DRAM: 1024 MiB', 'DRAM:  1 GiB'] MemTotal:         997768 kB RuntimeWatchdogUSec=15s /dev/watchdog0:          1 ssh-up=28.5s-after-SPL newboot=True setup=[1 0 /dev/watchdog0:          1 started]
+
+# oom-panic: corrected gap from the first "Kernel panic - not syncing" line (the dump is buffered, so both
+# lines share a timestamp) and the last wdhold temperature line before the panic:
+oom-panic 1: panic 07:59:25.600 -> SPL 07:59:34.140 = 8.5 s; temp before OOM panic [cpu=72476 ddr=63566] at 07:59:25.097
+oom-panic 2: panic 08:00:41.909 -> SPL 08:00:53.968 = 12.1 s; temp before OOM panic [cpu=75311 ddr=65834] at 08:00:41.406
+oom-panic 3: panic 08:02:02.151 -> SPL 08:02:12.701 = 10.5 s; temp before OOM panic [cpu=73772 ddr=64700] at 08:02:01.293
+oom-panic 4: panic 08:03:21.393 -> SPL 08:03:34.457 = 13.1 s; temp before OOM panic [cpu=72152 ddr=63728] at 08:03:20.890
+oom-panic 5: panic 08:04:41.254 -> SPL 08:04:51.806 = 10.6 s; temp before OOM panic [cpu=67049 ddr=61136] at 08:04:41.253
+
+# Extra case A (natural livelock, while sizing the load, before the driver existed): stress-ng with --bigheap
+# started ~06:44:45; cpu 65.4 °C / ddr 56.8 °C at the only sample; ssh stopped answering; OOM kills logged,
+# last at 06:46:09; no kernel output after that, no "reboot:"; systemd's 15 s watchdog fired:
+[06:41:22.733] orangepizero2 login: Out of memory: Killed process 3858 (stress-ng-bighe) total-vm:371376kB, anon-rss:235916kB, file-rss:16kB, shmem-rss:8kB, UID:0 pgtables:748kB oom_score_adj:1000
+[06:46:09.154] Out of memory: Killed process 3861 (stress-ng-bighe) total-vm:463024kB, anon-rss:342812kB, file-rss:8kB, shmem-rss:4kB, UID:0 pgtables:928kB oom_score_adj:1000
+[06:46:31.771] 
+[06:46:31.771] U-Boot SPL 2026.10_armbian-2026.10-S5508-P71b7-Hf8df-V1b9e-Bcd80-R448a (Nov 03 2026 - 01:42:44 +0000)
+[06:46:31.771] DRAM: 1024 MiB
+[06:46:31.771] Trying to boot from MMC1
+[06:46:32.774] NOTICE:  BL31: v2.14.11(debug):armbian
+# Extra case B (attempted livelock, aborted): same load with systemd holding the watchdog, 07:46:47-07:59;
+# >100 OOM kills over 10.5 min, cpu up to 77.7 °C / ddr 69.0 °C, the system never livelocked, no reset.
+# Stopped by hand (kill of the stress-ng parent PID); replaced by the panic_on_oom mode.
+
+# Serial excerpt: hot-wdt 14 (first SPL pass panicked, second pass retried and got 1 GiB)
+[07:31:07.732] wdhold: pet t=90s cpu=74987 ddr=66806
+[07:31:08.735] wdhold: STOP petting (timer) at t=90s; expect HW watchdog reset in 5s; cpu=74987 ddr=66806
+[07:31:09.238] wdhold: no-pet +1.0s cpu=75473 ddr=66968
+[07:31:09.238] Out of memory: Killed process 1924 (stress-ng-bighe) total-vm:495532kB, anon-rss:460288kB, file-rss:1004kB, shmem-rss:16kB, UID:0 pgtables:992kB oom_score_adj:1000
+[07:31:10.745] wdhold: no-pet +2.0s cpu=75554 ddr=65672
+[07:31:11.750] wdhold: no-pet +3.0s cpu=75554 ddr=66725
+[07:31:12.755] 
+[07:31:12.755] U-Boot SPL 2026.10_armbian-2026.10-S5508-P71b7-Hf8df-V1b9e-Bcd80-R448a (Nov 03 2026 - 01:42:44 +0000)
+[07:31:12.755] DRAM:This DRAM setup is currently not supported.
+[07:31:12.755] 
+[07:31:12.755] resetting ...
+[07:31:13.257] 
+[07:31:13.257] U-Boot SPL 2026.10_armbian-2026.10-S5508-P71b7-Hf8df-V1b9e-Bcd80-R448a (Nov 03 2026 - 01:42:44 +0000)
+[07:31:13.257] DRAM: (training retried) 1024 MiB
+[07:31:13.257] Trying to boot from MMC1
+[07:31:14.260] NOTICE:  BL31: v2.14.11(debug):armbian
+[07:31:14.260] NOTICE:  BL31: Built : 01:42:29, Nov  3 2026
+
+# Serial excerpt: hot-wdt 19 (retry needed, single pass)
+[07:43:48.854] wdhold: no-pet +2.0s cpu=73853 ddr=65915
+[07:43:49.857] wdhold: no-pet +3.0s cpu=75392 ddr=66968
+[07:43:50.860] wdhold: no-pet +4.0s cpu=74825 ddr=65105
+[07:43:50.860] Out of memory: Killed process 1919 (stress-ng-bighe) total-vm:558188kB, anon-rss:393440kB, file-rss:992kB, shmem-rss:20kB, UID:0 pgtables:1120kB oom_score_adj:1000
+[07:43:50.860] 
+[07:43:50.860] U-Boot SPL 2026.10_armbian-2026.10-S5508-P71b7-Hf8df-V1b9e-Bcd80-R448a (Nov 03 2026 - 01:42:44 +0000)
+[07:43:50.860] DRAM: (training retried) 1024 MiB
+[07:43:50.860] Trying to boot from MMC1
+
+# Serial excerpt: oom-panic 1 (panic header ... SPL)
+[07:59:25.600] [   2923]     0  2923   137819    78074    77836      235         3  1130496    53702          1000 stress-ng-bighe
+[07:59:25.600] Kernel panic - not syncing: Out of memory: system-wide panic_on_oom is enabled
+[07:59:25.600] CPU: 3 UID: 0 PID: 2922 Comm: stress-ng-vm Not tainted 7.3.1-edge-sunxi64 #12 PREEMPT 
+[...stack dump...]
+[07:59:25.600] ---[ end Kernel panic - not syncing: Out of memory: system-wide panic_on_oom is enabled ]---
+[07:59:34.140] 
+[07:59:34.140] U-Boot SPL 2026.10_armbian-2026.10-S5508-P71b7-Hf8df-V1b9e-Bcd80-R448a (Nov 03 2026 - 01:42:44 +0000)
+[07:59:34.140] DRAM: 1024 MiB
+[07:59:34.140] Trying to boot from MMC1

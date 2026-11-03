@@ -174,3 +174,100 @@ step in `impl-uboot.md`), nothing is needed.
   still fails.
 - Do the detection at a lower DRAM clock and then run the final init at CONFIG_DRAM_CLK, as the
   A523 driver does (`dram_sun55i_a523.c:1476`, `config.clk = 360`), for margin.
+
+## 8. Board results (2026-11-03, SD image 16cdd50a9, SPL "Nov 03 2026 - 01:42:44" with this patch)
+
+| test | runs | SPL DRAM line | "(training retried)" |
+|---|---|---|---|
+| cold boot (clean poweroff + Test Plug 2 off/on) | 3 | 3 x `DRAM: 1024 MiB` | 0 |
+| `reboot` | 20 | 20 x `DRAM: 1024 MiB` | 0 |
+| hardware watchdog (sysrq-c, kernel.panic=0, SPL about 15 s after the panic) | 20 | 20 x `DRAM: 1024 MiB` | 0 |
+| hot/loaded watchdog reproducer | 0 valid | n/a | n/a |
+
+MemTotal was 997772 kB every time. Pre-reset temperatures were 50-54 °C (cpu) and 48-51 °C (ddr). The
+reproducer used stress-ng (72-78 °C cpu, 62-69 °C ddr) and then `kill -STOP 1` to starve the watchdog.
+That never caused a reset, because the kernel ignores SIGSTOP to PID 1. Next time, freeze a process
+that holds /dev/watchdog open instead, or reach a real OOM livelock. The SPI NOR (/dev/mtd0) holds the
+old SPL "Nov 02 2026 - 00:31:49" (eGON.BT0, no retry code), so it needs reflashing (not done).
+
+## 9. Hot-OOM watchdog resets (2026-11-03, image 4321861ff, same SPL "Nov 03 2026 - 01:42:44" = 5e3896880)
+
+Raw per-reset data, serial excerpts and the two scripts (`hotwdt.py` host driver, `wdhold.py` board-side
+holder) are in `dram-warm-reset/board-hot-oom-2026-11-03.txt` and the same directory.
+
+**Load (every run):** `stress-ng --cpu 4 --cpu-method matrixprod --vm 2 --vm-bytes 100% --vm-keep --bigheap 1`.
+The 4 cores are busy, 2 vm workers keep rewriting all free RAM, and bigheap grows through RAM plus the
+487 MiB zram until the kernel OOM-kills it, then restarts. That gave 11-20 real
+`Out of memory: Killed process` events per run before the reset.
+
+**Trigger 1, "holder" (20 runs plus 1 validation run).** At runtime, systemd's RuntimeWatchdog is released
+with `busctl set-property ... RuntimeWatchdogUSec t 0`. This is not persisted, and systemd re-arms 15 s on the
+next boot (checked after every run). `wdhold.py` (mlocked, oom_score_adj -1000, nice -20; SCHED_FIFO
+is refused in the ssh cgroup) opens `/dev/watchdog0` and sets WDIOC_SETTIMEOUT=5 s (10 s for the validation run).
+It pets every 0.5 s for 90 s of load, then stops petting **without closing the fd**, and keeps writing a
+temperature line to /dev/kmsg (crit, so it reaches serial) every second. The driver checks with `fuser`
+that the holder's PID owns the device before it starts the load.
+
+How we know this is a hardware watchdog reset:
+- Linux stays alive and keeps logging up to the reset: no-pet lines at +1 ... +(T-1) s and OOM kills
+  continue. Then the SPL banner appears with no `reboot:` / `Restarting system` line, and there is no panic.
+- STOP->SPL was 4.0-5.0 s (mean 4.2) with a 5 s timeout and 9.5 s with a 10 s timeout. The gap follows the
+  programmed timeout, measured with the serial logger's ~0.5 s granularity.
+- During the 90 s of petting under the same load, no run ever reset.
+
+**Trigger 2, "oompanic" (5 runs), a real kernel OOM.** systemd keeps the 15 s watchdog. Set with runtime
+sysctl only: `vm.panic_on_oom=1`, `kernel.panic=0`. The first real OOM panics (`Kernel panic - not syncing:
+Out of memory: system-wide panic_on_oom is enabled`) and the kernel hangs, so systemd stops petting and
+sunxi-wdt fires. The panic->SPL time was 8.5-13.1 s, which fits a 15 s timeout with the last pet at most 7.5 s
+earlier. The DRAM is idle for those ~10 s.
+
+**Trigger 3, natural OOM livelock (1 case, the exact original chain).** While sizing the load at
+06:44, ssh stopped answering after OOM kills, serial went silent after the last kill at 06:46:09, and
+systemd's own 15 s watchdog reset the board at 06:46:31 (`DRAM: 1024 MiB`). A second attempt to reproduce
+this on purpose (07:46-07:59: more than 100 OOM kills over 10.5 min, cpu up to 77.7 °C) never livelocked. A
+livelock is not repeatable on demand, so trigger 2 replaced it.
+
+| set | resets | temp at trigger (cpu / ddr, °C) | final DRAM | `(training retried)` | SPL panic | 512 MiB | ssh-up after SPL |
+|---|---|---|---|---|---|---|---|
+| holder, 5 s (and 10 s validation) | 21 | 71.1-75.6 / 62.4-66.8 (mean 74.2 / 65.3) | 21 x 1024 MiB / 1 GiB | **2** (runs 14, 19) | **1** (run 14) | 0 | 26.0-30.3 s |
+| oompanic (real kernel OOM) | 5 | 67.0-75.3 / 61.1-65.8 | 5 x 1024 MiB | 0 | 0 | 0 | 26.4-28.8 s |
+| natural livelock | 1 | ~65 / ~57 (2 min before) | 1024 MiB | 0 | 0 | 0 | ~25 s |
+
+MemTotal was 997768 kB after every reset (27/27).
+
+**Run 14 reproduced the original failure, and the fix contained it:**
+
+```
+[07:31:08.735] wdhold: STOP petting (timer) at t=90s; expect HW watchdog reset in 5s; cpu=74987 ddr=66806
+[07:31:11.750] wdhold: no-pet +3.0s cpu=75554 ddr=66725
+[07:31:12.755] U-Boot SPL 2026.10_armbian-... (Nov 03 2026 - 01:42:44 +0000)
+[07:31:12.755] DRAM:This DRAM setup is currently not supported.
+[07:31:12.755] resetting ...
+[07:31:13.257] U-Boot SPL 2026.10_armbian-... (Nov 03 2026 - 01:42:44 +0000)
+[07:31:13.257] DRAM: (training retried) 1024 MiB
+```
+
+In the first SPL pass, all 4 geometries failed training in all 3 passes, so the patch's panic ran. The
+panic's `do_reset()` started a second pass about 0.5 s later. That pass still needed a retry, but this time
+the widest geometry (32-bit/1 rank) trained, and the patch kept it. The original bug had the same shape:
+"not supported", then 512 MiB on the next pass. The difference is the second pass: the unpatched SPL took the
+first 16-bit geometry that trained and came up at 512 MiB, while the patched one kept retrying and got 1 GiB.
+Run 19 needed a retry in a single pass (`DRAM: (training retried) 1024 MiB`), the case §4 was designed
+for.
+
+**Conclusions**
+
+- 27/27 hot resets ended at 1 GiB, with no 512 MiB. The fix holds: no wrong size, and the board always boots.
+- It does **not** prevent the first-pass panic. 1/21 hot holder resets still printed "not supported" and
+  relied on the panic-reset for a second pass. Back-to-back retries, all within one SPL pass (under 0.5 s in
+  total), are shorter than the transient.
+- The transient is real and depends on load or heat. Idle resets (§8) gave 0 retries in 43 (wdt, reboot and
+  cold). Hot resets with the DRAM saturated up to the moment of reset gave 2 retry events in 21, 1 of them a
+  full-scan failure. The oompanic runs, where the DRAM sat idle for about 10 s before the reset, gave 0 in 5
+  (a small sample). This supports the analog/thermal transient hypothesis from §2. It is about the
+  DRAM state right after a busy reset, not the SoC temperature alone: oompanic runs reached similar
+  temperatures and saw no retries.
+- Possible hardening, not done here: a delay between passes in `mctl_auto_detect_rank_width()` (for
+  example tens of ms, so the retries span the transient), and/or the §7 items (JEDEC DDR3 init timing,
+  detection at a lower DRAM clock). Re-run this test (`hotwdt.py hot-wdt 20 holder 5 90 ...`) and look for
+  the "not supported" count to reach 0.

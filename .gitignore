@@ -35,3 +35,4 @@ harness/jpegtest/jpegtest
 userpatches/config-example.conf
 harness/research/*/dl/
 harness/research/spi-backup/*.bin
+harness/queue/

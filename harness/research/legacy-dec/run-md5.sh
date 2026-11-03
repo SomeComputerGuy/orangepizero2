@@ -17,7 +17,7 @@ while read -r tag rel opts; do
   [ -n "$SWONLY" ] && continue
   [ -n "$RESUME" ] && grep -q "^$tag	" "$O/summary.tsv" && continue
   waitfree; i0=$(irq)
-  $SSH -n "/root/vp/ffmpeg $FF -hwaccel v4l2request -hwaccel_output_format drm_prime $opts -i $url -fps_mode passthrough -noautoscale -vf hwdownload,format=nv12 -f framemd5 -" > "$O/$tag.hw.framemd5" 2> "$O/$tag.err"
+  $SSH -n "${BFF:-/root/vp/ffmpeg} $FF -hwaccel v4l2request -hwaccel_output_format drm_prime $opts -i $url -fps_mode passthrough -noautoscale -vf hwdownload,format=nv12 -f framemd5 -" > "$O/$tag.hw.framemd5" 2> "$O/$tag.err"
   rc=$?; i1=$(irq)
   r=$(python3 -I "$H/harness/research/legacy-dec/cmp-framemd5.py" "$O/$tag.sw.framemd5" "$O/$tag.hw.framemd5")
   printf '%s\t%s\trc=%s\tirqs=%s\t%s\n' "$tag" "$rel" "$rc" "$((i1-i0))" "$r" | tee -a "$O/summary.tsv"

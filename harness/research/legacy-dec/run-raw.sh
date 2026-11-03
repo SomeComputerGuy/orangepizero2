@@ -15,7 +15,7 @@ while read -r tag rel opts; do
   [ -z "$tag" ] || [ "${tag#\#}" != "$tag" ] && continue
   wh=$(ffprobe -v error $opts -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$SERVE/$rel" | head -1 | tr , ' ')
   waitfree; i0=$(irq)
-  $SSH -n "/root/vp/ffmpeg $FF -hwaccel v4l2request -hwaccel_output_format drm_prime $opts -i http://10.56.0.1:8644/$rel -fps_mode passthrough $NF -vf hwdownload,format=nv12 -f rawvideo -" > "$O/$tag.hw.nv12" 2>"$O/$tag.raw-hw.err"
+  $SSH -n "${BFF:-/root/vp/ffmpeg} $FF -hwaccel v4l2request -hwaccel_output_format drm_prime $opts -i http://10.56.0.1:8644/$rel -fps_mode passthrough $NF -vf hwdownload,format=nv12 -f rawvideo -" > "$O/$tag.hw.nv12" 2>"$O/$tag.raw-hw.err"
   rc=$?; i1=$(irq)
   line="$tag\t$rel\t${wh/ /x}\trc=$rc\tirqs=$((i1-i0))"
   for i in simple int faani; do line="$line\t$i: $(PERFRAME="$O/$tag.$i.perframe" python3 -I $C $wh <(sw $i) "$O/$tag.hw.nv12")"; done

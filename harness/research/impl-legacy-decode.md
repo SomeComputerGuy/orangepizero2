@@ -83,6 +83,21 @@ MP@HL 1080p60/1080i30/1088p60, MPEG-1 1080p30, MPEG-4 SP/ASP (FFmpeg encoder), 6
 FLV1 1080p60, VP8 1080p60, H.264 High 1080p60 CABAC/CAVLC and 1080i MBAFF. Plus the existing `vdec-streams/h264-high-2160p30.mkv`.
 S-VOP counts (ffprobe): xvid-gmc 6, xvid-qpel-gmc 6, gmc-rot 6, **gmc-pan 0** (Xvid chose P-VOPs), all with 3 warping points and 1/16 pel.
 
+- **ISO/IEC 14496-4 bitstreams (2026-11-03).** The user downloaded them after accepting the ISO click-through licence. They are test data only and are
+  not committed (they live in `kernel-check/dl-legacy/iso-mpeg4-{asp,sp}/`).
+  - All 3 zips match the fluster md5s. sha256s are in `legacy-dec/results/ISO-14496-4-SHA256SUMS` and `dl-iso-mpeg4-{asp,sp}.SHA256SUMS`.
+  - This gives 30 ASP and 3 SP streams. The zips contain bitstreams only (no reference YUVs), and fluster's suites are `test_method: pixel` with no
+    md5s, so FFmpeg SW (IDCT envelope) stays the reference.
+  - Features per stream (`results/mpeg4-iso-features.txt`):
+    - interlaced with B-VOPs: a1ge4, a1ge9_L1-L4 (qpel), vcon_ge_1_asp_l4 (half-pel, 1080), vcon-asp14L4 (GMC + B);
+    - interlaced P: a1ge2_L4 (qpel), vcon-asp3L4/L5 (GMC);
+    - GMC with 1, 2 and 3 warping points: vcon-asp5/6/7/8/11/14;
+    - progressive qpel B: a1ge12, vcon_a1ge_13;
+    - **nok_720p**: plain SP at 1280x720 with no data partitioning, the first SP conformance stream that the driver can take.
+  - **xvidcore is no conformance arbiter** (`legacy-dec/xvid-vs-ff.sh`, `results/mpeg4-iso-xvid-vs-ff.tsv`). It agrees with FFmpeg within 4 only on
+    a1ge12_L1-L3, vcon-asp14L0 and vcon-asp7L0. It garbles the data-partitioned SP streams, which it does not support, and differs widely on interlaced,
+    1- and 2-point GMC and nok_720p. Where the board output disagrees with FFmpeg on these streams, xvid can't decide which one is right.
+
 ### 1.3 Logs
 Summaries copied to `harness/research/legacy-dec/results/` (md5/raw TSVs, fps, all SHA256SUMS). Full logs: `kernel-check/legacy-results/<suite>/` (`summary.tsv`, `raw.tsv`, per-frame `*.perframe`, `*.err`), `fps.tsv`,
 `kernel-check/legacy-chain.log`. Lists: `harness/research/legacy-dec/lists/`.
@@ -182,6 +197,9 @@ writing a grey chroma plane, is [U]). Bit-exact coverage:
   TRB/TRD per field, the driver's `trd_field`/`trb_field`) or field-predicted B macroblocks.
 - The 30 ISO ASP streams (licence-gated, §1.2) include interlaced B and would show which.
 
+- ISO streams that target this directly (host refs ready, board run pending): a1ge4, a1ge9_L1-L4, vcon_ge_1_asp_l4,
+  vcon-asp14L4 (§1.2).
+
 ### 3.3 Xvid half-pel GMC, top-left [M], root cause narrowed [U]
 - xvid-gmc (3 warping points, 1/16 pel, half-pel MVs): HW is wrong from display frame 23 (the B-VOP) through 29, up to 241,
   starting at the S-VOP at display frame 24 in MB row 0, cols 0-7, then propagating until the I-VOP at 30.
@@ -198,8 +216,9 @@ writing a grey chroma plane, is [U]). Bit-exact coverage:
 - Hypothesis: the HW mishandles a run of coded GMC MBs that starts at the first MB of the VOP (MB-to-MB state such as the
   predictor or "previous MB" state, reset at the VOP start). If MB 7, which is skipped GMC, really is wrong, this rules out
   residual-only errors.
-- **Board test to separate the cases** (needs a slot): dump the HW frame 24, then compare MBs 0-7 against (a) the SW output and
-  (b) the SW warp prediction without residual. The second shows whether the residual or the prediction is wrong.
+- **Board test to separate the cases** (needs a slot): `legacy-dec/gmc-f24.sh`. It compares HW MBs 0-10 of row 0 with SW and with the
+  prediction, taken as frame 22 shifted down 2 px. On SW this prediction matches the skipped MBs 7-10 within 3, while the coded MBs 0-6 carry
+  residuals of up to 132. So "HW ~ prediction" means the residual was lost, and a wrong MB 7 means the prediction is wrong.
 
 ### 3.4 Xvid quarter-pel + GMC speed [M]
 - xvid-qpel-gmc: 21 ms/frame VE (47 fps linear, 51 tiled) against 7–8 ms for the qpel-only and GMC-only streams.

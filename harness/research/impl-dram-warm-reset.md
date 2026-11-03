@@ -365,7 +365,8 @@ scp $K /home/aruni/orangepizero2/kernel-check/work-dram/out-A/u-boot-sunxi-with-
 $H/ssh.sh 'sha256sum /root/u-boot-A.bin && dd if=/root/u-boot-A.bin of=/dev/mmcblk0 bs=1024 seek=8 conv=fsync,notrunc && sync &&
   cmp -n 899305 /root/u-boot-A.bin <(dd if=/dev/mmcblk0 bs=1024 skip=8 count=879 2>/dev/null) && echo WRITE-OK'
 # 3. reboot; serial.log must show the new SPL banner (08:1x build), "DRAM: 1024 MiB", Linux up, MemTotal 997768 kB
-# 4. 10x reboot, 3x cold boot (poweroff + scripts/board-power.py off/on on Test Plug 2 .240 only), all 1024 MiB
+# 4. 10x reboot; 3x cold boot: systemctl poweroff, wait for "reboot: Power down" in serial.log, then
+#    scripts/board-power.py off/on (Test Plug 2 .240 only, never .245); all 1024 MiB
 # 5. python3 harness/research/dram-warm-reset/hotwdt.py hot-wdt 60 holder 5 90 <out>   (reads wdhold.py from its own dir)
 #    accept: 0 x "not supported", 0 x 512 MiB; record each "(training retried: pass N, M ms)"
 # 6. only if step 5 shows a panic: repeat 2-5 with out-B (A + JEDEC delays)
@@ -380,7 +381,7 @@ harness/ssh.sh 'dd if=/root/sd-uboot-4321861ff.bin of=/dev/mmcblk0 bs=1024 seek=
 If the board's copy is gone, push the host copy back first:
 `scp $K harness/research/dram-warm-reset/sd-uboot-4321861ff.bin root@10.56.0.107:/root/`.
 
-**Risk.** BROM falls back to SPI NOR only when the SD has no valid eGON header. A new SPL that
+**Risk.** BROM falls back to SPI NOR only when the SD has no valid eGON header (in practice: pull the SD). A new SPL that
 hangs would therefore not fall back, and recovery would need physical access or FEL. The healthy path
 of A and B runs the same code as the tested v1 (A) or differs only in two init register values (B),
 so this risk is low, but it is not zero.

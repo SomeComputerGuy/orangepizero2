@@ -225,7 +225,8 @@ static void write_out(const char *path, const struct fmtinfo *f, const uint8_t *
 
 static void usage(void)
 {
-	fprintf(stderr, "usage: jpegtest [-d dev] [-f nv12|nv21|yu12|yv12|tiled] [-n N] [-o out.yuv] in.jpg\n");
+	fprintf(stderr, "usage: jpegtest [-d dev] [-f nv12|nv21|yu12|yv12|tiled] [-n N] [-o out.yuv]\n"
+		"                [-r raw.bin] [-F fillbyte] in.jpg\n");
 	exit(2);
 }
 
@@ -239,12 +240,16 @@ int main(int argc, char **argv)
 	unsigned int n = 1, w, h, errors = 0, last = 0;
 	uint8_t *jpg;
 	size_t jlen;
+	const char *rawp = NULL;
+	int fill = -1;
 	double t0, dt;
 	FILE *in;
 	int c;
 
-	while ((c = getopt(argc, argv, "d:f:n:o:")) != -1) {
+	while ((c = getopt(argc, argv, "d:f:n:o:r:F:")) != -1) {
 		switch (c) {
+		case 'r': rawp = optarg; break;
+		case 'F': fill = strtol(optarg, NULL, 0); break;
 		case 'd': dev = optarg; break;
 		case 'n': n = strtoul(optarg, NULL, 0); break;
 		case 'o': outp = optarg; break;
@@ -304,6 +309,10 @@ int main(int argc, char **argv)
 
 	setup_queue(V4L2_BUF_TYPE_VIDEO_OUTPUT, obufs, NOUT);
 	setup_queue(V4L2_BUF_TYPE_VIDEO_CAPTURE, cbufs, NCAP);
+	/* -F: pre-fill the capture buffers to see which bytes the engine writes */
+	if (fill >= 0)
+		for (unsigned int i = 0; i < NCAP; i++)
+			memset(cbufs[i].p, fill, cbufs[i].len);
 	for (unsigned int i = 0; i < NOUT; i++) {
 		if (obufs[i].len < jlen) {
 			fprintf(stderr, "OUTPUT buffer too small (%zu)\n", obufs[i].len);
@@ -349,6 +358,15 @@ int main(int argc, char **argv)
 
 	if (outp)
 		write_out(outp, f, cbufs[last].p, &cf.fmt.pix, w, h);
+	if (rawp) {
+		/* -r: the whole capture buffer, as the engine left it */
+		FILE *r = fopen(rawp, "wb");
+
+		if (!r)
+			die(rawp);
+		fwrite(cbufs[last].p, 1, cbufs[last].len, r);
+		fclose(r);
+	}
 
 	return errors ? 1 : 0;
 }

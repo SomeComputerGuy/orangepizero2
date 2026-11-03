@@ -15,7 +15,10 @@ Build trees:
   resynced to the base sources.
 - `kernel-check/work-video-patch`: the `STAGE=patch` check tree.
 
-**Nothing in this file has run on the board yet.** The single test kernel for all three features is `kernel-check/work-video/linux-7.3.1` (Image md5 `87011f73b3cd0c80a7c9b8b1536b47f0`, plus modules and dtbs). Its sources equal branch `feat/sunxi-h616-di-jpeg-avs` at `d5f4c3d35` (pushed to `fork`).
+**Board run 2026-11-03** on image `4321861ff` (contains `d5f4c3d35`), image kernel as flashed (no trial kernel, no module
+swap). Results are in §4. Fixes from that run are on the branch as `c69adf2bb` (committed, **not pushed**, **not yet
+board-tested**: they need a new kernel). Scratch-tree commits: `0c7412fb6`, `a937ee1e0` (DI), `957ccb58b` (JPEG).
+The test kernel for `d5f4c3d35` was `kernel-check/work-video/linux-7.3.1` (Image md5 `87011f73b3cd0c80a7c9b8b1536b47f0`).
 
 ---
 
@@ -372,3 +375,314 @@ Open questions:
 - The validation ranges: alpha/beta −8..8, chroma deltas −32..31, sample_precision 1.
 - Interlaced MB height: the vendor's (h+15)/16 vs FFmpeg's ((h+31)>>5)<<1. They agree at 1080.
 - Which bunny reference is correct.
+
+---
+
+## 4. Board results (image 4321861ff, 2026-11-03)
+
+Board: /dev/video0 cedrus (/dev/media0), /dev/video1 sun50i-di300 (/dev/media1). Host outputs: `kernel-check/board-di/`,
+`kernel-check/jpeg-vectors/out-nv12/`, `kernel-check/board-avs1/`. The board was soft-rebooted twice (`systemctl reboot`)
+after DI hangs left a process in D state; no power cycle.
+
+### 4.1 DI300
+
+| test | result | details |
+|---|---|---|
+| D1 | PASS | probe OK, IOMMU group 0, FMD/TNR controls listed, v4l2-compliance 49/49 |
+| D2 | PASS (note) | weave byte-exact for all 7 formats at 720x576, 32x32 and 2048x1280. Note: at exactly 2048x1280 with 4:2:2 input (NV16/NV61/422P) the engine reads past the end of the source buffer (IOMMU read fault at buffer start + size, any mode; output still exact). Heights ≤ 1276 and 2016x1280 are clean. Fix: one page of slack on MMAP source buffers (`0c7412fb6`) |
+| D3 | PASS (note) | 100 % exact kept lines, TFF and BFF correct. The lag is 1.5 frames, not 1: job j outputs the second field of frame j−2 and the first field of j−1. The output timestamps still carry the newest source's time; not fixed (userspace can shift by 1.5 frames) |
+| D4 | FAIL vs target | field mode 33.2–33.5 dB (720x576 TFF/BFF, 1080), frame 33.25, bob 30.1. Host references: intra-field linear 30.1, yadif 40.2, bwdif 37.3 dB. Static scene exact (except the leftmost ~8 columns of odd rows), so motion detection works; the moving-content quality looks like the hardware's interpolator. No driver fix |
+| D5 | PASS | 1080p field mode 187.7 out/s, 2048x1280 148.7 out/s, frame mode 86.9 out/s (target ≥ 60); module clock 300 MHz |
+| D6 | FAIL, fixed (untested) | `-m field -F yv12 -t fixed` hung: STATUS 0x100 (busy), FUNC_EN 0x5 (DIT+TNR, no MD), DMA_CTL 0x81110111. Root cause: on the first job (no history) MD was off while TNR was on; the engine never completes. With no driver watchdog, STREAMOFF then sleeps in `v4l2_m2m_cancel_job()` forever (D state, reboot needed). Fix `0c7412fb6`: MD in every TNR job (vendor behaviour) and a 1 s job watchdog (reset + `deinterlace_init` + ERROR buffers). No further TNR runs were made on the image kernel |
+| D7 | FAIL, fixed (untested) | luma exact in all conversions; chroma wrong. NV12→I420/YV12: Cb and Cr exactly swapped. NV16→422P: Cb plane = source Cr, Cr plane broken (rows 0/1 repeated). I420→NV12: engine hang (same D-state symptom; FMT 0x10010000). Root cause: FMT_UVSEQ polarity inverted (vendor: 1 = VU for NV21/NV61; driver set it for NV12/NV16). Fix `a937ee1e0`: vendor polarity, and a semi-planar capture format must equal the source format (planar→semi-planar refused, since it hung). Also: di300test's `-c weave` cannot compare across formats (always "FAIL"); outputs were compared with `cmp`/numpy instead |
+| D8 | PASS | `-z -v` on 3:2 telecine 720x480: FID/FOD/FRD counters show the 5-job cadence. With fixed weave phases `-w p\|8` (chroma weave), p = 0/1/2 give 38/16/38 outputs that equal a film frame exactly (luma and chroma), 0 without weave; the union covers all 60 outputs and all 23 film frames, so a per-job detector reconstructs the film exactly. Every 5th stats read is all-zero except FID23/FRD13 (possibly the VOF buffer toggle); informative |
+| D9 | not run | optional |
+| D10 | PASS | new `harness/di300test/di300err` (MIT, static): mode control and S_FMT give EBUSY while streaming; STREAMOFF with jobs queued returns and every buffer comes back; the context restarts. Three contexts in parallel (NV12 weave, I420 field, YV12 weave): weave exact, field output equal to a solo run. Three runs killed mid-stream (SIGKILL): no D state, next run exact |
+
+### 4.2 JPEG (cedrus)
+
+`run.sh /root/jpeg nv12` then `check.sh` on the host (references: `ffmpeg -idct int`).
+
+| test | result | details |
+|---|---|---|
+| J1 | PASS | JPEG listed; v4l2-compliance 43/49, the same 6 failures as the h616-vdec/AVS2 baseline (MG2S G/TRY/S_FMT, duplicate AS01, DECODER_CMD, TRY_EXT_CTRLS); none new |
+| J2 | PASS | s420: Y 65.27 dB, U 66.52, V 66.39, max \|Δ\| 1 (not islow-exact; ≤ 1 LSB). Ten runs give the same md5 |
+| J3 | PASS | nv21, yu12, yv12 identical to nv12 vs reference; tiled de-tiled equals linear |
+| J4 | PARTIAL | s422, s444: Y as J2, chroma matches the **averaging** reference (66.5 / 52.5 dB, max 1), so FORCE_420 averages. s440 and mjpeg422: refused cleanly by `v4l2_jpeg_parse_header()` (no 4:4:0 subsampling value; chroma factors other than 1x1 rejected, which the engine also cannot do). s411: **hang** (IOMMU read fault, master 3, then "frame processing timed out"; the cedrus watchdog recovered and the next jobs were fine). Fix `957ccb58b` refuses 4:1:1 |
+| J5 | FAIL, refused now | grey: the job finishes in 0.45 ms with no error and writes no luma (linear and tiled alike); chroma 128 from the CPU fill. Root cause unknown (the vendor programs CTRL the same way, 0x180 without FORCE_420). Fix `957ccb58b` refuses greyscale until a trial kernel can probe it |
+| J6 | PASS | dri1/7/120 identical to s420 |
+| J7 | PASS except 4:1:1 | 16x16, 17x33, 1921x1081, 2049x64, 4096x2304: max \|Δ\| 1, no IOMMU faults. z17x33-411: wrong chroma (refused by `957ccb58b`) |
+| J8 | PASS | nodht and opt420 identical to s420 |
+| J9 | PASS | crtable ("Cb and Cr DQT tables differ"), prog (parse error), 4096x4096 (does not fit 4096x2304) refused, rc 1; next job fine |
+| J10 | PASS | trunc completes, no hang, no watchdog |
+| J11 | PASS | 1080p 4:2:0 16.5 ms = 125.8 MPPS; 4:4:4 34.2 ms = 60.7 MPPS; 4096x2304 72 ms = 131 MPPS (target 45 MPPS; ioctl round trip included) |
+| J12 | n/a | VE+0xE00..0xEFF read all zero during JPEG decodes (VE_MODE 0x00020000): the "JPEG plus" block is unused/absent on this path |
+| J13 | PASS | three JPEG contexts in parallel (1080p linear, 1080p 4:4:4 tiled, 4096x2304): outputs identical to solo runs. Mixed with AVS1 and AVS2 (sequential and parallel): every md5 unchanged (AVS1/AVS2 used instead of H.264 as the other codec) |
+
+### 4.3 AVS1 / AVS+ (cedrus)
+
+`avs1dec -d /dev/video0 -m /dev/media0`. Tool fix during the run: FFmpeg's framecrc seeds adler32 with 0, not 1
+(`harness/avs1dec/avs1dec.c`); the frame data were already correct. avs1dec now also prints the hardware time
+(request queue to completion).
+
+| test | result | details |
+|---|---|---|
+| A1 | PASS | AVSF listed; the 3 controls listed (v4l2-ctl prints "unsupported payload type" for types 0x2d0-0x2d2, cosmetic); compliance as J1 |
+| A2 | PASS | bunny frame 0 = 0xe9f1474e (md5 192c5c3d…), rc 0, dmesg clean |
+| A3 | PASS | full bunny with and without `-H`: identical (md5 dd0376a6…), so both data_offset conventions decode |
+| A4 | PASS | all 60 frames equal **FFmpeg master** (`avs1-refs-master`); 51 of 60 differ from FATE / FFmpeg 8.1, exactly as master does. The board settles the open question: master is right, the FATE reference is stale |
+| A5 | PASS | AVS+ 1080i test card: 5/5 frames equal the reference (= FATE), also with `-H` |
+| A6 | PASS | `-T` (NV12_32L32): same total md5 for bunny and the test card |
+| A7 | FAIL (expected) | cavs.mpg (pre-final revision, no slice start codes, chroma_format/sample_precision 0): 170 frames, rc 0, no error IRQ, but every frame is all zero: the engine writes nothing. Informative; a picture without slice start codes could be refused by the decoder tool |
+| A8 | PASS | AVSFileFormat.es: 105 frames, rc 0; contact sheet (frames 0, 50, 104) is clean video (`kernel-check/board-avs1/aff-tiles.png`) |
+| A9 | PASS | bunny → JPEG → AVS2 (main-1080p-ldp, 30 frames, equal to the earlier board run) → test card → bunny: all md5 unchanged; the same four in parallel: unchanged |
+| A10 | PASS | truncated bunny (20000 B), truncated test card, bunny with 20000 random bytes spliced in: rc 0, no hang, one rate-limited "AVS decode error: status …, error case …, mb …" per bad picture; the next full run correct. OUTPUT 2560x1440 AVSF is clamped to 1920x1088 |
+| A11 | PASS | hardware time: 1080i test card 10.3 ms per frame (≈ 97 frames, ≈ 195 fields/s; tiled 8.8 ms), 720p bunny 4.2 ms (238 fps). Target 1080p60. Wall time of avs1dec is CPU-bound (md5/adler over uncached capture buffers, 3.8 s user for 60 frames), not the VE |
+
+### 4.4 Fix commits (branch `feat/sunxi-h616-di-jpeg-avs`, `c69adf2bb`, not pushed)
+
+| patch | fixes | board-tested |
+|---|---|---|
+| h616-di/media-sunxi-sun50i-di300-fix-TNR-hang-add-a-job-watc.patch | D6 hang (MD with TNR), job watchdog for any stuck job (D6, D7), D2 over-read padding | no |
+| h616-di/media-sunxi-sun50i-di300-fix-the-UV-order-bit-limit-.patch | D7 UVSEQ polarity; planar→semi-planar refused | no |
+| h616-jpeg/media-cedrus-jpeg-drop-greyscale-and-4-1-1.patch | J5, J4/J7 4:1:1: refused instead of black/hang | superseded in §6 by `media-cedrus-jpeg-fix-4-1-1-refuse-greyscale.patch` |
+
+`STAGE=patch`: 774 applied, 0 failed (`kernel-check/run-video-fix-patch.log`); the DI and cedrus dirs equal the scratch
+tree; W=1 clean; checkpatch clean.
+
+Needs a trial kernel next: D6 (TNR fixed/adaptive, `-m tnr`), D7 (all conversions, check I420→NV12 is refused), the
+watchdog path, D2 at 2048x1280 4:2:2 without faults; for JPEG, probing greyscale (CTRL/TOP output bits) and 4:1:1
+without FORCE_420 to bring both back.
+
+
+## 5. JPEG greyscale and 4:1:1: root-cause work and probe plan (Phase 1, host only)
+
+The coordinator asked for a real fix rather than the refusal in `957ccb58b`, which stays only until a fix lands.
+
+### 5.1 Our setup against the vendor, register by register
+
+Sources:
+- **az**: `allwinner-zh/media-codec` `mjpeg_hal.c` (LGPL, A10/A20-era C source).
+- **vmj**: the current aarch64 `libawmjpeg.so` from libcedarc, disassembled here (`/tmp/vmj/vmj.dis`; functions
+  `SetJpegFormat` 0x3ab0, `InitJpegHw` 0x3fa0, `JpegHwDec` 0x4280, `JpegMallocFrmBuffer` 0x2230).
+- The vendor kernel `cedar_ve.c` (orangepi 4.9/5.4 sun50iw9) has no format-specific JPEG code, only the IRQ plumbing
+  for the 0xE00 "JPEG plus" block (VE_MODE bit 5).
+
+| item | vendor (vmj, IC > 0x1666 = H616 class) | ours | same? |
+|---|---|---|---|
+| chroma format, TRIGGER bits 29:27 | `strb (fmt<<3)\|3` at TRIGGER+3: 0 420, 1 411, 2 422, 3 444, 4 422T, 5 400 (`SetJpegFormat`: sampling words 0x221111/0x411111/0x211111/0x111111/0x121111/0x110000) | same values, 32-bit write | yes |
+| MCU size | max H / V sampling factor × 8 (grey 1x1 → 8x8; a grey file with 2x2 sampling → 16x16) | grey always 8x8 | yes for 1x1 grey; differs for grey files with H/V > 1 |
+| JPEG_SIZE (0xB8) | (rows−1)<<16 \| (cols−1) | same | yes |
+| quant tables | luma = comp0 Tq, chroma = comp1 Tq (grey: comp1 is zeroed → table 0) | grey: chroma = luma table | yes |
+| Huffman SRAM | Y from the scan's first component, C from the second (grey: the loop falls back to comp0 → C = Y) | grey: C = Y | yes |
+| ROT_LUMA / ROT_CHROMA (0xCC/0xD0) | output addresses | same | yes |
+| SD_ROT_DBLK_CTL (0xD4) | rotation/scale, 0 when not used | 0 | yes |
+| VLD_END (0x34) | buffer end − 1 | same | yes |
+| CTRL (0x14) | `\|= 0x7c` (IRQ bits 2–6) plus 0x180 (ROTATE_SCALE_OUT_EN + MC_NO_WRITEBACK) on linear output; **FORCE_420 (0x40000) only for fmt 2 and 3 (4:2:2, 4:4:4)** | IRQ 0x38 \| 0x180, FORCE_420 for **everything except 4:2:0 and grey** | **no**: IRQ bits 2/6; FORCE_420 on 4:1:1 and 4:2:2T |
+| TOP 0xEC / 0xE8 / 0xCC | YV12 (3) or NV21 (5) secondary/primary, 0xE8 = [29] \| 1<<30 \| chroma length; strides into 0xCC; also writes **0xC4 / 0xC8 (primary chroma length / strides)** | NV12/NV21/YU12/YV12 secondary set; 0xC4/0xC8 not written for JPEG | partly |
+| frame buffer (FBM) | 4:2:0 and grey → MB32_420 (7); 4:1:1, 4:2:2, 4:4:4, 4:2:2T → MB32_422 (8) on old ICs; **on IC > 0x1638 always 7** (4:2:0) | 4:2:0 capture formats only | consistent with the new-IC rule |
+
+### 5.2 Conclusions
+
+- **4:1:1: root cause found in the code.** The vendor never sets FORCE_420 for 4:1:1 (or 4:2:2T); on new ICs it
+  still allocates a 4:2:0 frame and relies on the output path. We set FORCE_420 for 4:1:1, and that is the case that
+  hung at 1080p (IOMMU read fault, master 3) and gave wrong chroma at 17x33. Candidate fix (trial commit
+  `db5b40477`): FORCE_420 only for 4:2:2 and 4:4:4, as the vendor. The board must still show which chroma layout
+  comes out (4:2:0 as hoped, or 4:2:2 rows), and where the old fault address lies relative to the buffers.
+- **Greyscale: no static difference** in the JPEG registers for a 1x1 grey file except the IRQ-enable bits 2/6 and
+  the primary TOP registers. The early finish (0.45 ms, no luma) needs the register dump after the job (STATUS bits
+  19–21 JPEG_MARKER / RESTART_ERROR / BIT_END, the VLD bit offset, the MCU position) to tell "engine refused the
+  format", "engine decoded but wrote elsewhere" and "engine stopped at once" apart. The capture is pre-filled with
+  0x5a so "wrote zeros" and "wrote nothing" are distinct.
+
+### 5.3 Trial kernel `jpegtrial`
+
+- Worktree `wt-jpeg-trial` (detached at `4321861ff`) plus, in `series.conf`: the two DI fix patches
+  (`0c7412fb6`, `a937ee1e0`); `trial-media-cedrus-jpeg-force420-vendor.patch` (= `db5b40477`, candidate fix);
+  `trial-media-cedrus-jpeg-probe.patch` (= `4e687343b`, TRIAL ONLY). The refusal `957ccb58b` is not in it.
+  Scratch branch `trial-jpeg`.
+- Build: `STAGE=all ARMBIAN=wt-jpeg-trial WORK=kernel-check/work-jpegtrial build-kernel.sh` (ccache;
+  `kernel-check/run-jpegtrial-all.log`): 806 patches applied, 0 failed; build exit 0, 0 C warnings; release `7.3.1`,
+  cedrus built in, DI300 a module. Artifacts: `kernel-check/vdec-serve/Image.jpegtrial` (sha256 9d7a3bdb34b74f51…),
+  `modules-jpegtrial.tgz` (installed by `install-kernel.sh` as `/lib/modules/7.3.1`; the image's own modules are
+  untouched). The cedrus sources differ from the integration tree only in `cedrus_jpeg.c`.
+- Probe parameters (`/sys/module/<cedrus>/parameters/`): `jpeg_dump` (register dump after setup and after the job,
+  plus the source/capture IOVA ranges) and `jpeg_probe` bits:
+
+| bit | variant |
+|---|---|
+| 0x1 | CTRL IRQ enables 0x7c (vendor) |
+| 0x2 | no ROTATE_SCALE_OUT_EN / MC_NO_WRITEBACK (primary/MC output only) |
+| 0x4 / 0x8 | FORCE_420 forced on / off |
+| 0x10 | grey: JPEG_SIZE in 16x16 units |
+| 0x20 | skip the secondary output setup |
+| 0x40 | ROTATE_SCALE_OUT_EN but keep MC writeback |
+| 0x80 | vendor byte writes to TRIGGER |
+| 0x100 | also program primary chroma length / strides (TOP 0xC4/0xC8) |
+| 0x200 | grey programmed as chroma format 0 |
+| 0x400 | 4:1:1: JPEG_SIZE in 16x8 units |
+
+### 5.4 Probe plan (one slot) and expected observables
+
+Slot script `harness/jpegtest/jpeg-slot.sh install → confirm → stage → probe → tests → restore` (fallback armed by
+`install-kernel.sh`; restore points `/boot/Image` back). `probe.sh` runs every case below with the capture pre-filled
+with 0x5a; `analyze-probe.py` prints, per run: rc, time, STATUS / VLD offset / MCU after the job, % of luma and
+chroma bytes written, luma PSNR, chroma PSNR under the 4:2:0-avg, 4:2:0-drop, 4:2:2-rows and raw-4:1:1 layouts,
+and any IOMMU fault placed against the buffer ranges.
+
+| run | vectors | expected if the hypothesis holds |
+|---|---|---|
+| control `c64` under every variant | 64x48 4:2:0 | luma/chroma ≈ 65 dB for all except 0x2/0x20 (output path changes) and 0x4/0x8 (no effect on 4:2:0) |
+| grey 0 (baseline) | g64, grey | reproduces: Y written 0 %, ~0.4 ms; the dump shows which STATUS bit ends the job |
+| grey 0x1 | | if the job ends on an interrupt we did not enable (bit 2 or 6): decode completes, Y written 100 % |
+| grey 0x2, 0x40 | nv12 and tiled | if grey only writes through the MC/primary path: Y written into the tiled (primary) layout |
+| grey 0x4 | | if the output unit needs FORCE_420 for 400: Y written |
+| grey 0x10 | | if the engine counts grey MCUs in 16x16: Y written (bottom/right parts may miss) and the MCU register ends at cols×rows/4 |
+| grey 0x100, 0x80, 0x20 | | primary TOP registers / trigger write width / secondary setup matter |
+| grey 0x200 | | as fmt 0 the engine runs for normal decode time and writes garbage chroma: shows fmt 5 itself is the stop |
+| g64s22 0 / 0x10 | grey with 2x2 sampling | tells the vendor's MCU rule (max factor × 8) for grey |
+| 4:1:1 0 (candidate) | f64, z17x33-411, s411 (nv12, tiled) | no hang, Y exact; chroma matches 4:2:0-avg or -drop (fix done), or 4:2:2-rows (engine writes 4:2:2: needs a 4:2:2 handling decision) |
+| 4:1:1 0x400, 0x404 | | checks the 32x8 MCU count (0x400 should break luma) |
+| 4:1:1 0x4 at 1080p (last) | s411 | the old hang again, now with the IOVA ranges: places the fault (expected: past the capture buffer end, by chroma rows written as 4:2:2) |
+
+After the probe: `PROBE=<best bits> jpeg-slot.sh tests` reruns J1–J13 plus D2 (2048x1280 4:2:2 faults), D6 (TNR
+fixed/adaptive/off/tnr-only on the noisy clip) and D7 (all conversions, planar→semi-planar refused), then
+`restore`. The final commit replaces `957ccb58b` with the confirmed fix and drops the probe patch.
+
+## 6. Phase 2 board results (trial kernels `jpegtrial` and `jpegfix`, 2026-11-03)
+
+### 6.1 Probe on `jpegtrial` (probe patch, `jpeg_probe` variants)
+
+Outputs: `kernel-check/jpeg-probe/out/<variant>/`, summary `kernel-check/jpeg-probe/probe-summary.txt`.
+
+- **Control** `c64` (4:2:0): Y 64.7 dB, chroma 64 dB under every variant except 0x20 (no secondary setup: no output).
+- **Greyscale: not fixable with the known registers.** For g64, g64s22 and grey 1080p, every variant (IRQ 0x7c,
+  no rotate-out, rotate-out with writeback, FORCE_420 on/off, MCU 16x16, primary TOP registers, byte trigger) ends
+  the job in 0.6–0.9 ms with STATUS 0xc001 (success), VLD offset unchanged (0x0a40, the first scan byte), JPEG_MCU
+  0x1, and no luma written. Programmed as fmt 0 (0x200) the same file runs the full decode (VLD offset to the end,
+  MCU 0x60000) and writes luma (garbage): chroma format 5 itself makes the engine stop after the first MCU.
+  Untested: MCU_START/END (MPEG+0xd8/0xdc) and the 0xE00 JPEG-plus block, which the vendor library does not
+  program for grey either. **Kept refused** (`num_components != 3`), so userspace falls back to software.
+- **4:1:1 without FORCE_420 (vendor rule): decodes correctly.** f64 and z17x33-411: luma exact; no hang. The chroma
+  is written as is: one interleaved CbCr line of width/2 bytes per picture line, at the luma stride, so twice the
+  size of an NV12 chroma plane (host check on `out/0/f64.nv12.raw`: chroma rows match the 4:1:1 reference to
+  0.016 mean abs error). At 1080p this ran past the capture buffer (IOMMU read fault on master 3 at dst_end + 8 KiB),
+  with FORCE_420 on and off alike. That was the original "hang". 0x400 (16-wide MCU) breaks luma: 32x8 MCUs are right.
+
+### 6.2 Fix: `h616-jpeg/media-cedrus-jpeg-fix-4-1-1-refuse-greyscale.patch` (replaces the refusal patch)
+
+- FORCE_420 only for 4:2:2 and 4:4:4, as libawmjpeg.
+- 4:1:1: chroma goes to a per-context noncoherent bounce buffer (`bytesperline × (ALIGN(h,16)+16)`), luma straight to
+  the capture buffer; a new `post_process` decoder op (called from `cedrus_irq` on success) resamples to 4:2:0 for
+  NV12/NV21/YUV420/YVU420 (column-pair sample, average of the two lines). Tiled NV12_32L32 is refused for 4:1:1.
+  The formula was checked on the probe raw data first (max 0.5 off the averaged reference).
+- Greyscale refused with the evidence above.
+
+### 6.3 `jpegfix` run (no probe patch; J1–J13, D2, D6, D7)
+
+Build: `kernel-check/run-jpegfix-all.log`, 805 applied, 0 failed, 0 C warnings. Results:
+`kernel-check/board-di/trial/jpegfix-tests.txt`, `kernel-check/jpeg-vectors/check-trial.txt`.
+
+| test | result |
+|---|---|
+| J4 s411 1080p | **PASS now**: Y 65.27 dB, U/V avg 66.55 / 66.57 dB (max 1), no fault, no timeout |
+| J7 z17x33-411 | **PASS now**: Y 64.83 dB, U 69.98 dB, V exact |
+| J1–J3, J6–J13 others | unchanged from §4: s420/s422/s444, DRI 1/7/120, odd sizes, 4096x2304, opt/nodht ≈ 65–66 dB max 1; 4096x4096, crtable, prog rejected; trunc completes |
+| J5 grey | refused (intended, §6.1) |
+| s440, mjpeg422 | refused by `v4l2_jpeg_parse_header()`, as in §4 (not a regression) |
+| perf | s420 1080p 16.5 ms (125.7 MPix/s), s444 34.3 ms, 4096x2304 71.5 ms |
+| D2 2048x1280 4:2:2 | weave exact; **first run still had 6 IOMMU read faults**. Buffer addresses (debug module) put them exactly at the end of the **capture** buffers, not the source ones as §4 assumed. Padding moved to both queues (`fix-TNR-hang` patch amended); rerun: 0 faults for nv16/nv61/422p weave and bob |
+| D6 TNR | fixed/adaptive/off 30 in → 60 out, 155 out/s; `-m tnr` 30 → 30; no hang |
+| D7 | all conversions run; I420→NV12 refused; di300err streaming/STREAMOFF checks all ok |
+
+The amended DI padding was tested by loading the rebuilt module on the `jpegfix` kernel (full test set rerun with it,
+0 faults). Board left on the image kernel `7.3.1-edge-sunxi64`.
+
+### 6.4 Commits
+
+Scratch tree `kernel-check/scratch-video/linux` master: `f6dd01e8a` (DI TNR/watchdog/padding), `45d1c914d` (DI UV
+order), `bd8cc0d19` (JPEG 4:1:1 fix, grey refused); old refusal kept as branch `refuse-grey-411-old`, probe on
+branch `trial-jpeg`. `wt-video-new` series: `STAGE=patch` 774 applied, 0 failed (`kernel-check/run-videonew-patch.log`);
+the cedrus and DI sources equal the scratch tree.
+
+
+## 7. Greyscale: does the hardware decode it? (Phase 3, host-only research + probe plan)
+
+### 7.1 What the vendor sends to the VE on the H616
+
+- **Two vendor JPEG decoders.** libcedarc has `libawmjpeg` (the MPEG engine, VE+0x100, which is what we use) and
+  `libawmjpegplus` (a separate "DEC/JPEG" register group at **VE+0xE00**: the libVE `getGroupRegAddr` table gives
+  group 6 "DEC/JPEG" = 0xe00; `MjpegDecoderInit` calls `getGroupRegAddr(ve, 6)`). libawmjpegplus ships with DWARF;
+  its `SetJpegFormatPlus` handles greyscale **of any sampling** and stores a separate `jpegGrayFormat`
+  (h2v2 → 0, h4v1 → 1, h2v1 → 2, h1v1 → 3, h1v2 → 4) next to chroma format 5.
+- **Which one the H616 gets.** `libvideoengine` `CreateSpecificDecoder` picks "mjpegplus" only for these VE
+  versions (T527 build, same list in the aodzip/A133/sun60iw2 builds): 0x1681, 0x1689, 0x1708, 0x0003011100021010,
+  0x0003011100021110, 0x0003011100020010, 0x0002111000021210. The H616 VE is **0x0003301000012011** (TOP+0xE0/0xE4,
+  §6 board read), not in the list, so the H616 uses **libawmjpeg on the MPEG engine**, like us.
+- **libawmjpeg grey path (vmj).** `JpegGetSof` accepts 1–3 components. `SetJpegFormat` maps the sampling word
+  0x110000 (one 1x1 component) to format 5 and returns "supported"; any other 1-component sampling (e.g. 0x220000)
+  → format 6 = error. `JpegDecoderMain` has no component-count check and no software fallback: 1x1 grey goes
+  to the hardware with exactly the register sequence we use — `InitJpegHw`: MPEG+0xC0 = DRI, TRIGGER+3 =
+  `5<<3|3`, IQ tables (luma = comp0 Tq, "chroma" = comp1 Tq = 0), ROT_LUMA/ROT_CHROMA, JPEG_SIZE in 8x8 MCUs,
+  0xD4 = 0, Huffman SRAM (C tables = Y tables), VLD_END; `JpegHwDec`: TOP 0xC4/0xC8/0xE8/0xEC, CTRL 0x7c (|0x180
+  on the linear-output paths; FORCE_420 not for format 5), VLD offset/len, VLD_ADDR | 0x70000000, TRIGGER byte 0
+  = 0x0e. It never writes MCU_START/END (0xD8/0xDC) or anything in 0xE00. The A10/A20 C source (`mjpeg_hal.c`)
+  is the same (JPEG400, same table loops).
+- So the vendor *claims* MPEG-engine greyscale on the H616, with our settings. Nothing in the vendor code
+  explains the board result (job ends after one MCU, 0 bits consumed). Either it is broken on this IP revision
+  and nobody noticed (MJPEG video is never grey; the vendor image path on newer chips is mjpegplus), or a register
+  outside the JPEG code differs.
+
+### 7.2 Other generations and consumers
+
+- Mainline cedrus JPEG (Linkmauve/Jernej, v1 2024) refuses `num_components != 3`; no grey support was ever written
+  or tested there. jemk's `cedrus/jpeg-test` (A10 reverse engineering) handles only 4:4:4/4:2:2/4:2:2T/4:2:0
+  (TRIGGER+3 = 0x1b/0x13/0x23/0x03), no grey. libvdpau-sunxi has no JPEG.
+- Userspace that could reach the cedrus JPEG decoder:
+  - **FFmpeg**: no `mjpeg_v4l2m2m` decoder upstream (v4l2m2m: H.263/H.264/HEVC/MPEG-1/2/4/VC-1/VP8/VP9 only) and
+    the v4l2-request series (ours: patches 0001–0013) has no JPEG hwaccel. FFmpeg (mpv, ffplay, Kodi) **always
+    decodes JPEG in software**, so greyscale already works there; the refusal never matters.
+  - **GStreamer**: `gstv4l2` registers a `v4l2jpegdec` for any M2M device with image/jpeg on OUTPUT and raw on
+    CAPTURE (cedrus qualifies), at rank PRIMARY+1, above `jpegdec` (PRIMARY). A refused job comes back with
+    V4L2_BUF_FLAG_ERROR → GST_BUFFER_FLAG_CORRUPTED → `gst_video_decoder_drop_frame`: the grey picture is
+    **dropped, not decoded in software**. Whether v4l2jpegdec works with cedrus at all (it expects the stateful
+    protocol: SOURCE_CHANGE, DEC_CMD_STOP/LAST drain) is untested.
+
+### 7.3 Ways out if the hardware cannot do it
+
+- **(a) Present grey as a 3-component stream: not feasible cleanly.** An interleaved scan puts Y, Cb, Cr blocks
+  inside every MCU, so inserting DC-only chroma blocks needs every Y block boundary, i.e. a full Huffman decode of
+  all coefficients in the kernel, then re-emitting the bits with byte stuffing. That is the entropy half of a
+  software decoder, on untrusted input, in the kernel; at 1080p it would cost about as much CPU as libjpeg-turbo
+  saves by offloading IDCT. Not upstreamable, no real gain.
+- **(b) Clean refusal + software fallback.** The kernel part is done (`-EINVAL` from setup, error buffer, log
+  line). FFmpeg needs nothing. GStreamer drops the frame; making it fall back needs userspace help, e.g. a
+  GStreamer patch that keeps `sampling=GRAYSCALE` (set by `jpegparse`) out of v4l2jpegdec's sink caps so decodebin
+  picks `jpegdec`, or lowering v4l2jpegdec's rank on this board. To be verified on the board (7.4 step 4).
+
+### 7.4 Probe build `greytrial` and board plan
+
+- Scratch branch `trial-grey` (`kernel-check/scratch-video/linux`): master + TRIAL patch
+  `trial-media-cedrus-jpeg-grey-probe.patch` (in `wt-jpeg-trial` series after the 4:1:1 fix; DI patches there are
+  the final ones). Module parameters: `jpeg_grey` (let 1-component JPEGs through as format 5, Cb/Cr mirroring Y as
+  the vendor), `jpeg_trig_xor`, `jpeg_ctrl_xor` (XOR into TRIGGER / CTRL), `jpeg_mcu_se` (MCU_START = 0, MCU_END =
+  rows-1|cols-1, rows|cols, n-1, n), `jpeg_reg`/`jpeg_reg_val` (one extra MPEG register write before the
+  trigger), `jpeg_dump` (MPEG, TOP and **VE+0xE00** dumps before the trigger and after the job).
+- Board side `harness/jpegtest/probe-grey.sh` (staged by `jpeg-slot.sh stage`), ~170 runs on `g64` (64x48 grey
+  1x1), plus `g64s22`, 1080p `grey`, tiled, and 4:2:0 `c64` controls first and last:
+  1. chroma format codes 0–7 and TRIGGER bits 30/31;
+  2. MCU_START/END variants (the "stops after exactly one MCU" hypothesis);
+  3. every CTRL bit except the IRQ enables;
+  4. TRIGGER bits 8–23;
+  5. every MPEG register the JPEG path leaves alone (0x00–0xfc minus VLD/IQ/SRAM/output/size/trigger), written
+     with 1 and with the JPEG_SIZE value;
+  6. last: TRIGGER bits 24–26 (decoder mode).
+  The `c64` dump also shows whether the 0xE00 block exists on the H616 (non-zero/changing registers in a 4:2:0
+  decode).
+- Success signature: VLD offset advancing to the end of the scan, JPEG_MCU = rows<<16, luma written ≈ reference
+  (`analyze-probe.py` prints VLDOFF before→after, MCU, Y written %, PSNR, "E00 nonzero").
+- Slot (one boot, ~15 min): `TAG=greytrial jpeg-slot.sh install` → `confirm` → `stage` → `greyprobe` →
+  `restore`. If a variant decodes grey: fix patch replacing the refusal, then a `jpegfix`-style confirm boot with
+  J1–J13. If none does: also (step 4) on the image kernel check `gst-inspect-1.0 v4l2jpegdec` and a
+  `gst-launch-1.0 filesrc ! jpegparse ! decodebin ! fakesink` / `playbin` run on a grey and a colour JPEG, to
+  decide whether the GStreamer fallback patch is needed.

@@ -39,6 +39,7 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <poll.h>
+#include <time.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -306,7 +307,8 @@ struct adler {
 
 static void adler_init(struct adler *s)
 {
-	s->a = 1;
+	/* FFmpeg's framecrc seeds av_adler32_update() with 0, not RFC 1950's 1 */
+	s->a = 0;
 	s->b = 0;
 }
 
@@ -846,6 +848,10 @@ static struct v4l2_ctx *v4l2_open(const char *video, const char *media,
 }
 
 /* One request per picture; waits for it. Returns -1 on a decode error. */
+/* request queue -> completion, summed over all jobs (hardware time) */
+static long long hw_ns;
+static unsigned int hw_jobs;
+
 static int v4l2_decode(struct v4l2_ctx *v, const uint8_t *data, size_t len,
 		       uint64_t ts, unsigned int cap_index,
 		       struct v4l2_ext_control *ctrls, unsigned int nctrls)
@@ -854,6 +860,7 @@ static int v4l2_decode(struct v4l2_ctx *v, const uint8_t *data, size_t len,
 	int req = v->req_fd[out];
 	struct v4l2_buffer buf = { 0 };
 	struct pollfd pfd = { .fd = req, .events = POLLPRI };
+	struct timespec t0, t1;
 	int ret, error = 0;
 
 	v->next_out = (out + 1) % NUM_OUT_BUFS;
@@ -881,11 +888,16 @@ static int v4l2_decode(struct v4l2_ctx *v, const uint8_t *data, size_t len,
 	buf.index = cap_index;
 	xioctl(v->video_fd, VIDIOC_QBUF, &buf, "VIDIOC_QBUF(CAPTURE)");
 
+	clock_gettime(CLOCK_MONOTONIC, &t0);
 	xioctl(req, MEDIA_REQUEST_IOC_QUEUE, NULL, "MEDIA_REQUEST_IOC_QUEUE");
 
 	ret = poll(&pfd, 1, 5000);
 	if (ret <= 0)
 		die("request timed out");
+	clock_gettime(CLOCK_MONOTONIC, &t1);
+	hw_ns += (t1.tv_sec - t0.tv_sec) * 1000000000LL +
+		 (t1.tv_nsec - t0.tv_nsec);
+	hw_jobs++;
 
 	memset(&buf, 0, sizeof(buf));
 	buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
@@ -1512,6 +1524,9 @@ int main(int argc, char **argv)
 
 		md5_final(&d.md5, sum);
 		printf("md5 %s\n", sum);
+		if (hw_jobs)
+			printf("hardware: %u jobs, %.3f ms each (queue to completion)\n",
+			       hw_jobs, hw_ns / 1e6 / hw_jobs);
 	}
 	if (d.crc && d.crc != stdout)
 		fclose(d.crc);

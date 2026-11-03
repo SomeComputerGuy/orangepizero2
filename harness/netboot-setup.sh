@@ -50,11 +50,10 @@ DROPIN_DIR="$HARNESS/netboot/$NETWORK_FILE.d"
 mkdir -p "$DROPIN_DIR"
 cat > "$DROPIN_DIR/netboot.conf" <<- EOF
 	# PXE hints for U-Boot's "dhcp"/"pxe" boot targets (systemd >= 251):
-	# siaddr = TFTP server, option 67 = file U-Boot's \`dhcp\` command fetches first
-	# (pointing it at the pxe config avoids the "no boot file name" TFTP noise).
+	# siaddr = TFTP server. No BootFilename=: U-Boot's pxe uses \$bootfile as its path
+	# prefix, so option 67 = pxelinux.cfg/... made every fetch land under pxelinux.cfg/.
 	[DHCPServer]
 	BootServerAddress=$HOST_IP
-	BootFilename=$PXE_CFG
 EOF
 run_root install -d -m 0755 "/etc/systemd/network/$NETWORK_FILE.d"
 run_root install -m 0644 "$DROPIN_DIR/netboot.conf" "/etc/systemd/network/$NETWORK_FILE.d/netboot.conf"

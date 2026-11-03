@@ -4,6 +4,10 @@
 [Match]
 MACAddress=68:da:73:af:62:79
 
+[Link]
+# Jumbo frames for the board MTU test (board stmmac max 3712; r8152 max 16362).
+MTUBytes=9000
+
 [Network]
 Address=10.56.0.1/24
 DHCPServer=yes

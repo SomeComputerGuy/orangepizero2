@@ -5,19 +5,19 @@ Every row must work and be board-verified against the stated number. Status: OK 
 | Spec item | Status | Notes |
 |---|---|---|
 | CPU H616 quad A53 | OK | DVFS 480–1512 MHz; cpuidle + suspend-to-RAM (DRAM self-refresh) PASS incl. 100-cycle soak; clean firmware verified; merge pending |
-| GPU Mali G31 MP2, OpenGL ES 1.0/2.0/3.2 | TODO | panfrost + devfreq OK; verify GLES version exposed by Mesa (glmark2-es2 / es2_info / eglinfo); 3.2 must be reached |
-| GPU OpenCL 2.0 | TODO | Mesa rusticl on panfrost; clinfo + a conformance subset |
-| Decode H.265 Main10@L5.1 4K@60 / 6K@30 | PARTIAL | 8-bit 4K 81.8 fps, 6K 30.2 fps bit-exact; Main10 4K bit-exact but 24.5 fps via P010 (AFBC10 path unmeasured); Main10 6K OOM |
-| Decode VP9 Profile 2 4K@60 | PARTIAL | runs on the VE (no G2 on H616); bit-exact, 35.6 fps via P010; AFBC10 unmeasured |
-| Decode AVS2 JiZhun 10-bit 4K@60 | GAP | no uAPI/driver/userspace anywhere; plan in impl-vdec.md §5 |
+| GPU Mali G31 MP2, OpenGL ES 1.0/2.0/3.2 | PARTIAL | image 2026-11-02: Mesa 26.2.4 exposes GLES 3.1, renderer reports MC1 (spec MP2); devfreq 306–600 MHz OK; GPU agent investigating |
+| GPU OpenCL 2.0 | PARTIAL | rusticl: OpenCL 3.0, OpenCL C 1.2, 1 CU; 2.0 optional-feature coverage + conformance subset pending (GPU agent) |
+| Decode H.265 Main10@L5.1 4K@60 / 6K@30 | PARTIAL | 8-bit 4K 81.8 fps, 6K 30.2 fps bit-exact; Main10 4K: AFBC10 83.9 fps, P010 60.3 fps bit-exact (patch 30, merged cf62ac65a, not yet in image); 60 Hz display needs DE33 AFBC scanout (Stage A in progress); Main10 6K OOM |
+| Decode VP9 Profile 2 4K@60 | PARTIAL | runs on the VE (no G2 on H616); AFBC10 84.2 fps; P010 57.1 fps bit-exact (<60); display needs DE33 AFBC scanout |
+| Decode AVS2 JiZhun 10-bit 4K@60 | WIP | clean-room uAPI + cedrus_avs2 + test decoder written, merged cf62ac65a; first board tests running; no 10-bit reference decoder exists (verification method: user decision pending); WQ/background pictures untested (no streams) |
 | Decode H.264 BP/MP/HP@L4.2 4K@30 | OK (pending image) | 42.0 fps tiled, bit-exact 300/300 |
 | Encode H.264 BP/MP/HP 4K@25 / 1080p@60 | GAP | encoder effort (last), harness/research/ve-encoder/SPEC.md |
 | Encode JPEG snapshot 1080p@60 | GAP | encoder effort (last) |
 | DDR3 1 GB | OK | |
 | TF card | OK | |
 | 2 MB SPI flash | OK | U-Boot boot from SPI verified |
-| Ethernet 10/100/1000 | PARTIAL | 1000 OK; RX-dead fixed (rgmii-rxid), 10/10 clean cold boots PASS on new image; forced 10/100 + iperf3 still to test |
-| WiFi 802.11 a/b/g/n/ac (859 chip) | PARTIAL | scan 2.4+5 GHz OK; STA association + ac rates + iperf to test |
+| Ethernet 10/100/1000 | PARTIAL | 1000 OK: image kernel iperf3 ~870–910 Mbit/s both ways, 27-min soak clean, no 512 KiB stall; RX-dead fixed (rgmii-rxid); forced 10/100 + long soak deferred to the end |
+| WiFi 802.11 a/b/g/n/ac (859 chip) | PARTIAL | a/g/n/ac STA + 2.4/5 GHz AP (VHT80 125 Mbit/s) verified, 3 driver fixes in image; 11b-only not forceable (firmware); VHT80 STA + DFS need user's 80 MHz AP |
 | BT 5.0 | PARTIAL | hci0 up without the vendor blob (in-kernel init + btattach), scan OK; LE 5.0 features + pairing to test |
 | Micro HDMI 2.0a 4K@60 | TODO | needs display; also HDMI audio + CEC |
 | TV CVBS PAL/NTSC (13-pin board) | TODO | new sun8i_tve driver built; needs TV |

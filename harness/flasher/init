@@ -1,0 +1,169 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+# Orange Pi Zero2 netboot flasher: /init of a BusyBox initramfs.
+#
+# Gets a DHCP address on the on-board EMAC (5020000.ethernet), reads
+# $URL/manifest from the host (harness/flasher/serve-image.sh), streams
+# $URL/<IMAGE> through `xz -dc` onto the SD card, reads back SIZE bytes
+# and compares their sha256 with the manifest, then syncs and reboots.
+#
+# Kernel command line (all optional):
+#   flasher.url=http://10.56.0.1:8080   host HTTP server
+#   flasher.dryrun=1        do every check and the full download + decompress + checksum, write nothing
+#   flasher.noreboot=1      stay in a shell after success
+#   flasher.sectors=N       refuse unless the SD card has exactly N 512-byte sectors
+#
+# Safety: the only target is /dev/mmcblk0 and only when it is an SD card in the SMHC0 slot
+# (4020000.mmc), MMC block major 179, within the size limits below. MTD devices (the SPI NOR
+# holding U-Boot) are never opened.
+#
+# Test hooks (host self-test under qemu-aarch64, see harness/flasher/selftest.sh):
+#   FLASHER_TEST=1 SYS=<fake sysfs> TARGET=<file> CMDLINE=<string> sh init
+
+TARGET="${TARGET:-/dev/mmcblk0}"
+SYS="${SYS:-/sys}"
+MIN_SECTORS=$((2 * 1024 * 1024 * 2))      # 2 GiB
+MAX_SECTORS=$((256 * 1024 * 1024 * 2))    # 256 GiB
+URL=http://10.56.0.1:8080
+DRYRUN=0 NOREBOOT=0 WANT_SECTORS=
+
+log() { echo "FLASHER: $*"; }
+die() {
+	log "FAIL $*"
+	report "fail" "$*"
+	if [ -n "$FLASHER_TEST" ]; then exit 1; fi
+	log "not rebooting; shell on the console"
+	exec setsid cttyhack sh
+}
+report() { # report STATUS DETAIL -> host log (best effort)
+	[ -n "$NETOK" ] || return 0
+	d=$(echo "$2" | tr -c 'A-Za-z0-9._=-' '_')
+	wget -q -T 5 -O /dev/null "$URL/report?status=$1&detail=$d" 2> /dev/null || true
+}
+
+setup_rootfs() {
+	/bin/busybox mkdir -p /bin /sbin /usr/bin /usr/sbin /proc /sys /dev /tmp /run
+	/bin/busybox --install -s
+	mount -t proc proc /proc
+	mount -t sysfs sysfs /sys
+	mount -t devtmpfs devtmpfs /dev 2> /dev/null
+	mount -t tmpfs tmpfs /tmp
+	echo 1 > /proc/sys/kernel/printk 2> /dev/null # keep the console readable
+}
+
+parse_cmdline() {
+	for a in ${CMDLINE:-$(cat /proc/cmdline)}; do
+		case $a in
+			flasher.url=*) URL=${a#flasher.url=} ;;
+			flasher.dryrun=1) DRYRUN=1 ;;
+			flasher.noreboot=1) NOREBOOT=1 ;;
+			flasher.sectors=*) WANT_SECTORS=${a#flasher.sectors=} ;;
+		esac
+	done
+	case $URL in http://*) ;; *) die "flasher.url must be http://" ;; esac
+}
+
+find_nic() { # the on-board EMAC, whatever the kernel named it
+	for n in "$SYS"/class/net/*; do
+		case $(readlink -f "$n/device" 2> /dev/null) in *5020000.ethernet) basename "$n"; return 0 ;; esac
+	done
+	return 1
+}
+
+net_up() {
+	for m in /lib/modules/*.ko; do [ -e "$m" ] && insmod "$m" 2> /dev/null; done
+	i=0
+	until NIC=$(find_nic); do
+		i=$((i + 1)); [ $i -gt 40 ] && die "no 5020000.ethernet interface"
+		sleep 0.5
+	done
+	log "nic $NIC"
+	ip link set "$NIC" up
+	# busybox udhcpc sends client-id 01:<MAC>, the same identity U-Boot's lease is keyed by
+	udhcpc -i "$NIC" -t 20 -T 2 -A 2 -n -q -s /etc/udhcpc.script || die "no DHCP lease on $NIC"
+	NETOK=1
+	log "address $(ip -4 -o addr show "$NIC" | awk '{print $4}')"
+}
+
+check_target() {
+	case $TARGET in /dev/mtd* | */mtd*) die "refusing MTD target $TARGET" ;; esac
+	[ "$TARGET" = /dev/mmcblk0 ] || [ -n "$FLASHER_TEST" ] || die "target must be /dev/mmcblk0"
+	b="$SYS/block/mmcblk0"
+	[ -d "$b" ] || die "no mmcblk0 in sysfs"
+	path=$(readlink -f "$b")
+	case $path in */4020000.mmc/*) ;; *) die "mmcblk0 is not on the SD slot 4020000.mmc ($path)" ;; esac
+	type=$(cat "$b/device/type" 2> /dev/null)
+	# The MMC core never sets the block "removable" flag (GENHD_FL_REMOVABLE comment in
+	# drivers/mmc/core/block.c), so removable media = an SD card (not eMMC/SDIO) in the
+	# card-detect slot SMHC0.
+	[ "$type" = SD ] || [ "$(cat "$b/removable" 2> /dev/null)" = 1 ] || die "mmcblk0 is not a removable SD card (type=$type)"
+	[ "$(cat "$b/dev")" = 179:0 ] || die "mmcblk0 is not MMC major 179 ($(cat "$b/dev"))"
+	if [ -z "$FLASHER_TEST" ]; then
+		[ -b "$TARGET" ] || die "$TARGET is not a block device"
+		grep -q '^/dev/mmcblk0' /proc/mounts && die "mmcblk0 is mounted"
+	fi
+	SECTORS=$(cat "$b/size")
+	[ "$SECTORS" -ge $MIN_SECTORS ] && [ "$SECTORS" -le $MAX_SECTORS ] ||
+		die "SD size $SECTORS sectors outside $MIN_SECTORS..$MAX_SECTORS"
+	[ -z "$WANT_SECTORS" ] || [ "$SECTORS" = "$WANT_SECTORS" ] ||
+		die "SD has $SECTORS sectors, expected $WANT_SECTORS"
+	[ $((SECTORS * 512)) -ge "$SIZE" ] || die "image ($SIZE bytes) larger than the card"
+	log "target $TARGET: $type, $SECTORS sectors ($((SECTORS / 2048)) MiB), $path"
+}
+
+get_manifest() {
+	wget -q -T 15 -O /tmp/manifest "$URL/manifest" || die "cannot fetch $URL/manifest"
+	IMAGE=$(sed -n 's/^IMAGE=//p' /tmp/manifest)
+	SHA256=$(sed -n 's/^SHA256=//p' /tmp/manifest)
+	SIZE=$(sed -n 's/^SIZE=//p' /tmp/manifest)
+	echo "$IMAGE" | grep -qE '^[A-Za-z0-9._+-]+\.img\.xz$' || die "bad IMAGE in manifest: $IMAGE"
+	echo "$SHA256" | grep -qE '^[0-9a-f]{64}$' || die "bad SHA256 in manifest"
+	echo "$SIZE" | grep -qE '^[0-9]+$' || die "bad SIZE in manifest"
+	log "image $IMAGE, $SIZE bytes, sha256 $SHA256"
+}
+
+flash() {
+	set -o pipefail
+	if [ $DRYRUN = 1 ]; then
+		log "dry run: download + decompress + checksum, no write"
+		got=$(wget -q -O - "$URL/$IMAGE" | xz -dc | head -c "$SIZE" | sha256sum) || die "download/decompress failed"
+		got=${got%% *}
+	else
+		log "writing $TARGET ..."
+		t0=$(cut -d. -f1 /proc/uptime)
+		wget -q -O - "$URL/$IMAGE" | xz -dc | dd of="$TARGET" bs=1M conv=fsync 2> /tmp/dd.log ||
+			die "write failed: $(tail -1 /tmp/dd.log)"
+		log "written in $(($(cut -d. -f1 /proc/uptime) - t0)) s: $(tail -1 /tmp/dd.log)"
+		sync
+		blockdev --flushbufs "$TARGET" 2> /dev/null
+		echo 3 > /proc/sys/vm/drop_caches 2> /dev/null
+		log "verifying ..."
+		got=$(head -c "$SIZE" "$TARGET" | sha256sum) || die "read-back failed"
+		got=${got%% *}
+	fi
+	set +o pipefail
+	[ "$got" = "$SHA256" ] || die "sha256 mismatch: got $got, want $SHA256"
+	log "RESULT OK sha256 $got"
+	report ok "$IMAGE"
+}
+
+main() {
+	[ -n "$FLASHER_TEST" ] || setup_rootfs
+	log "Orange Pi Zero2 netboot flasher starting"
+	parse_cmdline
+	[ -n "$FLASHER_TEST" ] && NETOK=1 || net_up
+	get_manifest
+	check_target
+	flash
+	[ -n "$FLASHER_TEST" ] && exit 0
+	sync
+	if [ $NOREBOOT = 1 ] || [ $DRYRUN = 1 ]; then
+		log "done; not rebooting (noreboot/dryrun)"
+		exec setsid cttyhack sh
+	fi
+	log "rebooting into the new image"
+	sleep 1
+	reboot -f
+}
+
+main "$@"

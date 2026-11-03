@@ -372,6 +372,8 @@ $H/ssh.sh 'sha256sum /root/u-boot-A.bin && dd if=/root/u-boot-A.bin of=/dev/mmcb
 # 6. only if step 5 shows a panic: repeat 2-5 with out-B (A + JEDEC delays)
 ```
 
+**End of slot:** if A (or B) passes, meaning 0 panics and 0 x 512 MiB, it stays on the SD, since it goes into the next image anyway. If it fails or anything looks off, restore the 4321861ff copy. The report must say which SPL the SD holds.
+
 **Restore** the original SD copy (the image's SPL "01:42:44"):
 
 ```sh

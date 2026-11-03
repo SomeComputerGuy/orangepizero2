@@ -143,6 +143,26 @@ writing a grey chroma plane, is [U]). Bit-exact coverage:
 - field pictures: HVLCFI0;
 - generated x264 1080i MBAFF 300/300.
 
+
+### 2.2b MPEG-1 implementation (2026-11-03, build-tested, **not HW-tested**)
+- Kernel, on build-fork `fix/sunxi-h616-legacy-dec` at 7828d5a1f, after the MPEG-2 clamp patch:
+  - `media-uapi-mpeg2-add-MPEG-1-sequence-and-full-pel-flags.patch`: adds `V4L2_MPEG2_SEQ_FLAG_MPEG1` (0x02) and
+    `V4L2_MPEG2_PIC_FLAG_FULL_PEL_FORWARD/BACKWARD` (0x100/0x200), makes v4l2-ctrls-core accept `PIC_CODING_TYPE_D`, and
+    documents the fields.
+  - `media-cedrus-mpeg2-decode-MPEG-1.patch`: with the MPEG-1 flag the driver triggers with `VE_DEC_MPEG_TRIGGER_MPEG1` and writes the
+    MP12HDR full-pel bits. It rejects D-pictures and full-pel in MPEG-2, and field pictures in MPEG-1. Mismatch control is
+    expected from the VE's MPEG-1 mode (as in Kuske's mpeg-test); the board test will tell.
+  - 752 patches apply, 0 failed, 0 C warnings; cedrus and v4l2-core W=1 report 0 warnings; checkpatch --strict is clean.
+- FFmpeg (fork a56a208 + `legacy-dec/ffmpeg-mpeg1-v4l2request.patch`, built into `kernel-check/ffmpeg-afbc/install-mpeg1`, ffmpeg
+  sha256 f158cac1...a322):
+  - `mpeg1_v4l2request` hwaccel that shares the MPEG-2 callbacks, plus the MPEG-1 seq flag and the full-pel flags;
+  - DRM_PRIME in the mpeg1 pixfmt list;
+  - configure, hwaccels.h and Makefile entries;
+  - `#ifndef` fallbacks for the new uAPI defines.
+  - FFmpeg cannot feed D-pictures (its parser rejects them), so the D path stays untested unless we write a small tool.
+- Board test plan: install the work-legacy kernel (needs approval), then run the 6 ISO MPEG-1 vectors with run-md5/run-raw
+  (IDCT envelope), and rerun MPEG-2 to check the clamp fix.
+
 ## 3. Failures
 
 ### 3.1 WMV9 (VC-1 Main) B-frames, right edge [M], root cause [U]
@@ -162,14 +182,24 @@ writing a grey chroma plane, is [U]). Bit-exact coverage:
   TRB/TRD per field, the driver's `trd_field`/`trb_field`) or field-predicted B macroblocks.
 - The 30 ISO ASP streams (licence-gated, §1.2) include interlaced B and would show which.
 
-### 3.3 Xvid half-pel GMC, top-left [M], root cause [U]
-- xvid-gmc (3 warping points, 1/16 pel, half-pel MVs): the S-VOP at display frame 24 and the B-VOP before it differ by up to 148,
-  only in MB row 0, columns 0–7. The error then propagates into later P-VOPs in that region.
-- The same content and encoder with quarter-pel (xvid-qpel-gmc), and the rotation+zoom GMC stream, are OK. That points at the
-  half-pel path of the GMC macroblocks' predictor vector: spec 7.8.7.3 makes it the per-MB average of the warp, rounded to half
-  sample. The driver writes one `VE_DEC_MPEG_GMC_MV_LUMA` from the warp at the origin and lets the hardware round it
-  (`cedrus_mpeg4.c` ~l. 415). Alternatively the clamping of warped positions outside the top/left edge.
-- A fable analysis agent was started on §3.1–3.3 but stopped on a usage limit before reporting.
+### 3.3 Xvid half-pel GMC, top-left [M], root cause narrowed [U]
+- xvid-gmc (3 warping points, 1/16 pel, half-pel MVs): HW is wrong from display frame 23 (the B-VOP) through 29, up to 241,
+  starting at the S-VOP at display frame 24 in MB row 0, cols 0-7, then propagating until the I-VOP at 30.
+- **Reference decoder (2026-11-03):** xvidcore 1.3.7 (user-built, `--disable-assembly`, libxvidcore.a sha256
+  987ceee1...ecad), driven by our `legacy-dec/xviddec.c` with `XVID_CPU_FORCE` (plain C). On the first 40 frames, xvid matches FFmpeg SW
+  within 4 everywhere for xvid-gmc. For xvid-qpel-gmc it matches within 4 except one MB of B frame 17 (15 px, max 6; HW agrees with
+  FFmpeg there: IDCT drift). So FFmpeg SW is a valid reference and **the HW is wrong** on frames 23-29.
+- **MB types (`ffmpeg -debug mb_type`, plus the sprite trajectories from our `legacy-dec/m4v-sprite.py`):** every S-VOP of both
+  streams starts with seven inter MBs with MVs (`>`, where the frame counter overlay sits), except the failing S-VOP 24 (trajectory du/dv (0,4) (1,0)
+  (4,1), about 2 pel down). There MBs 0-6 are **coded GMC MBs** (mcsel=1 with residual), and MB 7 is skipped GMC. Coded GMC
+  MBs elsewhere in the picture are fine. The quarter-pel stream never has coded GMC MBs at the start of a VOP, so its pass does not
+  clear the quarter-pel path. The earlier GMC_MV_LUMA rounding hypothesis is weakened: the per-MB average warp vector of MBs 0-7
+  is (0, 32/16) and rounds to the same half-pel vector the driver writes.
+- Hypothesis: the HW mishandles a run of coded GMC MBs that starts at the first MB of the VOP (MB-to-MB state such as the
+  predictor or "previous MB" state, reset at the VOP start). If MB 7, which is skipped GMC, really is wrong, this rules out
+  residual-only errors.
+- **Board test to separate the cases** (needs a slot): dump the HW frame 24, then compare MBs 0-7 against (a) the SW output and
+  (b) the SW warp prediction without residual. The second shows whether the residual or the prediction is wrong.
 
 ### 3.4 Xvid quarter-pel + GMC speed [M]
 - xvid-qpel-gmc: 21 ms/frame VE (47 fps linear, 51 tiled) against 7–8 ms for the qpel-only and GMC-only streams.

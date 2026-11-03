@@ -1,0 +1,19 @@
+vp9 3840x2160 (null), extra_hw_frames 6, CAPTURE override AS01
+connector HDMI-A-1 (74) connected, 10 modes
+mode 3840x2160 594000 kHz 3840x2160 total 4400x2250 -> 60.0000 Hz
+crtc 52, plane 35 (primary 42), format YU10 modifier 0x0800000000000061
+[AVHWFramesContext @ 0xaaaaad057f30] Using V4L2 media driver cedrus (7.3.1) for VP9F
+fb 80 for dmabuf ino 40 (42118176 bytes)
+fb 79 for dmabuf ino 39 (42118176 bytes)
+fb 81 for dmabuf ino 38 (42118176 bytes)
+fb 82 for dmabuf ino 37 (42118176 bytes)
+fb 83 for dmabuf ino 36 (42118176 bytes)
+fb 84 for dmabuf ino 35 (42118176 bytes)
+fb 85 for dmabuf ino 34 (42118176 bytes)
+commit phase after previous vblank: mean 15.776 ms max 129.493 ms, 323 of 330 later than the 0.667 ms vertical blanking
+flips 331, 40.474 flips/s over 8.153 s, mode refresh 60.0000 Hz
+frame interval mean 24.707 ms, sd 14.975 ms
+vblank sequence gaps >1: 112 (160 vblanks repeated a frame)
+queue empty at flip (decoder late): 317
+dt histogram: [<15 ms] 0 [15-16.2 ms] 0 [16.2-17.2 ms] 218 [17.2-18 ms] 0 [18-34 ms] 83 [34-51 ms] 22 [>=51 ms] 7
+decoded 331, receive_frame mean 0.03 ms max 0.13 ms

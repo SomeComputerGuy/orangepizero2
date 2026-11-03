@@ -1,0 +1,21 @@
+hevc 3840x2160 (null), extra_hw_frames 6, CAPTURE override AS12
+connector HDMI-A-1 (74) connected, 10 modes
+mode 3840x2160 594000 kHz 3840x2160 total 4400x2250 -> 60.0000 Hz
+crtc 52, plane 35 (primary 42), format YU08 modifier 0x0800000000000061
+[AVHWFramesContext @ 0xaaaab29a6ac0] Using V4L2 media driver cedrus (7.3.1) for S265
+fb 80 for dmabuf ino 70 (13057056 bytes) desc YU08 mod 0x0800000000000061 planes 1 pitch 0
+fb 79 for dmabuf ino 67 (13057056 bytes) desc YU08 mod 0x0800000000000061 planes 1 pitch 0
+fb 81 for dmabuf ino 68 (13057056 bytes) desc YU08 mod 0x0800000000000061 planes 1 pitch 0
+fb 82 for dmabuf ino 66 (13057056 bytes) desc YU08 mod 0x0800000000000061 planes 1 pitch 0
+fb 83 for dmabuf ino 69 (13057056 bytes) desc YU08 mod 0x0800000000000061 planes 1 pitch 0
+fb 84 for dmabuf ino 63 (13057056 bytes) desc YU08 mod 0x0800000000000061 planes 1 pitch 0
+fb 85 for dmabuf ino 64 (13057056 bytes) desc YU08 mod 0x0800000000000061 planes 1 pitch 0
+fb 86 for dmabuf ino 65 (13057056 bytes) desc YU08 mod 0x0800000000000061 planes 1 pitch 0
+fb 87 for dmabuf ino 62 (13057056 bytes) desc YU08 mod 0x0800000000000061 planes 1 pitch 0
+commit phase after previous vblank: mean 0.266 ms max 3.898 ms, 8 of 299 later than the 0.667 ms vertical blanking
+flips 300, 59.994 flips/s over 4.984 s, mode refresh 60.0000 Hz
+frame interval mean 16.668 ms, sd 0.029 ms
+vblank sequence gaps >1: 0 (0 vblanks repeated a frame)
+queue empty at flip (decoder late): 0
+dt histogram: [<15 ms] 0 [15-16.2 ms] 0 [16.2-17.2 ms] 299 [17.2-18 ms] 0 [18-34 ms] 0 [34-51 ms] 0 [>=51 ms] 0
+decoded 300, receive_frame mean 0.03 ms max 0.19 ms

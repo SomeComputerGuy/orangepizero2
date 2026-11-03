@@ -1,0 +1,89 @@
+Linux orangepizero2 7.3.1-edge-sunxi64 #11 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 aarch64 GNU/Linux
+root=UUID=7156c7bc-c358-4ed4-8823-98c9bc9c15f9 rootwait rootfstype=ext4 splash=verbose console=ttyS0,115200 console=tty1 consoleblank=0 loglevel=1 ubootpart=ed348b9e-01 usb-storage.quirks=0x2537:0x1066:u,0x2537:0x1068:u drm.edid_firmware=HDMI-A-1:edid/opiz2-fake4k60.bin video=HDMI-A-1:3840x2160@60D  cgroup_enable=memory
+== connectors
+/sys/class/drm/card0-HDMI-A-1 connected 720x480 720x480 
+== probe: XR24 3840x2160 on primary plane 42 + AS01 decode
+VE jobs=600 busy=9.53s avg=15.88ms => VE-bound fps 63.0
+connector HDMI-A-1 (74) connected, 10 modes
+mode 3840x2160 594000 kHz 3840x2160 total 4400x2250 -> 60.0000 Hz
+crtc 52, plane 42 (primary 42), format XR24 modifier 0x0000000000000000
+commit phase after previous vblank: mean 1.496 ms max 92.430 ms, 1499 of 1499 later than the 0.667 ms vertical blanking
+flips 1500, 60.041 flips/s over 24.966 s, mode refresh 60.0000 Hz
+frame interval mean 16.655 ms, sd 2.248 ms
+vblank sequence gaps >1: 1 (6 vblanks repeated a frame)
+queue empty at flip (decoder late): 0
+dt histogram: [<15 ms] 0 [15-16.2 ms] 0 [16.2-17.2 ms] 1498 [17.2-18 ms] 0 [18-34 ms] 0 [34-51 ms] 0 [>=51 ms] 1
+== baseline: AS01 decode without scanout load
+VE jobs=600 busy=7.15s avg=11.92ms => VE-bound fps 83.9
+== IN_FORMATS: planes offering YU10 + AFBC
+plane 35 possible_crtcs 0x1 type overlay formats 43
+  YU10 0x0800000000000041 BLOCK_SIZE=16x16,MODE=SPARSE
+  YU10 0x0800000000000061 BLOCK_SIZE=16x16,MODE=SPLIT|SPARSE
+planes with linear NV12: 3
+[    0.001430] pid_max: default: 32768 minimum: 301
+[    0.052297] iommu: Default domain type: Translated
+[    0.052320] iommu: DMA domain TLB invalidation policy: strict mode
+[    0.056780] NetLabel:  unlabeled traffic allowed by default
+[    0.070047] PCI: CLS 0 bytes, default 64
+[    0.125333] platform 1c0e000.video-codec: Adding to iommu group 0
+[    0.192236] bridge: filtering via arp/ip/ip6tables is no longer available by default. Update your scripts to load br_netfilter if you need this.
+[    0.234434] platform 1100000.planes: Adding to iommu group 0
+[    0.292617] sun4i-drm display-engine: bound 1280000.mixer (ops 0xffffcf34d233ff00)
+[    0.292877] sun4i-drm display-engine: bound 12a0000.mixer (ops 0xffffcf34d233ff00)
+[    0.293164] sun4i-drm display-engine: bound 6510000.tcon-top (ops 0xffffcf34d2346228)
+[    0.293870] sun4i-drm display-engine: bound 6515000.lcd-controller (ops 0xffffcf34d233c0c0)
+[    0.294441] sun4i-drm display-engine: bound 6516000.lcd-controller (ops 0xffffcf34d233c0c0)
+[    0.296402] sun4i-drm display-engine: bound 6000000.hdmi (ops 0xffffcf34d233e8b0)
+[    0.297516] [drm] Initialized sun4i-drm 1.0.0 for display-engine on minor 0
+[    1.102176] sun4i-drm display-engine: Direct firmware load for edid/opiz2-fake4k60.bin failed with error -2
+[    1.102207] sun4i-drm display-engine: [drm] *ERROR* [CONNECTOR:74:HDMI-A-1] Requesting EDID firmware "edid/opiz2-fake4k60.bin" failed (err=-2)
+[    1.102920] sun4i-drm display-engine: Direct firmware load for edid/opiz2-fake4k60.bin failed with error -2
+[    1.102933] sun4i-drm display-engine: [drm] *ERROR* [CONNECTOR:74:HDMI-A-1] Requesting EDID firmware "edid/opiz2-fake4k60.bin" failed (err=-2)
+[    1.103144] sun4i-drm display-engine: [drm] User-defined mode not supported: "3840x2160": 60 712254 3840 4152 4576 5312 2160 2161 2164 2235 0x20 0x6
+[    1.106189] sun4i-drm display-engine: [drm] fb0: sun4i-drmdrmfb frame buffer device
+[    1.445522] sun50i-iommu 30f0000.iommu: Page fault for 0x00000000fff00000 (master -1, dir rd)
+[    6.309437] systemd[1]: Queued start job for default target graphical.target.
+[   10.481790] sun4i-drm display-engine: [drm] User-defined mode not supported: "3840x2160": 60 594000 3840 4016 4104 4400 2160 2168 2178 2250 0x68 0x5
+== linear NV12 3840x2160 on VI plane 35 (600 flips)
+connector HDMI-A-1 (74) connected, 10 modes
+mode 3840x2160 594000 kHz 3840x2160 total 4400x2250 -> 60.0000 Hz
+crtc 52, plane 35 (primary 42), format NV12 modifier 0x0000000000000000
+commit phase after previous vblank: mean 1.835 ms max 128.184 ms, 599 of 599 later than the 0.667 ms vertical blanking
+flips 600, 59.343 flips/s over 10.094 s, mode refresh 60.0000 Hz
+frame interval mean 16.851 ms, sd 4.930 ms
+vblank sequence gaps >1: 1 (8 vblanks repeated a frame)
+queue empty at flip (decoder late): 0
+dt histogram: [<15 ms] 0 [15-16.2 ms] 0 [16.2-17.2 ms] 598 [17.2-18 ms] 0 [18-34 ms] 0 [34-51 ms] 0 [>=51 ms] 1
+== AFBC10 HEVC Main10 2160p60 (600 frames)
+VE jobs=600 busy=12.03s avg=20.04ms => VE-bound fps 49.9
+hevc 3840x2160 (null), extra_hw_frames 6, CAPTURE override AS01
+connector HDMI-A-1 (74) connected, 10 modes
+mode 3840x2160 594000 kHz 3840x2160 total 4400x2250 -> 60.0000 Hz
+crtc 52, plane 35 (primary 42), format YU10 modifier 0x0800000000000061
+[AVHWFramesContext @ 0xaaaad6a06ac0] Using V4L2 media driver cedrus (7.3.1) for S265
+fb 80 for dmabuf ino 30 (42118176 bytes)
+fb 79 for dmabuf ino 27 (42118176 bytes)
+fb 81 for dmabuf ino 28 (42118176 bytes)
+fb 82 for dmabuf ino 26 (42118176 bytes)
+fb 83 for dmabuf ino 29 (42118176 bytes)
+fb 84 for dmabuf ino 23 (42118176 bytes)
+fb 85 for dmabuf ino 24 (42118176 bytes)
+fb 86 for dmabuf ino 25 (42118176 bytes)
+fb 87 for dmabuf ino 22 (42118176 bytes)
+commit phase after previous vblank: mean 6.131 ms max 40.803 ms, 223 of 599 later than the 0.667 ms vertical blanking
+flips 600, 48.705 flips/s over 12.298 s, mode refresh 60.0000 Hz
+frame interval mean 20.532 ms, sd 7.608 ms
+vblank sequence gaps >1: 131 (140 vblanks repeated a frame)
+queue empty at flip (decoder late): 182
+dt histogram: [<15 ms] 0 [15-16.2 ms] 0 [16.2-17.2 ms] 468 [17.2-18 ms] 1 [18-34 ms] 121 [34-51 ms] 9 [>=51 ms] 0
+decoded 600, receive_frame mean 0.04 ms max 0.44 ms
+	fb=86
+		format=P010 little-endian (0x30313050)
+		modifier=0x0
+	fb=0
+	fb=0
+	fb=0
+	fb=0
+	fb=0
+	output_format=RGB
+== AFBC10 VP9 Profile 2 2160p60 (600 frames)

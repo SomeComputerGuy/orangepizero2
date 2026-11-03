@@ -205,7 +205,7 @@ round-1 claim "YU08 has no SPLIT" was a client bug.
 - Commit phase: mean 6.1 ms after vblank, and 223 of 599 commits landed after the blanking. The remainder landed
   inside it because the commits were late; they are not phase-aligned.
 
-**Open problems, not explained:**
+**Open problems at the time (all resolved in round 3, below):**
 1. The debugfs state captured 5 s into the AFBC run shows plane 35 with fb 86 as **P010, modifier 0x0, pitch 7680**,
    allocated by afbc-kms-play. Yet the client logged YU10/AFBC and 42,118,176-byte dmabufs. That size is larger than
    AFBC10 4K (17.2 MB) and P010 (24.9 MB). Either the descriptor path fell back to linear P010 (check fb_for_desc
@@ -217,3 +217,108 @@ round-1 claim "YU08 has no SPLIT" was a client bug.
    latches at vblank cannot be decided without a sink. **A real display is needed.**
 
 **Not run, cut by the time box:** VP9 P2 (interrupted at start), OSD, AS12 8-bit, TVE.
+
+
+## Board results, round 3 (image 4321861ff, 7.3.1-edge-sunxi64 #12, Stage A 1f852632b merged), 2026-11-03
+
+Raw data: harness/afbc-kms-play/results-2026-11-03-image4321861ff/. No kernel was installed. armbianEnv.txt was
+restored at the end; the final boot shows `DRAM: 1024 MiB`, the image kernel, and 0 IOMMU faults, flip_done errors or WARNs.
+
+### 1. Why rounds 1–2 showed "AFBC" as linear P010 in 42 MB buffers
+
+**Root cause: userspace, not the kernel.** `kernel-check/ffmpeg-afbc/install` held a `libavutil.a` from 22:33.
+The `V4L2REQUEST_PIXFMT` override was added to `hwcontext_v4l2request.c` at 22:41. The build tree was
+rebuilt then, but `make install` was never re-run, so the client linked a libavutil without the override.
+- The client's `setenv("V4L2REQUEST_PIXFMT", "AS01")` did nothing.
+- FFmpeg took cedrus's first 10-bit CAPTURE format, P010, and exported it as linear P010.
+- The "format YU10 modifier 0x...61" line the client printed was only its plane-selection request.
+
+42,118,176 bytes is exactly the 4K AFBC10 size (17,234,976) plus the P010 size (24,883,200). Cedrus's 10-bit
+P010 mode keeps an AFBC reference image next to the linear output. That size is inferred from the arithmetic;
+I did not check it in the code of the image's cedrus.
+
+**Fix:** re-ran `make install` (incremental, no recompiles). The client now logs each buffer's real descriptor
+format, modifier, plane count and pitch, and warns when AS01/AS12 was requested but the buffer is not AFBC.
+
+**Proof that the AFBC path is taken:**
+- Buffers are 17,234,976 bytes (AFBC10) or 13,057,056 bytes (AFBC8), with one plane, pitch 0 and modifier 0x0800000000000061.
+- debugfs shows plane 35 with fb YU10 and modifier 0x800000000000061.
+- The FBD registers read during playback: FBD_CTL (0x01105000) = 0xFF000015 (enabled), 0x5008 = 0x086F0EFF
+  (3839x2159), 0x5004 = 0x00003210. In round 2 these were all zero, which confirms that run never used AFBC.
+
+### 2–4. Playback on the 4K60 fake-EDID mode, 600 frames (300 for OSD and 8-bit)
+
+| Case | Format on plane 35 | Flips/s | Seq gaps | Starved flips | Commits outside vblank | Commit phase mean / max | VE-bound fps |
+|---|---|---|---|---|---|---|---|
+| HEVC Main10 2160p60 | YU10 AFBC split/sparse | **59.96** | 1 | 0 | 31 / 599 | 0.34 / 7.5 ms | 83.3 |
+| VP9 Profile 2 2160p60 | YU10 AFBC | 56.58 | 14 | 42 | 48 / 599 | 1.67 / 110 ms | 84.4 |
+| HEVC Main10 + primary kept on (OSD, VI at zpos 2) | YU10 AFBC | 59.80 | 1 | 0 | 19 / 299 | 0.43 / 19.6 ms | – |
+| HEVC Main 8-bit (AS12) | YU08 AFBC | **59.99** | 0 | 0 | 8 / 299 | 0.27 / 3.9 ms | – |
+| Linear NV12 pattern | NV12 | 59.26 | 1 | 0 | all | 2.1 ms | – |
+| XR24 pattern on primary | XR24 | 59.26 | 1 | 0 | all | 1.8 ms | – |
+
+- **VE throughput, HEVC Main10 to null:** 83.6 fps without scanout and 63.1 fps with 4K XR24 on the primary plane.
+  With AFBC10 on the VI plane, the AFBC run's VE-bound rate is 83.3 fps, so AFBC scanout costs the decoder
+  almost nothing, unlike XRGB.
+- **VP9 starved flips:** the decoder is behind on 42 flips even though the VE could do 84 fps. Decode timing is
+  bursty: the VP9 frame thread delivers frames late, and superframes contain hidden frames (648 VE jobs for 600
+  frames). This is a pipeline matter, not KMS. The fix is a deeper queue or more `extra_hw_frames`; I didn't try it.
+- **No new kernel messages** appeared during any run.
+- The pattern runs commit late because the client draws the stripes on the CPU before each commit.
+
+### 5. TV-out (TVE)
+
+**Enabling `overlays=orangepi-zero2-expansion` boot-loops the board.**
+- fbcon modesets Composite-1 (crtc-1, TCON TV1). The CRTC never produces a vblank:
+  `[CRTC:72:crtc-1] vblank wait timed out` WARN, then a chain of 10 s `flip_done timed out` errors.
+- Panfrost also fails to probe with -110.
+- After about 55 s the board resets. I didn't capture why; the hardware watchdog is the likely cause, given
+  that PID 1 or the console is stuck behind the DRM timeouts.
+- The overlay also enables IR, so IR is currently unusable too.
+- **Recovery:** I interrupted U-Boot over /dev/ttyOPIZ2 with the new
+  `harness/afbc-kms-play/tools/uboot-noovl.py` and booted with the armbianEnv settings but no overlays, then
+  removed the overlay line.
+
+**Contained test:** the overlay plus `video=Composite-1:d` boots fine with tv-encoder bound. I unbound fbcon,
+forced the connector on, and ran the client with a timeout:
+- **Clocks are correct after the modeset:** pll-video1 and tve0 at 216 MHz, tcon-tv1 and tcon-top-tv1 at 13.5 MHz.
+  TCON_TV_SETUP (0x06510000) = 0x10, so tv1_clk_src = TVE.
+- **TCON TV1 is enabled but does not run:** GCTL 0x80000003, TCON1_CTL 0x80100160, the line counter (0xFC) stays
+  at 0, and IRQ 99 (6516000.lcd-controller) counts 0.
+- **Switching TCON_TV_SETUP to the CCU source at runtime did not start it either.**
+- TVE0 reads 0x80300001 and TVE_TOP DAC_CFG0 reads 0x830B4201.
+- **Conclusion:** the stall is in TCON TV1/TVE bring-up, which comes from the `sun8i_tve` / TCON TOP patches
+  (`impl-audio-tve.md`, compile-tested only and never booted). It is upstream of the mixer, so DE33 Stage A is
+  not implicated: the vblank interrupt comes from the TCON, and the TCON gets no pixel clock.
+- The mixer1/DE33 YUV-output path could not be exercised. Picture quality needs a TV in any case.
+- **Recommended next steps:**
+  - Hand this to the TVE owner. Likely candidates are the TCON TV1 reset or gate, the TVE-to-TCON clock enable
+    in TVE_TOP, or TCON1 needing the TVE started first.
+  - Until it is fixed, make fbcon not take Composite by default (or have the connector report disconnected),
+    so the overlay can't brick the board.
+
+### 6. Tearing risk
+
+- At 4K60 the vertical blanking is only 90 lines, 0.667 ms. On the regmap path the DE33 has no DBUFF, so plane
+  registers take effect the moment the commit worker writes them.
+- In real playback the client commits right after the flip event. With the decoder ahead, 95% (HEVC),
+  92% (VP9) and 97% (8-bit) of commits landed inside the blanking.
+- The rest landed later: up to 7.5 ms (HEVC), 19.6 ms (OSD) and 110 ms (VP9, after starvation). A late write
+  changes the address mid-scanout, so it would tear at that scan line, about line 1000 for 7.5 ms. The exception
+  is if the FBD or overlay latch their base at frame start, which I can't tell without a sink.
+- **Assessment: tearing is likely on roughly 3–8% of frames**, more under CPU or DRAM load. It is
+  near-certain for a compositor that commits at arbitrary times (most do, e.g. mpv's `--vo=drm` presents
+  when the frame is ready).
+- The robust fix is the RCQ path (LE 0223–0230), which updates registers in hardware at vblank. Per the rules
+  I have not started it: **it needs the user's OK.**
+- A cheaper, partial mitigation would be to defer the DE33 register writes in atomic_flush to the next vblank IRQ
+  (software shadowing). That still races with long IRQ latency.
+- A real 4K display is needed to confirm visible tearing.
+
+### Fix commits
+
+- Kernel branch `feat/sunxi-h616-de33-afbc`: **no kernel changes were needed.** The AFBC problem was the stale
+  FFmpeg install.
+- Harness (repo main, this commit): the client's descriptor logging and non-AFBC warning; `tools/uboot-noovl.py`;
+  the round 2 and 3 results; this report. The draw-once pattern and the manual IN_FORMATS parse were already
+  in main's 8132696.

@@ -452,8 +452,13 @@ static uint32_t fb_for_desc(struct kms *k, const AVDRMFrameDescriptor *d,
 		return 0;
 	}
 	fbs[nfbs++] = (struct fbinfo){ st.st_ino, handle, fb_id };
-	fprintf(stderr, "fb %u for dmabuf ino %lu (%zu bytes)\n", fb_id,
-		(unsigned long)st.st_ino, d->objects[0].size);
+	fprintf(stderr, "fb %u for dmabuf ino %lu (%zu bytes) desc %.4s mod 0x%016" PRIx64
+		" planes %d pitch %u\n", fb_id, (unsigned long)st.st_ino, d->objects[0].size,
+		(const char *)&l->format, mods[0], l->nb_planes, pitches[0]);
+	if (o.pixfmt && !strncmp(o.pixfmt, "AS", 2) &&
+	    (mods[0] >> 56) != DRM_FORMAT_MOD_VENDOR_ARM)
+		fprintf(stderr, "WARNING: %s requested but the decoder exported a non-AFBC buffer\n",
+			o.pixfmt);
 	return fb_id;
 }
 

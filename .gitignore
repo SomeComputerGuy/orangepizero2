@@ -21,3 +21,4 @@ kernel-check/*.orig
 kernel-check/*.log
 kernel-check/dl-upstream/
 kernel-check/scratch*/
+docs/vendor/

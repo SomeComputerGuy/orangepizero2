@@ -427,3 +427,19 @@ The runs are `legacy-dec/board-slot.sh tests` and `gmc-f24.sh`, with results in 
   - sormy/tvbian 0806 cedrus MPEG-4 patch: same vendor QM modes, and it refuses all interlaced B-VOPs.
   - Upstream cedrus has no MPEG-4. GStreamer v4l2codecs has no MPEG-4 decoder.
   - LibreELEC, Kwiboo and Kodi: nothing found. lore.kernel.org returned 403. The linux-sunxi wiki and the #cedrus logs turned up nothing relevant.
+
+### 6.3e Interlaced B-VOP field MV wrap: refusal (fork fix/sunxi-h616-mpeg4-ilace-qpel-refuse 672813180)
+
+- **Correction to 6.3d.** The wrap is to **half** the f_code range for **every** f_code: [-16<<(f-1), 16<<(f-1)).
+  - B5 of vcon_ge_1 (f_code 1,1) has 298 bad MBs where -17 wraps.
+  - All bad fields across B1-B9 are explicit (dir 1/2/3) field MVs past half the range. Direct-mode MVs past half the range decode fine (vcon-asp14L4).
+  - Keying on f_code > 1 would be wrong.
+  - P-VOPs are unproven: no test stream (conformance or FFmpeg-encoded with ilme) has P field MVs past half the range.
+- **Kernel:** commit 2 refuses interlaced B-VOPs in cedrus_mpeg4_setup (-EINVAL; the job fails). W=1 build is clean.
+- **Userspace:** Jernej's FFmpeg v4l2-request outputs the failed buffers as frames, silently.
+  - Fix: harness/research/legacy-dec/ffmpeg-v4l2request-mpeg4-ilace-b-fallback.patch. It adds `!progressive_sequence && !low_delay` to mpeg4_unsupported(). This gives software fallback at hwaccel init.
+  - A B-VOP behind a wrong low_delay clears the flag and fails start_frame. That frame is dropped, not decoded wrongly.
+- **Board test (kernel ilref + patched FFmpeg):**
+  - vcon_ge_1 and a1ge2: init fallback, 0 VE IRQs. They match host FFmpeg -threads 1 (max 1 / 38 MBs at max 5, aarch64 IDCT).
+  - xvid-bf-1080p60: HW (129 IRQs), 1 MB at max 5 against host SW.
+  - Cost: vcon-asp14L4, which the HW decoded right, now goes to SW. Stock FFmpeg decodes it wrongly (its field-direct bug, 6.3b draft patch).

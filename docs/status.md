@@ -31,7 +31,7 @@ known gap · **GAP** no driver anywhere.
 | Analog audio | OK\* (line-out) | DAC-only by hardware (no MIC). Needs expansion board. |
 | GPU Mali-G31 (panfrost) | PARTIAL | devfreq 306–600 MHz. GLES 3.2 / OpenCL 2.0 exposure not yet verified. |
 | Video decode (Cedrus) | PARTIAL | Bit-exact: MPEG-2, H.264, HEVC, VP8, VP9 P2, HEVC Main10. H.264 4K 42.0 fps (spec 4K30 OK); HEVC 8-bit 4K 81.8 fps, 6K 30.2 fps; HEVC Main10 4K 24.5 fps and VP9 P2 4K 35.6 fps via P010, vs. spec 4K60 (AFBC 10-bit path unmeasured); Main10 6K OOM. Uses Jernej Skrabec's unposted H616 work. |
-| AVS2 decode | GAP | No uAPI, driver or userspace anywhere. Research/implementation in progress. |
+| AVS2 decode | PARTIAL | New cedrus uAPI + backend: 8-bit bit-exact on 17 streams, 4K Main10 58.5 fps; 10-bit only self-consistent; no FFmpeg path yet (harness avs2dec). |
 | Video encode (H.264, JPEG) | GAP | No open driver; reverse-engineering effort (`harness/research/ve-encoder/`). |
 | Crypto engine + TRNG | OK | `/dev/hwrng` = CE TRNG. U-Boot CE TRNG → KASLR seed built; board check of KASLR pending. |
 | RTC / watchdog | OK | No backup battery; sunxi-wdt 16 s, systemd watchdog 15 s. |
@@ -70,31 +70,66 @@ Server-image notes: pick bash at first login (the harness's ssh commands assume 
 wpa_supplicant by hand on wlan0, `nmcli device set wlan0 managed no`. `flash-sd.sh` takes the newest image, so
 it flashes whichever variant was built last. Not in either image: ffmpeg (Ubuntu's 8.1.2 has no v4l2-request hwaccel).
 
-## 3. Next
+## 3. Next (cleaned up 2026-11-04)
 
-0. Hardware the user has to supply: HDMI display, 13-pin expansion board, USB stick, USB-C data cable, TV, printer,
-   metering plug.
-1. Rebuild the image from the rebased integration; retest Ethernet bulk TCP + large pings on the image kernel.
-2. Full board matrix: WiFi STA 2.4/5/DFS + iperf3, BT pair, HDMI + audio + CEC, line-out, USB host + USB boot,
-   USB-C gadget, IR, PWM/I2C/SPI overlays, KASLR, GPU GLES/OpenCL.
-3. Decode: AFBC 10-bit 4K60; AVS2. Encoder: §1.
-4. Open the Armbian PRs (user sends/approves).
-9. **GLES 3.2 in panfrost (user go 2026-11-04; user reports Arm legal cleared the blob licence and authorised getting the closed blobs + tracing them).** Our Mesa fork, branch panfrost-gs-tess. Step 1: reference traces of Arm g24p0 (harness/research/arm-blob/dl/libmali-bifrost-g31-g24p0-gbm.so, JeffyCN/mirrors@$(cat harness/research/arm-blob/dl/COMMIT | cut -c1-12), git-ignored). Blocker: the blob needs the Arm kbase kernel driver (/dev/mali0), not panfrost, so a trial kernel with kbase (Bifrost r24p0-era, ported to 7.3) is needed for tracing; board-only, not in the image. Step 2: GS + tessellation via src/poly compute lowering in gallium panfrost (v7 JM), guided by the traces. Step 3: KHR-GLES32 + dEQP-GLES31 GS/tess groups on the board, no GLES 3.1 regressions. Order: after the OpenCL fixes (same compiler). Never upstream without asking.
-8. **User Manual review (queued 2026-11-04, when tokens are back):** one agent (fable if available, else Opus) reads docs/vendor/H616_User_Manual_V1.0.pdf (831 pp; registers for CCU, TVE, HDMI, Audio HUB/codec/OWA, EMAC, DMA, IOMMU, thermal, RTC, timers, TWI/UART/SPI/PWM/LRADC, Crypto/SID) and reviews our code against it: sunxi-7.3 kernel patches + DT (clock parents/PLL limits, TVE/HDMI setup, audio routing, EMAC, thermal trips, PWM, SPI), U-Boot (DRAM/CCU/PMIC), TF-A, and docs/datasheet-checklist.md. Report wrong register use, missed features, wrong limits and new acceptance rows; fixes on fix/* branches, build-checked, not merged until the user approves. Report in harness/research/user-manual-review.md.
-7. Desktop image variant (user 2026-11-04: "ffmpeg goes into the desktop one"): add OPIZ2_VARIANT=desktop (BUILD_DESKTOP=yes) to the shared config + build-all.sh, and ship the v4l2-request FFmpeg (Jernej/Kwiboo fork + our drafts in docs/upstream-queue.md) built as a cached package in that image; mpv/GStreamer wired to the hw decoder. Minimal/server stay without FFmpeg. Also write v4l2-request hwaccels in that FFmpeg for our non-upstream cedrus uAPIs: AVS2 (impl-avs2.md; userspace owns the DPB, today driven only by harness avs2dec), AVS/AVS+ (patches.media/h616-avs), plus MPEG-1 (draft in docs/upstream-queue.md); check output against avs2dec/davs2 md5s on the board. Also fix the stale AVS/AVS+ GAP row in docs/datasheet-checklist.md.
-6. Vulkan dEQP: stage deqp-vk (vulkan_headless build) says "Vulkan is not supported" (tcuPlatform.cpp:54) even with the env set, while vulkaninfo sees Mali-G31; libvulkan is never dlopened. Fix the build/platform, then rerun vk-subset.
-5. **Queued for when tokens are back (added 2026-11-04 ~18:30, start ≈ 2026-11-05 03:30): OPi5 / RK3588S cross-check.**
-   One agent (fable if available, else Opus), read-only on both trees. Sources: the other project at ~/orangepi5
-   (read only, never modify it or its memory) and its GitHub repos. Compare every patch / branch we carry
-   (armbian-build fork branches, sunxi-7.3 series, U-Boot/TF-A, userpatches, Mesa fork mesa-work/mesa, FFmpeg
-   drafts in docs/upstream-queue.md) against theirs. Answer:
-   - What can we use from them (patches/fixes that apply to H616, Mali-G31 panfrost, generic Armbian/Ubuntu
-     stonking, build framework, kernel 7.3 core, V4L2 stateless/request API, FFmpeg/GStreamer, Mesa)?
-   - What can they use from us?
-   - Common code both sides changed (Armbian framework/lib, stonking release support, kernel core/media/drm,
-     Mesa panfrost, FFmpeg v4l2-request, U-Boot common, TF-A): are the changes compatible, conflicting, or
-     duplicated? Anything we would send upstream must not conflict with or contradict theirs.
-   - Recommended actions: which patches to share/port, which to merge into one common version, upstream
-     submission order, and owner (us / them / joint).
-   Output: a report in harness/research/opi5-crosscheck.md, with feedback in both directions; no changes to
-   either tree until the user approves.
+Done since the last list: image 8546e5fc1 rebuilt in both variants (minimal + server, 20 PASS each); board queue
+finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay boots (Composite disconnected, rc0/rc1,
+0 vblank errors), JPEG greyscale probe run; interlaced MPEG-4 refusals merged; TV-out clock pinned.
+
+### A. Now (board only, low credits)
+1. GPU conformance rerun on the server image (`harness/analysis/gpu/gpu-rerun.sh`, tag 8546e5fc1-server): running.
+   Then commit the result summary.
+2. Bluetooth board <-> host (host now has bluez): discovery both ways, pair/bond + reconnect after a reboot, RFCOMM
+   throughput, BLE.
+
+### B. When tokens are back, in this order
+3. **Priority (user 2026-11-04: do these before the rest):**
+   - OpenCL fixes in the Mesa fork (mesa-work/mesa); same compiler work that GLES 3.2 (item 8) needs.
+   - VP9: queue depth.
+   - 10-bit AVS2 output in AFBC (8-bit AVS2 is bit-exact on 17 streams; 10-bit only self-consistent).
+4. OPi5 / RK3588S cross-check. One agent (fable if available, else Opus), read-only on both trees: ~/orangepi5
+   (never modify it or its memory) and its GitHub repos, against every patch / branch we carry (armbian-build fork
+   branches, sunxi-7.3 series, U-Boot/TF-A, userpatches, Mesa fork, FFmpeg drafts in docs/upstream-queue.md).
+   Answer: what we can use from them; what they can use from us; whether common code both sides changed (Armbian
+   framework, stonking support, kernel core/media/drm, Mesa panfrost, FFmpeg v4l2-request, U-Boot, TF-A) is
+   compatible, conflicting or duplicated (nothing we send upstream may contradict theirs); recommended actions
+   (share/port, merge into one version, submission order, owner). Report: harness/research/opi5-crosscheck.md; no
+   changes to either tree until the user approves.
+5. Vulkan dEQP: deqp-vk (vulkan_headless) says "Vulkan is not supported" (tcuPlatform.cpp:54) even with the env set,
+   while vulkaninfo sees Mali-G31 MC1; libvulkan is never dlopened. Fix the build/platform, rerun vk-subset.
+6. Desktop image variant (user: "ffmpeg goes into the desktop one"): OPIZ2_VARIANT=desktop (BUILD_DESKTOP=yes) in the
+   shared config + build-all.sh; ship the v4l2-request FFmpeg (Jernej/Kwiboo fork + our drafts in
+   docs/upstream-queue.md) as a cached package; mpv/GStreamer on the hw decoder. Minimal/server stay without FFmpeg.
+   Write v4l2-request hwaccels for our non-upstream cedrus uAPIs: AVS2 (impl-avs2.md; userspace owns the DPB, today
+   only harness avs2dec), AVS/AVS+ (patches.media/h616-avs), MPEG-1 (draft in docs/upstream-queue.md); check against
+   avs2dec/davs2 md5s on the board. Fix the stale AVS/AVS+ GAP row in docs/datasheet-checklist.md.
+   Open question to the user: XFCE (recommended) or GNOME.
+7. User Manual review: one agent reads docs/vendor/H616_User_Manual_V1.0.pdf (831 pp; CCU, TVE, HDMI, Audio
+   HUB/codec/OWA, EMAC, DMA, IOMMU, thermal, RTC, timers, TWI/UART/SPI/PWM/LRADC, Crypto/SID) and reviews the sunxi-7.3
+   patches + DT, U-Boot (DRAM/CCU/PMIC), TF-A and docs/datasheet-checklist.md against it. Report wrong register use,
+   missed features, wrong limits, new acceptance rows; fixes on fix/* branches, build-checked, not merged until the
+   user approves. Report: harness/research/user-manual-review.md.
+8. GLES 3.2 in panfrost (user go 2026-11-04; Arm legal cleared the blob licence). Mesa fork branch panfrost-gs-tess.
+   Step 1: reference traces of Arm g24p0 (harness/research/arm-blob/dl/, git-ignored, never in an image); needs a
+   board-only trial kernel with Arm kbase (/dev/mali0). Step 2: GS + tessellation via src/poly compute lowering in
+   gallium panfrost (v7 JM). Step 3: KHR-GLES32 + dEQP-GLES31 GS/tess on the board, no GLES 3.1 regressions.
+   After item 3's OpenCL fixes. Never upstream without asking.
+9. Remaining smaller work:
+   - Ethernet jumbo frames: board-test and merge fix/sunxi-h616-emac-jumbo (impl-emac-jumbo.md); the 11-03 soak lost
+     all 8000-byte pings in 11 of 19 rounds.
+   - JPEG greyscale decode (probe run 11-03; result to fold in).
+   - Display tearing.
+   - MPEG-4 ASP 3840x2160 decode acceptance test (datasheet-checklist).
+   - Datasheet W-items in docs/datasheet-checklist.md (W1-W34: CONFIG_COMPAT, hstimer, CE PRNG, SPI dual/quad,
+     deinterlacer, DE33 10-bit/HDR, I2S/SPDIF overlays, ...).
+   - Video encoder H.264/JPEG (reverse engineering, last).
+
+### C. Needs hardware from the user
+10. HDMI display (HDMI 4K60, HDMI audio, CEC, AFBC 4K60 output), TV (CVBS), 13-pin expansion board (IR, line-out,
+    2 extra USB ports), USB stick (USB host + USB boot), USB-C data cable (gadget mode, FEL), the HP M277dw (end-to-end
+    print test), a metering plug (suspend power saving). WiFi 5 GHz DFS STA + header I2C/SPI/UART loopbacks can be
+    done with what is here.
+
+### D. Waiting for the user's go
+11. Send the upstream items in docs/upstream-queue.md.
+12. Open the Armbian PRs (docs/prs/README.md).

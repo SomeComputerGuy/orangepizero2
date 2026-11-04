@@ -41,3 +41,4 @@ harness/avs1dec/avs1dec
 harness/avs1dec/avs1dec-host
 harness/di300test/di300err
 harness/research/dram-warm-reset/*.bin
+harness/research/legacy-dec/iso-refsoft-dl/

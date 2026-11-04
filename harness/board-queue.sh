@@ -14,7 +14,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 TOP=$PWD; H=$TOP/harness; SSH=$H/ssh.sh
-IMG=$TOP/images/5cc24a7c8/Armbian-unofficial_26.11.0-trunk_Orangepizero2_stonking_edge_7.3.1_minimal.img.xz
+IMG=$TOP/images/5bc4d01ed/Armbian-unofficial_26.11.0-trunk_Orangepizero2_stonking_edge_7.3.1_minimal.img.xz
 Q=$H/queue; mkdir -p "$Q/done"
 OUT=$Q/$(date +%Y%m%d-%H%M); mkdir -p "$OUT"; LOG=$OUT/queue.log; ln -sfn "$OUT" "$Q/current"; echo $$ > "$Q/PID"
 log() { echo "[$(date +%T)] $*" | tee -a "$LOG"; }

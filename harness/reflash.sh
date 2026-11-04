@@ -5,6 +5,7 @@
 #   harness/reflash.sh --dry-run        everything except the reboot/serial/write steps; prints the plan
 #   harness/reflash.sh                  real run: REWRITES THE BOARD'S SD CARD with the newest image
 #   options: --image X.img.xz  --sectors N (SD size, default: read over ssh)  --no-post (stop after flashing)
+#            --post-only (resume at step 8 on an already flashed board, e.g. after a wizard timeout)
 #            --power-cycle (allowed only when ssh and serial are both dead, per the harness rules)
 #
 # Steps: build flasher (Image + DTB + BusyBox initramfs) -> manifest (uncompressed sha256/size) -> start
@@ -24,13 +25,14 @@ BACKUP="$CFG.reflash-backup"
 WORK="$TOP/kernel-check/work-flasher"
 OUTD="$WORK/out"
 DTB_NAME=sun50i-h616-orangepi-zero2.dtb
-DRY=0 IMAGE="" SECTORS="" POST=1 POWERCYCLE=0
+DRY=0 IMAGE="" SECTORS="" POST=1 POWERCYCLE=0 POSTONLY=0
 while [[ $# -gt 0 ]]; do
 	case $1 in
 		--dry-run) DRY=1 ;;
 		--image) IMAGE=$2; shift ;;
 		--sectors) SECTORS=$2; shift ;;
 		--no-post) POST=0 ;;
+		--post-only) POSTONLY=1 ;;
 		--power-cycle) POWERCYCLE=1 ;;
 		*) echo "unknown option $1"; exit 2 ;;
 	esac
@@ -59,6 +61,7 @@ pgrep -f 'scripts/serial-log.py$' > /dev/null || pgrep -fx 'python3 -I scripts/s
 	{ echo "a previous reflash left $BACKUP/.reflash-none: check and remove it first"; exit 1; }
 echo "tftp root $TFTP_ROOT ok, console /dev/ttyOPIZ2 -> ttyUSB1, serial logger running"
 
+if [[ $POSTONLY == 0 ]]; then
 step "1. build the flasher"
 "$HARNESS/flasher/build-flasher.sh" | tail -4
 
@@ -146,6 +149,7 @@ else
 	kill "$SRV" 2> /dev/null; SRV=""
 fi
 
+fi # POSTONLY
 [[ $POST == 1 ]] || { echo "done (--no-post)"; exit 0; }
 
 step "8. first boot of the new image: first-login wizard"

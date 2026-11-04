@@ -171,6 +171,7 @@ def cmd_firstlogin(a):
         (r'Press Enter to start', ''),
         (r'[Cc]reate root password', pw), (r'[Rr]epeat root password', pw),
         (r'[Cc]hoose default system command shell', ''), (r'shell:\s*$', '1'),
+        (r'^\s*\d\) zsh\s*$', '1'),  # newer wizard: bare menu, no 'shell:' prompt line
         (r'[Pp]rovide a username', user),
         (r'[Cc]reate user \(.*\) password', pw), (r'[Rr]epeat user \(.*\) password', pw),
         (r'[Pp]rovide your real name', 'Arun Iyengar'),

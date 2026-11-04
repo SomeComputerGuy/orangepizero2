@@ -103,6 +103,8 @@ Cedrus `/dev/video0` OUTPUT formats on the board (2026-11-03): `MG2S S264 S265 V
 | JPEG ("HFIF" [sic]) | 45 MPPS | **none** | VE JPEG block at VE+0xE00 (`VE_MODE` bit 5, vendor `cedar_ve` IRQ path). No V4L2 driver on any sunxi | — | **GAP** | **W21**: stateful/stateless JPEG decode in cedrus |
 | Decode up to 4K@60 (general) | 4K@60 | — | see rows above | 8-bit HEVC 81.8 fps tiled, AFBC10 83.9 fps (VE-bound) | PARTIAL | tracked |
 
+**User Manual V1.0 (2026-11-04, docs/vendor/H616_User_Manual_V1.0.pdf, 831 pp, git-ignored; source github.com/CharlieYu4994/aw-doc):** same decode list as the datasheet, but §4.4.1 gives **MPEG-4 SP/ASP max resolution 3840x2160** (rate still 1080p@60). New acceptance item: decode an MPEG-4 ASP 3840x2160 stream on the VE (bit-exact vs FFmpeg; fps reported, no 60 fps target). The manual has register chapters for CCU (§3.3), TVE (§7.2), HDMI (§7.3), Audio (ch. 8), EMAC (ch. 6), DMA, IOMMU, Crypto; no VE/GPU registers.
+
 **W2 result (2026-11-03, harness/research/impl-legacy-decode.md):** with the Jernej FFmpeg fork, bit-exact (normative transforms) or within the IEEE 1180 IDCT envelope: MPEG-2 (incl. field pictures), H.263 BP, Spark, VP8, VC-1 AP, H.264 High features, MPEG-4 SP/ASP progressive, and Xvid without half-pel GMC. 1080p@60 speed is met by every format with a HW path except Xvid qpel+GMC (47–51 fps). Open: the MPEG-2 1080-line MC boundary (fix patch), MPEG-1 (no path), MPEG-4 interlaced B, Xvid half-pel GMC, WMV9 MP B-frames, MPEG-4 data partitioning, VC-1 SP (no stream). Still without a driver: AVS/AVS+ and JPEG.
 
 ### 2.4.2 Video encoding

@@ -21,10 +21,11 @@ def dmv_len(r):
     raise ValueError('bad dmv_length')
 def dmv(r):
     ln = dmv_len(r)
-    if ln == 0: return 0
-    c = r.u(ln)
-    v = c if c >> (ln - 1) else c - (1 << ln) + 1
-    r.u(1)  # marker
+    v = 0
+    if ln:
+        c = r.u(ln)
+        v = c if c >> (ln - 1) else c - (1 << ln) + 1
+    r.u(1)  # marker, also after a zero length
     return v
 for m in re.finditer(b'\x00\x00\x01', b):
     i = m.end(); c = b[i]; r = BR(b, i + 1)

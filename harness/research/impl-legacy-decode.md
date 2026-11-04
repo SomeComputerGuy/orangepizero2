@@ -13,6 +13,8 @@ Both kernels expose `MG2S S264 S265 VP8F VP9F AVS2 SVC1 MG4S S263 SPKS`. VE at 6
 
 > **Board update (2026-11-03, image 4321861ff = fix/sunxi-h616-legacy-dec 7828d5a1f, image kernel; details in §6):**
 > - **MPEG-1: 7/7 OK.** The 6 ISO vectors plus 1080p30; ccm1 is bit-exact. D-pictures (tcela-18) are bit-exact (31/31) against an exact DC-only reference.
+> - **Xvid GMC frame 24: fixed (2026-11-04)** by resetting the VE before each MPEG-4 job (§6.4). It was HW state carried between pictures, and
+>   it also hit P-VOPs.
 > - **MPEG-2 1080-line fix confirmed:** 1080p60 and 1080i are now within the envelope (max 3, was 21-22).
 > - **ISO 14496-4 ASP: 21/30 OK.** 19 pass the envelope criterion, and 2 (vcon-asp5L0, vcon-asp14L1, 1-point GMC at accuracy 0) are **FFmpeg reference bugs**: the HW matches a fixed FFmpeg within 1-3. 1 more is IDCT-marginal (vcon_a1ge_13_asp_l2, max 4 against an envelope of 3).
 >   8 fail: they are interlaced (field direct mode in B-VOPs, chroma of field qpel MBs).
@@ -320,6 +322,31 @@ The runs are `legacy-dec/board-slot.sh tests` and `gmc-f24.sh`, with results in 
   MBs elsewhere and skipped GMC MBs are right.
 - Root cause **[U]** (HW state at the VOP start for mcsel MBs). Next step: a driver experiment, e.g. re-initialising the GMC/MV state registers
   before the trigger.
+- **Fixed (2026-11-04) [M]**: a VE reset before every MPEG-4 Part 2 job. Patch `media-cedrus-reset-the-VE-before-each-MPEG-4-Part-2-job.patch`,
+  commit 26175bf8b on `fix/sunxi-h616-mpeg4-ve-reset` (on 7828d5a1f, not pushed).
+  - It is **not GMC-specific**: two new Xvid clips (`legacy-serve/gen/xs/x7.m4v`, `x9.m4v`, 1080p/720p) corrupt the first 5-7 MBs of a **P**
+    (or S) VOP the same way. The garbage is **history dependent**: x9 alone breaks from frame 5, but after x1/x3/x7 in the same boot it breaks
+    only at frame 27. The same S-VOP trajectory, registers and MB0 pattern (decode#82 of xvid-gmc) decodes correctly elsewhere in the stream.
+  - Ruled out (debug kernel `mp4dbg1`, `mpeg4_dbg` bits, 0 effect on frame 24):
+    - MC_CACHE_EN off;
+    - bwd ref = 0 or = fwd for P/S;
+    - zeroing MV regs 0x98-0xb4 and GMC regs 0x60-0x7c before writing;
+    - NC_FLAG_OUT for S (worse);
+    - field TRB/TRD variants.
+  - Ruled out with bitstream rewrites (`m4v-retraj.py`):
+    - giving the earlier S-VOPs frame 24's trajectory;
+    - giving frame 24 the earlier trajectory.
+  - Fixed: `reset_control_reset()` before each job (debug bit 0x2000, then the real patch in `cedrus_device_run`). Result: 0 bad MBs on
+    xvid-gmc (all 299 frames), x7, x9. The ISO ASP 30 + SP 3 results are numerically identical (19 OK/11 FAIL by sum-raw, SP unchanged).
+    The generated Xvid/H.263/Spark/ASP suite is unchanged, except g-xvid-gmc FAIL -> OK. No measurable time cost (qpel+GMC 300 fr: 6.41 vs
+    6.45 s).
+  - Note: `m4v-sprite.py` had a bug: it read the marker bit only after non-zero dmv lengths. That is fixed. The real Xvid trajectories are
+    (0,-1)(0,2)(0,0), and (0,0)(0,1)(0,0) for frame 24.
+- **qpel+GMC speed (47-51 fps vs 60) is a HW limit [M]**:
+  - S-VOPs cost 18-49 ms of VE time (mean 33.8), against P 6.8, B 10.1 and I 7.6 ms.
+  - 143/300 frames of that stream are S-VOPs.
+  - The warp runs at about 8 cycles per pixel at 600 MHz.
+  - Neither the MC cache bit nor the reset changes it.
 
 ## 5. Open / needs a decision
 1. ISO 14496-4 ASP/SP zips: accept ISO's click-through copyright licence? This is needed for MPEG-4 ASP conformance (B, qpel, GMC,

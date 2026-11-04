@@ -33,7 +33,14 @@ ok bluetooth "hciconfig hci0 2>/dev/null | grep -q 'UP RUNNING'" "$(systemctl is
 f=$(systemctl --failed --no-legend | awk '{print $2}' | tr '\n' ' '); ok failed-units "[ -z '$f' ]" "$f"
 w=$(journalctl -b -p warning --no-pager -q | grep -cE 'tmpfiles.*file flags|EXTRA_OPTS|ConfigurationDirectory'); ok bsp-journal-warnings "[ $w -eq 0 ]" "$w"
 ok fstab-sd-wear "findmnt -no OPTIONS / | grep -q noatime && findmnt -no FSTYPE /var/spool/cups | grep -q tmpfs" "$(findmnt -no OPTIONS /)"
-ok dhcp-client-id-mac "networkctl status end0 --no-pager | grep -q 'Client ID: 02:00'" ""
+# minimal image: systemd-networkd shows the client ID. Server image (NetworkManager): the merged NM
+# config must carry ipv4.dhcp-client-id=mac and end0 must hold the static lease, which the harness DHCP
+# server only hands to client ID 01:<MAC>.
+if systemctl is-active -q NetworkManager; then
+  ok dhcp-client-id-mac "NetworkManager --print-config | grep -qx 'ipv4.dhcp-client-id=mac' && ip -br -4 a show end0 | grep -q '10.56.0.107/'" "NetworkManager"
+else
+  ok dhcp-client-id-mac "networkctl status end0 --no-pager | grep -q 'Client ID: 02:00'" "systemd-networkd"
+fi
 ok cups "systemctl is-active -q cups && lpstat -r | grep -q running" "$(cupsd -v 2>/dev/null | head -1)"
 ok watchdog "[ -e /dev/watchdog0 ]" "$(systemctl show -p RuntimeWatchdogUSec --value)"
 ok hwrng "grep -q . /sys/class/misc/hw_random/rng_current" "$(cat /sys/class/misc/hw_random/rng_current)"

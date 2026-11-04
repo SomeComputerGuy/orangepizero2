@@ -54,6 +54,22 @@ known gap · **GAP** no driver anywhere.
 
 Board-level config lives in `userpatches/` (this repo).
 
+### Image variants (one config: `userpatches/config-opiz2-printserver.conf`)
+
+| Command | Image | Network | Extras |
+|---|---|---|---|
+| `./build.sh` | `..._minimal.img.xz` (BUILD_MINIMAL=yes) | systemd-networkd + timesyncd | none |
+| `./build.sh OPIZ2_VARIANT=server` | `....img.xz` (standard Armbian CLI, BUILD_MINIMAL=no) | NetworkManager (netplan) + chrony | Armbian `packages.additional`, armbian-config (from github.armbian.com/configng), armbian-zsh, plymouth (no splash) |
+
+Both share kernel, U-Boot, firmware, BSP and ccache; the server variant builds its own rootfs cache once
+(`cache/rootfs/rootfs-arm64-stonking-cli_*`). Printer/hardware packages, rusticl, the libclc divert, SD-wear fstab,
+WiFi regdomain, overlays and patches are identical. DHCP identity 01:<MAC> (harness static lease 10.56.0.107):
+netplan `dhcp-identifier: mac` on networkd, `/etc/NetworkManager/conf.d/zz-30-opiz2-dhcp-identity.conf` on NM.
+`TUNING_PROFILE=none` on both, so armbian-config does not replace the SD-wear settings on first boot.
+Server-image notes: pick bash at first login (the harness's ssh commands assume it); before running hostapd or
+wpa_supplicant by hand on wlan0, `nmcli device set wlan0 managed no`. `flash-sd.sh` takes the newest image, so
+it flashes whichever variant was built last. Not in either image: ffmpeg (Ubuntu's 8.1.2 has no v4l2-request hwaccel).
+
 ## 3. Next
 
 0. Hardware the user has to supply: HDMI display, 13-pin expansion board, USB stick, USB-C data cable, TV, printer,

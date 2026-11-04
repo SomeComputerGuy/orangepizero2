@@ -79,6 +79,7 @@ it flashes whichever variant was built last. Not in either image: ffmpeg (Ubuntu
    USB-C gadget, IR, PWM/I2C/SPI overlays, KASLR, GPU GLES/OpenCL.
 3. Decode: AFBC 10-bit 4K60; AVS2. Encoder: §1.
 4. Open the Armbian PRs (user sends/approves).
+6. Vulkan dEQP: stage deqp-vk (vulkan_headless build) says "Vulkan is not supported" (tcuPlatform.cpp:54) even with the env set, while vulkaninfo sees Mali-G31; libvulkan is never dlopened. Fix the build/platform, then rerun vk-subset.
 5. **Queued for when tokens are back (added 2026-11-04 ~18:30, start ≈ 2026-11-05 03:30): OPi5 / RK3588S cross-check.**
    One agent (fable if available, else Opus), read-only on both trees. Sources: the other project at ~/orangepi5
    (read only, never modify it or its memory) and its GitHub repos. Compare every patch / branch we carry

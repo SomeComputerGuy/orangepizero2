@@ -68,3 +68,19 @@ if command -v cupsd >/dev/null; then
 	cupsctl --remote-admin --remote-any --share-printers 2>/dev/null || true
 	systemctl enable cups cups-browsed ipp-usb avahi-daemon >/dev/null 2>&1 || true
 fi
+
+# 3b. Scan: ipp-usb serves the MFP's eSCL to the LAN (driverless scanning from Windows/macOS/iOS/
+# Android/Linux), saned (socket-activated) shares the local SANE backends with private-range clients.
+if [ -f /etc/ipp-usb/ipp-usb.conf ]; then
+	sed -i -E 's/^(\s*interface\s*=\s*)loopback/\1all/' /etc/ipp-usb/ipp-usb.conf
+fi
+if [ -f /etc/sane.d/saned.conf ]; then
+	grep -qx '# opiz2: LAN clients' /etc/sane.d/saned.conf || cat >> /etc/sane.d/saned.conf <<'SANED'
+# opiz2: LAN clients
+10.0.0.0/8
+172.16.0.0/12
+192.168.0.0/16
+fe80::/10
+SANED
+	systemctl enable saned.socket >/dev/null 2>&1 || true
+fi

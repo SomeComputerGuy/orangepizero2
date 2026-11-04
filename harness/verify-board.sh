@@ -42,6 +42,7 @@ else
   ok dhcp-client-id-mac "networkctl status end0 --no-pager | grep -q 'Client ID: 02:00'" "systemd-networkd"
 fi
 ok cups "systemctl is-active -q cups && lpstat -r | grep -q running" "$(cupsd -v 2>/dev/null | head -1)"
+ok scan-stack "command -v scanimage >/dev/null && [ -e /usr/lib/aarch64-linux-gnu/sane/libsane-airscan.so.1 ] && [ -e /usr/lib/aarch64-linux-gnu/sane/libsane-hpaio.so.1 ] && grep -qE '^\s*interface\s*=\s*all' /etc/ipp-usb/ipp-usb.conf && systemctl is-enabled -q saned.socket && systemctl is-active -q saned.socket" "$(scanimage -V 2>/dev/null | head -1)"
 ok watchdog "[ -e /dev/watchdog0 ]" "$(systemctl show -p RuntimeWatchdogUSec --value)"
 ok hwrng "grep -q . /sys/class/misc/hw_random/rng_current" "$(cat /sys/class/misc/hw_random/rng_current)"
 r INFO kernel-warnings "$(dmesg -l err,warn | wc -l) err/warn lines: $(dmesg -l err,warn | cut -c16- | sed -E 's/0x[0-9a-f]+|\b[0-9a-f]{16}\b//g' | sort | uniq -c | sort -rn | head -6 | sed 's/^ *//' | tr '\n' '|')"

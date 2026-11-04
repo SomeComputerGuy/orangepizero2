@@ -25,6 +25,7 @@ Board scripts (all run as `harness/ssh.sh 'python3 -' < script`; nothing to inst
 | GLES **1.0** | **Not today, but fixable by packaging** (new finding) | Debian/Ubuntu build Mesa with `-Dgles1=disabled`. No ES1 EGL config, ES1 context → EGL_BAD_ALLOC. Needs a Mesa rebuild with `-Dgles1=enabled` plus `libgles1` (§2.0). |
 | GLES **3.2** | **Not with any released Mesa.** Possible only through (A) new Mesa driver work (GS + tessellation) or (B) the Arm proprietary stack. | Missing in panfrost: geometry shaders, tessellation, and so OES_texture_cube_map_array. Nothing exists for Bifrost/JM upstream or in an open MR. |
 | OpenCL **2.0** | **Not with rusticl.** Possible only through (B) the Arm stack. With rusticl the row can be "OpenCL 3.0 with 1.2 C, conformance subset passing", plus a documented 2.0 gap. | rusticl hard-codes generic AS, program-scope globals, pipes, device enqueue, WG collectives and non-uniform WG to "unsupported" for every driver. SVM needs panfrost kernel uAPI work. |
+| (measured) CTS baseline | GLES 2/3: 0 Fail. GLES 3.1: 1 Fail (Mesa CI skips that case too), 1 KHR Fail still open, 2 OOM (board RAM limit). OpenCL: **82 subtest Fails + 2 compiler crashes**. Vulkan: not run yet (runner bug, fixed) | See section 4.1. The OpenCL row above is therefore "3.0 / 1.2 C with known upstream rusticl/Bifrost bugs", not "subset passing". |
 | (found) OpenCL correctness | **Fixable now (image change)** | Ubuntu's upstream libclc-22 breaks `sin()`/`cos()` and friends on rusticl. Mesa's libclc fork 22.1.8.3 is a drop-in fix. See §3.3. |
 
 ## 1. MC1 vs MP2: the G31 on H616 has exactly one shader core
@@ -294,7 +295,7 @@ sqrt/exp/log/pow/atan/tanh   PASS                     PASS (same ULPs)
 ```
 So the fork is a confirmed drop-in fix. Branch prepared (§6).
 
-### 3.5 / 4. Conformance suites: built, staged, waiting for a board slot
+### 3.5 / 4. Conformance suites: built, staged, run 2026-11-03/04 (results in 4.1)
 Approved 2026-11-03. Everything is cross-built on the host (ccache), with pins and sha256s recorded. Nothing has a
 complete board result yet. The first attempt was OOM-killed while the AVS2 agent's decoder used about 700 MB, and that
 contributed to the 01:15 watchdog reset, so the runners now gate on free memory (see below).
@@ -330,6 +331,47 @@ How to run:
   OOM killer took is retried, not recorded as Crash. Output goes to `/root/cts/results/<suite>/results.csv` (dEQP:
   test,status,duration,detail; OpenCL: binaries.csv plus per-subtest results.csv). Pull the results into
   `harness/analysis/gpu/cts/` as the regression baseline for the route-A Mesa work.
+
+### 4.1 Results (board image 5cc24a7c8, Mesa 26.2.4, queue finished 2026-11-04 07:08)
+
+Machine-readable baseline: `harness/analysis/gpu/cts/<suite>/` holds `summary.txt`, `nonpass.csv` (every row that is not Pass or NotSupported) and `results.csv.xz` (all cases). OpenCL has `binaries.csv`, `results.csv` and `logs.tar.xz`. The `.qpa` logs stay on the board in `/root/cts/results`.
+
+| Suite | Pass | NotSupported | Other |
+|---|---|---|---|
+| dEQP gles2-main (17165) | 17049 | 110 | 3 QualityWarning, 3 CompatibilityWarning |
+| dEQP gles3-main (44768) | 44619 | 144 | 5 QualityWarning |
+| dEQP gles31-main (37802) | 30480 | 7319 | **1 Fail, 2 OOM** |
+| KHR gles2-khr-main (473) | 468 | 5 | none |
+| KHR gles3-khr-main (6498) | 6268 | 230 | none |
+| KHR gles31-khr-main (4101) | 2959 | 1141 | **1 Fail** |
+| KHR gles32-khr-main (1405) | none | none | 1405 Missing: glcts creates no ES 3.2 context. This is expected because the driver exposes 3.1 (section 2). |
+| OpenCL-CTS Mesa profile (61 binaries) | 3132 subtests passed | | 82 subtests failed, 2 binaries crashed, 3 timed out (below) |
+| dEQP-VK subset (5227) | none | none | 5227 Missing: the run never started (below) |
+
+There are 0 Fail in gles2 and gles3. The full Mesa CI GLES mustpass set is therefore clean except for 1 gles31 Fail and 2 gles31 OOM. Triage:
+
+- **`dEQP-GLES31.functional.fbo.no_attachments.maximums.all`, Fail ("Framebuffer did not behave as expected").** Upstream treats it as expected. Mesa CI skips this case on the G52, the same Bifrost v7 family (`src/panfrost/ci/panfrost-g52-skips.txt`: "Huge render, which eventually times out"). It renders at GL_MAX_FRAMEBUFFER_WIDTH/HEIGHT with no attachments. On one core with 1 GB it is a limit of this board, not a bug we introduced. The .qpa on the board shows which sample point differs.
+- **`...draw_indirect.compute_interop.large.drawelements_{separate,combined}_grid_1000x1000_drawcount_5000`, OOM.** This is a memory limit of the board, not a leak. Run alone under a 700 MB memcg, the separate case reached 700 MB in 8 s, and Mesa logged `DRM_IOCTL_PANFROST_CREATE_BO failed (err=12)`. The grid needs more GPU (shmem) memory than a 968 MB board can give. The combined case is the twin and still needs a run of its own.
+- **`KHR-GLES31.core.blend_equation_advanced.test_coherency.mixedSequence`, Fail ("results differ").** This is open; it may be our setup or a G31/Mesa 26.2 problem. panfrost advertises `GL_KHR_blend_equation_advanced_coherent`. Mesa CI runs gles31-khr-main on the G52 and does not list this case in its fails or flakes files. So it is either specific to the G31 (one core, different tile setup), a regression in 26.2.4, or a flake. Next step: rerun it alone several times and read the .qpa.
+- **OpenCL (rusticl on panfrost).** Mesa CI runs the OpenCL-CTS quick profile only on the G610 (Valhall, `panfrost-g610-fails.txt`). No Mesa CI covers Bifrost, so this is the first baseline.
+  - The `Basic` enqueue_map_image Fail also appears in the G610 list. The other two Basic Fails (`async_copy_local_to_global` and `async_strided_copy_local_to_global`) are not in that list.
+  - **Crashes:** `Relationals` and `Integer Ops` crash with SIGSEGV after "Unhandled ALU op ine" in the Bifrost compiler. The same class of missing lowering is open as mesa#10122 (G31, "Unhandled ALU op ieq"): https://gitlab.freedesktop.org/mesa/mesa/-/work_items/10122. This is a real upstream compiler bug, likely an integer vector or bit-size that bi_emit_alu does not lower.
+  - **Math (54 of 106 failed):**
+    - Most failures are fp16 ("half") paths, with ULP errors of about 1400 in add, subtract and others.
+    - Several fp32 functions return NaN for valid inputs, for example floor(0x1p-27) gives -nan and acos(-0x1p+121) gives nan.
+    - Real driver bugs: fp16 arithmetic and fp32 handling of special and denormal inputs on Bifrost. These are not hardware limits; Arm's driver passes the same tests on G31.
+  - **Half Ops:** 5 vstore_half rounding variants fail (conversion rounding modes).
+  - **Atomics (8 of 13) and C11 Atomics (5 of 32):** global atomic add, sub, min, max, inc, dec, cmpxchg, xor and fetch_* fail. These are wrong results, not crashes, and point to a Bifrost global-atomics bug in the rusticl path.
+  - **Thread Dimensions:** 3 of 6 quick_{2d,3d} local-size cases fail.
+  - **Images:** Samplerless 1Dbuffer (int, uint, float) and Kernel 2D float 2Darray fail. The `Images (Kernel 3D *)` binaries hit the 5000 s timeout. On one core that is a performance limit; they need a longer timeout or a reduced profile.
+  - **Count:** 82 failed subtests in 9 binaries, plus 2 crashes and 3 timeouts. None of these come from the libclc fork; sin and cos compile and run with it.
+- **dEQP-VK subset, all Missing.** deqp-vk exited without reporting a single case, and the old runner turned "clean exit, nothing reported" into "done". The likely cause is that the runner passed the GL-only Mesa CI args (`--deqp-surface-type=pbuffer`, `--deqp-gl-config-name`, `--deqp-visibility`, ...) to deqp-vk. Mesa's `deqp-panfrost-g52-vk.toml` passes none, and our sanity run of `api.smoke` without them passed. The output was not kept, so this is not proven. Fixed in `deqp-run.py`: deqp-vk gets only log/watchdog args, and a process that exits before its first case now writes `StartupError` rows plus `shard-N.startup.log`.
+
+**Next board slot (all short, use `cts-restage.sh`; the runner now needs OOMPolicy=continue, MemoryMax=600M):**
+1. Restage the new `deqp-run.py`, remove `/root/cts/results/vk-subset`, and start the queue again. Only the VK step runs, about 5227 cases with jobs=1.
+2. Run the two OOM cases alone without a memcg cap while watching `/proc/meminfo` Shmem and the panfrost gems, to record their peak. Expected result: still OOM at about 900 MB or more, which stays as a recorded hardware limit.
+3. Run `mixedSequence` alone 5 times, and copy its .qpa and the `no_attachments.maximums.all` .qpa to the host.
+4. Optionally, rerun `Images (Kernel 3D *)` with `--timeout 20000`, and capture the `ine` shader with `BIFROST_MESA_DEBUG=shaders` for an upstream report.
 
 ## 5. Recommended plan
 

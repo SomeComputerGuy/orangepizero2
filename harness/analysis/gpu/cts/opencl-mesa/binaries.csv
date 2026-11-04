@@ -1,0 +1,61 @@
+suite,verdict,exit,summary,seconds,command
+Compute Info,Pass,0,PASSED 3 of 3 tests.,3,computeinfo/test_computeinfo
+Basic,Fail,1,FAILED 3 of 108 tests.,1893,basic/test_basic
+API,Fail,1,FAILED 1 of 149 tests.,31,api/test_api
+Compiler,Pass,0,PASSED 73 of 73 tests.,149,compiler/test_compiler
+Common Functions,Pass,0,PASSED 18 of 18 tests.,15,commonfns/test_commonfns
+Geometric Functions,Pass,0,PASSED 8 of 8 tests.,15,geometrics/test_geometrics
+Relationals,Crash,-11,,1,relationals/test_relationals
+Thread Dimensions,Fail,1,FAILED 3 of 6 tests.,413,thread_dimensions/test_thread_dimensions quick*
+Atomics,Fail,1,FAILED 8 of 13 tests.,5,atomics/test_atomics
+Profiling,Pass,0,PASSED 33 of 33 tests.,6,profiling/test_profiling
+Events,Pass,0,PASSED 30 of 30 tests.,35,events/test_events
+Printf,Pass,0,PASSED 18 of 18 tests.,7,printf/test_printf
+Device Partitioning,Pass,0,PASSED 9 of 9 tests.,1,device_partition/test_device_partition
+Buffers,Pass,0,PASSED 102 of 102 tests.,91,buffers/test_buffers
+Images (API Info),Pass,0,PASSED 6 of 6 tests.,125,images/clGetInfo/test_cl_get_info
+Images (Kernel Methods),Pass,0,PASSED 6 of 6 tests.,79,images/kernel_image_methods/test_kernel_image_methods
+Images (Kernel 1D int),Pass,0,PASSED 2 of 2 tests.,191,images/kernel_read_write/test_image_streams CL_FILTER_NEAREST int 1D 1Darray
+Images (Kernel 2D int),Pass,0,PASSED 2 of 2 tests.,914,images/kernel_read_write/test_image_streams CL_FILTER_NEAREST int 2D 2Darray
+Images (Kernel 3D int),Timeout,timeout,,5000,images/kernel_read_write/test_image_streams CL_FILTER_NEAREST int 3D
+Images (Kernel 1D uint),Pass,0,PASSED 2 of 2 tests.,213,images/kernel_read_write/test_image_streams CL_FILTER_NEAREST uint 1D 1Darray
+Images (Kernel 2D uint),Pass,0,PASSED 2 of 2 tests.,1023,images/kernel_read_write/test_image_streams CL_FILTER_NEAREST uint 2D 2Darray
+Images (Kernel 3D uint),Timeout,timeout,,5000,images/kernel_read_write/test_image_streams CL_FILTER_NEAREST uint 3D
+Images (Kernel 1D float),Pass,0,PASSED 2 of 2 tests.,324,images/kernel_read_write/test_image_streams CL_FILTER_NEAREST float 1D 1Darray
+Images (Kernel 2D float),Fail,1,FAILED 1 of 2 tests.,1536,images/kernel_read_write/test_image_streams CL_FILTER_NEAREST float 2D 2Darray
+Images (Kernel 3D float),Timeout,timeout,,5000,images/kernel_read_write/test_image_streams CL_FILTER_NEAREST float 3D
+Images (clCopyImage 1D),Pass,0,PASSED 5 of 5 tests.,80,images/clCopyImage/test_cl_copy_images 1D 1DTo1Dbuffer 1Darray 1Dbuffer 1DbufferTo1D
+Images (clCopyImage 2D),Pass,0,PASSED 6 of 6 tests.,2025,images/clCopyImage/test_cl_copy_images 2D 2Darray 2Darrayto2D 2Darrayto3D 2Dto2Darray 2Dto3D
+Images (clCopyImage 3D),Pass,0,PASSED 3 of 3 tests.,502,images/clCopyImage/test_cl_copy_images 3D 3Dto2D 3Dto2Darray
+Images (clReadWriteImage),Pass,0,PASSED 6 of 6 tests.,83,images/clReadWriteImage/test_cl_read_write_images
+Images (clFillImage int),Pass,0,PASSED 6 of 6 tests.,124,images/clFillImage/test_cl_fill_images int
+Images (clFillImage uint),Pass,0,PASSED 6 of 6 tests.,135,images/clFillImage/test_cl_fill_images uint
+Images (clFillImage float),Pass,0,PASSED 6 of 6 tests.,312,images/clFillImage/test_cl_fill_images float
+Images (Samplerless int),Fail,1,FAILED 1 of 6 tests.,17,images/samplerlessReads/test_samplerless_reads int
+Images (Samplerless uint),Fail,1,FAILED 1 of 6 tests.,18,images/samplerlessReads/test_samplerless_reads uint
+Images (Samplerless float),Fail,1,FAILED 1 of 6 tests.,41,images/samplerlessReads/test_samplerless_reads float
+Mem (Host Flags),Pass,0,PASSED 9 of 9 tests.,1,mem_host_flags/test_mem_host_flags
+Select,Pass,0,PASSED 22 of 22 tests.,15,select/test_select -w
+Contractions,Pass,0,PASSED 16 of 16 tests.,2,contractions/test_contractions
+Math,Fail,1,FAILED 54 of 106 tests.,877,math_brute_force/test_bruteforce -w
+Integer Ops,Crash,-11,,13,integer_ops/test_integer_ops integer_* quick_*
+Half Ops,Fail,1,FAILED 5 of 13 tests.,36,half/test_half -w
+C11 Atomics,Fail,1,FAILED 5 of 32 tests.,12,c11_atomics/test_c11_atomics
+Execution Model,Pass,0,,1,device_execution/test_device_execution
+Generic Address Space,Pass,0,,1,generic_address_space/test_generic_address_space
+Non Uniform Work Groups,Pass,0,,18,non_uniform_work_group/test_non_uniform_work_group
+Pipes,Pass,0,,1,pipes/test_pipes
+SVM,Pass,0,,1,SVM/test_svm
+Workgroups,Pass,0,,1,workgroups/test_workgroups
+Device timer,Pass,0,PASSED 2 of 2 tests.,6,device_timer/test_device_timer
+SPIRV new,Pass,0,PASSED 231 of 231 tests.,33,spirv_new/test_spirv_new
+SPIR,Pass,0,,1,spir/test_spir
+Mipmaps (Kernel),Pass,0,PASSED 5 of 5 tests.,1,images/kernel_read_write/test_image_streams test_mipmaps CL_FILTER_NEAREST
+Mipmaps (clCopyImage),Pass,0,,1,images/clCopyImage/test_cl_copy_images test_mipmaps
+Mipmaps (clReadWriteImage),Pass,0,PASSED 6 of 6 tests.,1,images/clReadWriteImage/test_cl_read_write_images test_mipmaps
+Subgroups,Pass,0,,1,subgroups/test_subgroups
+cl_ext_cxx_for_opencl,Pass,0,,1,extensions/cl_ext_cxx_for_opencl/test_cl_ext_cxx_for_opencl
+cl_khr_semaphore,Pass,0,,1,extensions/cl_khr_semaphore/test_cl_khr_semaphore
+cl_khr_command_buffer,Pass,0,,1,extensions/cl_khr_command_buffer/test_cl_khr_command_buffer
+cl_khr_command_buffer_mutable_dispatch,Pass,0,,1,extensions/cl_khr_command_buffer/cl_khr_command_buffer_mutable_dispatch/test_cl_khr_mutable_dispatch
+cl_khr_kernel_clock,Pass,0,PASSED 2 of 2 tests.,1,extensions/cl_khr_kernel_clock/test_cl_khr_kernel_clock

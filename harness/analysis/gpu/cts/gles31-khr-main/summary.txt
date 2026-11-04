@@ -1,0 +1,4 @@
+caselist /root/cts/deqp-gles/mustpass/gles31-khr-main.txt, 4101 cases, 106 s
+Fail                   1
+NotSupported           1141
+Pass                   2959

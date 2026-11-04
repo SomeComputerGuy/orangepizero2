@@ -1,0 +1,2 @@
+test,status,duration_s,detail
+KHR-GLES31.core.blend_equation_advanced.test_coherency.mixedSequence,Fail,0.00,results differ

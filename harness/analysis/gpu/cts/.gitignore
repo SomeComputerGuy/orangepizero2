@@ -1,0 +1,7 @@
+# Raw run outputs (~36 MB) stay local; committed: summary.txt, nonpass.csv, results.csv.xz,
+# opencl-mesa/{binaries,results}.csv and opencl-mesa/logs.tar.xz. The .qpa logs stay on the board.
+shard-*
+*.qpa
+/gles*/results.csv
+/vk-subset/results.csv
+/opencl-mesa/logs/

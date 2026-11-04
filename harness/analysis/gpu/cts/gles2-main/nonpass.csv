@@ -1,0 +1,7 @@
+test,status,duration_s,detail
+dEQP-GLES2.functional.rasterization.interpolation.basic.lines,QualityWarning,0.00,Interpolation was calculated using projected coordinateds
+dEQP-GLES2.functional.rasterization.interpolation.projected.lines,QualityWarning,0.00,Interpolation was calculated using projected coordinateds
+dEQP-GLES2.functional.rasterization.interpolation.projected.lines_wide,QualityWarning,0.00,Interpolation was calculated using projected coordinateds
+dEQP-GLES2.functional.flush_finish.flush,CompatibilityWarning,0.00,Suspicious performance behavior
+dEQP-GLES2.functional.flush_finish.finish,CompatibilityWarning,0.00,Suspicious performance behavior
+dEQP-GLES2.functional.flush_finish.finish_wait,CompatibilityWarning,0.00,Suspicious performance behavior

@@ -23,6 +23,10 @@ RE_RES = re.compile(r"^\s+(Pass|Fail|NotSupported|QualityWarning|CompatibilityWa
                     r"ResourceError|Crash|Timeout|Waiver|DeviceLost)\s*\((.*)\)\s*$")
 
 
+VK_ARGS = ["--deqp-log-images=disable", "--deqp-log-shader-sources=disable", "--deqp-shadercache=disable",
+           "--deqp-crashhandler=enable", "--deqp-watchdog=enable"]
+
+
 def wait_for_memory(min_kb=350000, poll=60):
     """Board is shared with other agents: never start a test process while avs2dec runs or memory is short."""
     while True:
@@ -56,7 +60,8 @@ def run_shard(idx, cases, a, extra):
             cl = os.path.join(a.out, "shard-%d.caselist" % idx)
             with open(cl, "w") as f:
                 f.write("\n".join(todo) + "\n")
-            cmd = [a.deqp, "--deqp-caselist-file=" + cl, "--deqp-log-filename=" + os.path.join(a.out, "shard-%d.qpa" % idx)] + MESA_CI_ARGS + extra
+            base = VK_ARGS if os.path.basename(a.deqp).startswith("deqp-vk") else MESA_CI_ARGS  # Mesa CI gives deqp-vk no GL/surface args
+            cmd = [a.deqp, "--deqp-caselist-file=" + cl, "--deqp-log-filename=" + os.path.join(a.out, "shard-%d.qpa" % idx)] + base + extra
             wait_for_memory()
             p = subprocess.Popen(cmd, cwd=os.path.dirname(a.deqp), preexec_fn=oom_first, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                  text=True, errors="replace", bufsize=1)
@@ -87,8 +92,16 @@ def run_shard(idx, cases, a, extra):
                         w.writerow([cur, "Crash", "%.1f" % (time.time() - t0),
                                     ("exit %d: " % p.returncode) + " | ".join(l.strip() for l in tail[-3:])[:300]]); fo.flush()
                         todo = todo[pos[cur] + 1:]
+                    elif last < 0:  # exited before reporting any case: record why instead of "Missing"
+                        msg = "exit %d before first case: " % p.returncode + " | ".join(l.strip() for l in tail)[:300]
+                        with open(os.path.join(a.out, "shard-%d.startup.log" % idx), "w") as lf:
+                            lf.write(msg + "\n")
+                        print(msg, file=sys.stderr)
+                        for c in todo:
+                            w.writerow([c, "StartupError", "", msg])
+                        fo.flush(); todo = []
                     else:
-                        todo = todo[last + 1:] if last >= 0 else []  # clean exit; resume after last reported
+                        todo = todo[last + 1:]  # clean exit; resume after last reported
                     break
                 tail = (tail + [line])[-6:]
                 m = RE_CASE.match(line.rstrip("\n"))

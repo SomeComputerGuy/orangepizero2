@@ -1,0 +1,4 @@
+caselist /root/cts/deqp-gles/mustpass/gles3-main.txt, 44768 cases, 1822 s
+NotSupported           144
+Pass                   44619
+QualityWarning         5

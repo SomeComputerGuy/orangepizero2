@@ -1,0 +1,3 @@
+caselist /root/cts/deqp-gles/mustpass/gles3-khr-main.txt, 6498 cases, 169 s
+NotSupported           230
+Pass                   6268

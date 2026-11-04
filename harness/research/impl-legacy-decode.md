@@ -406,3 +406,24 @@ The runs are `legacy-dec/board-slot.sh tests` and `gmc-f24.sh`, with results in 
 5. VC-1 Simple profile: no stream available.
 6. H.264 4:0:0 monochrome rejected by the driver.
 7. MPEG-4 data partitioning / RVLC: rejected by the driver ("no such mode"). The vendor library's handling is not mined [U].
+
+### 6.3d Board session 2026-11-04 (image 5bc4d01ed, debug slot mp4dbg4)
+
+- **vcon-asp14L4 (interlaced hpel + GMC, 352x576, 298 frames): OK.** On the image kernel the HW output matches vm_dec and patched FFmpeg with 0 luma and 0 chroma MBs over 4 (max 3). Stock FFmpeg differs (3081 MBs) because of its field-direct bug.
+- **vcon_ge_1 B1 field-bidir mismatch: cause found.** FFmpeg's `FFBF` dump of B field MVs is in mpeg4videodec.c in ffmpeg-hostfix. 160 of 163 bad fields have a backward field MV with a vertical component outside [-32,31] (field half-pel). Only 2 of 13233 good fields have one.
+  - The HW register dump confirms a wrap. At MB(0,1) bwd f0, FFmpeg/vm give (49,-33); the HW gives (49,62) in frame units, i.e. 31 = -33+64 in field units.
+  - The HW wraps field vertical MVs modulo 64 even with b_code=2, whose legal range is [-64,63]. This is a HW bug.
+  - The fix can't be per MB. A narrowest refusal candidate: interlaced B-VOPs with fcode_backward (or forward) > 1. Not implemented.
+  - Flipping the f_code fields in VOPHDR changes MVD parsing, so it can't be used as a workaround.
+- **Field qpel chroma: no register workaround.**
+  - CTRL XOR sweep on a1ge2: the chroma-bad MB count stays 2455 for bits 0,1,2,6,10,11,15,18,19,22,23,24,25,29.
+  - Bit 28 (vendor sw_chrom_mv_sel) gives 16314 bad MBs. Bit 26 breaks everything. Bit 9 hangs decode.
+  - VOPHDR bit 27 has no effect. FLD_QM 0-3 × FLD_HM were already tested in 6.3c.
+  - Script: legacy-dec/bitsweep.sh.
+- **External search (nothing addresses interlaced qpel chroma):**
+  - Vendor mp4_hal.c copies: allwinner-zh/media-codec, fsebentley/CedarX-12.06.2015, mikhailk-2012/sunxi-cedarx2. All set the same fld_qm 1/2 and hm=1.
+  - libcedarc binary trees (aodzip, CalvinXu17-a133, Homlet-H6, tinyvision, orangepi-build debs) contain no MPEG-4 source; their strings have nothing relevant.
+  - jernejsk/linux-1 h616-mpeg4 cedrus_mpeg4.c is identical to ours. jernejsk/FFmpeg "mpeg4 wip" (2020) is a plain hwaccel with flags only.
+  - sormy/tvbian 0806 cedrus MPEG-4 patch: same vendor QM modes, and it refuses all interlaced B-VOPs.
+  - Upstream cedrus has no MPEG-4. GStreamer v4l2codecs has no MPEG-4 decoder.
+  - LibreELEC, Kwiboo and Kodi: nothing found. lore.kernel.org returned 403. The linux-sunxi wiki and the #cedrus logs turned up nothing relevant.

@@ -10,7 +10,7 @@ L=$1; O=$2; mkdir -p "$O"; S="$O/raw.tsv"; : > "$S"
 FF="-nostdin -hide_banner -loglevel warning"; NF=${FRAMES:+-frames:v $FRAMES}   # env FRAMES=n caps decoded frames
 waitfree() { while $SSH -n "pgrep -x 'avs2dec|gst-launch-1.0|ffmpeg' >/dev/null"; do sleep 30; done; }
 irq() { $SSH -n "awk '/1c0e000.video-codec/{print \$2+\$3+\$4+\$5}' /proc/interrupts"; }
-sw() { ffmpeg $FF -idct $1 $opts -i "$SERVE/$rel" -fps_mode passthrough $NF -pix_fmt nv12 -f rawvideo - 2>>"$O/$tag.raw-sw.err"; }
+sw() { ffmpeg $FF -threads 1 -idct $1 $opts -i "$SERVE/$rel" -fps_mode passthrough $NF -pix_fmt nv12 -f rawvideo - 2>>"$O/$tag.raw-sw.err"; }
 while read -r tag rel opts; do
   [ -z "$tag" ] || [ "${tag#\#}" != "$tag" ] && continue
   wh=$(ffprobe -v error $opts -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$SERVE/$rel" | head -1 | tr , ' ')

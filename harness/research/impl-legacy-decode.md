@@ -15,6 +15,9 @@ Both kernels expose `MG2S S264 S265 VP8F VP9F AVS2 SVC1 MG4S S263 SPKS`. VE at 6
 > - **MPEG-1: 7/7 OK.** The 6 ISO vectors plus 1080p30; ccm1 is bit-exact. D-pictures (tcela-18) are bit-exact (31/31) against an exact DC-only reference.
 > - **Xvid GMC frame 24: fixed (2026-11-04)** by resetting the VE before each MPEG-4 job (§6.4). It was HW state carried between pictures, and
 >   it also hit P-VOPs.
+> - **Interlaced ASP (2026-11-04, §6.3b):** both failures are HW derivation differences: the field-direct vertical vector at 2x precision,
+>   and the field-qpel chroma vertical rounding order. No driver mode reproduces FFmpeg (HW limit). The FFmpeg references also needed
+>   `-threads 1`: with frame threads, its field direct mode reads zero co-located MVs.
 > - **MPEG-2 1080-line fix confirmed:** 1080p60 and 1080i are now within the envelope (max 3, was 21-22).
 > - **ISO 14496-4 ASP: 21/30 OK.** 19 pass the envelope criterion, and 2 (vcon-asp5L0, vcon-asp14L1, 1-point GMC at accuracy 0) are **FFmpeg reference bugs**: the HW matches a fixed FFmpeg within 1-3. 1 more is IDCT-marginal (vcon_a1ge_13_asp_l2, max 4 against an envelope of 3).
 >   8 fail: they are interlaced (field direct mode in B-VOPs, chroma of field qpel MBs).
@@ -313,6 +316,29 @@ The runs are `legacy-dec/board-slot.sh tests` and `gmc-f24.sh`, with results in 
   - **nok_720p has no reference.** FFmpeg's own SW decode conceals errors in every frame ("Error at MB"), on the host and on the board.
     xvid differs as well.
 - **No kernel patch changes** came out of this run: the 1-point GMC case is an FFmpeg bug, and the interlaced cases are still [U].
+
+### 6.3b Interlaced ASP failures, analysed (2026-11-04)
+- **The FFmpeg reference was partly wrong [M].** With frame threads (the default), FFmpeg's B-VOP field direct mode reads **zero co-located
+  field MVs**: `p_field_mv_table` is per-thread context and is not synced. In vcon_ge_1 B1, MB 3 got co (0,0) with threads, against
+  (51,-11)/(19,19) with `-threads 1`.
+  - `run-raw.sh` now builds its references with `-threads 1`.
+  - vcon_ge_1 min PSNR goes from 26.7 to 34.6 dB. It is still FAIL, and the other verdicts do not change (ASP 19 OK / 11 FAIL by sum-raw).
+- **Field direct mode: the HW derives the vertical vector differently [M]. It is a HW limit; no register selects it.**
+  - Debug kernel `mp4dbg3`, param `mpeg4_stopmb=N`: stop the B-VOP after N MBs and dump MV1-4.
+    - MV1-4 = fwd f0, bwd f0, fwd f1, bwd f1. Each holds bits 28:16 x, 12:0 y in frame units (2x field) and bit 29 the field select.
+    - MV5-8 stay 0.
+  - The HW matches FFmpeg's field select, TRB/TRD (pp/pb field time ±1 by tff and select) and x. In y it computes
+    `trunc(2*co_y*TRBi/TRDi)` in frame units (half-field-line precision); ISO/FFmpeg compute `2*trunc(co_y*TRBi/TRDi)`.
+  - That model predicts 837 of the 874 bad direct MBs of B1. The other 390 predicted MBs differ by <= 4.
+  - The derivation is internal (co-located MVs from the MBH buffer). Field TRB/TRD halved or equal to frame values, and the co-located type,
+    were tested (sweep `mp4dbg1i`): no change.
+- **Field qpel chroma: the HW uses a different rounding order [M]. HW limit [I].**
+  - `fldchroma.py` tests chroma rules on a1ge2 P1, built from FFmpeg's field MVs (`FFMVALL` dump in the host FFmpeg).
+  - The HW matches x = r(trunc(x/2)), y = r(y)>>1 on 940 of 944 bad MBs. This is the vendor's "fld_qm=1: divide by 2, Div2Round, y >> 1".
+    FFmpeg uses y = r(y>>1), where r(v) = (v>>1)|(v&1).
+  - All 4 FLD_QM modes x FLD_HM were tested (`mp4dbg1i`); none gives FFmpeg's rule (chroma MBs > 4: 2459 at qm=1, 7453/5953/14075 at qm=0/2/3).
+- Neither rule could be checked against the ISO reference decoder (MoMuSys) or reference YUVs: the zips hold bitstreams only. So the
+  claim that FFmpeg is right and the HW wrong is **[I]**. xvidcore is no help: it is far off FFmpeg on these streams (PSNR 9-20 dB).
 
 ### 6.4 Xvid half-pel GMC frame 24
 - The HW is wrong in exactly MBs 0-6 of row 0 (x < 112) plus 2 pixels of MB 7. These are the coded GMC MBs.

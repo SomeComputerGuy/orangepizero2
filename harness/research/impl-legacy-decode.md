@@ -340,6 +340,28 @@ The runs are `legacy-dec/board-slot.sh tests` and `gmc-f24.sh`, with results in 
 - Neither rule could be checked against the ISO reference decoder (MoMuSys) or reference YUVs: the zips hold bitstreams only. So the
   claim that FFmpeg is right and the HW wrong is **[I]**. xvidcore is no help: it is far off FFmpeg on these streams (PSNR 9-20 dB).
 
+### 6.3c Arbitration with the ISO/IEC 14496-5 reference decoder (vm_dec, MS v2.5, Amd 5 2004), host only (2026-11-04)
+- Comparison: per MB, a macroblock counts when max|diff| > 4. Tool: `cmp3.py`. Outputs are in /tmp/vm (not kept).
+- **Sanity check on progressive streams.**
+  - vcon-asp7L0: vm = FFmpeg (max 1).
+  - vcon_a1ge_10_asp_l1: luma-only drift, max 8 (IDCT).
+  - vcon_a1ge_13_asp_l1 (progressive qpel with B, which passes on the HW): vm_dec differs from **both** FFmpeg and the HW in B-VOP chroma
+    (3791 MBs, max 76; no FFmpeg `-bug` flag reproduces it). So vm_dec is not a perfect arbiter.
+- **Field direct (interlaced B): FFmpeg bug; the HW is right.**
+  - On vcon_ge_1 B1, vm_dec = HW on all 874 field-direct MBs (0 differ); FFmpeg differs on all 874.
+  - vm_dec (sys/mc.cpp) scales `m_vctTrueHalfPel.y` in frame units (2x the field vector) and then drops the half line (`& ~1`).
+  - Draft FFmpeg fix (not sent): `legacy-dec/ffmpeg-mpeg4-field-direct-DRAFT.patch`. With it, FFmpeg = vm_dec on vcon_ge_1 (41 frames, max 2)
+    and vcon-asp14L4 (298 frames, max 3). Before it: 32571 and 3082 MBs.
+  - The patch file also documents FFmpeg's frame-thread bug (zero co-located field MVs).
+- **Field qpel chroma: the HW is wrong.**
+  - vm_dec = FFmpeg on all 40 frames of a1ge2 (0 chroma MBs differ). The HW is off in 2455 chroma MBs over 3 frames.
+  - Proposal (not merged, not HW-tested): refuse VOLs that are interlaced **and** quarter-sample, giving SW fallback. Commit e3cfb9bc8 on
+    `fix/sunxi-h616-mpeg4-ilace-qpel-refuse` (on 26175bf8b); ccache W=1 clean. Affected: a1ge2, a1ge4, a1ge9_L1-L4.
+- **Still open:** vcon_ge_1 is interlaced **half-pel**. Besides direct mode, the HW differs from vm_dec = FFmpeg in about 125 field-bidir
+  (`X-=`) MBs of B1, each in one field only (807 luma MBs over 11 frames). The cause is unknown; analysing it needs the board. vcon_ge_1 stays FAIL.
+- Rows: no row is marked OK yet. vcon-asp14L4 (interlaced hpel GMC) needs a board re-run against vm_dec / patched-FFmpeg references
+  before it can be marked.
+
 ### 6.4 Xvid half-pel GMC frame 24
 - The HW is wrong in exactly MBs 0-6 of row 0 (x < 112) plus 2 pixels of MB 7. These are the coded GMC MBs.
 - HW luma there is **flat 166** with a few ±4 textures, and chroma V is 0-11. SW and the prediction (frame 22 shifted down 2 px, accurate to 3

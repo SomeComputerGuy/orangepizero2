@@ -79,3 +79,18 @@ it flashes whichever variant was built last. Not in either image: ffmpeg (Ubuntu
    USB-C gadget, IR, PWM/I2C/SPI overlays, KASLR, GPU GLES/OpenCL.
 3. Decode: AFBC 10-bit 4K60; AVS2. Encoder: §1.
 4. Open the Armbian PRs (user sends/approves).
+5. **Queued for when tokens are back (added 2026-11-04 ~18:30, start ≈ 2026-11-05 03:30): OPi5 / RK3588S cross-check.**
+   One agent (fable if available, else Opus), read-only on both trees. Sources: the other project at ~/orangepi5
+   (read only, never modify it or its memory) and its GitHub repos. Compare every patch / branch we carry
+   (armbian-build fork branches, sunxi-7.3 series, U-Boot/TF-A, userpatches, Mesa fork mesa-work/mesa, FFmpeg
+   drafts in docs/upstream-queue.md) against theirs. Answer:
+   - What can we use from them (patches/fixes that apply to H616, Mali-G31 panfrost, generic Armbian/Ubuntu
+     stonking, build framework, kernel 7.3 core, V4L2 stateless/request API, FFmpeg/GStreamer, Mesa)?
+   - What can they use from us?
+   - Common code both sides changed (Armbian framework/lib, stonking release support, kernel core/media/drm,
+     Mesa panfrost, FFmpeg v4l2-request, U-Boot common, TF-A): are the changes compatible, conflicting, or
+     duplicated? Anything we would send upstream must not conflict with or contradict theirs.
+   - Recommended actions: which patches to share/port, which to merge into one common version, upstream
+     submission order, and owner (us / them / joint).
+   Output: a report in harness/research/opi5-crosscheck.md, with feedback in both directions; no changes to
+   either tree until the user approves.

@@ -1,0 +1,9 @@
+== board: 2000 1 
+-- counters before:  rx_desc: 0  overflow_error: 0  ipc_csum_error: 0  rx_collision: 0  rx_crc_errors: 0  rx_length: 60 RXpk=1683517 RXerr=60 RXdrop=0 TXpk=2040124 TXerr=0 
+ping -s 1472: host->board 10 received/10; board->host 10 received/10
+ping -s 1971: host->board 10 received/10; board->host 10 received/10
+ping -s 1972: host->board 10 received/10; board->host 10 received/10
+-- counters after pings:  rx_desc: 0  overflow_error: 0  ipc_csum_error: 0  rx_collision: 0  rx_crc_errors: 0  rx_length: 60 RXpk=1683724 RXerr=60 RXdrop=0 TXpk=2040363 TXerr=0 
+iperf3 host->board: 956 Mbits/sec
+iperf3 board->host (-R): 915 Mbits/sec
+-- counters after iperf:  rx_desc: 0  overflow_error: 0  ipc_csum_error: 0  rx_collision: 0  rx_crc_errors: 0  rx_length: 60 RXpk=2347505 RXerr=60 RXdrop=0 TXpk=2888908 TXerr=0 

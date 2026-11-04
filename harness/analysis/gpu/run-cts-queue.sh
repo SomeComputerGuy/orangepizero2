@@ -1,8 +1,8 @@
 #!/bin/sh
 # Board-side CTS queue (dEQP GLES mustpass lists, then Mesa's OpenCL-CTS profile, then the dEQP-VK subset).
 # Every step resumes from its partial results, so the unit can be restarted after a reboot or kill.
-# Start: systemd-run --unit=cts --collect -p MemoryMax=320M -p OOMScoreAdjust=1000 -p Restart=on-failure \
-#   -p RestartSec=60 -p BindReadOnlyPaths=/root/cts/mesa-libclc/spirv64-mesa3d-.spv:/usr/lib/clc/spirv64-mesa3d-.spv \
+# Start: systemd-run --unit=cts --collect -p MemoryMax=600M -p MemorySwapMax=64M -p OOMPolicy=continue \
+#   -p BindReadOnlyPaths=/root/cts/mesa-libclc/spirv64-mesa3d-.spv:/usr/lib/clc/spirv64-mesa3d-.spv \
 #   sh /root/cts/run-cts-queue.sh
 set -e
 export LD_LIBRARY_PATH=/root/cts/lib EGL_PLATFORM=surfaceless

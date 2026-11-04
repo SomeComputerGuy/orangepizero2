@@ -71,7 +71,7 @@ say "sanity runs: done"
 
 if [[ ${1:-} == --start ]]; then
 	$SSH 'systemctl is-active -q cts && { echo "cts already running"; exit 0; }
-	systemd-run --unit=cts --collect -p MemoryMax=320M -p OOMScoreAdjust=1000 -p Restart=on-failure -p RestartSec=60 \
+	systemd-run --unit=cts --collect -p MemoryMax=600M -p MemorySwapMax=64M -p OOMPolicy=continue \
 		-p BindReadOnlyPaths=/root/cts/mesa-libclc/spirv64-mesa3d-.spv:/usr/lib/clc/spirv64-mesa3d-.spv \
 		sh /root/cts/run-cts-queue.sh'
 	say "cts queue started (journalctl -u cts; results in /root/cts/results)"

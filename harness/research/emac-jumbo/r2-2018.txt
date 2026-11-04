@@ -1,0 +1,11 @@
+== set mtu 2018 (was 2000)
+rc=0
+== board: 2018 1 
+-- counters before:  rx_desc: 0  overflow_error: 0  ipc_csum_error: 0  rx_collision: 0  rx_crc_errors: 0  rx_length: 0 RXpk=662701 RXerr=0 RXdrop=0 TXpk=809343 TXerr=0 
+ping -s 1472: host->board 10 received/10; board->host 10 received/10
+ping -s 1989: host->board 10 received/10; board->host 10 received/10
+ping -s 1990: host->board 10 received/10; board->host 10 received/10
+-- counters after pings:  rx_desc: 0  overflow_error: 0  ipc_csum_error: 0  rx_collision: 0  rx_crc_errors: 0  rx_length: 0 RXpk=662931 RXerr=0 RXdrop=0 TXpk=809615 TXerr=0 
+iperf3 host->board: 956 Mbits/sec
+iperf3 board->host (-R): 906 Mbits/sec
+-- counters after iperf:  rx_desc: 0  overflow_error: 0  ipc_csum_error: 0  rx_collision: 0  rx_crc_errors: 0  rx_length: 0 RXpk=1319956 RXerr=0 RXdrop=0 TXpk=1542690 TXerr=0 

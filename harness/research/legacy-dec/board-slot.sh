@@ -7,7 +7,7 @@
 set -e
 H=/home/aruni/orangepizero2; D=$H/harness/research/legacy-dec; R=$H/kernel-check/legacy-results; SSH=$H/harness/ssh.sh
 case $1 in
-install) $SSH -n "set -e; test -L /boot/Image; readlink /boot/Image > /root/legacy-good-kernel; cat /root/legacy-good-kernel; uname -a; sha256sum /boot/dtb/allwinner/sun50i-h616-orangepi-zero2.dtb | tee /root/legacy-good-dtb.sha" $H/harness/research/vdec-perf/install-kernel.sh legacy1
+install) $SSH -n "set -e; test -L /boot/Image; readlink /boot/Image > /root/legacy-good-kernel; cat /root/legacy-good-kernel; uname -a; sha256sum /boot/dtb/allwinner/sun50i-h616-orangepi-zero2.dtb | tee /root/legacy-good-dtb.sha"; $H/harness/research/vdec-perf/install-kernel.sh ${TAG:-legacy1}
          $SSH -n "cat /boot/vdec-trial; readlink /boot/Image; sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &" ;;
 confirm) $SSH -n "uname -v; touch /run/vdec-ok; dmesg | grep -i -m3 cedrus; cat /boot/vdec-trial 2>/dev/null; ls /dev/video*"
          $H/harness/research/vdec-perf/ship.sh $H/kernel-check/ffmpeg-afbc/install-mpeg1/opt/ffv4l2/bin/ffmpeg /root/vp/ffmpeg-m1

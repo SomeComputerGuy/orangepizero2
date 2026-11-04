@@ -12,7 +12,7 @@ If a process dies mid-case, that case is recorded as Crash. If no line arrives f
 the next case. Results go to OUT/results.csv as "test,status,duration_s,detail", in
 caselist order, and the run can be resumed: cases already in OUT/shard-*.csv are skipped.
 """
-import argparse, csv, os, re, selectors, subprocess, sys, threading, time
+import argparse, csv, json, os, re, selectors, subprocess, sys, threading, time
 
 MESA_CI_ARGS = ["--deqp-surface-width=256", "--deqp-surface-height=256", "--deqp-surface-type=pbuffer",
                 "--deqp-visibility=hidden", "--deqp-gl-config-name=rgba8888d24s8ms0",
@@ -35,6 +35,12 @@ def wait_for_memory(min_kb=350000, poll=60):
         time.sleep(poll)
 
 
+def oom_first():
+    """deqp children are the OOM killer's first choice; the runner itself is protected (see main)."""
+    with open("/proc/self/oom_score_adj", "w") as f:
+        f.write("1000")
+
+
 def run_shard(idx, cases, a, extra):
     path = os.path.join(a.out, "shard-%d.csv" % idx)
     done = set()
@@ -44,14 +50,15 @@ def run_shard(idx, cases, a, extra):
     todo = [c for c in cases if c not in done]
     with open(path, "a", newline="") as fo:
         w = csv.writer(fo)
-        kills = {}
+        kpath = os.path.join(a.out, "shard-%d.kills.json" % idx)  # persisted so a runner restart cannot loop
+        kills = json.load(open(kpath)) if os.path.exists(kpath) else {}
         while todo:
             cl = os.path.join(a.out, "shard-%d.caselist" % idx)
             with open(cl, "w") as f:
                 f.write("\n".join(todo) + "\n")
             cmd = [a.deqp, "--deqp-caselist-file=" + cl, "--deqp-log-filename=" + os.path.join(a.out, "shard-%d.qpa" % idx)] + MESA_CI_ARGS + extra
             wait_for_memory()
-            p = subprocess.Popen(cmd, cwd=os.path.dirname(a.deqp), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            p = subprocess.Popen(cmd, cwd=os.path.dirname(a.deqp), preexec_fn=oom_first, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                  text=True, errors="replace", bufsize=1)
             sel = selectors.DefaultSelector(); sel.register(p.stdout, selectors.EVENT_READ)
             pos = {c: i for i, c in enumerate(todo)}
@@ -66,9 +73,16 @@ def run_shard(idx, cases, a, extra):
                 line = p.stdout.readline()
                 if not line:
                     p.wait()
-                    if cur and p.returncode == -9 and kills.get(cur, 0) < 3:  # OOM/external kill: retry same case
+                    if cur and p.returncode == -9:  # OOM/external kill: retry once, then record OOM and move on
                         kills[cur] = kills.get(cur, 0) + 1
-                        todo = todo[pos[cur]:]
+                        with open(kpath, "w") as kf:
+                            json.dump(kills, kf)
+                        if kills[cur] < 2:
+                            todo = todo[pos[cur]:]
+                        else:
+                            w.writerow([cur, "OOM", "%.1f" % (time.time() - t0),
+                                        "SIGKILL x%d (memcg OOM): " % kills[cur] + " | ".join(l.strip() for l in tail[-3:])[:250]]); fo.flush()
+                            todo = todo[pos[cur] + 1:]
                     elif cur:  # died inside a case
                         w.writerow([cur, "Crash", "%.1f" % (time.time() - t0),
                                     ("exit %d: " % p.returncode) + " | ".join(l.strip() for l in tail[-3:])[:300]]); fo.flush()
@@ -94,6 +108,11 @@ def main():
     ap.add_argument("--out", required=True); ap.add_argument("--jobs", type=int, default=3)
     ap.add_argument("--timeout", type=int, default=120)
     a, extra = ap.parse_known_args()
+    try:  # keep the runner alive under memcg OOM so kill counts and resume state stay coherent
+        with open("/proc/self/oom_score_adj", "w") as f:
+            f.write("-900")
+    except OSError:
+        pass
     extra = [x for x in extra if x != "--"]
     os.makedirs(a.out, exist_ok=True)
     cases = [l.strip() for l in open(a.caselist) if l.strip() and not l.startswith("#")]

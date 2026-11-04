@@ -1,0 +1,11 @@
+== refused MTUs
+mtu 2022: Error: mtu greater than device maximum.
+mtu 3000: Error: mtu greater than device maximum.
+mtu 3712: Error: mtu greater than device maximum.
+2021
+0
+== down/up at 2000
+2000
+000020 7bc42000 a8010000 40000002 00000000
+ping 1972 host->board: 10 received
+ping 1972 board->host: 10 received

@@ -1,0 +1,11 @@
+== set mtu 2000 (was 1500)
+rc=0
+== board: 2000 1 
+-- counters before:  rx_desc: 0  overflow_error: 0  ipc_csum_error: 0  rx_collision: 0  rx_crc_errors: 0  rx_length: 0 RXpk=315 RXerr=0 RXdrop=0 TXpk=439 TXerr=0 
+ping -s 1472: host->board 10 received/10; board->host 10 received/10
+ping -s 1971: host->board 10 received/10; board->host 10 received/10
+ping -s 1972: host->board 10 received/10; board->host 10 received/10
+-- counters after pings:  rx_desc: 0  overflow_error: 0  ipc_csum_error: 0  rx_collision: 0  rx_crc_errors: 0  rx_length: 0 RXpk=517 RXerr=0 RXdrop=0 TXpk=674 TXerr=0 
+iperf3 host->board: 952 Mbits/sec
+iperf3 board->host (-R): 910 Mbits/sec
+-- counters after iperf:  rx_desc: 0  overflow_error: 0  ipc_csum_error: 0  rx_collision: 0  rx_crc_errors: 0  rx_length: 0 RXpk=662518 RXerr=0 RXdrop=0 TXpk=809109 TXerr=0 

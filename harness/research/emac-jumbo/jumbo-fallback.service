@@ -1,0 +1,10 @@
+[Unit]
+Description=Restore the image kernel if the EMAC jumbo trial kernel is not confirmed
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/jumbo-fallback.sh
+
+[Install]
+WantedBy=multi-user.target

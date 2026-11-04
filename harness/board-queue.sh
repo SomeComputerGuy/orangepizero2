@@ -46,13 +46,13 @@ step_grey() { # JPEG greyscale probe (trial kernel, 300 s fallback armed by inst
   export TAG=greytrial
   $H/jpegtest/jpeg-slot.sh install > "$OUT/grey.log" 2>&1
   sleep 60; wait_ssh 900 || { log "grey: no ssh after install - queue stopped"; exit 1; }
-  for s in confirm stage greyprobe restore; do $H/jpegtest/jpeg-slot.sh $s >> "$OUT/grey.log" 2>&1; log "grey $s rc=$?"; done
+  local g; for g in confirm stage greyprobe restore; do $H/jpegtest/jpeg-slot.sh $g >> "$OUT/grey.log" 2>&1; log "grey $g rc=$?"; done
   sleep 60; alive_or_stop grey-restore
   log "grey: kernel now $($SSH -n 'uname -rv')"
 }
 step_kaslr() { # kernel base must differ between boots
-  for i in 1 2 3; do echo "boot$i $($SSH -n 'grep -m1 " _text$" /proc/kallsyms; cat /proc/cmdline | grep -o "nokaslr" || true')" >> "$OUT/kaslr.txt"; reboot_wait; done
-  log "kaslr: $(awk '{print $2}' "$OUT/kaslr.txt" | sort -u | wc -l) distinct _text of 3"; alive_or_stop kaslr
+  for i in 1 2 3; do echo "boot$i $($SSH -n 'grep -m1 -w _stext /proc/kallsyms; cat /proc/cmdline | grep -o "nokaslr" || true')" >> "$OUT/kaslr.txt"; reboot_wait; done
+  log "kaslr: $(awk '{print $2}' "$OUT/kaslr.txt" | grep .  | sort -u | wc -l) distinct _text of 3"; alive_or_stop kaslr
 }
 step_thermal() { # 60 min all-core + DRAM stress, temps/freqs every 30 s
   $SSH -n 'systemd-run --unit=qthermal --collect stress-ng --cpu 4 --cpu-method matrixprod --vm 1 --vm-bytes 300M -t 60m' >/dev/null 2>&1

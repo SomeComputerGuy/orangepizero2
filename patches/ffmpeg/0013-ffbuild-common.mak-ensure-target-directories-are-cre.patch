@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Alexander Kanavin <alex@linutronix.de>
 Date: Thu, 11 Dec 2025 20:14:25 +0100
-Subject: [PATCH 101/102] ffbuild/common.mak: ensure target directories are
+Subject: [PATCH 13/13] ffbuild/common.mak: ensure target directories are
  created before running shell redirects into them
 
 Otherwise, occasional build races have been observed:

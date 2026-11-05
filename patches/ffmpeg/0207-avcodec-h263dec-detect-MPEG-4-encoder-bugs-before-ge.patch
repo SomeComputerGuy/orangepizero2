@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Jernej Skrabec <jernej.skrabec@siol.net>
 Date: Fri, 9 Oct 2026 03:46:15 +0200
-Subject: [PATCH 20/21] avcodec/h263dec: detect MPEG-4 encoder bugs before
+Subject: [PATCH 207/208] avcodec/h263dec: detect MPEG-4 encoder bugs before
  get_format()
 
 ff_mpeg4_workaround_bugs() runs after the pixel format and with it the

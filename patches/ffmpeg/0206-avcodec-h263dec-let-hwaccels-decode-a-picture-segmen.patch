@@ -1,8 +1,8 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Jernej Skrabec <jernej.skrabec@siol.net>
 Date: Fri, 9 Oct 2026 03:46:15 +0200
-Subject: [PATCH 19/21] avcodec/h263dec: let hwaccels decode a picture segment
- by segment
+Subject: [PATCH 206/208] avcodec/h263dec: let hwaccels decode a picture
+ segment by segment
 
 Some hardware decoders (the MPEG engine of the Allwinner video engine)
 cannot parse MPEG-4 video packet headers nor H.263 GOB and slice

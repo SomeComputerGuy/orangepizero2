@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Arun Iyengar <aiyengar1990@gmail.com>
 Date: Thu, 5 Nov 2026 06:08:06 +0000
-Subject: [PATCH 203/204] avcodec/mpeg4videodec: do not round the GMC1 average
+Subject: [PATCH 303/304] avcodec/mpeg4videodec: do not round the GMC1 average
  MV with a zero shift
 
 RSHIFT(x, 0) evaluates to x - 1 for negative x (the rounding term

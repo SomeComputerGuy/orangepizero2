@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Arun Iyengar <aiyengar1990@gmail.com>
 Date: Thu, 5 Nov 2026 06:07:38 +0000
-Subject: [PATCH 202/204] avcodec/v4l2_request_mpeg4: decode interlaced B-VOP
+Subject: [PATCH 302/304] avcodec/v4l2_request_mpeg4: decode interlaced B-VOP
  streams in software
 
 Cedrus wraps the vertical field vectors of interlaced B-VOPs to half

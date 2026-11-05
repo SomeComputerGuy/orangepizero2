@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Arun Iyengar <aiyengar1990@gmail.com>
 Date: Thu, 5 Nov 2026 06:07:39 +0000
-Subject: [PATCH 204/204] avcodec: add V4L2 Request API MPEG-1 hwaccel
+Subject: [PATCH 304/304] avcodec: add V4L2 Request API MPEG-1 hwaccel
 
 Cedrus decodes MPEG-1 through the MPEG-2 stateless controls with a
 small downstream uAPI extension: V4L2_MPEG2_SEQ_FLAG_MPEG1 and the

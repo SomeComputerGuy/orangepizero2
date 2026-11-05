@@ -1,0 +1,33 @@
+=== forced 100/full
+board: Speed: 100Mb/s Duplex: Full [18117.267860] dwmac-sun8i 5020000.ethernet end0: Link is Up - 100Mbps/Full - flow control off
+host:  Speed: 100Mb/s Duplex: Half 
+-- before: IpInDiscards=0 IpReasmTimeout=0 IpReasmReqds=0 IpReasmOKs=0 IpReasmFails=0 IpFragOKs=31558 IpFragFails=0 IpFragCreates=173719  tx_underflow: 0  rx_desc: 0  overflow_error: 0  rx_crc_errors: 0  rx_length: 3400  rx_missed_cntr: 0  rx_overflow_cntr: 0 RXpk=3060649 RXerr=3400 RXdrop=2 TXpk=3413407 TXerr=0 TXdrop=16 
+iperf3 host->board: 92.7 Mbits/sec  retr 1
+iperf3 board->host: 87.3 Mbits/sec
+ping 8000 x20: 100% packet loss; ping 1472 x20: 0% packet loss
+-- after: IpInDiscards=0 IpReasmTimeout=0 IpReasmReqds=0 IpReasmOKs=0 IpReasmFails=0 IpFragOKs=31558 IpFragFails=0 IpFragCreates=173719  tx_underflow: 0  rx_desc: 0  overflow_error: 0  rx_crc_errors: 0  rx_length: 3520  rx_missed_cntr: 0  rx_overflow_cntr: 0 RXpk=3221533 RXerr=3520 RXdrop=2 TXpk=3553628 TXerr=0 TXdrop=16 
+=== forced 100/half
+board: Speed: 100Mb/s Duplex: Half [18189.203584] dwmac-sun8i 5020000.ethernet end0: Link is Up - 100Mbps/Half - flow control off
+host:  Speed: 100Mb/s Duplex: Half 
+-- before: IpInDiscards=0 IpReasmTimeout=0 IpReasmReqds=0 IpReasmOKs=0 IpReasmFails=0 IpFragOKs=31558 IpFragFails=0 IpFragCreates=173719  tx_underflow: 0  rx_desc: 0  overflow_error: 0  rx_crc_errors: 0  rx_length: 3520  rx_missed_cntr: 0  rx_overflow_cntr: 0 RXpk=3221759 RXerr=3520 RXdrop=2 TXpk=3553912 TXerr=0 TXdrop=23 
+iperf3 host->board: 89.4 Mbits/sec  retr 0
+iperf3 board->host: 90.2 Mbits/sec
+ping 8000 x20: 100% packet loss; ping 1472 x20: 0% packet loss
+-- after: IpInDiscards=0 IpReasmTimeout=0 IpReasmReqds=0 IpReasmOKs=0 IpReasmFails=0 IpFragOKs=31558 IpFragFails=0 IpFragCreates=173719  tx_underflow: 0  rx_desc: 0  overflow_error: 0  rx_crc_errors: 0  rx_length: 3640  rx_missed_cntr: 0  rx_overflow_cntr: 0 RXpk=3378006 RXerr=3640 RXdrop=2 TXpk=3697409 TXerr=680 TXdrop=23 
+=== forced 10/full
+board: Speed: 10Mb/s Duplex: Full [18259.027579] dwmac-sun8i 5020000.ethernet end0: Link is Up - 10Mbps/Full - flow control off
+host:  Speed: 10Mb/s Duplex: Half 
+-- before: IpInDiscards=0 IpReasmTimeout=0 IpReasmReqds=0 IpReasmOKs=0 IpReasmFails=0 IpFragOKs=31558 IpFragFails=0 IpFragCreates=173719  tx_underflow: 0  rx_desc: 0  overflow_error: 0  rx_crc_errors: 0  rx_length: 3640  rx_missed_cntr: 0  rx_overflow_cntr: 0 RXpk=3378269 RXerr=3640 RXdrop=2 TXpk=3697726 TXerr=680 TXdrop=30 
+iperf3 host->board: 8.58 Mbits/sec  retr 111
+iperf3 board->host: 7.34 Mbits/sec
+ping 8000 x20: 100% packet loss; ping 1472 x20: 0% packet loss
+-- after: IpInDiscards=0 IpReasmTimeout=0 IpReasmReqds=0 IpReasmOKs=0 IpReasmFails=0 IpFragOKs=31558 IpFragFails=0 IpFragCreates=173719  tx_underflow: 0  rx_desc: 0  overflow_error: 0  rx_crc_errors: 0  rx_length: 3760  rx_missed_cntr: 0  rx_overflow_cntr: 0 RXpk=3400201 RXerr=3760 RXdrop=2 TXpk=3720390 TXerr=680 TXdrop=30 
+=== forced 10/half
+board: Speed: 10Mb/s Duplex: Half [18339.891600] dwmac-sun8i 5020000.ethernet end0: Link is Up - 10Mbps/Half - flow control off
+host:  Speed: 10Mb/s Duplex: Half 
+-- before: IpInDiscards=0 IpReasmTimeout=0 IpReasmReqds=0 IpReasmOKs=0 IpReasmFails=0 IpFragOKs=31558 IpFragFails=0 IpFragCreates=173719  tx_underflow: 0  rx_desc: 0  overflow_error: 0  rx_crc_errors: 0  rx_length: 3760  rx_missed_cntr: 0  rx_overflow_cntr: 0 RXpk=3400479 RXerr=3760 RXdrop=2 TXpk=3720706 TXerr=680 TXdrop=37 
+iperf3 host->board: 8.67 Mbits/sec  retr 0
+iperf3 board->host: 8.88 Mbits/sec
+ping 8000 x20: 100% packet loss; ping 1472 x20: 0% packet loss
+-- after: IpInDiscards=0 IpReasmTimeout=0 IpReasmReqds=0 IpReasmOKs=0 IpReasmFails=0 IpFragOKs=31558 IpFragFails=0 IpFragCreates=173719  tx_underflow: 0  rx_desc: 0  overflow_error: 0  rx_crc_errors: 0  rx_length: 3880  rx_missed_cntr: 0  rx_overflow_cntr: 0 RXpk=3422380 RXerr=3880 RXdrop=2 TXpk=3741550 TXerr=743 TXdrop=37 
+back to: Speed: 1000Mb/s Duplex: Full 

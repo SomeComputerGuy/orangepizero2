@@ -717,3 +717,50 @@ Board check for this decision (§7.4 step 3), on the image kernel, with `g.jpg` 
 2. Run `gst-launch-1.0 -v filesrc location=X ! jpegparse ! decodebin ! videoconvert ! filesink location=out.raw`,
    once as is and once with `GST_PLUGIN_FEATURE_RANK=v4l2jpegdec:MARGINAL` set.
 3. For each run, record which decoder was chosen (`-v` output) and compare the output to `ffmpeg -i X -f rawvideo`.
+
+### 7.6 Board results: greytrial probe (board queue 2026-11-03) and the GStreamer check (2026-11-05)
+
+Probe: `harness/queue/20261103-0919/grey.log` (169 runs, kernel `greytrial`, fallback armed, image kernel restored
+afterwards), per-run output `kernel-check/jpeg-probe/grey-out/`, summary `kernel-check/jpeg-probe/grey-summary.txt`.
+g64 is 64x48 grey 1x1; its scan is 1297 bytes, starting at bit 0xa40 and ending at bit 0x32c8.
+
+| Variant (§7.4 step) | Runs | Result |
+|---|---|---|
+| controls `c64` 4:2:0, first and last | 1, 169 | Y 64.7 dB, C 64.0 dB, VLD 0x1378→0x4d08, MCU 0x30000: the probe kernel decodes colour correctly |
+| grey baseline (g64, g64 tiled, g64s22, 1080p grey) | 2-5 | STATUS 0xc001 ("done"), VLD offset stays at 0xa40, MCU 0x1, no luma written, 0.75-0.87 ms: same as the 6.1 result |
+| chroma format codes 0-4 in TRIGGER bits 29:27 | 6-10 | the engine consumes **exactly the whole scan** (VLD 0xa40→0x32c8), counts 6 MCU rows (MCU 0x60000) and writes all of Y and C, but as garbage (PSNR 4-10 dB): it parses the 1-component scan as an interleaved 3-component one |
+| codes 6, 7; TRIGGER bits 30/31 | 11-14 | same stop as code 5 |
+| MCU_START/END variants (MPEG+0xd8/0xdc) | 15-18 | same stop: "one MCU then done" is not caused by the MCU range |
+| every CTRL bit except the IRQ enables | 19-47 | same stop; bit 27 = job never starts (VLD 0, MCU 0), bit 28 = bogus VLD offset 0x7ffee00f |
+| TRIGGER bits 8-23 | 48-63 | same stop |
+| 49 MPEG registers the JPEG path leaves alone, each = 1 and = JPEG_SIZE | 64-161 | same stop for all 98 |
+| TRIGGER bits 24-26 (decoder mode) | 162-168 | MCU 0: other engines, nothing decoded |
+| 0xE00 "JPEG plus" block | dumps of all runs | all zero, before and after: the block is absent or unclocked on the H616 (agrees with §7.1: the H616 VE version is not in the mjpegplus list) |
+
+What it shows: format code 5 (the only greyscale code the vendor library uses) makes the H616 MPEG-engine JPEG
+path stop after the first MCU without consuming bits, and no register we can reach changes that. Codes 0-4
+run but have no single-component mode. **The H616 VE cannot decode greyscale JPEG.** The refusal in
+`media-cedrus-jpeg-fix-4-1-1-refuse-greyscale.patch` stays, and the probe patch is dropped. No kernel work is left
+for greyscale (the in-kernel 3-component rewrite, §7.3 (a), stays rejected).
+
+GStreamer check (§7.4 step 4 / §7.5), image kernel 7.3.1-edge-sunxi64 #17, gst 1.28.7, pipeline
+`filesrc ! jpegparse ! decodebin ! videoconvert ! video/x-raw,format=I420 ! filesink`:
+
+| File | default ranks (v4l2jpegdec PRIMARY+1 is picked) | `GST_PLUGIN_FEATURE_RANK=v4l2jpegdec:MARGINAL` (jpegdec picked) |
+|---|---|---|
+| g64 (grey 64x48) | hangs, killed by the 60 s timeout, 0 bytes out | rc 0, 4608 bytes (64x48 I420) |
+| grey (grey 1080p) | hangs, 0 bytes | rc 0, 3110400 bytes |
+| c64 (4:2:0 64x48) | rc 0 but **0 bytes out** | rc 0, 4608 bytes |
+| s420 (4:2:0 1080p) | rc 0 but **0 bytes out** | rc 0, 3110400 bytes |
+
+So `v4l2jpegdec` on cedrus is broken for **colour JPEGs too** (as §7.5 feared: it expects the stateful
+decoder protocol, which cedrus does not offer), and greyscale hangs the pipeline. Per the §7.5 rule this
+decides **option A**: ship the rank override (`harness/research/jpeg/gst-jpeg-rank-hook.sh.draft`) in the image.
+Option B adds nothing while v4l2jpegdec cannot drive cedrus at all.
+
+Still needed:
+1. Turn the rank-hook draft into an image customisation (userpatches) and check after a rebuild that playbin /
+   decodebin pick `jpegdec` on the board (the table above with no environment override).
+2. Hardware JPEG in GStreamer would need a stateless JPEG element (v4l2codecs has none), i.e. new userspace work.
+   Hardware JPEG through cedrus is usable today only from our jpegtest tool / direct V4L2 users.
+3. Nothing for FFmpeg-based players (software JPEG, correct for every sampling).

@@ -191,3 +191,53 @@ Same trial procedure as round 1. Raw output: emac-jumbo/r2-*.txt.
 - `mtu 2019` is refused and the MTU stays at 2018.
 - Restored afterwards: image kernel #11, DRAM: 1024 MiB, MTU 1500. Removed the trial files, the .good modules dir,
   /root/jumbo-bak, the jumbo-fallback unit/script and the /run UseMTU drop-in from the board.
+
+## Round 3, 2026-11-05 (kernel-fixes agent): image kernel #17, manual cross-check, 8000-byte ping root cause
+
+**Branch state.** `fix/sunxi-h616-emac-jumbo` (ad9021910, 0e2765af5) is already in `stonking-orangepizero2` (merged
+2026-11-03, before b9df5096b), so there was nothing to rebase. The board image kernel 7.3.1-edge-sunxi64 #17 contains it
+(`ip -d link`: maxmtu 2018), so this round ran on the image kernel, no trial kernel. Raw output: emac-jumbo/r3-*.txt;
+new host script emac-jumbo/run-frag-duplex.sh (fragmented pings, forced speed/duplex with a 300 s auto-revert).
+
+**User manual cross-check** (docs/vendor/H616_User_Manual_V1.0.pdf §6.5, pp.399-408; agrees with
+user-manual-review.md §6): RX_CTL0 (0x24) bit 31 RX_EN, bit 30 RX_FRM_LEN_CTL (0 = up to 2048 bytes, or 10240 with
+JUMBO_FRM_EN; 1 = up to 16384), bit 29 JUMBO_FRM_EN ("jumbo frames of 9018 bytes without reporting a giant"), bit 28
+STRIP_FCS, bit 27 CHECK_CRC; TX_CTL0 (0x10) bit 30 TX_FRM_LEN_CTL (same 2048/10240/16384 rule). RX and TX descriptor
+BUF_SIZE is bits 10:0 (max 2047). The branch sets bit 29 only and caps the MTU at 2018 (2044-byte frames in one
+descriptor): consistent with the manual. Frames up to 10240 bytes would need multi-descriptor RX/TX in the stmmac
+normal-descriptor path (follow-up above), not a register change.
+
+| Test | Result |
+|---|---|
+| MTU 1500: DF ping 1471/1472 both ways | 10/10 each |
+| MTU 1500 iperf3 TCP | 901 / 868 Mbit/s (host->board / board->host); 0 RX/TX errors |
+| MTU 2000: DF ping 1472/1971/1972 both ways | 10/10 each; iperf3 955 / 905 Mbit/s, 0 new errors |
+| MTU 2018: DF ping 1472/1989/1990 both ways | 10/10 each; iperf3 956 / 904 Mbit/s, 0 new errors (2 RX drops in 660k packets) |
+| `mtu 2019`, `mtu 3712` | "Error: mtu greater than device maximum.", MTU stays 2018 |
+| UDP 8000-byte datagrams board->host (iperf3 -u -l 8000 200M, 5 s) at board MTU 2018 and 1500 | 0/15629 lost both times (board fragments, host reassembles) |
+| ping -s 3000/8000/16000 x50 from the host (host MTU 9000) at board MTU 1500 and 2018 | **100 % loss both ways**, rx_length + RX errors count the dropped oversize frames, no stall, small pings fine afterwards |
+| forced 100/half (host parallel-detects half) | 89.4 / 90.2 Mbit/s, 0 retransmits, ping 1472 0 % loss |
+| forced 10/half | 8.67 / 8.88 Mbit/s, 0 retransmits, ping 1472 0 % loss |
+| forced 100/full, 10/full | duplex mismatch by construction: host autoneg sees a forced partner and falls back to half. 92.7/87.3 and 8.58/7.34 Mbit/s, 10 Mbit had 111 retransmits. A real full-duplex check needs the host forced too (sudo) |
+| half duplex TX errors | TXerr +680 in the 100/half round, +63 in 10/half (collision aborts during bidirectional iperf3; TCP saw 0 retransmits) |
+| back to autoneg | 1000/Full |
+
+**Root cause of the 11-03 soak "8000-byte pings lost in 11/19 rounds": a host/board MTU mismatch, not an EMAC bug.**
+The host link enx68da73af6279 is MTU 9000 (harness/06-opiz2-enx68da73af6279.network `MTUBytes=9000`) and the board is
+MTU 1500. `ping -s 8000` from the host is then one unfragmented 8042-byte frame, which the board must drop (over its MTU,
+and over the 2044-byte single-descriptor limit). It reproduces 100 % today. The host journal shows
+`sudo ip link set enx68da73af6279 mtu 1500` at 21:39:52 on 11-03. All soak rounds after that (21:42 onwards, 1G, 100M and
+10M) had 0 % loss, because the host then fragmented to 1500-byte frames and the board reassembled them. The host is
+back at 9000 now. The status row's "8000-byte pings lose ~33 % after ~1 h" is very likely the same thing. On one L2
+segment all hosts must use the same MTU. With the 9000 host, 8000-byte pings cannot work until the board takes
+frames over 2044 bytes (multi-descriptor follow-up).
+
+**Remaining for this branch / Ethernet:**
+1. Merge state: done (in integration). Nothing to change in the patches.
+2. Host test link: set MTUBytes to a value the board can take (1500, or 2018 for jumbo tests) in
+   harness/06-opiz2-enx68da73af6279.network, or soak tests will keep "losing" large pings (needs the user, sudo).
+3. Image: netplan `UseMTU=true` re-applies the DHCP MTU on every link bounce, so a jumbo MTU needs a netplan `mtu:`
+   setting (round 1 note).
+4. MTU above 2018 (manual allows 10240/16384): stmmac normal-descriptor multi-descriptor RX + TX split, upstream-sized
+   net-next work.
+5. Full-duplex forced 100/10 with the host also forced (needs sudo on the host); VLAN at max MTU (also needs host sudo).

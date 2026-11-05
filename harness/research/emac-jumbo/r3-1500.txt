@@ -1,0 +1,15 @@
+== board: 1500 1 
+-- counters before:  rx_desc: 0  overflow_error: 0  ipc_csum_error: 0  rx_collision: 0  rx_crc_errors: 0  rx_length: 0 RXpk=921663 RXerr=0 RXdrop=0 TXpk=836455 TXerr=0 
+ping -s 1472: host->board 10 received/10; board->host 10 received/10
+ping -s 1471: host->board 10 received/10; board->host 10 received/10
+ping -s 1472: host->board 10 received/10; board->host 10 received/10
+-- counters after pings:  rx_desc: 0  overflow_error: 0  ipc_csum_error: 0  rx_collision: 0  rx_crc_errors: 0  rx_length: 0 RXpk=921901 RXerr=0 RXdrop=0 TXpk=836730 TXerr=0 
+iperf3 host->board: 901 Mbits/sec
+iperf3 board->host (-R): 868 Mbits/sec
+-- counters after iperf:  rx_desc: 0  overflow_error: 0  ipc_csum_error: 0  rx_collision: 0  rx_crc_errors: 0  rx_length: 0 RXpk=1737679 RXerr=0 RXdrop=0 TXpk=1754523 TXerr=0 
+== frag mtu1500: board mtu 1500 Speed: 1000Mb/s Duplex: Full 
+-- before: IpInDiscards=0 IpReasmTimeout=0 IpReasmReqds=0 IpReasmOKs=0 IpReasmFails=0 IpFragOKs=0 IpFragFails=0 IpFragCreates=0  tx_underflow: 0  rx_desc: 0  overflow_error: 0  rx_crc_errors: 0  rx_length: 0  rx_missed_cntr: 0  rx_overflow_cntr: 0 RXpk=1737787 RXerr=0 RXdrop=0 TXpk=1754649 TXerr=0 TXdrop=0 
+ping -s 3000 x50: host->board 0 received 100% packet loss ; board->host 0 received 100% packet loss 
+ping -s 8000 x50: host->board 0 received 100% packet loss ; board->host 0 received 100% packet loss 
+ping -s 16000 x50: host->board 0 received 100% packet loss ; board->host 0 received 100% packet loss 
+-- after: IpInDiscards=0 IpReasmTimeout=0 IpReasmReqds=0 IpReasmOKs=0 IpReasmFails=0 IpFragOKs=150 IpFragFails=0 IpFragCreates=1000  tx_underflow: 0  rx_desc: 0  overflow_error: 0  rx_crc_errors: 0  rx_length: 1900  rx_missed_cntr: 0  rx_overflow_cntr: 0 RXpk=1738029 RXerr=1900 RXdrop=0 TXpk=1755918 TXerr=0 TXdrop=0 

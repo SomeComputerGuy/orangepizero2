@@ -1,0 +1,16 @@
+1 1512000/1512000 vdd=1100000 pll-cpux=0 cpux=0 
+2 480000/480000 vdd=900000 pll-cpux=0 cpux=0 
+3 480000/480000 vdd=900000 pll-cpux=0 cpux=0 
+4 480000/1512000 vdd=1100000 pll-cpux=0 cpux=0 
+5 480000/720000 vdd=900000 pll-cpux=0 cpux=0 
+6 480000/480000 vdd=900000 pll-cpux=0 cpux=0 
+7 480000/480000 vdd=900000 pll-cpux=0 cpux=0 
+8 480000/480000 vdd=900000 pll-cpux=0 cpux=0 
+9 480000/480000 vdd=900000 pll-cpux=0 cpux=0 
+10 480000/480000 vdd=900000 pll-cpux=0 cpux=0 
+11 480000/480000 vdd=900000 pll-cpux=0 cpux=0 
+12 1512000/1512000 vdd=1100000 pll-cpux=0 cpux=0 
+13 480000/480000 vdd=900000 pll-cpux=0 cpux=0 
+14 480000/480000 vdd=900000 pll-cpux=0 cpux=0 
+15 480000/480000 vdd=900000 pll-cpux=0 cpux=0 
+DONE

@@ -1,0 +1,655 @@
+[    0.000000] Booting Linux on physical CPU 0x0000000000 [0x410fd034]
+[    0.000000] Linux version 7.3.1 (aruni@claudebox.iyengar.cloud) (aarch64-linux-gnu-gcc (Ubuntu 15.3.0-4ubuntu1) 15.3.0, GNU ld (GNU Binutils for Ubuntu) 2.47) #1 SMP PREEMPT Thu Nov  5 08:23:30 UTC 2026
+[    0.000000] KASLR enabled
+[    0.000000] random: crng init done
+[    0.000000] Machine model: OrangePi Zero2
+[    0.000000] efi: UEFI not found.
+[    0.000000] OF: reserved mem: 0x0000000040000000..0x000000004007ffff (512 KiB) nomap non-reusable secmon@40000000
+[    0.000000] cma: Reserved 64 MiB at 0x000000007bc00000
+[    0.000000] psci: probing for conduit method from DT.
+[    0.000000] psci: PSCIv1.1 detected in firmware.
+[    0.000000] psci: Using standard PSCI v0.2 function IDs
+[    0.000000] psci: MIGRATE_INFO_TYPE not supported.
+[    0.000000] psci: SMC Calling Convention v1.5
+[    0.000000] Zone ranges:
+[    0.000000]   DMA      [mem 0x0000000040000000-0x000000007fffffff]
+[    0.000000]   DMA32    empty
+[    0.000000]   Normal   empty
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000040000000-0x000000004007ffff]
+[    0.000000]   node   0: [mem 0x0000000040080000-0x000000007fffffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000040000000-0x000000007fffffff]
+[    0.000000] percpu: Embedded 35 pages/cpu s102936 r8192 d32232 u143360
+[    0.000000] pcpu-alloc: s102936 r8192 d32232 u143360 alloc=35*4096
+[    0.000000] pcpu-alloc: [0] 0 [0] 1 [0] 2 [0] 3 
+[    0.000000] Detected VIPT I-cache on CPU0
+[    0.000000] CPU features: kernel page table isolation forced ON by KASLR
+[    0.000000] CPU features: detected: Kernel page table isolation (KPTI)
+[    0.000000] CPU features: detected: ARM erratum 845719
+[    0.000000] alternatives: applying boot alternatives
+[    0.000000] Kernel command line: root=UUID=f4b27789-916c-4aca-a071-702cd3d477e7 rootwait rootfstype=ext4 splash=verbose console=ttyS0,115200 console=tty1 consoleblank=0 loglevel=1 ubootpart=3cdb7e02-01 usb-storage.quirks=0x2537:0x1066:u,0x2537:0x1068:u   cgroup_enable=memory
+[    0.000000] Unknown kernel command line parameters "splash=verbose ubootpart=3cdb7e02-01 cgroup_enable=memory", will be passed to user space.
+[    0.000000] printk: log buffer data + meta data: 131072 + 458752 = 589824 bytes
+[    0.000000] Dentry cache hash table entries: 131072 (order: 8, 1048576 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 65536 (order: 7, 524288 bytes, linear)
+[    0.000000] software IO TLB: SWIOTLB bounce buffer size adjusted to 1MB
+[    0.000000] software IO TLB: area num 4.
+[    0.000000] software IO TLB: mapped [mem 0x000000007aa80000-0x000000007ab80000] (1MB)
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 262144
+[    0.000000] mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    0.000000] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=4, Nodes=1
+[    0.000000] ftrace: allocating 60744 entries in 238 pages
+[    0.000000] ftrace: allocated 238 pages with 6 groups
+[    0.000000] rcu: Preemptible hierarchical RCU implementation.
+[    0.000000] rcu: 	RCU restricting CPUs from NR_CPUS=8 to nr_cpu_ids=4.
+[    0.000000] 	Trampoline variant of Tasks RCU enabled.
+[    0.000000] 	Rude variant of Tasks RCU enabled.
+[    0.000000] 	Tracing variant of Tasks RCU enabled.
+[    0.000000] rcu: RCU calculated value of scheduler-enlistment delay is 25 jiffies.
+[    0.000000] rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=4
+[    0.000000] RCU Tasks: Setting shift to 2 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=4.
+[    0.000000] RCU Tasks Rude: Setting shift to 2 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=4.
+[    0.000000] NR_IRQS: 64, nr_irqs: 64, preallocated irqs: 0
+[    0.000000] Root IRQ handler: gic_handle_irq
+[    0.000000] GIC: Using split EOI/Deactivate mode
+[    0.000000] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[    0.000000] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645041785100000 ns
+[    0.000000] arch_timer: cp15 timer running at 24.00MHz (phys).
+[    0.000000] clocksource: arch_sys_counter: mask: 0xffffffffffffff max_cycles: 0x588fe9dc0, max_idle_ns: 440795202592 ns
+[    0.000000] sched_clock: 56 bits at 24MHz, resolution 41ns, wraps every 4398046511097ns
+[    0.000215] clocksource: timer: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 79635851949 ns
+[    0.001288] Console: colour dummy device 80x25
+[    0.001308] printk: legacy console [tty1] enabled
+[    0.001416] Calibrating delay loop (skipped), value calculated using timer frequency.. 48.00 BogoMIPS (lpj=96000)
+[    0.001431] pid_max: default: 32768 minimum: 301
+[    0.001652] Yama: becoming mindful.
+[    0.001675] SELinux:  Initializing.
+[    0.002192] TOMOYO Linux initialized
+[    0.002358] Mount-cache hash table entries: 2048 (order: 2, 16384 bytes, linear)
+[    0.002374] Mountpoint-cache hash table entries: 2048 (order: 2, 16384 bytes, linear)
+[    0.002745] VFS: Finished mounting rootfs on nullfs
+[    0.005021] rcu: Hierarchical SRCU implementation.
+[    0.005043] rcu: 	Max phase no-delay instances is 1000.
+[    0.005252] Timer migration: 1 hierarchy levels; 8 children per group; 1 crossnode level
+[    0.005929] EFI services will not be available.
+[    0.006212] smp: Bringing up secondary CPUs ...
+[    0.006825] Detected VIPT I-cache on CPU1
+[    0.007018] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[    0.007808] Detected VIPT I-cache on CPU2
+[    0.007993] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[    0.008930] Detected VIPT I-cache on CPU3
+[    0.009116] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[    0.009275] smp: Brought up 1 node, 4 CPUs
+[    0.009293] SMP: Total of 4 processors activated.
+[    0.009299] CPU: All CPU(s) started at EL2
+[    0.009324] CPU features: detected: 32-bit EL0 Support
+[    0.009329] CPU features: detected: 32-bit EL1 Support
+[    0.009336] CPU features: detected: CRC32 instructions
+[    0.009352] CPU features: detected: PMUv3
+[    0.009402] alternatives: applying system-wide alternatives
+[    0.011331] Memory: 892384K/1048576K available (18496K kernel code, 2866K rwdata, 12604K rodata, 2560K init, 744K bss, 84360K reserved, 65536K cma-reserved)
+[    0.012377] devtmpfs: initialized
+[    0.022859] posixtimers hash table entries: 2048 (order: 3, 32768 bytes, linear)
+[    0.022967] futex hash table entries: 1024 (65536 bytes on 1 NUMA nodes, total 64 KiB, linear).
+[    0.024308] 2G module region forced by RANDOMIZE_MODULE_REGION_FULL
+[    0.024330] 0 pages in range for non-PLT usage
+[    0.024338] 514912 pages in range for PLT usage
+[    0.025447] DMI: not present or invalid.
+[    0.027771] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    0.029088] DMA: preallocated 128 KiB GFP_KERNEL|GFP_DMA pool for atomic allocations
+[    0.029182] audit: initializing netlink subsys (disabled)
+[    0.029450] audit: type=2000 audit(0.028:1): state=initialized audit_enabled=0 res=1
+[    0.102363] thermal_sys: Registered thermal governor 'fair_share'
+[    0.102383] thermal_sys: Registered thermal governor 'bang_bang'
+[    0.102390] thermal_sys: Registered thermal governor 'step_wise'
+[    0.102396] thermal_sys: Registered thermal governor 'user_space'
+[    0.102516] cpuidle: using governor ladder
+[    0.102546] cpuidle: using governor menu
+[    0.102850] hw-breakpoint: found 6 breakpoint and 4 watchpoint registers.
+[    0.102972] ASID allocator initialised with 32768 entries
+[    0.108985] /soc/tcon-top@6510000: Fixed dependency cycle(s) with /soc/bus@1000000/mixer@280000
+[    0.109029] /soc/bus@1000000/mixer@280000: Fixed dependency cycle(s) with /soc/tcon-top@6510000
+[    0.109071] /soc/tcon-top@6510000: Fixed dependency cycle(s) with /soc/bus@1000000/mixer@2a0000
+[    0.109108] /soc/bus@1000000/mixer@2a0000: Fixed dependency cycle(s) with /soc/tcon-top@6510000
+[    0.109187] /soc/rtc@7000000: Fixed dependency cycle(s) with /soc/clock@3001000
+[    0.109202] /soc/clock@7010000: Fixed dependency cycle(s) with /soc/clock@3001000
+[    0.109216] /soc/rtc@7000000: Fixed dependency cycle(s) with /soc/clock@7010000
+[    0.109231] /soc/clock@3001000: Fixed dependency cycle(s) with /soc/rtc@7000000
+[    0.109366] /soc/interrupt-controller@3021000: Fixed dependency cycle(s) with /soc/interrupt-controller@3021000
+[    0.109663] /soc/tcon-top@6510000: Fixed dependency cycle(s) with /soc/hdmi@6000000
+[    0.109704] /soc/hdmi@6000000: Fixed dependency cycle(s) with /soc/tcon-top@6510000
+[    0.109765] /soc/lcd-controller@6516000: Fixed dependency cycle(s) with /soc/tcon-top@6510000
+[    0.109784] /soc/tcon-top@6510000: Fixed dependency cycle(s) with /soc/lcd-controller@6516000
+[    0.109799] /soc/lcd-controller@6515000: Fixed dependency cycle(s) with /soc/tcon-top@6510000
+[    0.109818] /soc/tcon-top@6510000: Fixed dependency cycle(s) with /soc/lcd-controller@6515000
+[    0.109978] /soc/clock@7010000: Fixed dependency cycle(s) with /soc/rtc@7000000
+[    0.120051] /connector: Fixed dependency cycle(s) with /soc/hdmi@6000000
+[    0.120081] /soc/hdmi@6000000: Fixed dependency cycle(s) with /connector
+[    0.125622] iommu: Default domain type: Translated
+[    0.125646] iommu: DMA domain TLB invalidation policy: strict mode
+[    0.127446] SCSI subsystem initialized
+[    0.127703] libata version 3.00 loaded.
+[    0.127999] usbcore: registered new interface driver usbfs
+[    0.128043] usbcore: registered new interface driver hub
+[    0.128098] usbcore: registered new device driver usb
+[    0.128269] mc: Linux media interface: v0.10
+[    0.128321] videodev: Linux video capture interface: v2.00
+[    0.128404] pps_core: LinuxPPS API ver. 1 registered
+[    0.128411] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    0.128430] PTP clock support registered
+[    0.129118] Advanced Linux Sound Architecture Driver Initialized.
+[    0.130068] NetLabel: Initializing
+[    0.130082] NetLabel:  domain hash size = 128
+[    0.130088] NetLabel:  protocols = UNLABELED CIPSOv4 CALIPSO
+[    0.130156] NetLabel:  unlabeled traffic allowed by default
+[    0.130162] mctp: management component transport protocol core
+[    0.130168] NET: Registered PF_MCTP protocol family
+[    0.130640] vgaarb: loaded
+[    0.131189] clocksource: Switched to clocksource arch_sys_counter
+[    0.131885] VFS: Disk quotas dquot_6.6.0
+[    0.131922] VFS: Dquot-cache hash table entries: 512 (4096 bytes)
+[    0.132458] netfs: FS-Cache loaded
+[    0.132736] CacheFiles: Loaded
+[    0.140878] NET: Registered PF_INET protocol family
+[    0.141039] IP idents hash table entries: 16384 (order: 5, 131072 bytes, linear)
+[    0.142299] tcp_listen_portaddr_hash hash table entries: 512 (order: 1, 8192 bytes, linear)
+[    0.142337] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.142353] TCP established hash table entries: 8192 (order: 4, 65536 bytes, linear)
+[    0.142425] TCP bind hash table entries: 8192 (order: 6, 262144 bytes, linear)
+[    0.142672] TCP: Hash tables configured (established 8192 bind 8192)
+[    0.142818] UDP hash table entries: 512 (order: 3, 32768 bytes, linear)
+[    0.143063] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.143101] NET: Registered PF_XDP protocol family
+[    0.143125] PCI: CLS 0 bytes, default 64
+[    0.143698] Unpacking initramfs...
+[    0.155920] kvm [1]: nv: 571 coarse grained trap handlers
+[    0.156813] kvm [1]: nv: 710 fine grained trap handlers
+[    0.157424] kvm [1]: IPA Size Limit: 40 bits
+[    0.160584] kvm [1]: vgic interrupt IRQ9
+[    0.160647] kvm [1]: Hyp nVHE mode initialized successfully
+[    0.162783] Initialise system trusted keyrings
+[    0.163293] workingset: timestamp_bits=46 (anon: 41) max_order=18 bucket_order=0 (anon: 0)
+[    0.163986] squashfs: version 4.0 (2009/01/31) Phillip Lougher
+[    0.164925] SGI XFS with ACLs, security attributes, scrub, repair, no debug enabled
+[    0.167555] cryptd: max_cpu_qlen set to 1000
+[    0.167745] NET: Registered PF_ALG protocol family
+[    0.167777] Key type asymmetric registered
+[    0.167784] Asymmetric key parser 'x509' registered
+[    0.167791] Asymmetric key parser 'pkcs8' registered
+[    0.167900] Block layer SCSI generic (bsg) driver version 0.4 loaded (major 239)
+[    0.168189] io scheduler mq-deadline registered
+[    0.168274] io scheduler bfq registered
+[    0.176612] ledtrig-cpu: registered to indicate activity on CPUs
+[    0.192980] Serial: 8250/16550 driver, 8 ports, IRQ sharing disabled
+[    0.200528] misc dump reg init
+[    0.201444] platform 1420000.deinterlace: Adding to iommu group 0
+[    0.201536] platform 1c0e000.video-codec: Adding to iommu group 0
+[    0.220246] loop: module loaded
+[    0.222809] wireguard: WireGuard 1.0.0 loaded. See www.wireguard.com for information.
+[    0.222831] wireguard: Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
+[    0.225400] tun: Universal TUN/TAP device driver, 1.6
+[    0.226463] PPP generic driver version 2.4.2
+[    0.226791] PPP BSD Compression module registered
+[    0.226807] PPP Deflate Compression module registered
+[    0.226821] PPP MPPE Compression module registered
+[    0.226829] NET: Registered PF_PPPOX protocol family
+[    0.230351] usbcore: registered new interface driver usblp
+[    0.230424] usbcore: registered new interface driver usb-storage
+[    0.230909] mousedev: PS/2 mouse device common for all mice
+[    0.232915] sun6i-rtc 7000000.rtc: registered as rtc0
+[    0.232972] sun6i-rtc 7000000.rtc: setting system clock to 2026-11-05T10:22:16 UTC (1793874136)
+[    0.233696] i2c_dev: i2c /dev entries driver
+[    0.235363] usbcore: registered new interface driver uvcvideo
+[    0.235599] Driver for 1-wire Dallas network protocol.
+[    0.238046] sunxi-wdt 30090a0.watchdog: Watchdog enabled (timeout=16 sec, nowayout=0)
+[    0.241969] SMCCC: SOC_ID: ID = jep106:091e:1823 Revision = 0x00000000
+[    0.242326] clocksource: hstimer: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 9556302233 ns
+[    0.243099] hid: raw HID events driver (C) Jiri Kosina
+[    0.243396] usbcore: registered new interface driver usbhid
+[    0.243410] usbhid: USB HID core driver
+[    0.244284] cedrus 1c0e000.video-codec: Device registered as /dev/video0
+[    0.247042] hw perfevents: enabled with armv8_cortex_a53 PMU driver, 7 (0,8000003f) counters available
+[    0.257202] gnss: GNSS driver registered with major 236
+[    0.257869] usbcore: registered new interface driver snd-usb-audio
+[    0.266562] NET: Registered PF_INET6 protocol family
+[    0.268188] Segment Routing with IPv6
+[    0.268236] In-situ OAM (IOAM) with IPv6
+[    0.268325] NET: Registered PF_PACKET protocol family
+[    0.268383] bridge: filtering via arp/ip/ip6tables is no longer available by default. Update your scripts to load br_netfilter if you need this.
+[    0.268807] 9pnet: Installing 9P2000 support
+[    0.268952] Key type dns_resolver registered
+[    0.283923] registered taskstats version 1
+[    0.284594] Loading compiled-in X.509 certificates
+[    0.298614] zswap: loaded using pool lzo
+[    0.298829] Key type .fscrypt registered
+[    0.298838] Key type fscrypt-provisioning registered
+[    0.299017] Key type encrypted registered
+[    0.310179] platform 1100000.planes: Adding to iommu group 0
+[    0.313988] gpio gpiochip0: Static allocation of GPIO base is deprecated, use dynamic allocation.
+[    0.314954] sun50i-h616-r-pinctrl 7022000.pinctrl: initialized sunXi PIO driver
+[    0.325042] sun50i_cpufreq_nvmem: Using CPU speed bin speed3
+[    0.328837] sun50i-h616-r-pinctrl 7022000.pinctrl: supply vcc-pl not found, using dummy regulator
+[    0.329373] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[    0.329892] axp20x-rsb sunxi-rsb-745: AXP20x variant AXP806 found
+[    0.330513] axp20x-rsb sunxi-rsb-745: AXP20X driver loaded
+[    0.332713] gpio gpiochip1: Static allocation of GPIO base is deprecated, use dynamic allocation.
+[    0.342928] sun50i-h616-pinctrl 300b000.pinctrl: initialized sunXi PIO driver
+[    0.346072] printk: console [ttyS0] disabled
+[    0.367087] 5000000.serial: ttyS0 MMIO32:0x0000000005000000 (irq = 291, base_baud = 1500000) is a 16550A
+[    0.367570] printk: console [ttyS0] enabled
+[    0.369327] sun4i-drm display-engine: bound 1280000.mixer (ops 0xffffbf2e1073ff60)
+[    0.369597] sun4i-drm display-engine: bound 12a0000.mixer (ops 0xffffbf2e1073ff60)
+[    0.369918] sun4i-drm display-engine: bound 6510000.tcon-top (ops 0xffffbf2e10746288)
+[    0.370560] sun4i-drm display-engine: bound 6515000.lcd-controller (ops 0xffffbf2e1073c120)
+[    0.371061] sun4i-drm display-engine: bound 6516000.lcd-controller (ops 0xffffbf2e1073c120)
+[    0.371711] sun8i-dw-hdmi 6000000.hdmi: Detected HDMI TX controller v2.12a with HDCP (DWC HDMI 2.0 TX PHY)
+[    0.372669] sun8i-dw-hdmi 6000000.hdmi: registered DesignWare HDMI I2C bus driver
+[    0.373170] sun4i-drm display-engine: bound 6000000.hdmi (ops 0xffffbf2e1073e910)
+[    0.374266] [drm] Initialized sun4i-drm 1.0.0 for display-engine on minor 0
+[    0.374450] sun4i-drm display-engine: [drm] Cannot find any crtc or sizes
+[    0.376178] sun6i-spi 5010000.spi: registered host spi0
+[    0.376653] spi spi0.0: setup mode 0, 8 bits/w, 40000000 Hz max --> 0
+[    1.512631] Freeing initrd memory: 24336K
+[    1.522780] sun6i-spi 5010000.spi: registered child spi0.0
+[    1.534215] sunxi-mmc 4020000.mmc: Got CD GPIO
+[    1.534897] sunxi-mmc 4021000.mmc: allocated mmc-pwrseq
+[    1.540000] ehci-platform 5200000.usb: EHCI Host Controller
+[    1.540040] ehci-platform 5200000.usb: new USB bus registered, assigned bus number 1
+[    1.540406] ehci-platform 5310000.usb: EHCI Host Controller
+[    1.540439] ehci-platform 5310000.usb: new USB bus registered, assigned bus number 2
+[    1.540748] ehci-platform 5200000.usb: irq 298, io mem 0x05200000
+[    1.540759] ehci-platform 5310000.usb: irq 299, io mem 0x05310000
+[    1.541405] ehci-platform 5311000.usb: EHCI Host Controller
+[    1.541442] ehci-platform 5311000.usb: new USB bus registered, assigned bus number 3
+[    1.541766] ehci-platform 5311000.usb: irq 300, io mem 0x05311000
+[    1.542224] ohci-platform 5200400.usb: Generic Platform OHCI controller
+[    1.542275] ohci-platform 5200400.usb: new USB bus registered, assigned bus number 4
+[    1.542419] ohci-platform 5200400.usb: irq 301, io mem 0x05200400
+[    1.542738] ohci-platform 5310400.usb: Generic Platform OHCI controller
+[    1.542774] ohci-platform 5310400.usb: new USB bus registered, assigned bus number 5
+[    1.542917] ohci-platform 5310400.usb: irq 302, io mem 0x05310400
+[    1.542947] ohci-platform 5311400.usb: Generic Platform OHCI controller
+[    1.542972] ohci-platform 5311400.usb: new USB bus registered, assigned bus number 6
+[    1.543060] ohci-platform 5311400.usb: irq 303, io mem 0x05311400
+[    1.544914] clk: Disabling unused clocks
+[    1.545048] PM: genpd: Disabling unused power domains
+[    1.545062] ALSA device list:
+[    1.545067]   #0: h616-audio-codec
+[    1.551220] ehci-platform 5200000.usb: USB 2.0 started, EHCI 1.00
+[    1.551349] usb usb1: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 7.03
+[    1.551558] usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+[    1.551574] usb usb1: Product: EHCI Host Controller
+[    1.551587] usb usb1: Manufacturer: Linux 7.3.1 ehci_hcd
+[    1.551598] usb usb1: SerialNumber: 5200000.usb
+[    1.552509] hub 1-0:1.0: USB hub found
+[    1.552571] hub 1-0:1.0: 1 port detected
+[    1.559602] sunxi-mmc 4020000.mmc: initialized, max. request size: 16384 KB, uses new timings mode
+[    1.563283] ehci-platform 5310000.usb: USB 2.0 started, EHCI 1.00
+[    1.563440] usb usb2: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 7.03
+[    1.563695] usb usb2: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+[    1.563719] usb usb2: Product: EHCI Host Controller
+[    1.563737] usb usb2: Manufacturer: Linux 7.3.1 ehci_hcd
+[    1.563754] usb usb2: SerialNumber: 5310000.usb
+[    1.564855] hub 2-0:1.0: USB hub found
+[    1.564936] hub 2-0:1.0: 1 port detected
+[    1.575316] ehci-platform 5311000.usb: USB 2.0 started, EHCI 1.00
+[    1.575480] usb usb3: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 7.03
+[    1.575796] usb usb3: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+[    1.575820] usb usb3: Product: EHCI Host Controller
+[    1.575838] usb usb3: Manufacturer: Linux 7.3.1 ehci_hcd
+[    1.575855] usb usb3: SerialNumber: 5311000.usb
+[    1.576975] hub 3-0:1.0: USB hub found
+[    1.577061] hub 3-0:1.0: 1 port detected
+[    1.599334] usb usb6: New USB device found, idVendor=1d6b, idProduct=0001, bcdDevice= 7.03
+[    1.599550] usb usb6: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+[    1.599568] usb usb6: Product: Generic Platform OHCI controller
+[    1.599581] usb usb6: Manufacturer: Linux 7.3.1 ohci_hcd
+[    1.599592] usb usb6: SerialNumber: 5311400.usb
+[    1.600419] hub 6-0:1.0: USB hub found
+[    1.600477] hub 6-0:1.0: 1 port detected
+[    1.601025] usb usb4: New USB device found, idVendor=1d6b, idProduct=0001, bcdDevice= 7.03
+[    1.601255] usb usb4: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+[    1.601277] usb usb4: Product: Generic Platform OHCI controller
+[    1.601289] usb usb4: Manufacturer: Linux 7.3.1 ohci_hcd
+[    1.601301] usb usb4: SerialNumber: 5200400.usb
+[    1.602271] hub 4-0:1.0: USB hub found
+[    1.602338] hub 4-0:1.0: 1 port detected
+[    1.602937] usb usb5: New USB device found, idVendor=1d6b, idProduct=0001, bcdDevice= 7.03
+[    1.603135] usb usb5: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+[    1.603152] usb usb5: Product: Generic Platform OHCI controller
+[    1.603165] usb usb5: Manufacturer: Linux 7.3.1 ohci_hcd
+[    1.603235] usb usb5: SerialNumber: 5310400.usb
+[    1.604052] hub 5-0:1.0: USB hub found
+[    1.604095] hub 5-0:1.0: 1 port detected
+[    1.612758] mmc0: new high speed SDHC card at address aaaa
+[    1.614105] mmcblk0: mmc0:aaaa SC32G 29.7 GiB
+[    1.618949]  mmcblk0: p1
+[    1.764097] sunxi-mmc 4021000.mmc: initialized, max. request size: 16384 KB, uses new timings mode
+[    1.772112] Freeing unused kernel memory: 2560K
+[    1.772470] Run /init as init process
+[    1.772488]   with arguments:
+[    1.772497]     /init
+[    1.772507]   with environment:
+[    1.772517]     HOME=/
+[    1.772527]     TERM=linux
+[    1.772537]     splash=verbose
+[    1.772547]     ubootpart=3cdb7e02-01
+[    1.772558]     cgroup_enable=memory
+[    1.788289] fbcon: Taking over console
+[    1.800427] mmc1: new UHS-I speed SDR104 SDIO card at address 8800
+[    4.565159] EXT4-fs (mmcblk0p1): mounted filesystem f4b27789-916c-4aca-a071-702cd3d477e7 ro with writeback data mode. Quota mode: none.
+[    4.810904] Not activating Mandatory Access Control as /sbin/tomoyo-init does not exist.
+[    6.390633] systemd[1]: systemd 261.3-0ubuntu3 running in system mode (+PAM +AUDIT +SELINUX +APPARMOR +IMA +IPE +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 +KMOD +LIBCRYPTSETUP +LIBCRYPTSETUP_PLUGINS +LIBFDISK +PCRE2 +PWQUALITY +P11KIT +QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD +BPF_FRAMEWORK +BTF -XKBCOMMON -UTMP +LIBARCHIVE)
+[    6.390802] systemd[1]: Detected architecture arm64.
+[    6.418176] systemd[1]: Hostname set to <orangepizero2>.
+[    6.743505] systemd[1]: bpf-restrict-fs: BPF LSM hook not enabled in the kernel, BPF LSM not supported.
+[    6.744111] systemd[1]: Using hardware watchdog /dev/watchdog0: 'sunxi-wdt', version 0.
+[    6.744152] systemd[1]: Watchdog running with a hardware timeout of 16s.
+[    8.275149] systemd[1]: Queued start job for default target graphical.target.
+[    8.286134] systemd[1]: Created slice system-cups.slice - CUPS Slice.
+[    8.289019] systemd[1]: Created slice system-modprobe.slice - Slice /system/modprobe.
+[    8.291635] systemd[1]: Created slice system-serial\x2dgetty.slice - Slice /system/serial-getty.
+[    8.293490] systemd[1]: Created slice user.slice - User and Session Slice.
+[    8.294191] systemd[1]: Started systemd-ask-password-wall.path - Forward Password Requests to Wall Directory Watch.
+[    8.295571] systemd[1]: Set up automount proc-sys-fs-binfmt_misc.automount - Arbitrary Executable File Formats File System Automount Point.
+[    8.295979] systemd[1]: Expecting device dev-ttyS0.device - /dev/ttyS0...
+[    8.296305] systemd[1]: Reached target imports.target - Image Downloads.
+[    8.296815] systemd[1]: Reached target slices.target - Slice Units.
+[    8.297184] systemd[1]: Reached target swap.target - Swaps.
+[    8.320118] systemd[1]: Listening on rpcbind.socket - RPCbind Server Activation Socket.
+[    8.321329] systemd[1]: Listening on syslog.socket - Syslog Socket.
+[    8.332326] systemd[1]: Listening on systemd-ask-password.socket - Query the User Interactively for a Password.
+[    8.340630] systemd[1]: Listening on systemd-creds.socket - Credential Encryption/Decryption.
+[    8.349128] systemd[1]: Listening on systemd-factory-reset.socket - Factory Reset Management.
+[    8.350008] systemd[1]: Listening on systemd-hostnamed.socket - Hostname Service Socket.
+[    8.350937] systemd[1]: Listening on systemd-journald-dev-log.socket - Journal Socket (/dev/log).
+[    8.352058] systemd[1]: Listening on systemd-journald.socket - Journal Sockets.
+[    8.364147] systemd[1]: Listening on systemd-mute-console.socket - Console Output Muting Service Socket.
+[    8.365145] systemd[1]: Listening on systemd-resolved-monitor.socket - Resolve Monitor Varlink Socket.
+[    8.366057] systemd[1]: Listening on systemd-resolved-varlink.socket - Resolve Service Varlink Socket.
+[    8.367025] systemd[1]: Listening on systemd-udevd-control.socket - udev Control Socket.
+[    8.367947] systemd[1]: Listening on systemd-udevd-kernel.socket - udev Kernel Socket.
+[    8.368902] systemd[1]: Listening on systemd-udevd-varlink.socket - udev Varlink Socket.
+[    8.369917] systemd[1]: dev-hugepages.mount - Huge Pages File System skipped, unmet condition check ConditionPathExists=/sys/kernel/mm/hugepages
+[    8.377669] systemd[1]: Mounting dev-mqueue.mount - POSIX Message Queue File System...
+[    8.382516] systemd[1]: Mounting sys-kernel-debug.mount - Kernel Debug File System...
+[    8.388285] systemd[1]: Mounting sys-kernel-tracing.mount - Kernel Trace File System...
+[    8.389484] systemd[1]: auth-rpcgss-module.service - Kernel Module supporting RPCSEC_GSS skipped, unmet condition check ConditionPathExists=/etc/krb5.keytab
+[    8.397817] systemd[1]: Starting fake-hwclock-load.service - Restore the current clock...
+[    8.415756] systemd[1]: Starting keyboard-setup.service - Set the console keyboard layout...
+[    8.431742] systemd[1]: Starting kmod-static-nodes.service - Create List of Static Device Nodes...
+[    8.443822] systemd[1]: Starting modprobe@configfs.service - Load Kernel Module configfs...
+[    8.444596] systemd[1]: modprobe@drm.service - Load Kernel Module drm skipped, unmet condition check ConditionKernelModuleLoaded=!drm
+[    8.445000] systemd[1]: modprobe@efi_pstore.service - Load Kernel Module efi_pstore skipped, unmet condition check ConditionKernelModuleLoaded=!efi_pstore
+[    8.456256] systemd[1]: Starting modprobe@fuse.service - Load Kernel Module fuse...
+[    8.457252] systemd[1]: systemd-hibernate-clear.service - Clear Stale Hibernate Storage Info skipped, unmet condition check ConditionPathExists=/sys/firmware/efi/efivars/HibernateLocation-8cf2644b-4b0b-428f-9387-6d876050dc67
+[    8.481282] systemd[1]: Starting systemd-modules-load.service - Load Kernel Modules...
+[    8.496424] systemd[1]: Starting systemd-udev-load-credentials.service - Load udev Rules from Credentials...
+[    8.513737] systemd[1]: Starting systemd-udev-trigger.service - Coldplug All udev Devices...
+[    8.556345] systemd[1]: Mounted dev-mqueue.mount - POSIX Message Queue File System.
+[    8.558112] systemd[1]: Mounted sys-kernel-debug.mount - Kernel Debug File System.
+[    8.560403] systemd[1]: Mounted sys-kernel-tracing.mount - Kernel Trace File System.
+[    8.564675] systemd[1]: Finished kmod-static-nodes.service - Create List of Static Device Nodes.
+[    8.570511] systemd[1]: modprobe@configfs.service: Deactivated successfully.
+[    8.571971] systemd[1]: Finished modprobe@configfs.service - Load Kernel Module configfs.
+[    8.578800] systemd[1]: Mounting sys-kernel-config.mount - Kernel Configuration File System...
+[    8.591874] systemd[1]: Starting systemd-tmpfiles-setup-dev-early.service - Create Static Device Nodes in /dev gracefully...
+[    8.613540] fuse: init (API version 7.46)
+[    8.619738] systemd[1]: modprobe@fuse.service: Deactivated successfully.
+[    8.621997] systemd[1]: Finished modprobe@fuse.service - Load Kernel Module fuse.
+[    8.639722] systemd[1]: Mounting sys-fs-fuse-connections.mount - FUSE Control File System...
+[    8.645288] systemd[1]: Mounted sys-kernel-config.mount - Kernel Configuration File System.
+[    8.691100] systemd[1]: fake-hwclock-load.service: Deactivated successfully.
+[    8.692780] systemd[1]: Finished fake-hwclock-load.service - Restore the current clock.
+[    8.697002] systemd[1]: Mounted sys-fs-fuse-connections.mount - FUSE Control File System.
+[    8.698105] systemd[1]: systemd-fsck-root.service - File System Check on Root Device skipped, unmet condition check ConditionPathExists=!/run/initramfs/fsck-root
+[    8.702931] systemd[1]: Starting systemd-remount-fs.service - Remount Root and Kernel File Systems...
+[    8.730806] [ADDR_MGT] addr_mgt_probe: module version: v1.0.9
+[    8.730939] [ADDR_MGT] addr_mgt_probe: success.
+[    8.731668] systemd[1]: Finished systemd-udev-load-credentials.service - Load udev Rules from Credentials.
+[    8.760324] WCN: marlin_init entry!
+[    8.761076] WCN: wcn config bt wake host
+[    8.761567] WCN: no allwinner,sunxi-btlpm node, bt_hostwake irq not used
+[    8.761591] WCN: marlin2 parse_dt some para not config
+[    8.761603] sdiohal:sdiohal_parse_dt adma_tx:1, adma_rx:1, pwrseq:0, irq type:data, gpio_num:0000000000000000, blksize:840
+[    8.764101] sdiohal:sdiohal_init ok
+[    8.765986] WCN: marlin_probe ok!
+[    8.779695] mtty_probe init device addr: 0x0000000090f6f959
+[    8.780479] -->rfkill_bluetooth_init
+[    8.780689] bluetooth_set_power: start_block=1
+[    8.780710] WCN: marlin power state:0, subsys: [MARLIN_BLUETOOTH] power 0
+[    8.780719] bluetooth_set_power: end_block=1
+[    8.780761] <--rfkill_bluetooth_init
+[    8.787317] systemd[1]: Finished systemd-modules-load.service - Load Kernel Modules.
+[    8.799636] systemd[1]: Starting systemd-sysctl.service - Apply Kernel Variables...
+[    8.815488] systemd[1]: Finished systemd-tmpfiles-setup-dev-early.service - Create Static Device Nodes in /dev gracefully.
+[    8.847531] EXT4-fs (mmcblk0p1): re-mounted f4b27789-916c-4aca-a071-702cd3d477e7 r/w.
+[    8.852623] systemd[1]: Finished systemd-remount-fs.service - Remount Root and Kernel File Systems.
+[    8.859828] systemd[1]: systemd-hwdb-update.service - Rebuild Hardware Database skipped, unmet condition check ConditionNeedsUpdate=/etc
+[    8.860211] systemd[1]: systemd-pstore.service - Platform Persistent Storage Archival skipped, unmet condition check ConditionDirectoryNotEmpty=/sys/fs/pstore
+[    8.867561] systemd[1]: Starting systemd-random-seed.service - Load/Save OS Random Seed...
+[    8.868402] systemd[1]: systemd-sysusers.service - Create System Users skipped, no trigger condition checks were met.
+[    8.885174] systemd[1]: Starting systemd-journalctl.socket - Journal Log Access Socket...
+[    8.892975] systemd[1]: Starting systemd-tmpfiles-setup-dev.service - Create Static Device Nodes in /dev...
+[    8.900845] systemd[1]: Finished keyboard-setup.service - Set the console keyboard layout.
+[    8.902533] systemd[1]: Listening on systemd-journalctl.socket - Journal Log Access Socket.
+[    8.939002] systemd[1]: Finished systemd-sysctl.service - Apply Kernel Variables.
+[    8.950428] systemd[1]: Starting systemd-resolved.service - Network Name Resolution...
+[    8.971306] systemd[1]: Finished systemd-tmpfiles-setup-dev.service - Create Static Device Nodes in /dev.
+[    8.972383] systemd[1]: Reached target local-fs-pre.target - Preparation for Local File Systems.
+[    8.979552] systemd[1]: Starting systemd-udevd.service - Rule-based Manager for Device Events and Files...
+[    8.982008] systemd[1]: Finished systemd-random-seed.service - Load/Save OS Random Seed.
+[    8.983688] systemd[1]: first-boot-complete.target - First Boot Complete skipped, unmet condition check ConditionFirstBoot=yes
+[    9.501626] systemd[1]: Started systemd-udevd.service - Rule-based Manager for Device Events and Files.
+[    9.554989] systemd[1]: Mounting tmp.mount - /tmp...
+[    9.562147] systemd[1]: var-spool-cups.mount: Directory /var/spool/cups to mount over is not empty, mounting anyway.
+[    9.579631] systemd[1]: Mounting var-spool-cups.mount - /var/spool/cups...
+[    9.580621] systemd[1]: Started systemd-resolved.service - Network Name Resolution.
+[    9.628965] systemd[1]: Mounted tmp.mount - /tmp.
+[    9.630358] systemd[1]: Reached target nss-lookup.target - Host and Network Name Lookups.
+[    9.631530] systemd[1]: Listening on systemd-rfkill.socket - Load/Save RF Kill Switch Status /dev/rfkill Watch.
+[    9.637961] systemd[1]: Starting systemd-rfkill.service - Load/Save RF Kill Switch Status...
+[    9.648780] systemd[1]: Mounted var-spool-cups.mount - /var/spool/cups.
+[    9.650125] systemd[1]: Reached target local-fs.target - Local File Systems.
+[    9.658600] systemd[1]: Listening on systemd-sysext.socket - System Extension Image Management.
+[    9.664334] systemd[1]: Starting armbian-zram-config.service - Armbian ZRAM config...
+[    9.675707] systemd[1]: Starting console-setup.service - Set console font and keymap...
+[    9.683637] systemd[1]: Starting netplan-configure.service - Netplan Backend Configuration...
+[    9.700270] systemd[1]: Starting plymouth-read-write.service - Tell Plymouth To Write Out Runtime Data...
+[    9.730348] bluetooth_set_power: start_block=0
+[    9.730382] WCN: start_marlin [MARLIN_BLUETOOTH]
+[    9.730392] WCN: marlin power state:0, subsys: [MARLIN_BLUETOOTH] power 1
+[    9.730398] WCN: the first power on start
+[    9.732523] systemd[1]: Starting systemd-binfmt.service - Set Up Additional Binary Formats...
+[    9.733002] systemd[1]: systemd-machine-id-commit.service - Save Transient machine-id to Disk skipped, unmet condition check ConditionPathIsMountPoint=/etc/machine-id
+[    9.813282] systemd[1]: Finished console-setup.service - Set console font and keymap.
+[    9.814470] systemd[1]: proc-sys-fs-binfmt_misc.automount: Got automount request for /proc/sys/fs/binfmt_misc, triggered by 282 (systemd-binfmt)
+[    9.823631] systemd[1]: Mounting proc-sys-fs-binfmt_misc.mount - Arbitrary Executable File Formats File System...
+[    9.824462] systemd[1]: Received SIGRTMIN+20 from PID 155 (plymouthd).
+[    9.833194] WCN: marlin chip en dummy pull up -- need manually set GPIO 
+[    9.838403] systemd[1]: Finished plymouth-read-write.service - Tell Plymouth To Write Out Runtime Data.
+[    9.855286] sdiohal:sdiohal_scan_card
+[    9.855555] sdiohal:sdiohal_probe: func->class=0, vendor=0x0000, device=0x0000, func_num=0x0001, clock=150000000
+[    9.855685] WCN: marlin_scan_finish!
+[    9.855702] sdiohal:probe ok
+[    9.855878] sdiohal:scan end!
+[    9.855898] WCN: then marlin start to download
+[    9.857048] WCN: marlin_get_wcn_chipid: chipid: 0x2355b001
+[    9.857086] WCN: marlin_request_firmware from /lib/firmware/uwe5622/wcnmodem.bin start!
+[    9.938669] systemd[1]: Mounted proc-sys-fs-binfmt_misc.mount - Arbitrary Executable File Formats File System.
+[    9.949076] systemd[1]: Finished systemd-binfmt.service - Set Up Additional Binary Formats.
+[   10.160534] systemd[1]: Finished systemd-udev-trigger.service - Coldplug All udev Devices.
+[   10.174998] systemd[1]: Starting plymouth-start.service - Show Plymouth Boot Screen...
+[   10.273130] zram: Added device: zram0
+[   10.273814] zram: Added device: zram1
+[   10.274602] zram: Added device: zram2
+[   10.361580] systemd[1]: Started plymouth-start.service - Show Plymouth Boot Screen.
+[   10.365964] systemd[1]: systemd-ask-password-console.path - Dispatch Password Requests to Console Directory Watch skipped, unmet condition check ConditionPathExists=!/run/plymouth/pid
+[   10.366641] systemd[1]: Started systemd-ask-password-plymouth.path - Forward Password Requests to Plymouth Directory Watch.
+[   10.381870] zram0: detected capacity change from 0 to 991112
+[   10.419001] Adding 495552k swap on /dev/zram0.  Priority:5 extents:1 across:495552k SS
+[   10.465494] sun4i-drm display-engine: [drm] Cannot find any crtc or sizes
+[   10.545683] zram1: detected capacity change from 0 to 102400
+[   10.551441] systemd[1]: Finished netplan-configure.service - Netplan Backend Configuration.
+[   10.643277] WCN: combin_img 0 marlin_firmware_write finish and successful
+[   10.647345] WCN: marlin_start_run read reset reg val:0x1
+[   10.647378] WCN: after do marlin_start_run reset reg val:0x0
+[   10.647599] WCN: s_marlin_bootup_time=10647595333
+[   10.656483] WCN: clock mode: TSX
+[   10.656678] WCN: marlin_write_cali_data sync init_state:0x0
+[   10.679550] WCN: marlin_write_cali_data sync init_state:0x0
+[   10.703640] WCN: marlin_write_cali_data sync init_state:0xf0f0f0f1
+[   10.703678] WCN: sdio_config bt_wake_host trigger:[high]
+[   10.703683] WCN: sdio_config irq:[inband]
+[   10.703687] WCN: sdio_config wake_host_level_duration_time:[20ms]
+[   10.703692] WCN: sdio_config wake_host_data_separation:[bt/wifi reuse]
+[   10.703696] WCN: marlin_send_sdio_config_to_cp sdio_config:0x80f01 (enable config)
+[   10.704085] WCN: marlin_write_cali_data finish
+[   10.704329] WCN: check_cp_ready sync val:0xf0f0f0f2, prj_type val:0x0
+[   10.727512] WCN: check_cp_ready sync val:0xf0f0f0f2, prj_type val:0x0
+[   10.739319] systemd[1]: Finished armbian-zram-config.service - Armbian ZRAM config.
+[   10.750879] systemd[1]: Starting armbian-ramlog.service - Armbian memory supported logging...
+[   10.751532] WCN: check_cp_ready sync val:0xf0f0f0f2, prj_type val:0x0
+[   10.775498] WCN: check_cp_ready sync val:0xf0f0f0f2, prj_type val:0x0
+[   10.799495] WCN: check_cp_ready sync val:0xf0f0f0f2, prj_type val:0x0
+[   10.801785] systemd[1]: Found device dev-ttyS0.device - /dev/ttyS0.
+[   10.823562] WCN: check_cp_ready sync val:0xf0f0f0ff, prj_type val:0x0
+[   10.823594] sdiohal:sdiohal_runtime_get entry
+[   10.824885] WCN: get_cp2_version entry!
+[   10.826388] WCN: WCND at cmd read:WCN_VER:Platform Version:MARLIN3_19B_W21.05.3~Project Version:sc2355_marlin3_lite_ott~12-15-2021 11:26:33~
+[   10.826546] WCN: switch_cp2_log - close entry!
+[   10.827909] WCN: WCND at cmd read:OK
+[   10.828174] WCN: then marlin download finished and run ok
+[   10.828201] WCN: start_loopcheck
+[   10.832060] mtty mtty: BD address ea:97:b0:2b:a9:ee from addr_mgt
+[   10.832131] marlin_sdio_write +++ op 0xFCA0
+[   10.833800] woble_data_recv opcode: 0xFCA0, status: 0
+[   10.845656] marlin_sdio_write +++ op 0xFCA2
+[   10.856607] woble_data_recv opcode: 0xFCA2, status: 0
+[   10.856843] marlin_sdio_write +++ op 0xFCA1
+[   10.859051] woble_data_recv opcode: 0xFCA1, status: 0
+[   10.859343] mtty mtty: Bluetooth vendor init done (PSKEY 176 B, RF 252 B)
+[   10.859387] bluetooth_set_power: end_block=0
+[   10.862676] systemd[1]: Started systemd-rfkill.service - Load/Save RF Kill Switch Status.
+[   11.032683] EXT4-fs (zram1): mounted filesystem b0f00b69-905a-4649-8b8e-da944b1ddf1d r/w without journal. Quota mode: none.
+[   11.448271] sun8i-ce 1904000.crypto: will run requests pump with realtime priority
+[   11.449097] sun8i-ce 1904000.crypto: will run requests pump with realtime priority
+[   11.449506] sun8i-ce 1904000.crypto: will run requests pump with realtime priority
+[   11.450133] sun8i-ce 1904000.crypto: will run requests pump with realtime priority
+[   11.451427] sun8i-ce 1904000.crypto: Register cbc(aes)
+[   11.451486] sun8i-ce 1904000.crypto: Register ecb(aes)
+[   11.451498] sun8i-ce 1904000.crypto: Register cbc(des3_ede)
+[   11.451509] sun8i-ce 1904000.crypto: Register ecb(des3_ede)
+[   11.451520] sun8i-ce 1904000.crypto: Register md5
+[   11.451533] sun8i-ce 1904000.crypto: Register sha1
+[   11.451544] sun8i-ce 1904000.crypto: Register sha224
+[   11.451555] sun8i-ce 1904000.crypto: Register sha256
+[   11.451567] sun8i-ce 1904000.crypto: Register sha384
+[   11.451579] sun8i-ce 1904000.crypto: Register sha512
+[   11.451873] sun8i-ce 1904000.crypto: CryptoEngine Die ID 0
+[   11.462645] sun50i-di300 1420000.deinterlace: Device registered as /dev/video1
+[   11.616044] dwmac-sun8i 5020000.ethernet: IRQ eth_wake_irq not found
+[   11.616083] dwmac-sun8i 5020000.ethernet: IRQ sfty not found
+[   11.616780] dwmac-sun8i 5020000.ethernet: PTP uses main clock
+[   11.620533] dwmac-sun8i 5020000.ethernet: No HW DMA feature register supported
+[   11.620566] dwmac-sun8i 5020000.ethernet: RX Checksum Offload Engine supported
+[   11.620572] dwmac-sun8i 5020000.ethernet: COE Type 2
+[   11.620580] dwmac-sun8i 5020000.ethernet: TX Checksum insertion supported
+[   11.620587] dwmac-sun8i 5020000.ethernet: Normal descriptors
+[   11.620592] dwmac-sun8i 5020000.ethernet: Chain mode enabled
+[   11.720966] Registered IR keymap rc-cec
+[   11.721208] rc rc0: dw_hdmi as /devices/platform/soc/6000000.hdmi/rc/rc0
+[   11.721443] input: dw_hdmi as /devices/platform/soc/6000000.hdmi/rc/rc0/input0
+[   11.865413] panfrost 1800000.gpu: clock rate = 432000000
+[   11.865466] panfrost 1800000.gpu: bus_clock rate = 200000000
+[   11.872141] panfrost 1800000.gpu: mali-g31 id 0x7093 major 0x0 minor 0x0 status 0x0
+[   11.872172] panfrost 1800000.gpu: features: 00000000,000027f7, issues: 00000000,00000400
+[   11.872181] panfrost 1800000.gpu: Features: L2:0x07100206 Shader:0x00000000 Tiler:0x00000209 Mem:0x1 MMU:0x00002821 AS:0xff JS:0x7
+[   11.872190] panfrost 1800000.gpu: shader_present=0x1 l2_present=0x1
+[   11.884302] [drm] Initialized panfrost 1.6.0 for 1800000.gpu on minor 1
+[   12.146092] systemd[1]: systemd-ask-password-console.path - Dispatch Password Requests to Console Directory Watch skipped, unmet condition check ConditionPathExists=!/run/plymouth/pid
+[   12.146966] systemd[1]: dev-hugepages.mount - Huge Pages File System skipped, unmet condition check ConditionPathExists=/sys/kernel/mm/hugepages
+[   12.167985] systemd[1]: Starting fake-hwclock-load.service - Restore the current clock...
+[   12.168433] systemd[1]: modprobe@efi_pstore.service - Load Kernel Module efi_pstore skipped, unmet condition check ConditionKernelModuleLoaded=!efi_pstore
+[   12.168709] systemd[1]: systemd-hibernate-clear.service - Clear Stale Hibernate Storage Info skipped, unmet condition check ConditionPathExists=/sys/firmware/efi/efivars/HibernateLocation-8cf2644b-4b0b-428f-9387-6d876050dc67
+[   12.169328] systemd[1]: systemd-hwdb-update.service - Rebuild Hardware Database skipped, unmet condition check ConditionNeedsUpdate=/etc
+[   12.169663] systemd[1]: systemd-machine-id-commit.service - Save Transient machine-id to Disk skipped, unmet condition check ConditionPathIsMountPoint=/etc/machine-id
+[   12.169978] systemd[1]: systemd-pstore.service - Platform Persistent Storage Archival skipped, unmet condition check ConditionDirectoryNotEmpty=/sys/fs/pstore
+[   12.170523] systemd[1]: systemd-sysusers.service - Create System Users skipped, no trigger condition checks were met.
+[   12.419810] systemd[1]: Reached target usb-gadget.target - Hardware activated USB gadget.
+[   12.425655] dwmac-sun8i 5020000.ethernet end0: renamed from eth0
+[   12.470297] systemd[1]: fake-hwclock-load.service: Deactivated successfully.
+[   12.472611] systemd[1]: Finished fake-hwclock-load.service - Restore the current clock.
+[   12.516307] systemd[1]: systemd-ask-password-console.path - Dispatch Password Requests to Console Directory Watch skipped, unmet condition check ConditionPathExists=!/run/plymouth/pid
+[   12.517021] systemd[1]: dev-hugepages.mount - Huge Pages File System skipped, unmet condition check ConditionPathExists=/sys/kernel/mm/hugepages
+[   12.521899] systemd[1]: Starting fake-hwclock-load.service - Restore the current clock...
+[   12.522322] systemd[1]: modprobe@efi_pstore.service - Load Kernel Module efi_pstore skipped, unmet condition check ConditionKernelModuleLoaded=!efi_pstore
+[   12.522587] systemd[1]: systemd-hibernate-clear.service - Clear Stale Hibernate Storage Info skipped, unmet condition check ConditionPathExists=/sys/firmware/efi/efivars/HibernateLocation-8cf2644b-4b0b-428f-9387-6d876050dc67
+[   12.523057] systemd[1]: systemd-hwdb-update.service - Rebuild Hardware Database skipped, unmet condition check ConditionNeedsUpdate=/etc
+[   12.523676] systemd[1]: systemd-machine-id-commit.service - Save Transient machine-id to Disk skipped, unmet condition check ConditionPathIsMountPoint=/etc/machine-id
+[   12.523948] systemd[1]: systemd-pstore.service - Platform Persistent Storage Archival skipped, unmet condition check ConditionDirectoryNotEmpty=/sys/fs/pstore
+[   12.524346] systemd[1]: systemd-sysusers.service - Create System Users skipped, no trigger condition checks were met.
+[   12.638650] systemd[1]: fake-hwclock-load.service: Deactivated successfully.
+[   12.639795] systemd[1]: Finished fake-hwclock-load.service - Restore the current clock.
+[   14.813518] systemd[1]: Finished armbian-ramlog.service - Armbian memory supported logging.
+[   14.825808] systemd[1]: Starting systemd-journald.service - Journal Service...
+[   14.941235] systemd-journald[437]: Collecting audit messages is disabled.
+[   15.114784] systemd[1]: Started systemd-journald.service - Journal Service.
+[   15.189849] systemd-journald[437]: Received client request to flush runtime journal.
+[   15.574855] RPC: Registered named UNIX socket transport module.
+[   15.574889] RPC: Registered udp transport module.
+[   15.574893] RPC: Registered tcp transport module.
+[   15.574897] RPC: Registered tcp-with-tls transport module.
+[   15.574901] RPC: Registered tcp NFSv4.1 backchannel transport module.
+[   16.172269] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[   16.211077] Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+[   16.215936] Loaded X.509 cert 'wens: 61c038651aabdcf94bd0ac7ff06c7248db18c600'
+[   16.339152] WCN: start_marlin [MARLIN_WIFI]
+[   16.339248] WCN: marlin power state:1, subsys: [MARLIN_WIFI] power 1
+[   16.339261] WCN: marlin have open, GNSS is closed
+[   16.384388] WCN: get_board_ant_num [one_ant]
+[   16.384417] wifi ini path = /lib/firmware/wifi_2355b001_1ant.ini
+[   16.425919] sprdwl:sprdwl_get_fw_info length mismatch: len_count=83, r_len=89
+[   16.425987] sprdwl:sprdwl_get_fw_info, drv_version=1, fw_version=2, compat_ver=0
+[   16.426001] sprdwl:chip_model:0x2355, chip_ver:0x0
+[   16.426010] sprdwl:fw_ver:0, fw_std:0x7f, fw_capa:0x120f7f
+[   16.426020] sprdwl:mac_addr:e0:51:d8:fe:17:19
+[   16.426032] sprdwl:credit_capa:TX_WITH_CREDIT
+[   16.426040] sprdwl:ott support:0
+[   16.458087] unisoc_wifi unisoc_wifi wlan0: mixed HW and IP checksum settings.
+[   17.048857] bluetooth_set_power: start_block=0
+[   17.048889] WCN: start_marlin [MARLIN_BLUETOOTH]
+[   17.048899] WCN: marlin power state:5, subsys: [MARLIN_BLUETOOTH] power 1
+[   17.048906] WCN: marlin have open, GNSS is closed
+[   17.048914] bluetooth_set_power: end_block=0
+[   17.315840] mtty_open device success!
+[   17.550597] Bluetooth: Core ver 2.22
+[   17.550792] NET: Registered PF_BLUETOOTH protocol family
+[   17.550807] Bluetooth: HCI device and connection manager initialized
+[   17.550831] Bluetooth: HCI socket layer initialized
+[   17.550840] Bluetooth: L2CAP socket layer initialized
+[   17.550875] Bluetooth: SCO socket layer initialized
+[   17.669431] Bluetooth: HCI UART driver ver 2.3
+[   17.669463] Bluetooth: HCI UART protocol H4 registered
+[   17.669468] Bluetooth: HCI UART protocol BCSP registered
+[   17.669626] Bluetooth: HCI UART protocol LL registered
+[   17.669652] Bluetooth: HCI UART protocol ATH3K registered
+[   17.669744] Bluetooth: HCI UART protocol Three-wire (H5) registered
+[   17.670046] Bluetooth: HCI UART protocol Intel registered
+[   17.670385] Bluetooth: HCI UART protocol Broadcom registered
+[   17.670457] Bluetooth: HCI UART protocol QCA registered
+[   17.670465] Bluetooth: HCI UART protocol AG6XX registered
+[   17.670505] Bluetooth: HCI UART protocol Marvell registered
+[   21.905536] Bluetooth: BNEP (Ethernet Emulation) ver 1.3
+[   21.905563] Bluetooth: BNEP filters: protocol multicast
+[   21.905584] Bluetooth: BNEP socket layer initialized
+[   21.940685] Bluetooth: MGMT ver 1.23
+[   22.523507] dwmac-sun8i 5020000.ethernet end0: Register MEM_TYPE_PAGE_POOL RxQ-0
+[   22.559329] dwmac-sun8i 5020000.ethernet end0: PHY [stmmac-0:01] driver [RTL8211F Gigabit Ethernet] (irq=POLL)
+[   22.570739] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[   22.570772] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[   22.571903] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[   22.572047] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[   23.562750] NOTICE: Automounting of tracing to debugfs is deprecated and will be removed in 2030
+[   25.664200] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx

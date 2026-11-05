@@ -1,0 +1,1 @@
+/sys/class/devfreq/1800000.gpu gov=simple_ondemand cur=306000000 target=306000000 min=306000000 max=600000000 trans=Total transition : 1269

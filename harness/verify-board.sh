@@ -41,6 +41,14 @@ if systemctl is-active -q NetworkManager; then
 else
   ok dhcp-client-id-mac "networkctl status end0 --no-pager | grep -q 'Client ID: 02:00'" "systemd-networkd"
 fi
+# GStreamer must autoplug the software jpegdec, not v4l2jpegdec (cannot drive cedrus; impl-di-jpeg-avs.md 7.6).
+# ssh sessions get /etc/environment through pam_env, like a login.
+if command -v gst-launch-1.0 >/dev/null; then
+  gst-launch-1.0 -q videotestsrc num-buffers=1 ! video/x-raw,width=64,height=48 ! jpegenc ! filesink location=/tmp/vb.jpg >/dev/null 2>&1
+  jd=$(timeout 30 gst-launch-1.0 -v filesrc location=/tmp/vb.jpg ! jpegparse ! decodebin ! fakesink 2>&1 | grep -oE '(v4l2)?jpegdec[0-9]+' | sort -u | tr '\n' ' '); rm -f /tmp/vb.jpg
+  ok gst-jpeg-autoplug "grep -qx 'GST_PLUGIN_FEATURE_RANK=v4l2jpegdec:MARGINAL' /etc/environment && systemctl show -p DefaultEnvironment | grep -q v4l2jpegdec:MARGINAL && grep -q '^jpegdec' <<<'$jd'" "decoder: $jd"
+fi
+r INFO eth-mtu "end0 mtu $(cat /sys/class/net/end0/mtu) (max $(ip -d link show end0 | grep -o 'maxmtu [0-9]*' | cut -d' ' -f2))"
 ok cups "systemctl is-active -q cups && lpstat -r | grep -q running" "$(cupsd -v 2>/dev/null | head -1)"
 ok scan-stack "command -v scanimage >/dev/null && [ -e /usr/lib/aarch64-linux-gnu/sane/libsane-airscan.so.1 ] && [ -e /usr/lib/aarch64-linux-gnu/sane/libsane-hpaio.so.1 ] && grep -qE '^\s*interface\s*=\s*all' /etc/ipp-usb/ipp-usb.conf && systemctl is-enabled -q saned.socket && systemctl is-active -q saned.socket" "$(scanimage -V 2>/dev/null | head -1)"
 ok watchdog "[ -e /dev/watchdog0 ]" "$(systemctl show -p RuntimeWatchdogUSec --value)"

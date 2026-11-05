@@ -1,0 +1,2411 @@
+[  180.117821] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  180.119802] CPU1 is up
+[  180.120347] Detected VIPT I-cache on CPU2
+[  180.120497] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  180.122388] CPU2 is up
+[  180.123303] Detected VIPT I-cache on CPU3
+[  180.123459] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  180.125447] CPU3 is up
+[  180.127073] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  180.135345] usb usb1: root hub lost power or was reset
+[  180.135420] usb usb2: root hub lost power or was reset
+[  180.135443] usb usb3: root hub lost power or was reset
+[  180.194452] usb usb4: root hub lost power or was reset
+[  180.254247] usb usb5: root hub lost power or was reset
+[  180.314098] usb usb6: root hub lost power or was reset
+[  180.314219] sdiohal:[sdiohal_resume]enter
+[  180.314290] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  180.314783] WCN: start_loopcheck
+[  180.314816] bt_tx_powerchange is_resume =1
+[  180.314891] marlin_sdio_write +++ op 0xFD09
+[  180.319428] woble_data_recv opcode: 0xFD09, status: 0
+[  180.320905] WCN: [marlin_resume]enter
+[  180.342499] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  180.342538] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  180.342565] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  180.342601] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  180.366320] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  180.405849] OOM killer enabled.
+[  180.405862] Restarting tasks: Starting
+[  180.406767] Restarting tasks: Done
+[  180.406861] random: crng reseeded on system resumption
+[  180.418370] PM: suspend exit
+[  182.397801] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  185.753844] PM: suspend entry (deep)
+[  185.754216] Filesystems sync: 0.000 seconds
+[  185.779366] Freezing user space processes
+[  185.781051] Freezing user space processes completed (elapsed 0.001 seconds)
+[  185.781080] OOM killer disabled.
+[  185.781085] Freezing remaining freezable tasks
+[  185.782439] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  185.782452] printk: Suspending console(s) (use no_console_suspend to debug)
+[  185.789756] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  185.789904] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  185.790192] WCN: [marlin_suspend]enter
+[  185.790239] sdiohal:[sdiohal_suspend]enter
+[  185.790244] WCN: stop_loopcheck
+[  185.790250] bt_tx_powerchange is_resume =0
+[  185.790282] marlin_sdio_write +++ op 0xFD09
+[  185.794207] woble_data_recv opcode: 0xFD09, status: 0
+[  185.794345] marlin_sdio_write +++ op 0xFD0D
+[  185.797823] woble_data_recv opcode: 0xFD0D, status: 0
+[  185.798387] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  185.861599] Disabling non-boot CPUs ...
+[  185.863757] psci: CPU3 killed (polled 4 ms)
+[  185.867339] psci: CPU2 killed (polled 0 ms)
+[  185.871028] psci: CPU1 killed (polled 0 ms)
+[  185.873020] Enabling non-boot CPUs ...
+[  185.873351] Detected VIPT I-cache on CPU1
+[  185.873428] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  185.874477] CPU1 is up
+[  185.874765] Detected VIPT I-cache on CPU2
+[  185.874847] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  185.876073] CPU2 is up
+[  185.876375] Detected VIPT I-cache on CPU3
+[  185.876460] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  185.877537] CPU3 is up
+[  185.878442] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  185.882580] usb usb2: root hub lost power or was reset
+[  185.882580] usb usb1: root hub lost power or was reset
+[  185.882710] usb usb3: root hub lost power or was reset
+[  185.939630] usb usb4: root hub lost power or was reset
+[  185.999426] usb usb5: root hub lost power or was reset
+[  186.059221] usb usb6: root hub lost power or was reset
+[  186.059301] sdiohal:[sdiohal_resume]enter
+[  186.059337] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  186.059734] WCN: start_loopcheck
+[  186.059758] bt_tx_powerchange is_resume =1
+[  186.059800] marlin_sdio_write +++ op 0xFD09
+[  186.063986] woble_data_recv opcode: 0xFD09, status: 0
+[  186.064671] WCN: [marlin_resume]enter
+[  186.091454] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  186.091479] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  186.091492] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  186.091511] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  186.115167] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  186.151076] OOM killer enabled.
+[  186.151091] Restarting tasks: Starting
+[  186.152518] Restarting tasks: Done
+[  186.152616] random: crng reseeded on system resumption
+[  186.160554] PM: suspend exit
+[  188.143100] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  191.510312] PM: suspend entry (deep)
+[  191.510985] Filesystems sync: 0.000 seconds
+[  191.532801] Freezing user space processes
+[  191.534476] Freezing user space processes completed (elapsed 0.001 seconds)
+[  191.534504] OOM killer disabled.
+[  191.534509] Freezing remaining freezable tasks
+[  191.535855] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  191.535868] printk: Suspending console(s) (use no_console_suspend to debug)
+[  191.542065] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  191.542259] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  191.542488] WCN: [marlin_suspend]enter
+[  191.542533] sdiohal:[sdiohal_suspend]enter
+[  191.542538] WCN: stop_loopcheck
+[  191.542543] bt_tx_powerchange is_resume =0
+[  191.542575] marlin_sdio_write +++ op 0xFD09
+[  191.546314] woble_data_recv opcode: 0xFD09, status: 0
+[  191.546392] marlin_sdio_write +++ op 0xFD0D
+[  191.548793] woble_data_recv opcode: 0xFD0D, status: 0
+[  191.549210] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  191.618064] Disabling non-boot CPUs ...
+[  191.620219] psci: CPU3 killed (polled 0 ms)
+[  191.623809] psci: CPU2 killed (polled 0 ms)
+[  191.627850] psci: CPU1 killed (polled 0 ms)
+[  191.629770] Enabling non-boot CPUs ...
+[  191.630097] Detected VIPT I-cache on CPU1
+[  191.630174] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  191.631207] CPU1 is up
+[  191.631492] Detected VIPT I-cache on CPU2
+[  191.631573] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  191.632700] CPU2 is up
+[  191.633000] Detected VIPT I-cache on CPU3
+[  191.633085] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  191.634202] CPU3 is up
+[  191.635111] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  191.639278] usb usb2: root hub lost power or was reset
+[  191.639279] usb usb1: root hub lost power or was reset
+[  191.639279] usb usb3: root hub lost power or was reset
+[  191.696561] usb usb4: root hub lost power or was reset
+[  191.756503] usb usb5: root hub lost power or was reset
+[  191.816509] usb usb6: root hub lost power or was reset
+[  191.816608] sdiohal:[sdiohal_resume]enter
+[  191.816644] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  191.817041] WCN: start_loopcheck
+[  191.817065] bt_tx_powerchange is_resume =1
+[  191.817094] marlin_sdio_write +++ op 0xFD09
+[  191.820720] woble_data_recv opcode: 0xFD09, status: 0
+[  191.821406] WCN: [marlin_resume]enter
+[  191.844792] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  191.844815] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  191.844827] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  191.844846] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  191.868635] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  191.912558] OOM killer enabled.
+[  191.912572] Restarting tasks: Starting
+[  191.913213] Restarting tasks: Done
+[  191.913358] random: crng reseeded on system resumption
+[  191.923586] PM: suspend exit
+[  193.901721] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  197.328226] PM: suspend entry (deep)
+[  197.331066] Filesystems sync: 0.002 seconds
+[  197.354197] Freezing user space processes
+[  197.356385] Freezing user space processes completed (elapsed 0.002 seconds)
+[  197.356498] OOM killer disabled.
+[  197.356511] Freezing remaining freezable tasks
+[  197.358123] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  197.358157] printk: Suspending console(s) (use no_console_suspend to debug)
+[  197.367671] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  197.367916] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  197.368311] WCN: [marlin_suspend]enter
+[  197.368401] sdiohal:[sdiohal_suspend]enter
+[  197.368464] WCN: stop_loopcheck
+[  197.368481] bt_tx_powerchange is_resume =0
+[  197.368533] marlin_sdio_write +++ op 0xFD09
+[  197.371975] woble_data_recv opcode: 0xFD09, status: 0
+[  197.372177] marlin_sdio_write +++ op 0xFD0D
+[  197.375661] woble_data_recv opcode: 0xFD0D, status: 0
+[  197.376475] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  197.445629] Disabling non-boot CPUs ...
+[  197.447885] psci: CPU3 killed (polled 0 ms)
+[  197.452490] psci: CPU2 killed (polled 4 ms)
+[  197.457602] psci: CPU1 killed (polled 0 ms)
+[  197.459879] Enabling non-boot CPUs ...
+[  197.460457] Detected VIPT I-cache on CPU1
+[  197.460604] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  197.462644] CPU1 is up
+[  197.463173] Detected VIPT I-cache on CPU2
+[  197.463324] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  197.465458] CPU2 is up
+[  197.465999] Detected VIPT I-cache on CPU3
+[  197.466150] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  197.468321] CPU3 is up
+[  197.469989] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  197.489287] usb usb3: root hub lost power or was reset
+[  197.489287] usb usb1: root hub lost power or was reset
+[  197.489287] usb usb2: root hub lost power or was reset
+[  197.548505] usb usb4: root hub lost power or was reset
+[  197.608481] usb usb5: root hub lost power or was reset
+[  197.668494] usb usb6: root hub lost power or was reset
+[  197.668626] sdiohal:[sdiohal_resume]enter
+[  197.668867] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  197.669820] WCN: start_loopcheck
+[  197.669857] bt_tx_powerchange is_resume =1
+[  197.669921] marlin_sdio_write +++ op 0xFD09
+[  197.674311] woble_data_recv opcode: 0xFD09, status: 0
+[  197.675838] WCN: [marlin_resume]enter
+[  197.696972] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  197.697012] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  197.697039] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  197.697076] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  197.720800] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  197.760477] OOM killer enabled.
+[  197.760492] Restarting tasks: Starting
+[  197.761706] Restarting tasks: Done
+[  197.761812] random: crng reseeded on system resumption
+[  197.772007] PM: suspend exit
+[  199.757605] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  203.193861] PM: suspend entry (deep)
+[  203.194078] Filesystems sync: 0.000 seconds
+[  203.220691] Freezing user space processes
+[  203.222405] Freezing user space processes completed (elapsed 0.001 seconds)
+[  203.222436] OOM killer disabled.
+[  203.222441] Freezing remaining freezable tasks
+[  203.223809] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  203.223824] printk: Suspending console(s) (use no_console_suspend to debug)
+[  203.234085] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  203.234229] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  203.234511] WCN: [marlin_suspend]enter
+[  203.234555] sdiohal:[sdiohal_suspend]enter
+[  203.234561] WCN: stop_loopcheck
+[  203.234566] bt_tx_powerchange is_resume =0
+[  203.234598] marlin_sdio_write +++ op 0xFD09
+[  203.239053] woble_data_recv opcode: 0xFD09, status: 0
+[  203.239179] marlin_sdio_write +++ op 0xFD0D
+[  203.242554] woble_data_recv opcode: 0xFD0D, status: 0
+[  203.243345] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  203.301976] Disabling non-boot CPUs ...
+[  203.303119] psci: CPU3 killed (polled 0 ms)
+[  203.306816] psci: CPU2 killed (polled 0 ms)
+[  203.310652] psci: CPU1 killed (polled 0 ms)
+[  203.312768] Enabling non-boot CPUs ...
+[  203.313100] Detected VIPT I-cache on CPU1
+[  203.313175] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  203.314208] CPU1 is up
+[  203.314495] Detected VIPT I-cache on CPU2
+[  203.314576] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  203.315621] CPU2 is up
+[  203.315909] Detected VIPT I-cache on CPU3
+[  203.315989] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  203.317116] CPU3 is up
+[  203.318020] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  203.322130] usb usb1: root hub lost power or was reset
+[  203.322205] usb usb2: root hub lost power or was reset
+[  203.322298] usb usb3: root hub lost power or was reset
+[  203.380437] usb usb4: root hub lost power or was reset
+[  203.440302] usb usb5: root hub lost power or was reset
+[  203.500308] usb usb6: root hub lost power or was reset
+[  203.500388] sdiohal:[sdiohal_resume]enter
+[  203.500424] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  203.500854] WCN: start_loopcheck
+[  203.500880] bt_tx_powerchange is_resume =1
+[  203.500911] marlin_sdio_write +++ op 0xFD09
+[  203.504683] woble_data_recv opcode: 0xFD09, status: 0
+[  203.505375] WCN: [marlin_resume]enter
+[  203.528639] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  203.528664] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  203.528677] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  203.528697] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  203.552517] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  203.592420] OOM killer enabled.
+[  203.592434] Restarting tasks: Starting
+[  203.593697] Restarting tasks: Done
+[  203.593799] random: crng reseeded on system resumption
+[  203.602670] PM: suspend exit
+[  205.581501] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  208.898927] PM: suspend entry (deep)
+[  208.899149] Filesystems sync: 0.000 seconds
+[  208.924904] Freezing user space processes
+[  208.926615] Freezing user space processes completed (elapsed 0.001 seconds)
+[  208.926647] OOM killer disabled.
+[  208.926651] Freezing remaining freezable tasks
+[  208.928033] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  208.928050] printk: Suspending console(s) (use no_console_suspend to debug)
+[  208.933931] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  208.934100] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  208.934364] WCN: [marlin_suspend]enter
+[  208.934413] sdiohal:[sdiohal_suspend]enter
+[  208.934419] WCN: stop_loopcheck
+[  208.934425] bt_tx_powerchange is_resume =0
+[  208.934459] marlin_sdio_write +++ op 0xFD09
+[  208.938340] woble_data_recv opcode: 0xFD09, status: 0
+[  208.938482] marlin_sdio_write +++ op 0xFD0D
+[  208.942041] woble_data_recv opcode: 0xFD0D, status: 0
+[  208.942851] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  209.001685] Disabling non-boot CPUs ...
+[  209.002809] psci: CPU3 killed (polled 0 ms)
+[  209.006710] psci: CPU2 killed (polled 0 ms)
+[  209.010328] psci: CPU1 killed (polled 0 ms)
+[  209.012447] Enabling non-boot CPUs ...
+[  209.012768] Detected VIPT I-cache on CPU1
+[  209.012849] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  209.013909] CPU1 is up
+[  209.014200] Detected VIPT I-cache on CPU2
+[  209.014281] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  209.015339] CPU2 is up
+[  209.015626] Detected VIPT I-cache on CPU3
+[  209.015710] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  209.016850] CPU3 is up
+[  209.017763] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  209.021846] usb usb3: root hub lost power or was reset
+[  209.021846] usb usb1: root hub lost power or was reset
+[  209.021992] usb usb2: root hub lost power or was reset
+[  209.080363] usb usb4: root hub lost power or was reset
+[  209.140237] usb usb5: root hub lost power or was reset
+[  209.200291] usb usb6: root hub lost power or was reset
+[  209.200368] sdiohal:[sdiohal_resume]enter
+[  209.200404] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  209.200862] WCN: start_loopcheck
+[  209.200887] bt_tx_powerchange is_resume =1
+[  209.200917] marlin_sdio_write +++ op 0xFD09
+[  209.205339] woble_data_recv opcode: 0xFD09, status: 0
+[  209.206061] WCN: [marlin_resume]enter
+[  209.228567] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  209.228590] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  209.228603] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  209.228622] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  209.252483] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  209.292336] OOM killer enabled.
+[  209.292350] Restarting tasks: Starting
+[  209.293912] Restarting tasks: Done
+[  209.294017] random: crng reseeded on system resumption
+[  209.303199] PM: suspend exit
+[  211.309427] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  214.666088] PM: suspend entry (deep)
+[  214.666413] Filesystems sync: 0.000 seconds
+[  214.688543] Freezing user space processes
+[  214.690484] Freezing user space processes completed (elapsed 0.001 seconds)
+[  214.690524] OOM killer disabled.
+[  214.690532] Freezing remaining freezable tasks
+[  214.692011] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  214.692035] printk: Suspending console(s) (use no_console_suspend to debug)
+[  214.702606] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  214.702796] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  214.703127] WCN: [marlin_suspend]enter
+[  214.703194] sdiohal:[sdiohal_suspend]enter
+[  214.703203] WCN: stop_loopcheck
+[  214.703213] bt_tx_powerchange is_resume =0
+[  214.703254] marlin_sdio_write +++ op 0xFD09
+[  214.706797] woble_data_recv opcode: 0xFD09, status: 0
+[  214.706917] marlin_sdio_write +++ op 0xFD0D
+[  214.710412] woble_data_recv opcode: 0xFD0D, status: 0
+[  214.711492] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  214.775393] Disabling non-boot CPUs ...
+[  214.778150] psci: CPU3 killed (polled 0 ms)
+[  214.781642] psci: CPU2 killed (polled 0 ms)
+[  214.786364] psci: CPU1 killed (polled 0 ms)
+[  214.788587] Enabling non-boot CPUs ...
+[  214.789057] Detected VIPT I-cache on CPU1
+[  214.789164] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  214.790706] CPU1 is up
+[  214.791136] Detected VIPT I-cache on CPU2
+[  214.791252] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  214.792860] CPU2 is up
+[  214.793294] Detected VIPT I-cache on CPU3
+[  214.793410] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  214.795053] CPU3 is up
+[  214.796389] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  214.801983] usb usb1: root hub lost power or was reset
+[  214.801983] usb usb2: root hub lost power or was reset
+[  214.802169] usb usb3: root hub lost power or was reset
+[  214.860208] usb usb4: root hub lost power or was reset
+[  214.920247] usb usb5: root hub lost power or was reset
+[  214.980255] usb usb6: root hub lost power or was reset
+[  214.980379] sdiohal:[sdiohal_resume]enter
+[  214.980427] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  214.981002] WCN: start_loopcheck
+[  214.981033] bt_tx_powerchange is_resume =1
+[  214.981073] marlin_sdio_write +++ op 0xFD09
+[  214.985322] woble_data_recv opcode: 0xFD09, status: 0
+[  214.986366] WCN: [marlin_resume]enter
+[  215.008609] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  215.008641] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  215.008662] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  215.008689] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  215.032452] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  215.072289] OOM killer enabled.
+[  215.072304] Restarting tasks: Starting
+[  215.073553] Restarting tasks: Done
+[  215.073649] random: crng reseeded on system resumption
+[  215.085603] PM: suspend exit
+[  217.069391] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  220.459211] PM: suspend entry (deep)
+[  220.459438] Filesystems sync: 0.000 seconds
+[  220.485394] Freezing user space processes
+[  220.487200] Freezing user space processes completed (elapsed 0.001 seconds)
+[  220.487229] OOM killer disabled.
+[  220.487234] Freezing remaining freezable tasks
+[  220.488606] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  220.488622] printk: Suspending console(s) (use no_console_suspend to debug)
+[  220.495747] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  220.495884] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  220.496214] WCN: [marlin_suspend]enter
+[  220.496261] sdiohal:[sdiohal_suspend]enter
+[  220.496267] WCN: stop_loopcheck
+[  220.496274] bt_tx_powerchange is_resume =0
+[  220.496307] marlin_sdio_write +++ op 0xFD09
+[  220.500151] woble_data_recv opcode: 0xFD09, status: 0
+[  220.500227] marlin_sdio_write +++ op 0xFD0D
+[  220.503849] woble_data_recv opcode: 0xFD0D, status: 0
+[  220.504490] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  220.566291] Disabling non-boot CPUs ...
+[  220.568437] psci: CPU3 killed (polled 0 ms)
+[  220.571849] psci: CPU2 killed (polled 0 ms)
+[  220.575895] psci: CPU1 killed (polled 0 ms)
+[  220.577934] Enabling non-boot CPUs ...
+[  220.578287] Detected VIPT I-cache on CPU1
+[  220.578364] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  220.579394] CPU1 is up
+[  220.579709] Detected VIPT I-cache on CPU2
+[  220.579792] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  220.580825] CPU2 is up
+[  220.581128] Detected VIPT I-cache on CPU3
+[  220.581210] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  220.582333] CPU3 is up
+[  220.583234] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  220.587585] usb usb3: root hub lost power or was reset
+[  220.587585] usb usb1: root hub lost power or was reset
+[  220.587585] usb usb2: root hub lost power or was reset
+[  220.647842] usb usb4: root hub lost power or was reset
+[  220.710253] usb usb5: root hub lost power or was reset
+[  220.768547] usb usb6: root hub lost power or was reset
+[  220.768651] sdiohal:[sdiohal_resume]enter
+[  220.768718] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  220.769079] WCN: start_loopcheck
+[  220.769099] bt_tx_powerchange is_resume =1
+[  220.769141] marlin_sdio_write +++ op 0xFD09
+[  220.773409] woble_data_recv opcode: 0xFD09, status: 0
+[  220.774060] WCN: [marlin_resume]enter
+[  220.798167] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  220.798191] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  220.798204] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  220.798224] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  220.822897] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  220.864489] OOM killer enabled.
+[  220.864503] Restarting tasks: Starting
+[  220.866084] Restarting tasks: Done
+[  220.866192] random: crng reseeded on system resumption
+[  220.876415] PM: suspend exit
+[  222.946735] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  226.496119] PM: suspend entry (deep)
+[  226.496790] Filesystems sync: 0.000 seconds
+[  226.521844] Freezing user space processes
+[  226.524065] Freezing user space processes completed (elapsed 0.002 seconds)
+[  226.524111] OOM killer disabled.
+[  226.524122] Freezing remaining freezable tasks
+[  226.525537] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  226.525576] printk: Suspending console(s) (use no_console_suspend to debug)
+[  226.536704] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  226.536931] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  226.537404] WCN: [marlin_suspend]enter
+[  226.537496] sdiohal:[sdiohal_suspend]enter
+[  226.537509] WCN: stop_loopcheck
+[  226.537523] bt_tx_powerchange is_resume =0
+[  226.537591] marlin_sdio_write +++ op 0xFD09
+[  226.540884] woble_data_recv opcode: 0xFD09, status: 0
+[  226.541104] marlin_sdio_write +++ op 0xFD0D
+[  226.544571] woble_data_recv opcode: 0xFD0D, status: 0
+[  226.545402] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  226.610235] Disabling non-boot CPUs ...
+[  226.612676] psci: CPU3 killed (polled 4 ms)
+[  226.617310] psci: CPU2 killed (polled 0 ms)
+[  226.621468] psci: CPU1 killed (polled 0 ms)
+[  226.623878] Enabling non-boot CPUs ...
+[  226.624498] Detected VIPT I-cache on CPU1
+[  226.624639] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  226.626729] CPU1 is up
+[  226.627304] Detected VIPT I-cache on CPU2
+[  226.627455] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  226.629614] CPU2 is up
+[  226.630183] Detected VIPT I-cache on CPU3
+[  226.630336] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  226.632536] CPU3 is up
+[  226.634298] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  226.642627] usb usb2: root hub lost power or was reset
+[  226.642658] usb usb1: root hub lost power or was reset
+[  226.642851] usb usb3: root hub lost power or was reset
+[  226.704166] usb usb4: root hub lost power or was reset
+[  226.766443] usb usb5: root hub lost power or was reset
+[  226.828925] usb usb6: root hub lost power or was reset
+[  226.829092] sdiohal:[sdiohal_resume]enter
+[  226.829283] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  226.829995] WCN: start_loopcheck
+[  226.830028] bt_tx_powerchange is_resume =1
+[  226.830099] marlin_sdio_write +++ op 0xFD09
+[  226.834228] woble_data_recv opcode: 0xFD09, status: 0
+[  226.835856] WCN: [marlin_resume]enter
+[  226.858750] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  226.858790] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  226.858817] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  226.858853] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  226.883466] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  226.924849] OOM killer enabled.
+[  226.924864] Restarting tasks: Starting
+[  226.926707] Restarting tasks: Done
+[  226.926821] random: crng reseeded on system resumption
+[  226.936881] PM: suspend exit
+[  229.007057] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  232.417301] PM: suspend entry (deep)
+[  232.417739] Filesystems sync: 0.000 seconds
+[  232.445845] Freezing user space processes
+[  232.447813] Freezing user space processes completed (elapsed 0.001 seconds)
+[  232.447854] OOM killer disabled.
+[  232.447862] Freezing remaining freezable tasks
+[  232.449145] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  232.449170] printk: Suspending console(s) (use no_console_suspend to debug)
+[  232.463289] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  232.463516] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  232.463826] WCN: [marlin_suspend]enter
+[  232.463894] sdiohal:[sdiohal_suspend]enter
+[  232.463905] WCN: stop_loopcheck
+[  232.463915] bt_tx_powerchange is_resume =0
+[  232.463957] marlin_sdio_write +++ op 0xFD09
+[  232.467891] woble_data_recv opcode: 0xFD09, status: 0
+[  232.468102] marlin_sdio_write +++ op 0xFD0D
+[  232.471513] woble_data_recv opcode: 0xFD0D, status: 0
+[  232.472222] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  232.533248] Disabling non-boot CPUs ...
+[  232.535804] psci: CPU3 killed (polled 0 ms)
+[  232.540308] psci: CPU2 killed (polled 0 ms)
+[  232.544867] psci: CPU1 killed (polled 0 ms)
+[  232.547475] Enabling non-boot CPUs ...
+[  232.547992] Detected VIPT I-cache on CPU1
+[  232.548108] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  232.549604] CPU1 is up
+[  232.550041] Detected VIPT I-cache on CPU2
+[  232.550156] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  232.551582] CPU2 is up
+[  232.552010] Detected VIPT I-cache on CPU3
+[  232.552126] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  232.553660] CPU3 is up
+[  232.554885] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  232.565571] usb usb2: root hub lost power or was reset
+[  232.565571] usb usb3: root hub lost power or was reset
+[  232.565625] usb usb1: root hub lost power or was reset
+[  232.624904] usb usb4: root hub lost power or was reset
+[  232.684893] usb usb5: root hub lost power or was reset
+[  232.744893] usb usb6: root hub lost power or was reset
+[  232.744995] sdiohal:[sdiohal_resume]enter
+[  232.745185] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  232.745918] WCN: start_loopcheck
+[  232.745947] bt_tx_powerchange is_resume =1
+[  232.746031] marlin_sdio_write +++ op 0xFD09
+[  232.749874] woble_data_recv opcode: 0xFD09, status: 0
+[  232.750866] WCN: [marlin_resume]enter
+[  232.773364] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  232.773396] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  232.773417] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  232.773446] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  232.797107] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  232.836989] OOM killer enabled.
+[  232.837003] Restarting tasks: Starting
+[  232.840786] Restarting tasks: Done
+[  232.840942] random: crng reseeded on system resumption
+[  232.848907] PM: suspend exit
+[  234.825839] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  238.204033] PM: suspend entry (deep)
+[  238.204357] Filesystems sync: 0.000 seconds
+[  238.241326] Freezing user space processes
+[  238.243054] Freezing user space processes completed (elapsed 0.001 seconds)
+[  238.243086] OOM killer disabled.
+[  238.243090] Freezing remaining freezable tasks
+[  238.244457] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  238.244475] printk: Suspending console(s) (use no_console_suspend to debug)
+[  238.254599] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  238.254740] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  238.255026] WCN: [marlin_suspend]enter
+[  238.255075] sdiohal:[sdiohal_suspend]enter
+[  238.255081] WCN: stop_loopcheck
+[  238.255087] bt_tx_powerchange is_resume =0
+[  238.255119] marlin_sdio_write +++ op 0xFD09
+[  238.258606] woble_data_recv opcode: 0xFD09, status: 0
+[  238.258739] marlin_sdio_write +++ op 0xFD0D
+[  238.262164] woble_data_recv opcode: 0xFD0D, status: 0
+[  238.262951] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  238.322529] Disabling non-boot CPUs ...
+[  238.324663] psci: CPU3 killed (polled 0 ms)
+[  238.328159] psci: CPU2 killed (polled 0 ms)
+[  238.331757] psci: CPU1 killed (polled 0 ms)
+[  238.334193] Enabling non-boot CPUs ...
+[  238.334519] Detected VIPT I-cache on CPU1
+[  238.334594] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  238.335646] CPU1 is up
+[  238.335931] Detected VIPT I-cache on CPU2
+[  238.336014] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  238.337220] CPU2 is up
+[  238.337525] Detected VIPT I-cache on CPU3
+[  238.337610] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  238.338716] CPU3 is up
+[  238.339619] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  238.343694] usb usb2: root hub lost power or was reset
+[  238.343694] usb usb1: root hub lost power or was reset
+[  238.343694] usb usb3: root hub lost power or was reset
+[  238.400823] usb usb4: root hub lost power or was reset
+[  238.460859] usb usb5: root hub lost power or was reset
+[  238.520860] usb usb6: root hub lost power or was reset
+[  238.520941] sdiohal:[sdiohal_resume]enter
+[  238.520978] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  238.521405] WCN: start_loopcheck
+[  238.521430] bt_tx_powerchange is_resume =1
+[  238.521474] marlin_sdio_write +++ op 0xFD09
+[  238.525646] woble_data_recv opcode: 0xFD09, status: 0
+[  238.526465] WCN: [marlin_resume]enter
+[  238.549138] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  238.549163] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  238.549176] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  238.549196] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  238.572997] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  238.612926] OOM killer enabled.
+[  238.612941] Restarting tasks: Starting
+[  238.614334] Restarting tasks: Done
+[  238.614425] random: crng reseeded on system resumption
+[  238.623485] PM: suspend exit
+[  240.617960] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  243.999998] PM: suspend entry (deep)
+[  244.000563] Filesystems sync: 0.000 seconds
+[  244.026468] Freezing user space processes
+[  244.028644] Freezing user space processes completed (elapsed 0.002 seconds)
+[  244.028693] OOM killer disabled.
+[  244.028705] Freezing remaining freezable tasks
+[  244.030388] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  244.030427] printk: Suspending console(s) (use no_console_suspend to debug)
+[  244.040042] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  244.040288] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  244.040676] WCN: [marlin_suspend]enter
+[  244.040821] sdiohal:[sdiohal_suspend]enter
+[  244.040837] WCN: stop_loopcheck
+[  244.040852] bt_tx_powerchange is_resume =0
+[  244.040905] marlin_sdio_write +++ op 0xFD09
+[  244.044734] woble_data_recv opcode: 0xFD09, status: 0
+[  244.044995] marlin_sdio_write +++ op 0xFD0D
+[  244.049366] woble_data_recv opcode: 0xFD0D, status: 0
+[  244.050762] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  244.111114] Disabling non-boot CPUs ...
+[  244.113354] psci: CPU3 killed (polled 0 ms)
+[  244.117442] psci: CPU2 killed (polled 0 ms)
+[  244.122920] psci: CPU1 killed (polled 0 ms)
+[  244.125141] Enabling non-boot CPUs ...
+[  244.125714] Detected VIPT I-cache on CPU1
+[  244.125855] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  244.127943] CPU1 is up
+[  244.128474] Detected VIPT I-cache on CPU2
+[  244.128619] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  244.131170] CPU2 is up
+[  244.131714] Detected VIPT I-cache on CPU3
+[  244.131866] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  244.134093] CPU3 is up
+[  244.135648] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  244.145686] usb usb2: root hub lost power or was reset
+[  244.145686] usb usb3: root hub lost power or was reset
+[  244.145893] usb usb1: root hub lost power or was reset
+[  244.204874] usb usb4: root hub lost power or was reset
+[  244.264758] usb usb5: root hub lost power or was reset
+[  244.324849] usb usb6: root hub lost power or was reset
+[  244.324979] sdiohal:[sdiohal_resume]enter
+[  244.325121] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  244.326161] WCN: start_loopcheck
+[  244.326198] bt_tx_powerchange is_resume =1
+[  244.326265] marlin_sdio_write +++ op 0xFD09
+[  244.330141] woble_data_recv opcode: 0xFD09, status: 0
+[  244.331791] WCN: [marlin_resume]enter
+[  244.353329] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  244.353368] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  244.353396] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  244.353432] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  244.377068] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  244.416828] OOM killer enabled.
+[  244.416842] Restarting tasks: Starting
+[  244.417627] Restarting tasks: Done
+[  244.417779] random: crng reseeded on system resumption
+[  244.427650] PM: suspend exit
+[  246.409714] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  249.841052] PM: suspend entry (deep)
+[  249.841639] Filesystems sync: 0.000 seconds
+[  249.861910] Freezing user space processes
+[  249.863986] Freezing user space processes completed (elapsed 0.002 seconds)
+[  249.864035] OOM killer disabled.
+[  249.864047] Freezing remaining freezable tasks
+[  249.865642] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  249.865677] printk: Suspending console(s) (use no_console_suspend to debug)
+[  249.875578] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  249.875827] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  249.876191] WCN: [marlin_suspend]enter
+[  249.876279] sdiohal:[sdiohal_suspend]enter
+[  249.876293] WCN: stop_loopcheck
+[  249.876307] bt_tx_powerchange is_resume =0
+[  249.876357] marlin_sdio_write +++ op 0xFD09
+[  249.880046] woble_data_recv opcode: 0xFD09, status: 0
+[  249.880256] marlin_sdio_write +++ op 0xFD0D
+[  249.883589] woble_data_recv opcode: 0xFD0D, status: 0
+[  249.884509] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  249.950709] Disabling non-boot CPUs ...
+[  249.952790] psci: CPU3 killed (polled 0 ms)
+[  249.957263] psci: CPU2 killed (polled 0 ms)
+[  249.962149] psci: CPU1 killed (polled 0 ms)
+[  249.965172] Enabling non-boot CPUs ...
+[  249.965749] Detected VIPT I-cache on CPU1
+[  249.965889] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  249.967790] CPU1 is up
+[  249.968314] Detected VIPT I-cache on CPU2
+[  249.968462] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  249.970441] CPU2 is up
+[  249.970988] Detected VIPT I-cache on CPU3
+[  249.971139] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  249.973203] CPU3 is up
+[  249.974756] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  249.985536] usb usb1: root hub lost power or was reset
+[  249.985542] usb usb3: root hub lost power or was reset
+[  249.985750] usb usb2: root hub lost power or was reset
+[  250.044686] usb usb4: root hub lost power or was reset
+[  250.104755] usb usb5: root hub lost power or was reset
+[  250.164766] usb usb6: root hub lost power or was reset
+[  250.164894] sdiohal:[sdiohal_resume]enter
+[  250.165131] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  250.166056] WCN: start_loopcheck
+[  250.166095] bt_tx_powerchange is_resume =1
+[  250.166161] marlin_sdio_write +++ op 0xFD09
+[  250.170157] woble_data_recv opcode: 0xFD09, status: 0
+[  250.171517] WCN: [marlin_resume]enter
+[  250.193243] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  250.193282] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  250.193311] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  250.193348] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  250.217054] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  250.256740] OOM killer enabled.
+[  250.256754] Restarting tasks: Starting
+[  250.262019] Restarting tasks: Done
+[  250.262129] random: crng reseeded on system resumption
+[  250.272812] PM: suspend exit
+[  252.265894] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  255.750912] PM: suspend entry (deep)
+[  255.751149] Filesystems sync: 0.000 seconds
+[  255.795078] Freezing user space processes
+[  255.796800] Freezing user space processes completed (elapsed 0.001 seconds)
+[  255.796830] OOM killer disabled.
+[  255.796835] Freezing remaining freezable tasks
+[  255.798211] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  255.798227] printk: Suspending console(s) (use no_console_suspend to debug)
+[  255.804994] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  255.805180] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  255.805423] WCN: [marlin_suspend]enter
+[  255.805467] sdiohal:[sdiohal_suspend]enter
+[  255.805473] WCN: stop_loopcheck
+[  255.805479] bt_tx_powerchange is_resume =0
+[  255.805513] marlin_sdio_write +++ op 0xFD09
+[  255.809828] woble_data_recv opcode: 0xFD09, status: 0
+[  255.809953] marlin_sdio_write +++ op 0xFD0D
+[  255.813435] woble_data_recv opcode: 0xFD0D, status: 0
+[  255.814124] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  255.874908] Disabling non-boot CPUs ...
+[  255.877064] psci: CPU3 killed (polled 0 ms)
+[  255.880663] psci: CPU2 killed (polled 0 ms)
+[  255.884424] psci: CPU1 killed (polled 0 ms)
+[  255.886440] Enabling non-boot CPUs ...
+[  255.886761] Detected VIPT I-cache on CPU1
+[  255.886844] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  255.887895] CPU1 is up
+[  255.888186] Detected VIPT I-cache on CPU2
+[  255.888268] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  255.889307] CPU2 is up
+[  255.889590] Detected VIPT I-cache on CPU3
+[  255.889671] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  255.890823] CPU3 is up
+[  255.891737] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  255.899128] usb usb1: root hub lost power or was reset
+[  255.899128] usb usb3: root hub lost power or was reset
+[  255.899128] usb usb2: root hub lost power or was reset
+[  255.960756] usb usb4: root hub lost power or was reset
+[  256.018906] usb usb5: root hub lost power or was reset
+[  256.081176] usb usb6: root hub lost power or was reset
+[  256.081272] sdiohal:[sdiohal_resume]enter
+[  256.081348] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  256.081848] WCN: start_loopcheck
+[  256.081871] bt_tx_powerchange is_resume =1
+[  256.081914] marlin_sdio_write +++ op 0xFD09
+[  256.086122] woble_data_recv opcode: 0xFD09, status: 0
+[  256.087171] WCN: [marlin_resume]enter
+[  256.110661] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  256.110686] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  256.110700] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  256.110719] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  256.135368] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  256.176864] OOM killer enabled.
+[  256.176879] Restarting tasks: Starting
+[  256.177559] Restarting tasks: Done
+[  256.177658] random: crng reseeded on system resumption
+[  256.186471] PM: suspend exit
+[  258.265943] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  261.798258] PM: suspend entry (deep)
+[  261.798808] Filesystems sync: 0.000 seconds
+[  261.819533] Freezing user space processes
+[  261.821729] Freezing user space processes completed (elapsed 0.002 seconds)
+[  261.821777] OOM killer disabled.
+[  261.821789] Freezing remaining freezable tasks
+[  261.823417] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  261.823457] printk: Suspending console(s) (use no_console_suspend to debug)
+[  261.833552] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  261.833903] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  261.834244] WCN: [marlin_suspend]enter
+[  261.834335] sdiohal:[sdiohal_suspend]enter
+[  261.834349] WCN: stop_loopcheck
+[  261.834363] bt_tx_powerchange is_resume =0
+[  261.834413] marlin_sdio_write +++ op 0xFD09
+[  261.839024] woble_data_recv opcode: 0xFD09, status: 0
+[  261.839228] marlin_sdio_write +++ op 0xFD0D
+[  261.843720] woble_data_recv opcode: 0xFD0D, status: 0
+[  261.844911] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  261.907431] Disabling non-boot CPUs ...
+[  261.909692] psci: CPU3 killed (polled 0 ms)
+[  261.913978] psci: CPU2 killed (polled 0 ms)
+[  261.919785] psci: CPU1 killed (polled 0 ms)
+[  261.922775] Enabling non-boot CPUs ...
+[  261.923355] Detected VIPT I-cache on CPU1
+[  261.923495] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  261.925541] CPU1 is up
+[  261.926075] Detected VIPT I-cache on CPU2
+[  261.926228] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  261.928324] CPU2 is up
+[  261.928858] Detected VIPT I-cache on CPU3
+[  261.929008] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  261.931232] CPU3 is up
+[  261.932787] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  261.943614] usb usb3: root hub lost power or was reset
+[  261.943615] usb usb2: root hub lost power or was reset
+[  261.943828] usb usb1: root hub lost power or was reset
+[  262.004875] usb usb4: root hub lost power or was reset
+[  262.067248] usb usb5: root hub lost power or was reset
+[  262.129397] usb usb6: root hub lost power or was reset
+[  262.129573] sdiohal:[sdiohal_resume]enter
+[  262.129654] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  262.130219] WCN: start_loopcheck
+[  262.130254] bt_tx_powerchange is_resume =1
+[  262.130307] marlin_sdio_write +++ op 0xFD09
+[  262.135022] woble_data_recv opcode: 0xFD09, status: 0
+[  262.136795] WCN: [marlin_resume]enter
+[  262.159064] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  262.159102] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  262.159130] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  262.159167] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  262.183783] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  262.225099] OOM killer enabled.
+[  262.225115] Restarting tasks: Starting
+[  262.225772] Restarting tasks: Done
+[  262.225872] random: crng reseeded on system resumption
+[  262.233981] PM: suspend exit
+[  265.372519] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  267.771317] PM: suspend entry (deep)
+[  267.771530] Filesystems sync: 0.000 seconds
+[  267.808647] Freezing user space processes
+[  267.810346] Freezing user space processes completed (elapsed 0.001 seconds)
+[  267.810376] OOM killer disabled.
+[  267.810381] Freezing remaining freezable tasks
+[  267.811732] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  267.811746] printk: Suspending console(s) (use no_console_suspend to debug)
+[  267.818636] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  267.818766] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  267.819089] WCN: [marlin_suspend]enter
+[  267.819133] sdiohal:[sdiohal_suspend]enter
+[  267.819139] WCN: stop_loopcheck
+[  267.819145] bt_tx_powerchange is_resume =0
+[  267.819178] marlin_sdio_write +++ op 0xFD09
+[  267.822163] woble_data_recv opcode: 0xFD09, status: 0
+[  267.822292] marlin_sdio_write +++ op 0xFD0D
+[  267.824576] woble_data_recv opcode: 0xFD0D, status: 0
+[  267.825362] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  267.886174] Disabling non-boot CPUs ...
+[  267.888234] psci: CPU3 killed (polled 0 ms)
+[  267.892061] psci: CPU2 killed (polled 0 ms)
+[  267.895518] psci: CPU1 killed (polled 0 ms)
+[  267.897160] Enabling non-boot CPUs ...
+[  267.897505] Detected VIPT I-cache on CPU1
+[  267.897582] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  267.898561] CPU1 is up
+[  267.898851] Detected VIPT I-cache on CPU2
+[  267.898932] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  267.899905] CPU2 is up
+[  267.900191] Detected VIPT I-cache on CPU3
+[  267.900272] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  267.901318] CPU3 is up
+[  267.902222] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  267.909038] usb usb2: root hub lost power or was reset
+[  267.909038] usb usb1: root hub lost power or was reset
+[  267.909038] usb usb3: root hub lost power or was reset
+[  267.968428] usb usb4: root hub lost power or was reset
+[  268.028213] usb usb5: root hub lost power or was reset
+[  268.088024] usb usb6: root hub lost power or was reset
+[  268.088101] sdiohal:[sdiohal_resume]enter
+[  268.088234] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  268.088772] WCN: start_loopcheck
+[  268.088795] bt_tx_powerchange is_resume =1
+[  268.088839] marlin_sdio_write +++ op 0xFD09
+[  268.093349] woble_data_recv opcode: 0xFD09, status: 0
+[  268.094109] WCN: [marlin_resume]enter
+[  268.116328] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  268.116353] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  268.116366] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  268.116386] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  268.140055] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  268.179754] OOM killer enabled.
+[  268.179769] Restarting tasks: Starting
+[  268.180479] Restarting tasks: Done
+[  268.180567] random: crng reseeded on system resumption
+[  268.192292] PM: suspend exit
+[  270.179151] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  273.537927] PM: suspend entry (deep)
+[  273.539405] Filesystems sync: 0.001 seconds
+[  273.562205] Freezing user space processes
+[  273.563848] Freezing user space processes completed (elapsed 0.001 seconds)
+[  273.563878] OOM killer disabled.
+[  273.563883] Freezing remaining freezable tasks
+[  273.565252] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  273.565266] printk: Suspending console(s) (use no_console_suspend to debug)
+[  273.571479] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  273.571618] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  273.571889] WCN: [marlin_suspend]enter
+[  273.571934] sdiohal:[sdiohal_suspend]enter
+[  273.571939] WCN: stop_loopcheck
+[  273.571945] bt_tx_powerchange is_resume =0
+[  273.571978] marlin_sdio_write +++ op 0xFD09
+[  273.575603] woble_data_recv opcode: 0xFD09, status: 0
+[  273.575683] marlin_sdio_write +++ op 0xFD0D
+[  273.579232] woble_data_recv opcode: 0xFD0D, status: 0
+[  273.579920] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  273.639251] Disabling non-boot CPUs ...
+[  273.641406] psci: CPU3 killed (polled 0 ms)
+[  273.645068] psci: CPU2 killed (polled 0 ms)
+[  273.647525] psci: CPU1 killed (polled 0 ms)
+[  273.648982] Enabling non-boot CPUs ...
+[  273.649315] Detected VIPT I-cache on CPU1
+[  273.649393] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  273.650461] CPU1 is up
+[  273.650761] Detected VIPT I-cache on CPU2
+[  273.650843] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  273.651900] CPU2 is up
+[  273.652187] Detected VIPT I-cache on CPU3
+[  273.652271] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  273.653379] CPU3 is up
+[  273.654451] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  273.662136] usb usb1: root hub lost power or was reset
+[  273.662136] usb usb3: root hub lost power or was reset
+[  273.662269] usb usb2: root hub lost power or was reset
+[  273.721624] usb usb4: root hub lost power or was reset
+[  273.781281] usb usb5: root hub lost power or was reset
+[  273.841095] usb usb6: root hub lost power or was reset
+[  273.841171] sdiohal:[sdiohal_resume]enter
+[  273.841237] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  273.841667] WCN: start_loopcheck
+[  273.841690] bt_tx_powerchange is_resume =1
+[  273.841733] marlin_sdio_write +++ op 0xFD09
+[  273.844871] woble_data_recv opcode: 0xFD09, status: 0
+[  273.845923] WCN: [marlin_resume]enter
+[  273.873246] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  273.873270] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  273.873284] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  273.873304] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  273.896964] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  273.932787] OOM killer enabled.
+[  273.932800] Restarting tasks: Starting
+[  273.934378] Restarting tasks: Done
+[  273.934472] random: crng reseeded on system resumption
+[  273.943096] PM: suspend exit
+[  275.919619] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  279.342303] PM: suspend entry (deep)
+[  279.342917] Filesystems sync: 0.000 seconds
+[  279.375469] Freezing user space processes
+[  279.377774] Freezing user space processes completed (elapsed 0.002 seconds)
+[  279.377823] OOM killer disabled.
+[  279.377835] Freezing remaining freezable tasks
+[  279.379138] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  279.379176] printk: Suspending console(s) (use no_console_suspend to debug)
+[  279.393704] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  279.394047] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  279.394395] WCN: [marlin_suspend]enter
+[  279.394487] sdiohal:[sdiohal_suspend]enter
+[  279.394500] WCN: stop_loopcheck
+[  279.394514] bt_tx_powerchange is_resume =0
+[  279.394565] marlin_sdio_write +++ op 0xFD09
+[  279.398904] woble_data_recv opcode: 0xFD09, status: 0
+[  279.399120] marlin_sdio_write +++ op 0xFD0D
+[  279.402477] woble_data_recv opcode: 0xFD0D, status: 0
+[  279.403608] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  279.465031] Disabling non-boot CPUs ...
+[  279.467296] psci: CPU3 killed (polled 0 ms)
+[  279.472444] psci: CPU2 killed (polled 0 ms)
+[  279.477966] psci: CPU1 killed (polled 0 ms)
+[  279.480905] Enabling non-boot CPUs ...
+[  279.481481] Detected VIPT I-cache on CPU1
+[  279.481621] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  279.483691] CPU1 is up
+[  279.484245] Detected VIPT I-cache on CPU2
+[  279.484395] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  279.486554] CPU2 is up
+[  279.487090] Detected VIPT I-cache on CPU3
+[  279.487245] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  279.489445] CPU3 is up
+[  279.491084] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  279.499395] usb usb3: root hub lost power or was reset
+[  279.499637] usb usb2: root hub lost power or was reset
+[  279.499645] usb usb1: root hub lost power or was reset
+[  279.558450] usb usb4: root hub lost power or was reset
+[  279.618048] usb usb5: root hub lost power or was reset
+[  279.677858] usb usb6: root hub lost power or was reset
+[  279.677997] sdiohal:[sdiohal_resume]enter
+[  279.678236] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  279.678759] WCN: start_loopcheck
+[  279.678791] bt_tx_powerchange is_resume =1
+[  279.678864] marlin_sdio_write +++ op 0xFD09
+[  279.683402] woble_data_recv opcode: 0xFD09, status: 0
+[  279.685352] WCN: [marlin_resume]enter
+[  279.710390] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  279.710431] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  279.710458] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  279.710494] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  279.733792] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  279.773595] OOM killer enabled.
+[  279.773609] Restarting tasks: Starting
+[  279.774506] Restarting tasks: Done
+[  279.774600] random: crng reseeded on system resumption
+[  279.783093] PM: suspend exit
+[  281.756304] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  285.121609] PM: suspend entry (deep)
+[  285.121846] Filesystems sync: 0.000 seconds
+[  285.156646] Freezing user space processes
+[  285.158427] Freezing user space processes completed (elapsed 0.001 seconds)
+[  285.158457] OOM killer disabled.
+[  285.158462] Freezing remaining freezable tasks
+[  285.159918] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  285.159941] printk: Suspending console(s) (use no_console_suspend to debug)
+[  285.169553] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  285.169698] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  285.169988] WCN: [marlin_suspend]enter
+[  285.170037] sdiohal:[sdiohal_suspend]enter
+[  285.170044] WCN: stop_loopcheck
+[  285.170050] bt_tx_powerchange is_resume =0
+[  285.170082] marlin_sdio_write +++ op 0xFD09
+[  285.173927] woble_data_recv opcode: 0xFD09, status: 0
+[  285.174058] marlin_sdio_write +++ op 0xFD0D
+[  285.176274] woble_data_recv opcode: 0xFD0D, status: 0
+[  285.176971] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  285.237194] Disabling non-boot CPUs ...
+[  285.239356] psci: CPU3 killed (polled 0 ms)
+[  285.242743] psci: CPU2 killed (polled 0 ms)
+[  285.246643] psci: CPU1 killed (polled 0 ms)
+[  285.248382] Enabling non-boot CPUs ...
+[  285.248711] Detected VIPT I-cache on CPU1
+[  285.248789] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  285.249829] CPU1 is up
+[  285.250118] Detected VIPT I-cache on CPU2
+[  285.250202] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  285.251266] CPU2 is up
+[  285.251813] Detected VIPT I-cache on CPU3
+[  285.251907] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  285.253027] CPU3 is up
+[  285.253929] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  285.260152] usb usb3: root hub lost power or was reset
+[  285.260152] usb usb2: root hub lost power or was reset
+[  285.260151] usb usb1: root hub lost power or was reset
+[  285.319266] usb usb4: root hub lost power or was reset
+[  285.379109] usb usb5: root hub lost power or was reset
+[  285.438920] usb usb6: root hub lost power or was reset
+[  285.438997] sdiohal:[sdiohal_resume]enter
+[  285.439136] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  285.439631] WCN: start_loopcheck
+[  285.439653] bt_tx_powerchange is_resume =1
+[  285.439730] marlin_sdio_write +++ op 0xFD09
+[  285.444262] woble_data_recv opcode: 0xFD09, status: 0
+[  285.445434] WCN: [marlin_resume]enter
+[  285.467139] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  285.467162] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  285.467177] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  285.467196] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  285.490976] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  285.534648] OOM killer enabled.
+[  285.534661] Restarting tasks: Starting
+[  285.536193] Restarting tasks: Done
+[  285.536285] random: crng reseeded on system resumption
+[  285.548555] PM: suspend exit
+[  287.529476] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  290.960621] PM: suspend entry (deep)
+[  290.961999] Filesystems sync: 0.001 seconds
+[  290.986191] Freezing user space processes
+[  290.988255] Freezing user space processes completed (elapsed 0.001 seconds)
+[  290.988303] OOM killer disabled.
+[  290.988316] Freezing remaining freezable tasks
+[  290.989941] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  290.989980] printk: Suspending console(s) (use no_console_suspend to debug)
+[  291.004107] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  291.004349] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  291.004730] WCN: [marlin_suspend]enter
+[  291.004821] sdiohal:[sdiohal_suspend]enter
+[  291.004834] WCN: stop_loopcheck
+[  291.004848] bt_tx_powerchange is_resume =0
+[  291.004900] marlin_sdio_write +++ op 0xFD09
+[  291.009191] woble_data_recv opcode: 0xFD09, status: 0
+[  291.009365] marlin_sdio_write +++ op 0xFD0D
+[  291.012905] woble_data_recv opcode: 0xFD0D, status: 0
+[  291.014125] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  291.076136] Disabling non-boot CPUs ...
+[  291.078465] psci: CPU3 killed (polled 0 ms)
+[  291.082784] psci: CPU2 killed (polled 0 ms)
+[  291.088379] psci: CPU1 killed (polled 0 ms)
+[  291.091384] Enabling non-boot CPUs ...
+[  291.091962] Detected VIPT I-cache on CPU1
+[  291.092102] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  291.094125] CPU1 is up
+[  291.094791] Detected VIPT I-cache on CPU2
+[  291.094945] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  291.097031] CPU2 is up
+[  291.097556] Detected VIPT I-cache on CPU3
+[  291.097704] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  291.099957] CPU3 is up
+[  291.101480] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  291.111396] usb usb3: root hub lost power or was reset
+[  291.111396] usb usb1: root hub lost power or was reset
+[  291.111462] usb usb2: root hub lost power or was reset
+[  291.171139] usb usb4: root hub lost power or was reset
+[  291.231819] usb usb5: root hub lost power or was reset
+[  291.292585] usb usb6: root hub lost power or was reset
+[  291.292717] sdiohal:[sdiohal_resume]enter
+[  291.292856] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  291.293838] WCN: start_loopcheck
+[  291.293876] bt_tx_powerchange is_resume =1
+[  291.293975] marlin_sdio_write +++ op 0xFD09
+[  291.298140] woble_data_recv opcode: 0xFD09, status: 0
+[  291.299529] WCN: [marlin_resume]enter
+[  291.321428] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  291.321468] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  291.321495] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  291.321532] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  291.345489] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  291.385676] OOM killer enabled.
+[  291.385690] Restarting tasks: Starting
+[  291.387390] Restarting tasks: Done
+[  291.387481] random: crng reseeded on system resumption
+[  291.397042] PM: suspend exit
+[  293.417959] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  296.867962] PM: suspend entry (deep)
+[  296.869273] Filesystems sync: 0.001 seconds
+[  296.893451] Freezing user space processes
+[  296.895359] Freezing user space processes completed (elapsed 0.001 seconds)
+[  296.895397] OOM killer disabled.
+[  296.895407] Freezing remaining freezable tasks
+[  296.896725] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  296.896751] printk: Suspending console(s) (use no_console_suspend to debug)
+[  296.907006] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  296.907187] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  296.907584] WCN: [marlin_suspend]enter
+[  296.907651] sdiohal:[sdiohal_suspend]enter
+[  296.907660] WCN: stop_loopcheck
+[  296.907670] bt_tx_powerchange is_resume =0
+[  296.907723] marlin_sdio_write +++ op 0xFD09
+[  296.911602] woble_data_recv opcode: 0xFD09, status: 0
+[  296.911807] marlin_sdio_write +++ op 0xFD0D
+[  296.915340] woble_data_recv opcode: 0xFD0D, status: 0
+[  296.916314] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  296.977265] Disabling non-boot CPUs ...
+[  296.978882] psci: CPU3 killed (polled 0 ms)
+[  296.983477] psci: CPU2 killed (polled 0 ms)
+[  296.987969] psci: CPU1 killed (polled 0 ms)
+[  296.990848] Enabling non-boot CPUs ...
+[  296.991295] Detected VIPT I-cache on CPU1
+[  296.991403] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  296.992853] CPU1 is up
+[  296.993254] Detected VIPT I-cache on CPU2
+[  296.993367] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  296.994863] CPU2 is up
+[  296.995280] Detected VIPT I-cache on CPU3
+[  296.995400] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  296.996908] CPU3 is up
+[  296.998315] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  297.006363] usb usb1: root hub lost power or was reset
+[  297.006364] usb usb3: root hub lost power or was reset
+[  297.006364] usb usb2: root hub lost power or was reset
+[  297.066420] usb usb4: root hub lost power or was reset
+[  297.127057] usb usb5: root hub lost power or was reset
+[  297.187759] usb usb6: root hub lost power or was reset
+[  297.187868] sdiohal:[sdiohal_resume]enter
+[  297.187929] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  297.188678] WCN: start_loopcheck
+[  297.188710] bt_tx_powerchange is_resume =1
+[  297.188796] marlin_sdio_write +++ op 0xFD09
+[  297.192940] woble_data_recv opcode: 0xFD09, status: 0
+[  297.193919] WCN: [marlin_resume]enter
+[  297.216500] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  297.216531] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  297.216552] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  297.216580] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  297.240599] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  297.280937] OOM killer enabled.
+[  297.280952] Restarting tasks: Starting
+[  297.282241] Restarting tasks: Done
+[  297.282348] random: crng reseeded on system resumption
+[  297.292860] PM: suspend exit
+[  299.309107] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  302.704302] PM: suspend entry (deep)
+[  302.704608] Filesystems sync: 0.000 seconds
+[  302.739112] Freezing user space processes
+[  302.740931] Freezing user space processes completed (elapsed 0.001 seconds)
+[  302.740958] OOM killer disabled.
+[  302.740963] Freezing remaining freezable tasks
+[  302.742338] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  302.742355] printk: Suspending console(s) (use no_console_suspend to debug)
+[  302.748959] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  302.749100] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  302.749383] WCN: [marlin_suspend]enter
+[  302.749430] sdiohal:[sdiohal_suspend]enter
+[  302.749437] WCN: stop_loopcheck
+[  302.749442] bt_tx_powerchange is_resume =0
+[  302.749483] marlin_sdio_write +++ op 0xFD09
+[  302.752546] woble_data_recv opcode: 0xFD09, status: 0
+[  302.752690] marlin_sdio_write +++ op 0xFD0D
+[  302.756214] woble_data_recv opcode: 0xFD0D, status: 0
+[  302.756803] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  302.817825] Disabling non-boot CPUs ...
+[  302.818976] psci: CPU3 killed (polled 0 ms)
+[  302.822481] psci: CPU2 killed (polled 0 ms)
+[  302.826084] psci: CPU1 killed (polled 0 ms)
+[  302.828417] Enabling non-boot CPUs ...
+[  302.828746] Detected VIPT I-cache on CPU1
+[  302.828828] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  302.829883] CPU1 is up
+[  302.830170] Detected VIPT I-cache on CPU2
+[  302.830253] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  302.831306] CPU2 is up
+[  302.831595] Detected VIPT I-cache on CPU3
+[  302.831677] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  302.832823] CPU3 is up
+[  302.833736] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  302.840910] usb usb1: root hub lost power or was reset
+[  302.840925] usb usb2: root hub lost power or was reset
+[  302.840980] usb usb3: root hub lost power or was reset
+[  302.900936] usb usb4: root hub lost power or was reset
+[  302.961675] usb usb5: root hub lost power or was reset
+[  303.022347] usb usb6: root hub lost power or was reset
+[  303.022433] sdiohal:[sdiohal_resume]enter
+[  303.022502] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  303.023026] WCN: start_loopcheck
+[  303.023049] bt_tx_powerchange is_resume =1
+[  303.023117] marlin_sdio_write +++ op 0xFD09
+[  303.027418] woble_data_recv opcode: 0xFD09, status: 0
+[  303.028267] WCN: [marlin_resume]enter
+[  303.051042] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  303.051067] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  303.051080] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  303.051100] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  303.075078] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  303.115520] OOM killer enabled.
+[  303.115534] Restarting tasks: Starting
+[  303.116642] Restarting tasks: Done
+[  303.116738] random: crng reseeded on system resumption
+[  303.125550] PM: suspend exit
+[  305.135585] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  308.597945] PM: suspend entry (deep)
+[  308.598766] Filesystems sync: 0.000 seconds
+[  308.622747] Freezing user space processes
+[  308.624403] Freezing user space processes completed (elapsed 0.001 seconds)
+[  308.624433] OOM killer disabled.
+[  308.624438] Freezing remaining freezable tasks
+[  308.625809] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  308.625822] printk: Suspending console(s) (use no_console_suspend to debug)
+[  308.632006] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  308.632190] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  308.632455] WCN: [marlin_suspend]enter
+[  308.632503] sdiohal:[sdiohal_suspend]enter
+[  308.632509] WCN: stop_loopcheck
+[  308.632515] bt_tx_powerchange is_resume =0
+[  308.632548] marlin_sdio_write +++ op 0xFD09
+[  308.636207] woble_data_recv opcode: 0xFD09, status: 0
+[  308.636340] marlin_sdio_write +++ op 0xFD0D
+[  308.639834] woble_data_recv opcode: 0xFD0D, status: 0
+[  308.640470] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  308.700443] Disabling non-boot CPUs ...
+[  308.702551] psci: CPU3 killed (polled 0 ms)
+[  308.705778] psci: CPU2 killed (polled 0 ms)
+[  308.709118] psci: CPU1 killed (polled 0 ms)
+[  308.710442] Enabling non-boot CPUs ...
+[  308.710770] Detected VIPT I-cache on CPU1
+[  308.710846] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  308.711924] CPU1 is up
+[  308.712222] Detected VIPT I-cache on CPU2
+[  308.712307] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  308.713387] CPU2 is up
+[  308.713674] Detected VIPT I-cache on CPU3
+[  308.713757] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  308.714865] CPU3 is up
+[  308.715912] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  308.723907] usb usb2: root hub lost power or was reset
+[  308.723907] usb usb1: root hub lost power or was reset
+[  308.724021] usb usb3: root hub lost power or was reset
+[  308.784112] usb usb4: root hub lost power or was reset
+[  308.844751] usb usb5: root hub lost power or was reset
+[  308.905442] usb usb6: root hub lost power or was reset
+[  308.905530] sdiohal:[sdiohal_resume]enter
+[  308.905617] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  308.905925] WCN: start_loopcheck
+[  308.905942] bt_tx_powerchange is_resume =1
+[  308.905989] marlin_sdio_write +++ op 0xFD09
+[  308.909835] woble_data_recv opcode: 0xFD09, status: 0
+[  308.911012] WCN: [marlin_resume]enter
+[  308.934172] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  308.934196] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  308.934210] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  308.934230] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  308.958248] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  308.998638] OOM killer enabled.
+[  308.998652] Restarting tasks: Starting
+[  308.999606] Restarting tasks: Done
+[  308.999702] random: crng reseeded on system resumption
+[  309.008750] PM: suspend exit
+[  311.014686] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  314.442989] PM: suspend entry (deep)
+[  314.443567] Filesystems sync: 0.000 seconds
+[  314.469027] Freezing user space processes
+[  314.471216] Freezing user space processes completed (elapsed 0.002 seconds)
+[  314.471261] OOM killer disabled.
+[  314.471273] Freezing remaining freezable tasks
+[  314.472587] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  314.472626] printk: Suspending console(s) (use no_console_suspend to debug)
+[  314.487175] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  314.487402] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  314.487866] WCN: [marlin_suspend]enter
+[  314.487957] sdiohal:[sdiohal_suspend]enter
+[  314.487971] WCN: stop_loopcheck
+[  314.487985] bt_tx_powerchange is_resume =0
+[  314.488072] marlin_sdio_write +++ op 0xFD09
+[  314.492343] woble_data_recv opcode: 0xFD09, status: 0
+[  314.492563] marlin_sdio_write +++ op 0xFD0D
+[  314.495964] woble_data_recv opcode: 0xFD0D, status: 0
+[  314.497140] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  314.558488] Disabling non-boot CPUs ...
+[  314.560671] psci: CPU3 killed (polled 0 ms)
+[  314.564581] psci: CPU2 killed (polled 0 ms)
+[  314.569290] psci: CPU1 killed (polled 0 ms)
+[  314.572668] Enabling non-boot CPUs ...
+[  314.573248] Detected VIPT I-cache on CPU1
+[  314.573390] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  314.575285] CPU1 is up
+[  314.575803] Detected VIPT I-cache on CPU2
+[  314.575949] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  314.577910] CPU2 is up
+[  314.578452] Detected VIPT I-cache on CPU3
+[  314.578602] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  314.580660] CPU3 is up
+[  314.582196] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  314.593097] usb usb1: root hub lost power or was reset
+[  314.593098] usb usb3: root hub lost power or was reset
+[  314.593303] usb usb2: root hub lost power or was reset
+[  314.652310] usb usb4: root hub lost power or was reset
+[  314.712281] usb usb5: root hub lost power or was reset
+[  314.772183] usb usb6: root hub lost power or was reset
+[  314.772320] sdiohal:[sdiohal_resume]enter
+[  314.772549] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  314.773375] WCN: start_loopcheck
+[  314.773412] bt_tx_powerchange is_resume =1
+[  314.773459] marlin_sdio_write +++ op 0xFD09
+[  314.778369] woble_data_recv opcode: 0xFD09, status: 0
+[  314.779838] WCN: [marlin_resume]enter
+[  314.804733] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  314.804773] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  314.804801] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  314.804839] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  314.828455] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  314.864224] OOM killer enabled.
+[  314.864239] Restarting tasks: Starting
+[  314.865522] Restarting tasks: Done
+[  314.865633] random: crng reseeded on system resumption
+[  314.875518] PM: suspend exit
+[  316.868780] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  320.244665] PM: suspend entry (deep)
+[  320.245071] Filesystems sync: 0.000 seconds
+[  320.275571] Freezing user space processes
+[  320.277883] Freezing user space processes completed (elapsed 0.002 seconds)
+[  320.277910] OOM killer disabled.
+[  320.277914] Freezing remaining freezable tasks
+[  320.279318] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  320.279339] printk: Suspending console(s) (use no_console_suspend to debug)
+[  320.292301] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  320.292463] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  320.292730] WCN: [marlin_suspend]enter
+[  320.292775] sdiohal:[sdiohal_suspend]enter
+[  320.292781] WCN: stop_loopcheck
+[  320.292786] bt_tx_powerchange is_resume =0
+[  320.292817] marlin_sdio_write +++ op 0xFD09
+[  320.296490] woble_data_recv opcode: 0xFD09, status: 0
+[  320.296619] marlin_sdio_write +++ op 0xFD0D
+[  320.300175] woble_data_recv opcode: 0xFD0D, status: 0
+[  320.301004] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  320.363861] Disabling non-boot CPUs ...
+[  320.366032] psci: CPU3 killed (polled 0 ms)
+[  320.370004] psci: CPU2 killed (polled 0 ms)
+[  320.373487] psci: CPU1 killed (polled 0 ms)
+[  320.375119] Enabling non-boot CPUs ...
+[  320.375456] Detected VIPT I-cache on CPU1
+[  320.375535] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  320.376592] CPU1 is up
+[  320.376886] Detected VIPT I-cache on CPU2
+[  320.376968] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  320.378035] CPU2 is up
+[  320.378332] Detected VIPT I-cache on CPU3
+[  320.378426] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  320.379578] CPU3 is up
+[  320.380518] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  320.386951] usb usb2: root hub lost power or was reset
+[  320.386951] usb usb1: root hub lost power or was reset
+[  320.387081] usb usb3: root hub lost power or was reset
+[  320.446370] usb usb4: root hub lost power or was reset
+[  320.506341] usb usb5: root hub lost power or was reset
+[  320.566327] usb usb6: root hub lost power or was reset
+[  320.566424] sdiohal:[sdiohal_resume]enter
+[  320.566567] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  320.567139] WCN: start_loopcheck
+[  320.567162] bt_tx_powerchange is_resume =1
+[  320.567202] marlin_sdio_write +++ op 0xFD09
+[  320.571879] woble_data_recv opcode: 0xFD09, status: 0
+[  320.572803] WCN: [marlin_resume]enter
+[  320.594785] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  320.594809] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  320.594824] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  320.594843] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  320.618534] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  320.658401] OOM killer enabled.
+[  320.658417] Restarting tasks: Starting
+[  320.662397] Restarting tasks: Done
+[  320.662507] random: crng reseeded on system resumption
+[  320.673542] PM: suspend exit
+[  322.658686] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  326.016314] PM: suspend entry (deep)
+[  326.016675] Filesystems sync: 0.000 seconds
+[  326.040656] Freezing user space processes
+[  326.042382] Freezing user space processes completed (elapsed 0.001 seconds)
+[  326.042409] OOM killer disabled.
+[  326.042414] Freezing remaining freezable tasks
+[  326.043759] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  326.043773] printk: Suspending console(s) (use no_console_suspend to debug)
+[  326.050365] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  326.050509] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  326.050792] WCN: [marlin_suspend]enter
+[  326.050841] sdiohal:[sdiohal_suspend]enter
+[  326.050847] WCN: stop_loopcheck
+[  326.050853] bt_tx_powerchange is_resume =0
+[  326.050900] marlin_sdio_write +++ op 0xFD09
+[  326.054257] woble_data_recv opcode: 0xFD09, status: 0
+[  326.054388] marlin_sdio_write +++ op 0xFD0D
+[  326.056726] woble_data_recv opcode: 0xFD0D, status: 0
+[  326.057569] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  326.118313] Disabling non-boot CPUs ...
+[  326.120434] psci: CPU3 killed (polled 0 ms)
+[  326.124285] psci: CPU2 killed (polled 0 ms)
+[  326.127495] psci: CPU1 killed (polled 0 ms)
+[  326.129551] Enabling non-boot CPUs ...
+[  326.129898] Detected VIPT I-cache on CPU1
+[  326.129977] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  326.131029] CPU1 is up
+[  326.131331] Detected VIPT I-cache on CPU2
+[  326.131415] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  326.132474] CPU2 is up
+[  326.132930] Detected VIPT I-cache on CPU3
+[  326.133022] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  326.134124] CPU3 is up
+[  326.135035] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  326.139238] usb usb3: root hub lost power or was reset
+[  326.139238] usb usb1: root hub lost power or was reset
+[  326.139277] usb usb2: root hub lost power or was reset
+[  326.196644] usb usb4: root hub lost power or was reset
+[  326.256578] usb usb5: root hub lost power or was reset
+[  326.316565] usb usb6: root hub lost power or was reset
+[  326.316643] sdiohal:[sdiohal_resume]enter
+[  326.316678] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  326.317070] WCN: start_loopcheck
+[  326.317095] bt_tx_powerchange is_resume =1
+[  326.317136] marlin_sdio_write +++ op 0xFD09
+[  326.321265] woble_data_recv opcode: 0xFD09, status: 0
+[  326.322114] WCN: [marlin_resume]enter
+[  326.344834] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  326.344859] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  326.344872] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  326.344892] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  326.368718] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  326.408583] OOM killer enabled.
+[  326.408597] Restarting tasks: Starting
+[  326.410148] Restarting tasks: Done
+[  326.410239] random: crng reseeded on system resumption
+[  326.420092] PM: suspend exit
+[  328.417090] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  331.819853] PM: suspend entry (deep)
+[  331.820232] Filesystems sync: 0.000 seconds
+[  331.843085] Freezing user space processes
+[  331.845109] Freezing user space processes completed (elapsed 0.001 seconds)
+[  331.845146] OOM killer disabled.
+[  331.845154] Freezing remaining freezable tasks
+[  331.846621] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  331.846647] printk: Suspending console(s) (use no_console_suspend to debug)
+[  331.853075] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  331.853272] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  331.853614] WCN: [marlin_suspend]enter
+[  331.853684] sdiohal:[sdiohal_suspend]enter
+[  331.853693] WCN: stop_loopcheck
+[  331.853703] bt_tx_powerchange is_resume =0
+[  331.853794] marlin_sdio_write +++ op 0xFD09
+[  331.857524] woble_data_recv opcode: 0xFD09, status: 0
+[  331.857630] marlin_sdio_write +++ op 0xFD0D
+[  331.861057] woble_data_recv opcode: 0xFD0D, status: 0
+[  331.861640] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  331.922652] Disabling non-boot CPUs ...
+[  331.925406] psci: CPU3 killed (polled 0 ms)
+[  331.929226] psci: CPU2 killed (polled 0 ms)
+[  331.933579] psci: CPU1 killed (polled 0 ms)
+[  331.935263] Enabling non-boot CPUs ...
+[  331.935738] Detected VIPT I-cache on CPU1
+[  331.935848] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  331.937399] CPU1 is up
+[  331.937827] Detected VIPT I-cache on CPU2
+[  331.937944] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  331.939551] CPU2 is up
+[  331.939995] Detected VIPT I-cache on CPU3
+[  331.940114] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  331.941757] CPU3 is up
+[  331.943178] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  331.951340] usb usb2: root hub lost power or was reset
+[  331.951340] usb usb3: root hub lost power or was reset
+[  331.951514] usb usb1: root hub lost power or was reset
+[  332.010898] usb usb4: root hub lost power or was reset
+[  332.070780] usb usb5: root hub lost power or was reset
+[  332.130698] usb usb6: root hub lost power or was reset
+[  332.130803] sdiohal:[sdiohal_resume]enter
+[  332.130854] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  332.131477] WCN: start_loopcheck
+[  332.131509] bt_tx_powerchange is_resume =1
+[  332.131566] marlin_sdio_write +++ op 0xFD09
+[  332.135582] woble_data_recv opcode: 0xFD09, status: 0
+[  332.136682] WCN: [marlin_resume]enter
+[  332.159159] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  332.159193] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  332.159213] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  332.159241] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  332.183024] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  332.222814] OOM killer enabled.
+[  332.222830] Restarting tasks: Starting
+[  332.224194] Restarting tasks: Done
+[  332.224293] random: crng reseeded on system resumption
+[  332.233270] PM: suspend exit
+[  334.239286] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  337.606216] PM: suspend entry (deep)
+[  337.606452] Filesystems sync: 0.000 seconds
+[  337.632780] Freezing user space processes
+[  337.634468] Freezing user space processes completed (elapsed 0.001 seconds)
+[  337.634502] OOM killer disabled.
+[  337.634507] Freezing remaining freezable tasks
+[  337.635837] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  337.635851] printk: Suspending console(s) (use no_console_suspend to debug)
+[  337.646795] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  337.646934] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  337.647220] WCN: [marlin_suspend]enter
+[  337.647267] sdiohal:[sdiohal_suspend]enter
+[  337.647273] WCN: stop_loopcheck
+[  337.647279] bt_tx_powerchange is_resume =0
+[  337.647322] marlin_sdio_write +++ op 0xFD09
+[  337.651509] woble_data_recv opcode: 0xFD09, status: 0
+[  337.651645] marlin_sdio_write +++ op 0xFD0D
+[  337.655107] woble_data_recv opcode: 0xFD0D, status: 0
+[  337.655753] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  337.714416] Disabling non-boot CPUs ...
+[  337.716554] psci: CPU3 killed (polled 0 ms)
+[  337.720199] psci: CPU2 killed (polled 0 ms)
+[  337.723641] psci: CPU1 killed (polled 0 ms)
+[  337.725776] Enabling non-boot CPUs ...
+[  337.726101] Detected VIPT I-cache on CPU1
+[  337.726177] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  337.727184] CPU1 is up
+[  337.727477] Detected VIPT I-cache on CPU2
+[  337.727561] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  337.728573] CPU2 is up
+[  337.728857] Detected VIPT I-cache on CPU3
+[  337.728952] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  337.730090] CPU3 is up
+[  337.731016] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  337.735282] usb usb1: root hub lost power or was reset
+[  337.735282] usb usb3: root hub lost power or was reset
+[  337.735426] usb usb2: root hub lost power or was reset
+[  337.792979] usb usb4: root hub lost power or was reset
+[  337.852917] usb usb5: root hub lost power or was reset
+[  337.912858] usb usb6: root hub lost power or was reset
+[  337.912958] sdiohal:[sdiohal_resume]enter
+[  337.913028] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  337.913611] WCN: start_loopcheck
+[  337.913635] bt_tx_powerchange is_resume =1
+[  337.913677] marlin_sdio_write +++ op 0xFD09
+[  337.917152] woble_data_recv opcode: 0xFD09, status: 0
+[  337.918110] WCN: [marlin_resume]enter
+[  337.941177] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  337.941201] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  337.941214] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  337.941233] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  337.964989] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  338.004929] OOM killer enabled.
+[  338.004943] Restarting tasks: Starting
+[  338.005999] Restarting tasks: Done
+[  338.006091] random: crng reseeded on system resumption
+[  338.014773] PM: suspend exit
+[  339.997424] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  343.476187] PM: suspend entry (deep)
+[  343.476620] Filesystems sync: 0.000 seconds
+[  343.494800] Freezing user space processes
+[  343.496672] Freezing user space processes completed (elapsed 0.001 seconds)
+[  343.496702] OOM killer disabled.
+[  343.496706] Freezing remaining freezable tasks
+[  343.498066] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  343.498082] printk: Suspending console(s) (use no_console_suspend to debug)
+[  343.504847] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  343.504997] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  343.505279] WCN: [marlin_suspend]enter
+[  343.505328] sdiohal:[sdiohal_suspend]enter
+[  343.505334] WCN: stop_loopcheck
+[  343.505340] bt_tx_powerchange is_resume =0
+[  343.505374] marlin_sdio_write +++ op 0xFD09
+[  343.509528] woble_data_recv opcode: 0xFD09, status: 0
+[  343.509600] marlin_sdio_write +++ op 0xFD0D
+[  343.513202] woble_data_recv opcode: 0xFD0D, status: 0
+[  343.513914] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  343.572659] Disabling non-boot CPUs ...
+[  343.574793] psci: CPU3 killed (polled 0 ms)
+[  343.578259] psci: CPU2 killed (polled 0 ms)
+[  343.581687] psci: CPU1 killed (polled 0 ms)
+[  343.582926] Enabling non-boot CPUs ...
+[  343.583526] Detected VIPT I-cache on CPU1
+[  343.583613] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  343.584665] CPU1 is up
+[  343.584951] Detected VIPT I-cache on CPU2
+[  343.585031] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  343.586072] CPU2 is up
+[  343.586362] Detected VIPT I-cache on CPU3
+[  343.586447] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  343.587596] CPU3 is up
+[  343.588501] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  343.595692] usb usb2: root hub lost power or was reset
+[  343.595692] usb usb1: root hub lost power or was reset
+[  343.595826] usb usb3: root hub lost power or was reset
+[  343.655104] usb usb4: root hub lost power or was reset
+[  343.715071] usb usb5: root hub lost power or was reset
+[  343.775015] usb usb6: root hub lost power or was reset
+[  343.775122] sdiohal:[sdiohal_resume]enter
+[  343.775239] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  343.775670] WCN: start_loopcheck
+[  343.775693] bt_tx_powerchange is_resume =1
+[  343.775722] marlin_sdio_write +++ op 0xFD09
+[  343.779441] woble_data_recv opcode: 0xFD09, status: 0
+[  343.780191] WCN: [marlin_resume]enter
+[  343.803326] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  343.803351] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  343.803365] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  343.803384] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  343.827201] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  343.867088] OOM killer enabled.
+[  343.867102] Restarting tasks: Starting
+[  343.868172] Restarting tasks: Done
+[  343.868271] random: crng reseeded on system resumption
+[  343.878334] PM: suspend exit
+[  345.883636] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  349.350343] PM: suspend entry (deep)
+[  349.350853] Filesystems sync: 0.000 seconds
+[  349.369913] Freezing user space processes
+[  349.371994] Freezing user space processes completed (elapsed 0.002 seconds)
+[  349.372025] OOM killer disabled.
+[  349.372029] Freezing remaining freezable tasks
+[  349.373435] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  349.373454] printk: Suspending console(s) (use no_console_suspend to debug)
+[  349.387054] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  349.387242] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  349.387491] WCN: [marlin_suspend]enter
+[  349.387536] sdiohal:[sdiohal_suspend]enter
+[  349.387542] WCN: stop_loopcheck
+[  349.387548] bt_tx_powerchange is_resume =0
+[  349.387581] marlin_sdio_write +++ op 0xFD09
+[  349.391618] woble_data_recv opcode: 0xFD09, status: 0
+[  349.391732] marlin_sdio_write +++ op 0xFD0D
+[  349.395256] woble_data_recv opcode: 0xFD0D, status: 0
+[  349.395865] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  349.454651] Disabling non-boot CPUs ...
+[  349.456695] psci: CPU3 killed (polled 0 ms)
+[  349.460038] psci: CPU2 killed (polled 0 ms)
+[  349.463500] psci: CPU1 killed (polled 0 ms)
+[  349.464967] Enabling non-boot CPUs ...
+[  349.465653] Detected VIPT I-cache on CPU1
+[  349.465741] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  349.466718] CPU1 is up
+[  349.467012] Detected VIPT I-cache on CPU2
+[  349.467092] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  349.468049] CPU2 is up
+[  349.468334] Detected VIPT I-cache on CPU3
+[  349.468415] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  349.469470] CPU3 is up
+[  349.470372] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  349.477861] usb usb3: root hub lost power or was reset
+[  349.477861] usb usb1: root hub lost power or was reset
+[  349.477883] usb usb2: root hub lost power or was reset
+[  349.537306] usb usb4: root hub lost power or was reset
+[  349.597177] usb usb5: root hub lost power or was reset
+[  349.657162] usb usb6: root hub lost power or was reset
+[  349.657241] sdiohal:[sdiohal_resume]enter
+[  349.657306] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  349.657886] WCN: start_loopcheck
+[  349.657909] bt_tx_powerchange is_resume =1
+[  349.657951] marlin_sdio_write +++ op 0xFD09
+[  349.662422] woble_data_recv opcode: 0xFD09, status: 0
+[  349.663409] WCN: [marlin_resume]enter
+[  349.685483] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  349.685506] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  349.685520] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  349.685540] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  349.709357] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  349.753243] OOM killer enabled.
+[  349.753258] Restarting tasks: Starting
+[  349.757220] Restarting tasks: Done
+[  349.757325] random: crng reseeded on system resumption
+[  349.766603] PM: suspend exit
+[  351.737768] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  355.126726] PM: suspend entry (deep)
+[  355.127072] Filesystems sync: 0.000 seconds
+[  355.150261] Freezing user space processes
+[  355.152148] Freezing user space processes completed (elapsed 0.001 seconds)
+[  355.152178] OOM killer disabled.
+[  355.152182] Freezing remaining freezable tasks
+[  355.153534] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  355.153552] printk: Suspending console(s) (use no_console_suspend to debug)
+[  355.159955] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  355.160099] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  355.160433] WCN: [marlin_suspend]enter
+[  355.160481] sdiohal:[sdiohal_suspend]enter
+[  355.160487] WCN: stop_loopcheck
+[  355.160493] bt_tx_powerchange is_resume =0
+[  355.160526] marlin_sdio_write +++ op 0xFD09
+[  355.163635] woble_data_recv opcode: 0xFD09, status: 0
+[  355.163705] marlin_sdio_write +++ op 0xFD0D
+[  355.166027] woble_data_recv opcode: 0xFD0D, status: 0
+[  355.166659] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  355.229565] Disabling non-boot CPUs ...
+[  355.231707] psci: CPU3 killed (polled 0 ms)
+[  355.235369] psci: CPU2 killed (polled 0 ms)
+[  355.238585] psci: CPU1 killed (polled 0 ms)
+[  355.240105] Enabling non-boot CPUs ...
+[  355.240430] Detected VIPT I-cache on CPU1
+[  355.240508] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  355.241827] CPU1 is up
+[  355.242136] Detected VIPT I-cache on CPU2
+[  355.242221] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  355.243253] CPU2 is up
+[  355.243543] Detected VIPT I-cache on CPU3
+[  355.243626] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  355.244756] CPU3 is up
+[  355.245665] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  355.249657] usb usb1: root hub lost power or was reset
+[  355.249657] usb usb3: root hub lost power or was reset
+[  355.249786] usb usb2: root hub lost power or was reset
+[  355.310410] usb usb4: root hub lost power or was reset
+[  355.372121] usb usb5: root hub lost power or was reset
+[  355.429744] usb usb6: root hub lost power or was reset
+[  355.429861] sdiohal:[sdiohal_resume]enter
+[  355.429901] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  355.430303] WCN: start_loopcheck
+[  355.430325] bt_tx_powerchange is_resume =1
+[  355.430354] marlin_sdio_write +++ op 0xFD09
+[  355.433696] woble_data_recv opcode: 0xFD09, status: 0
+[  355.434864] WCN: [marlin_resume]enter
+[  355.459033] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  355.459058] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  355.459072] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  355.459092] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  355.483508] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  355.524589] OOM killer enabled.
+[  355.524603] Restarting tasks: Starting
+[  355.526024] Restarting tasks: Done
+[  355.526116] random: crng reseeded on system resumption
+[  355.533997] PM: suspend exit
+[  357.579041] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  361.131283] PM: suspend entry (deep)
+[  361.131851] Filesystems sync: 0.000 seconds
+[  361.154439] Freezing user space processes
+[  361.156446] Freezing user space processes completed (elapsed 0.001 seconds)
+[  361.156488] OOM killer disabled.
+[  361.156496] Freezing remaining freezable tasks
+[  361.157956] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  361.157981] printk: Suspending console(s) (use no_console_suspend to debug)
+[  361.164686] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  361.164960] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  361.165243] WCN: [marlin_suspend]enter
+[  361.165314] sdiohal:[sdiohal_suspend]enter
+[  361.165325] WCN: stop_loopcheck
+[  361.165335] bt_tx_powerchange is_resume =0
+[  361.165376] marlin_sdio_write +++ op 0xFD09
+[  361.168846] woble_data_recv opcode: 0xFD09, status: 0
+[  361.169017] marlin_sdio_write +++ op 0xFD0D
+[  361.172493] woble_data_recv opcode: 0xFD0D, status: 0
+[  361.173371] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  361.235926] Disabling non-boot CPUs ...
+[  361.237674] psci: CPU3 killed (polled 0 ms)
+[  361.242189] psci: CPU2 killed (polled 0 ms)
+[  361.246389] psci: CPU1 killed (polled 0 ms)
+[  361.248313] Enabling non-boot CPUs ...
+[  361.249091] Detected VIPT I-cache on CPU1
+[  361.249209] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  361.250781] CPU1 is up
+[  361.251187] Detected VIPT I-cache on CPU2
+[  361.251302] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  361.253052] CPU2 is up
+[  361.253469] Detected VIPT I-cache on CPU3
+[  361.253589] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  361.255244] CPU3 is up
+[  361.256465] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  361.262080] usb usb3: root hub lost power or was reset
+[  361.262108] usb usb2: root hub lost power or was reset
+[  361.262271] usb usb1: root hub lost power or was reset
+[  361.322547] usb usb4: root hub lost power or was reset
+[  361.384253] usb usb5: root hub lost power or was reset
+[  361.446067] usb usb6: root hub lost power or was reset
+[  361.446174] sdiohal:[sdiohal_resume]enter
+[  361.446223] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  361.446810] WCN: start_loopcheck
+[  361.446842] bt_tx_powerchange is_resume =1
+[  361.446881] marlin_sdio_write +++ op 0xFD09
+[  361.450518] woble_data_recv opcode: 0xFD09, status: 0
+[  361.451632] WCN: [marlin_resume]enter
+[  361.475312] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  361.475345] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  361.475365] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  361.475394] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  361.499812] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  361.544929] OOM killer enabled.
+[  361.544944] Restarting tasks: Starting
+[  361.548411] Restarting tasks: Done
+[  361.548511] random: crng reseeded on system resumption
+[  361.556927] PM: suspend exit
+[  363.603522] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  367.140902] PM: suspend entry (deep)
+[  367.141312] Filesystems sync: 0.000 seconds
+[  367.162058] Freezing user space processes
+[  367.164065] Freezing user space processes completed (elapsed 0.001 seconds)
+[  367.164100] OOM killer disabled.
+[  367.164109] Freezing remaining freezable tasks
+[  367.165561] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  367.165586] printk: Suspending console(s) (use no_console_suspend to debug)
+[  367.176601] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  367.176874] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  367.177151] WCN: [marlin_suspend]enter
+[  367.177218] sdiohal:[sdiohal_suspend]enter
+[  367.177227] WCN: stop_loopcheck
+[  367.177237] bt_tx_powerchange is_resume =0
+[  367.177279] marlin_sdio_write +++ op 0xFD09
+[  367.181564] woble_data_recv opcode: 0xFD09, status: 0
+[  367.181736] marlin_sdio_write +++ op 0xFD0D
+[  367.185221] woble_data_recv opcode: 0xFD0D, status: 0
+[  367.186087] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  367.248238] Disabling non-boot CPUs ...
+[  367.250891] psci: CPU3 killed (polled 0 ms)
+[  367.255478] psci: CPU2 killed (polled 0 ms)
+[  367.259886] psci: CPU1 killed (polled 0 ms)
+[  367.262462] Enabling non-boot CPUs ...
+[  367.262908] Detected VIPT I-cache on CPU1
+[  367.263016] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  367.264461] CPU1 is up
+[  367.265053] Detected VIPT I-cache on CPU2
+[  367.265175] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  367.266610] CPU2 is up
+[  367.267017] Detected VIPT I-cache on CPU3
+[  367.267132] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  367.268614] CPU3 is up
+[  367.270060] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  367.277850] usb usb1: root hub lost power or was reset
+[  367.277872] usb usb3: root hub lost power or was reset
+[  367.277896] usb usb2: root hub lost power or was reset
+[  367.338837] usb usb4: root hub lost power or was reset
+[  367.400545] usb usb5: root hub lost power or was reset
+[  367.462220] usb usb6: root hub lost power or was reset
+[  367.462351] sdiohal:[sdiohal_resume]enter
+[  367.462547] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  367.463302] WCN: start_loopcheck
+[  367.463331] bt_tx_powerchange is_resume =1
+[  367.463380] marlin_sdio_write +++ op 0xFD09
+[  367.467146] woble_data_recv opcode: 0xFD09, status: 0
+[  367.468381] WCN: [marlin_resume]enter
+[  367.491583] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  367.491615] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  367.491636] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  367.491665] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  367.516023] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  367.557031] OOM killer enabled.
+[  367.557044] Restarting tasks: Starting
+[  367.558520] Restarting tasks: Done
+[  367.558619] random: crng reseeded on system resumption
+[  367.568704] PM: suspend exit
+[  369.628036] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  373.035264] PM: suspend entry (deep)
+[  373.035787] Filesystems sync: 0.000 seconds
+[  373.072312] Freezing user space processes
+[  373.074476] Freezing user space processes completed (elapsed 0.002 seconds)
+[  373.074510] OOM killer disabled.
+[  373.074515] Freezing remaining freezable tasks
+[  373.075628] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  373.075655] printk: Suspending console(s) (use no_console_suspend to debug)
+[  373.085160] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  373.085341] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  373.085578] WCN: [marlin_suspend]enter
+[  373.085622] sdiohal:[sdiohal_suspend]enter
+[  373.085627] WCN: stop_loopcheck
+[  373.085633] bt_tx_powerchange is_resume =0
+[  373.085664] marlin_sdio_write +++ op 0xFD09
+[  373.089457] woble_data_recv opcode: 0xFD09, status: 0
+[  373.089533] marlin_sdio_write +++ op 0xFD0D
+[  373.093220] woble_data_recv opcode: 0xFD0D, status: 0
+[  373.093884] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  373.156571] Disabling non-boot CPUs ...
+[  373.158729] psci: CPU3 killed (polled 0 ms)
+[  373.162342] psci: CPU2 killed (polled 0 ms)
+[  373.165131] psci: CPU1 killed (polled 0 ms)
+[  373.166915] Enabling non-boot CPUs ...
+[  373.167244] Detected VIPT I-cache on CPU1
+[  373.167322] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  373.168654] CPU1 is up
+[  373.168954] Detected VIPT I-cache on CPU2
+[  373.169037] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  373.170091] CPU2 is up
+[  373.170379] Detected VIPT I-cache on CPU3
+[  373.170461] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  373.171638] CPU3 is up
+[  373.172638] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  373.176719] usb usb3: root hub lost power or was reset
+[  373.176719] usb usb2: root hub lost power or was reset
+[  373.176855] usb usb1: root hub lost power or was reset
+[  373.235405] usb usb4: root hub lost power or was reset
+[  373.295400] usb usb5: root hub lost power or was reset
+[  373.355407] usb usb6: root hub lost power or was reset
+[  373.355490] sdiohal:[sdiohal_resume]enter
+[  373.355528] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  373.355976] WCN: start_loopcheck
+[  373.356000] bt_tx_powerchange is_resume =1
+[  373.356030] marlin_sdio_write +++ op 0xFD09
+[  373.360335] woble_data_recv opcode: 0xFD09, status: 0
+[  373.361326] WCN: [marlin_resume]enter
+[  373.383831] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  373.383855] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  373.383869] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  373.383890] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  373.407548] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  373.447531] OOM killer enabled.
+[  373.447545] Restarting tasks: Starting
+[  373.451542] Restarting tasks: Done
+[  373.451692] random: crng reseeded on system resumption
+[  373.464025] PM: suspend exit
+[  375.456607] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  378.931481] PM: suspend entry (deep)
+[  378.931777] Filesystems sync: 0.000 seconds
+[  378.951674] Freezing user space processes
+[  378.953377] Freezing user space processes completed (elapsed 0.001 seconds)
+[  378.953408] OOM killer disabled.
+[  378.953413] Freezing remaining freezable tasks
+[  378.954749] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  378.954764] printk: Suspending console(s) (use no_console_suspend to debug)
+[  378.961133] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  378.961302] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  378.961555] WCN: [marlin_suspend]enter
+[  378.961600] sdiohal:[sdiohal_suspend]enter
+[  378.961606] WCN: stop_loopcheck
+[  378.961612] bt_tx_powerchange is_resume =0
+[  378.961644] marlin_sdio_write +++ op 0xFD09
+[  378.965167] woble_data_recv opcode: 0xFD09, status: 0
+[  378.965293] marlin_sdio_write +++ op 0xFD0D
+[  378.968857] woble_data_recv opcode: 0xFD0D, status: 0
+[  378.969602] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  379.028567] Disabling non-boot CPUs ...
+[  379.030693] psci: CPU3 killed (polled 0 ms)
+[  379.034830] psci: CPU2 killed (polled 0 ms)
+[  379.038211] psci: CPU1 killed (polled 0 ms)
+[  379.039585] Enabling non-boot CPUs ...
+[  379.039942] Detected VIPT I-cache on CPU1
+[  379.040023] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  379.041062] CPU1 is up
+[  379.041353] Detected VIPT I-cache on CPU2
+[  379.041435] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  379.042491] CPU2 is up
+[  379.042784] Detected VIPT I-cache on CPU3
+[  379.042868] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  379.044001] CPU3 is up
+[  379.044913] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  379.051837] usb usb3: root hub lost power or was reset
+[  379.051836] usb usb2: root hub lost power or was reset
+[  379.051960] usb usb1: root hub lost power or was reset
+[  379.111395] usb usb4: root hub lost power or was reset
+[  379.171385] usb usb5: root hub lost power or was reset
+[  379.231341] usb usb6: root hub lost power or was reset
+[  379.231419] sdiohal:[sdiohal_resume]enter
+[  379.231555] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  379.232060] WCN: start_loopcheck
+[  379.232083] bt_tx_powerchange is_resume =1
+[  379.232114] marlin_sdio_write +++ op 0xFD09
+[  379.235437] woble_data_recv opcode: 0xFD09, status: 0
+[  379.236126] WCN: [marlin_resume]enter
+[  379.259672] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  379.259697] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  379.259710] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  379.259730] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  379.283528] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  379.327445] OOM killer enabled.
+[  379.327460] Restarting tasks: Starting
+[  379.328379] Restarting tasks: Done
+[  379.328485] random: crng reseeded on system resumption
+[  379.339508] PM: suspend exit
+[  381.312557] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  384.792475] PM: suspend entry (deep)
+[  384.793033] Filesystems sync: 0.000 seconds
+[  384.815739] Freezing user space processes
+[  384.817489] Freezing user space processes completed (elapsed 0.001 seconds)
+[  384.817521] OOM killer disabled.
+[  384.817526] Freezing remaining freezable tasks
+[  384.818892] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  384.818910] printk: Suspending console(s) (use no_console_suspend to debug)
+[  384.825109] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  384.825264] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  384.825535] WCN: [marlin_suspend]enter
+[  384.825579] sdiohal:[sdiohal_suspend]enter
+[  384.825585] WCN: stop_loopcheck
+[  384.825591] bt_tx_powerchange is_resume =0
+[  384.825623] marlin_sdio_write +++ op 0xFD09
+[  384.829268] woble_data_recv opcode: 0xFD09, status: 0
+[  384.829412] marlin_sdio_write +++ op 0xFD0D
+[  384.832797] woble_data_recv opcode: 0xFD0D, status: 0
+[  384.833397] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  384.892841] Disabling non-boot CPUs ...
+[  384.894953] psci: CPU3 killed (polled 0 ms)
+[  384.898497] psci: CPU2 killed (polled 0 ms)
+[  384.902073] psci: CPU1 killed (polled 0 ms)
+[  384.903424] Enabling non-boot CPUs ...
+[  384.903752] Detected VIPT I-cache on CPU1
+[  384.903833] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  384.904884] CPU1 is up
+[  384.905177] Detected VIPT I-cache on CPU2
+[  384.905260] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  384.906318] CPU2 is up
+[  384.906606] Detected VIPT I-cache on CPU3
+[  384.906689] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  384.907825] CPU3 is up
+[  384.908735] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  384.915776] usb usb2: root hub lost power or was reset
+[  384.915776] usb usb1: root hub lost power or was reset
+[  384.915893] usb usb3: root hub lost power or was reset
+[  384.975339] usb usb4: root hub lost power or was reset
+[  385.035317] usb usb5: root hub lost power or was reset
+[  385.095325] usb usb6: root hub lost power or was reset
+[  385.095402] sdiohal:[sdiohal_resume]enter
+[  385.095539] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  385.096101] WCN: start_loopcheck
+[  385.096123] bt_tx_powerchange is_resume =1
+[  385.096166] marlin_sdio_write +++ op 0xFD09
+[  385.100357] woble_data_recv opcode: 0xFD09, status: 0
+[  385.101268] WCN: [marlin_resume]enter
+[  385.123653] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  385.123677] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  385.123690] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  385.123710] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  385.147482] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  385.187379] OOM killer enabled.
+[  385.187393] Restarting tasks: Starting
+[  385.191384] Restarting tasks: Done
+[  385.191495] random: crng reseeded on system resumption
+[  385.202199] PM: suspend exit
+[  387.200251] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  390.524727] PM: suspend entry (deep)
+[  390.526194] Filesystems sync: 0.001 seconds
+[  390.562862] Freezing user space processes
+[  390.564761] Freezing user space processes completed (elapsed 0.001 seconds)
+[  390.564793] OOM killer disabled.
+[  390.564797] Freezing remaining freezable tasks
+[  390.566148] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  390.566162] printk: Suspending console(s) (use no_console_suspend to debug)
+[  390.572998] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  390.573183] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  390.573431] WCN: [marlin_suspend]enter
+[  390.573475] sdiohal:[sdiohal_suspend]enter
+[  390.573480] WCN: stop_loopcheck
+[  390.573486] bt_tx_powerchange is_resume =0
+[  390.573518] marlin_sdio_write +++ op 0xFD09
+[  390.577703] woble_data_recv opcode: 0xFD09, status: 0
+[  390.577836] marlin_sdio_write +++ op 0xFD0D
+[  390.581405] woble_data_recv opcode: 0xFD0D, status: 0
+[  390.582130] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  390.644512] Disabling non-boot CPUs ...
+[  390.645655] psci: CPU3 killed (polled 0 ms)
+[  390.649398] psci: CPU2 killed (polled 0 ms)
+[  390.652901] psci: CPU1 killed (polled 0 ms)
+[  390.654674] Enabling non-boot CPUs ...
+[  390.655002] Detected VIPT I-cache on CPU1
+[  390.655079] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  390.656145] CPU1 is up
+[  390.656443] Detected VIPT I-cache on CPU2
+[  390.656528] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  390.657577] CPU2 is up
+[  390.657870] Detected VIPT I-cache on CPU3
+[  390.657953] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  390.659035] CPU3 is up
+[  390.660099] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  390.664119] usb usb3: root hub lost power or was reset
+[  390.664119] usb usb1: root hub lost power or was reset
+[  390.664119] usb usb2: root hub lost power or was reset
+[  390.723270] usb usb4: root hub lost power or was reset
+[  390.783273] usb usb5: root hub lost power or was reset
+[  390.843224] usb usb6: root hub lost power or was reset
+[  390.843311] sdiohal:[sdiohal_resume]enter
+[  390.843349] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  390.843734] WCN: start_loopcheck
+[  390.843757] bt_tx_powerchange is_resume =1
+[  390.843786] marlin_sdio_write +++ op 0xFD09
+[  390.847809] woble_data_recv opcode: 0xFD09, status: 0
+[  390.848702] WCN: [marlin_resume]enter
+[  390.871586] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  390.871611] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  390.871625] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  390.871645] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  390.895327] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  390.935314] OOM killer enabled.
+[  390.935328] Restarting tasks: Starting
+[  390.936823] Restarting tasks: Done
+[  390.936925] random: crng reseeded on system resumption
+[  390.945418] PM: suspend exit
+[  392.928454] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  396.387560] PM: suspend entry (deep)
+[  396.387986] Filesystems sync: 0.000 seconds
+[  396.412128] Freezing user space processes
+[  396.414231] Freezing user space processes completed (elapsed 0.002 seconds)
+[  396.414279] OOM killer disabled.
+[  396.414291] Freezing remaining freezable tasks
+[  396.415518] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  396.415564] printk: Suspending console(s) (use no_console_suspend to debug)
+[  396.425159] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  396.425353] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  396.425605] WCN: [marlin_suspend]enter
+[  396.425654] sdiohal:[sdiohal_suspend]enter
+[  396.425660] WCN: stop_loopcheck
+[  396.425665] bt_tx_powerchange is_resume =0
+[  396.425697] marlin_sdio_write +++ op 0xFD09
+[  396.428890] woble_data_recv opcode: 0xFD09, status: 0
+[  396.429019] marlin_sdio_write +++ op 0xFD0D
+[  396.432583] woble_data_recv opcode: 0xFD0D, status: 0
+[  396.433232] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  396.496148] Disabling non-boot CPUs ...
+[  396.498281] psci: CPU3 killed (polled 0 ms)
+[  396.501747] psci: CPU2 killed (polled 0 ms)
+[  396.505167] psci: CPU1 killed (polled 0 ms)
+[  396.506904] Enabling non-boot CPUs ...
+[  396.507455] Detected VIPT I-cache on CPU1
+[  396.507540] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  396.508603] CPU1 is up
+[  396.508908] Detected VIPT I-cache on CPU2
+[  396.508991] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  396.510072] CPU2 is up
+[  396.510364] Detected VIPT I-cache on CPU3
+[  396.510449] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  396.511592] CPU3 is up
+[  396.512512] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  396.519750] usb usb3: root hub lost power or was reset
+[  396.519750] usb usb1: root hub lost power or was reset
+[  396.519750] usb usb2: root hub lost power or was reset
+[  396.579208] usb usb4: root hub lost power or was reset
+[  396.639186] usb usb5: root hub lost power or was reset
+[  396.699146] usb usb6: root hub lost power or was reset
+[  396.699225] sdiohal:[sdiohal_resume]enter
+[  396.699359] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  396.699922] WCN: start_loopcheck
+[  396.699945] bt_tx_powerchange is_resume =1
+[  396.699986] marlin_sdio_write +++ op 0xFD09
+[  396.703644] woble_data_recv opcode: 0xFD09, status: 0
+[  396.704680] WCN: [marlin_resume]enter
+[  396.727519] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  396.727543] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  396.727557] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  396.727576] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  396.751344] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  396.791258] OOM killer enabled.
+[  396.791272] Restarting tasks: Starting
+[  396.792065] Restarting tasks: Done
+[  396.792159] random: crng reseeded on system resumption
+[  396.801375] PM: suspend exit
+[  398.784341] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  402.345195] PM: suspend entry (deep)
+[  402.345489] Filesystems sync: 0.000 seconds
+[  402.363751] Freezing user space processes
+[  402.365511] Freezing user space processes completed (elapsed 0.001 seconds)
+[  402.365537] OOM killer disabled.
+[  402.365541] Freezing remaining freezable tasks
+[  402.366894] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  402.366911] printk: Suspending console(s) (use no_console_suspend to debug)
+[  402.376868] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  402.377056] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  402.377305] WCN: [marlin_suspend]enter
+[  402.377349] sdiohal:[sdiohal_suspend]enter
+[  402.377355] WCN: stop_loopcheck
+[  402.377361] bt_tx_powerchange is_resume =0
+[  402.377417] marlin_sdio_write +++ op 0xFD09
+[  402.380970] woble_data_recv opcode: 0xFD09, status: 0
+[  402.381090] marlin_sdio_write +++ op 0xFD0D
+[  402.384664] woble_data_recv opcode: 0xFD0D, status: 0
+[  402.385241] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  402.444447] Disabling non-boot CPUs ...
+[  402.446483] psci: CPU3 killed (polled 0 ms)
+[  402.449923] psci: CPU2 killed (polled 0 ms)
+[  402.453516] psci: CPU1 killed (polled 0 ms)
+[  402.455325] Enabling non-boot CPUs ...
+[  402.455645] Detected VIPT I-cache on CPU1
+[  402.455729] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  402.456705] CPU1 is up
+[  402.456994] Detected VIPT I-cache on CPU2
+[  402.457075] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  402.458045] CPU2 is up
+[  402.458331] Detected VIPT I-cache on CPU3
+[  402.458413] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  402.459509] CPU3 is up
+[  402.460411] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  402.467573] usb usb2: root hub lost power or was reset
+[  402.467626] usb usb1: root hub lost power or was reset
+[  402.467651] usb usb3: root hub lost power or was reset
+[  402.527185] usb usb4: root hub lost power or was reset
+[  402.587122] usb usb5: root hub lost power or was reset
+[  402.647076] usb usb6: root hub lost power or was reset
+[  402.647155] sdiohal:[sdiohal_resume]enter
+[  402.647291] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  402.647845] WCN: start_loopcheck
+[  402.647870] bt_tx_powerchange is_resume =1
+[  402.647910] marlin_sdio_write +++ op 0xFD09
+[  402.651648] woble_data_recv opcode: 0xFD09, status: 0
+[  402.652542] WCN: [marlin_resume]enter
+[  402.675394] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  402.675418] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  402.675432] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  402.675451] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  402.699243] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  402.739180] OOM killer enabled.
+[  402.739194] Restarting tasks: Starting
+[  402.743351] Restarting tasks: Done
+[  402.743447] random: crng reseeded on system resumption
+[  402.753445] PM: suspend exit
+[  404.736677] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  408.109160] PM: suspend entry (deep)
+[  408.109393] Filesystems sync: 0.000 seconds
+[  408.146817] Freezing user space processes
+[  408.148528] Freezing user space processes completed (elapsed 0.001 seconds)
+[  408.148561] OOM killer disabled.
+[  408.148566] Freezing remaining freezable tasks
+[  408.149899] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  408.149913] printk: Suspending console(s) (use no_console_suspend to debug)
+[  408.160660] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  408.160841] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  408.161106] WCN: [marlin_suspend]enter
+[  408.161154] sdiohal:[sdiohal_suspend]enter
+[  408.161161] WCN: stop_loopcheck
+[  408.161167] bt_tx_powerchange is_resume =0
+[  408.161201] marlin_sdio_write +++ op 0xFD09
+[  408.165403] woble_data_recv opcode: 0xFD09, status: 0
+[  408.165473] marlin_sdio_write +++ op 0xFD0D
+[  408.169050] woble_data_recv opcode: 0xFD0D, status: 0
+[  408.169588] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  408.228775] Disabling non-boot CPUs ...
+[  408.230918] psci: CPU3 killed (polled 0 ms)
+[  408.233409] psci: CPU2 killed (polled 0 ms)
+[  408.237233] psci: CPU1 killed (polled 0 ms)
+[  408.238827] Enabling non-boot CPUs ...
+[  408.239454] Detected VIPT I-cache on CPU1
+[  408.239542] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  408.240589] CPU1 is up
+[  408.240877] Detected VIPT I-cache on CPU2
+[  408.240959] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  408.242006] CPU2 is up
+[  408.242291] Detected VIPT I-cache on CPU3
+[  408.242374] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  408.243510] CPU3 is up
+[  408.244425] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  408.248528] usb usb1: root hub lost power or was reset
+[  408.248598] usb usb2: root hub lost power or was reset
+[  408.248698] usb usb3: root hub lost power or was reset
+[  408.307023] usb usb4: root hub lost power or was reset
+[  408.367021] usb usb5: root hub lost power or was reset
+[  408.427062] usb usb6: root hub lost power or was reset
+[  408.427139] sdiohal:[sdiohal_resume]enter
+[  408.427175] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  408.427594] WCN: start_loopcheck
+[  408.427619] bt_tx_powerchange is_resume =1
+[  408.427650] marlin_sdio_write +++ op 0xFD09
+[  408.431608] woble_data_recv opcode: 0xFD09, status: 0
+[  408.432693] WCN: [marlin_resume]enter
+[  408.455335] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  408.455359] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  408.455373] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  408.455393] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  408.479201] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  408.523117] OOM killer enabled.
+[  408.523131] Restarting tasks: Starting
+[  408.524286] Restarting tasks: Done
+[  408.524378] random: crng reseeded on system resumption
+[  408.537022] PM: suspend exit
+[  410.528257] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  413.945602] PM: suspend entry (deep)
+[  413.945859] Filesystems sync: 0.000 seconds
+[  413.975609] Freezing user space processes
+[  413.977238] Freezing user space processes completed (elapsed 0.001 seconds)
+[  413.977264] OOM killer disabled.
+[  413.977268] Freezing remaining freezable tasks
+[  413.978619] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  413.978635] printk: Suspending console(s) (use no_console_suspend to debug)
+[  413.984641] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  413.984779] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  413.985116] WCN: [marlin_suspend]enter
+[  413.985164] sdiohal:[sdiohal_suspend]enter
+[  413.985170] WCN: stop_loopcheck
+[  413.985176] bt_tx_powerchange is_resume =0
+[  413.985208] marlin_sdio_write +++ op 0xFD09
+[  413.989219] woble_data_recv opcode: 0xFD09, status: 0
+[  413.989347] marlin_sdio_write +++ op 0xFD0D
+[  413.991579] woble_data_recv opcode: 0xFD0D, status: 0
+[  413.992161] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  414.067943] Disabling non-boot CPUs ...
+[  414.070077] psci: CPU3 killed (polled 0 ms)
+[  414.073545] psci: CPU2 killed (polled 0 ms)
+[  414.076878] psci: CPU1 killed (polled 0 ms)
+[  414.077903] Enabling non-boot CPUs ...
+[  414.078233] Detected VIPT I-cache on CPU1
+[  414.078310] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  414.079387] CPU1 is up
+[  414.079685] Detected VIPT I-cache on CPU2
+[  414.079769] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  414.080831] CPU2 is up
+[  414.081119] Detected VIPT I-cache on CPU3
+[  414.081204] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  414.082300] CPU3 is up
+[  414.083274] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  414.087376] usb usb2: root hub lost power or was reset
+[  414.087376] usb usb1: root hub lost power or was reset
+[  414.087504] usb usb3: root hub lost power or was reset
+[  414.147066] usb usb4: root hub lost power or was reset
+[  414.206944] usb usb5: root hub lost power or was reset
+[  414.267002] usb usb6: root hub lost power or was reset
+[  414.267080] sdiohal:[sdiohal_resume]enter
+[  414.267115] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  414.267543] WCN: start_loopcheck
+[  414.267569] bt_tx_powerchange is_resume =1
+[  414.267599] marlin_sdio_write +++ op 0xFD09
+[  414.271759] woble_data_recv opcode: 0xFD09, status: 0
+[  414.272595] WCN: [marlin_resume]enter
+[  414.295282] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  414.295306] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  414.295319] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  414.295339] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  414.319168] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  414.359056] OOM killer enabled.
+[  414.359071] Restarting tasks: Starting
+[  414.359684] Restarting tasks: Done
+[  414.359797] random: crng reseeded on system resumption
+[  414.367689] PM: suspend exit
+[  416.352157] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx
+[  419.795226] PM: suspend entry (deep)
+[  419.795741] Filesystems sync: 0.000 seconds
+[  419.823694] Freezing user space processes
+[  419.825761] Freezing user space processes completed (elapsed 0.002 seconds)
+[  419.825806] OOM killer disabled.
+[  419.825818] Freezing remaining freezable tasks
+[  419.827186] Freezing remaining freezable tasks completed (elapsed 0.001 seconds)
+[  419.827224] printk: Suspending console(s) (use no_console_suspend to debug)
+[  419.838074] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  419.838318] dwmac-sun8i 5020000.ethernet end0: Link is Down
+[  419.838708] WCN: [marlin_suspend]enter
+[  419.838795] sdiohal:[sdiohal_suspend]enter
+[  419.838808] WCN: stop_loopcheck
+[  419.838822] bt_tx_powerchange is_resume =0
+[  419.838872] marlin_sdio_write +++ op 0xFD09
+[  419.843163] woble_data_recv opcode: 0xFD09, status: 0
+[  419.843366] marlin_sdio_write +++ op 0xFD0D
+[  419.846703] woble_data_recv opcode: 0xFD0D, status: 0
+[  419.847734] sdiohal:sdiohal_suspend pm_flags=0x1, caps=0x1c190f
+[  419.909244] Disabling non-boot CPUs ...
+[  419.911314] psci: CPU3 killed (polled 0 ms)
+[  419.916878] psci: CPU2 killed (polled 0 ms)
+[  419.922581] psci: CPU1 killed (polled 0 ms)
+[  419.925497] Enabling non-boot CPUs ...
+[  419.926077] Detected VIPT I-cache on CPU1
+[  419.926218] CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[  419.928179] CPU1 is up
+[  419.928715] Detected VIPT I-cache on CPU2
+[  419.928865] CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[  419.930767] CPU2 is up
+[  419.931501] Detected VIPT I-cache on CPU3
+[  419.931657] CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[  419.933651] CPU3 is up
+[  419.935295] sunxi-rsb 7083000.rsb: RSB running at 3000000 Hz
+[  419.943785] usb usb1: root hub lost power or was reset
+[  419.943785] usb usb2: root hub lost power or was reset
+[  419.943993] usb usb3: root hub lost power or was reset
+[  420.003002] usb usb4: root hub lost power or was reset
+[  420.062975] usb usb5: root hub lost power or was reset
+[  420.122979] usb usb6: root hub lost power or was reset
+[  420.123110] sdiohal:[sdiohal_resume]enter
+[  420.123183] sdiohal:sdiohal_resume pm_flags=0x0, caps=0x1c190f
+[  420.124214] WCN: start_loopcheck
+[  420.124255] bt_tx_powerchange is_resume =1
+[  420.124323] marlin_sdio_write +++ op 0xFD09
+[  420.129336] woble_data_recv opcode: 0xFD09, status: 0
+[  420.130708] WCN: [marlin_resume]enter
+[  420.155463] dwmac-sun8i 5020000.ethernet end0: No Safety Features support found
+[  420.155504] dwmac-sun8i 5020000.ethernet end0: No MAC Management Counters available
+[  420.155533] dwmac-sun8i 5020000.ethernet end0: PTP not supported by HW
+[  420.155571] dwmac-sun8i 5020000.ethernet end0: configuring for phy/rgmii-rxid link mode
+[  420.179194] musb-sunxi 5100000.usb: sunxi-musb does not have ULPI bus control register
+[  420.214961] OOM killer enabled.
+[  420.214978] Restarting tasks: Starting
+[  420.215993] Restarting tasks: Done
+[  420.216091] random: crng reseeded on system resumption
+[  420.227473] PM: suspend exit
+[  422.207819] dwmac-sun8i 5020000.ethernet end0: Link is Up - 1Gbps/Full - flow control rx/tx

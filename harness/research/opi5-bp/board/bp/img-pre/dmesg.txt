@@ -1,0 +1,514 @@
+[11598.553872] bifrost_kbase: loading out-of-tree module taints kernel.
+[11598.562557] mali 1800000.gpu: Kernel DDK version g25p0-00eac0
+[11598.562594] mali 1800000.gpu: error -ENXIO: IRQ JOB not found
+[11598.562629] mali 1800000.gpu: error -ENXIO: IRQ MMU not found
+[11598.562646] mali 1800000.gpu: error -ENXIO: IRQ GPU not found
+[11598.562696] mali 1800000.gpu: GPU metrics tracepoint support enabled
+[11598.563680] mali 1800000.gpu: sunxi glue: reset deasserted, 2 clocks, 1 regulators, core clk 306000000 Hz
+[11598.563720] mali 1800000.gpu: kbase_device_runtime_init: Device runtime usage count unexpectedly non zero 1
+[11598.563728] mali 1800000.gpu: Early device initialization failed error = -22
+[11598.564913] mali 1800000.gpu: Device initialization failed
+[11598.564954] mali 1800000.gpu: probe with driver mali failed with error -22
+[11613.134594] panfrost 1800000.gpu: clock rate = 306000000
+[11613.134634] panfrost 1800000.gpu: bus_clock rate = 200000000
+[11613.137307] panfrost 1800000.gpu: mali-g31 id 0x7093 major 0x0 minor 0x0 status 0x0
+[11613.137343] panfrost 1800000.gpu: features: 00000000,000027f7, issues: 00000000,00000400
+[11613.137355] panfrost 1800000.gpu: Features: L2:0x07100206 Shader:0x00000000 Tiler:0x00000209 Mem:0x1 MMU:0x00002821 AS:0xff JS:0x7
+[11613.137369] panfrost 1800000.gpu: shader_present=0x1 l2_present=0x1
+[11613.140496] panfrost 1800000.gpu: Unbalanced pm_runtime_enable!
+[11613.141529] [drm] Initialized panfrost 1.6.0 for 1800000.gpu on minor 1
+[11994.784383] cedrus 1c0e000.video-codec: AVS decode error: status 0x60010003, error case 0x58, mb 259
+[11994.969037] cedrus 1c0e000.video-codec: AVS decode error: status 0x60010003, error case 0x58, mb 259
+[11995.282313] cedrus 1c0e000.video-codec: AVS decode error: status 0x50010003, error case 0x42, mb 788
+[11995.930885] cedrus 1c0e000.video-codec: AVS decode error: status 0x50010003, error case 0x42, mb 788
+[12091.157858] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0141c0, tail=0xa0141c0
+[12091.176554] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0461c0, tail=0xa0461c0
+[12091.195593] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0141c0, tail=0xa0141c0
+[12091.212777] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0141c0, tail=0xa0141c0
+[12091.228801] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0141c0, tail=0xa0141c0
+[12091.245622] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0141c0, tail=0xa0141c0
+[12091.263706] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0141c0, tail=0xa0141c0
+[12091.281252] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0141c0, tail=0xa0141c0
+[12091.299543] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0141c0, tail=0xa0141c0
+[12091.315006] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0141c0, tail=0xa0141c0
+[12930.423370] panfrost 1800000.gpu: gpu sched timeout, js=1, config=0x7300, status=0x8, head=0xa0161c0, tail=0xa0161c0, sched_job=00000000cca52e21
+[12965.559246] panfrost 1800000.gpu: gpu sched timeout, js=1, config=0x7300, status=0x8, head=0xa0501c0, tail=0xa0501c0, sched_job=000000007deafe88
+[13031.383121] panfrost 1800000.gpu: gpu sched timeout, js=1, config=0x7300, status=0x8, head=0xa0641c0, tail=0xa0641c0, sched_job=000000005897918c
+[13054.423030] panfrost 1800000.gpu: gpu sched timeout, js=1, config=0x7300, status=0x8, head=0xa0641c0, tail=0xa0641c0, sched_job=00000000869c0891
+[14304.519634] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa03c1c0, tail=0xa03c1c0
+[14304.527025] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0161c0, tail=0xa0161c0
+[14304.536497] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0261c0, tail=0xa0261c0
+[14304.545531] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa03c1c0, tail=0xa03c1c0
+[14314.998359] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa03c1c0, tail=0xa03c1c0
+[14315.003729] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0161c0, tail=0xa0161c0
+[14315.012688] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0261c0, tail=0xa0261c0
+[14315.022249] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa03c1c0, tail=0xa03c1c0
+[14484.869173] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0xa010200, tail=0xa010200
+[14484.879765] panfrost 1800000.gpu: js fault, js=1, status=IMPRECISE_FAULT, head=0xa010200, tail=0xa010200
+[14484.890059] panfrost 1800000.gpu: js fault, js=1, status=IMPRECISE_FAULT, head=0xa010200, tail=0xa010200
+[14484.900910] panfrost 1800000.gpu: js fault, js=1, status=IMPRECISE_FAULT, head=0xa010200, tail=0xa010200
+[14484.910900] panfrost 1800000.gpu: js fault, js=1, status=IMPRECISE_FAULT, head=0xa010200, tail=0xa010200
+[14484.920395] panfrost 1800000.gpu: js fault, js=1, status=IMPRECISE_FAULT, head=0xa010200, tail=0xa010200
+[14484.930084] panfrost 1800000.gpu: js fault, js=1, status=IMPRECISE_FAULT, head=0xa010200, tail=0xa010200
+[14484.940981] panfrost 1800000.gpu: js fault, js=1, status=IMPRECISE_FAULT, head=0xa010200, tail=0xa010200
+[14484.952883] panfrost 1800000.gpu: js fault, js=1, status=IMPRECISE_FAULT, head=0xa010200, tail=0xa010200
+[14484.963005] panfrost 1800000.gpu: js fault, js=1, status=IMPRECISE_FAULT, head=0xa010200, tail=0xa010200
+[14484.973260] panfrost 1800000.gpu: js fault, js=1, status=IMPRECISE_FAULT, head=0xa010200, tail=0xa010200
+[14484.986272] panfrost 1800000.gpu: js fault, js=1, status=IMPRECISE_FAULT, head=0xa010200, tail=0xa010200
+[14484.997551] panfrost 1800000.gpu: js fault, js=1, status=IMPRECISE_FAULT, head=0xa010200, tail=0xa010200
+[14485.009212] panfrost 1800000.gpu: js fault, js=1, status=IMPRECISE_FAULT, head=0xa010200, tail=0xa010200
+[14485.021457] panfrost 1800000.gpu: js fault, js=1, status=IMPRECISE_FAULT, head=0xa010200, tail=0xa010200
+[14485.031688] panfrost 1800000.gpu: js fault, js=1, status=IMPRECISE_FAULT, head=0xa010200, tail=0xa010200
+[14520.541960] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14520.546871] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14520.552415] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14520.557722] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14520.561995] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14520.566221] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14520.570768] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14520.574430] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14520.578088] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14520.581879] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14520.585530] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14520.589356] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14520.593186] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14520.597037] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14520.601212] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14520.605935] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14520.609785] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14520.613751] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14520.651274] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14520.655661] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14520.659449] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14520.664092] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14520.667246] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14520.671033] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14520.675577] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14520.679656] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14520.684162] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14520.688611] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14520.693174] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14520.697288] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14520.701029] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14520.704700] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14520.708116] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14520.711956] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14520.715244] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14520.718946] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14520.722904] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14520.727197] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14520.731651] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14520.736235] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14520.740535] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14520.744317] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14520.748629] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14520.752673] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14520.756858] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14531.491572] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14531.497806] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14531.503287] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14531.508737] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14531.512888] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14531.517457] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14531.522184] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14531.526763] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14531.531133] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14531.535204] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14531.538810] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14531.542602] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14531.546333] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14531.550202] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14531.554072] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14531.558142] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14531.562175] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14531.566034] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14531.602017] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14531.605816] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14531.609587] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14531.613802] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14531.617486] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14531.621659] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14531.625692] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14531.629538] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14531.633254] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14531.637255] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14531.641334] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14531.645327] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14531.649358] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14531.653421] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14531.657463] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14531.661406] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14531.665461] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14531.670019] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14531.674855] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14531.678688] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14531.683558] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14531.688666] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14531.692972] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14531.697231] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14531.702131] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0391c0, tail=0xa0391c0
+[14531.706659] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0281c0, tail=0xa0281c0
+[14531.710428] panfrost 1800000.gpu: js fault, js=1, status=INSTR_BARRIER_FAULT, head=0xa0131c0, tail=0xa0131c0
+[14534.099675] panfrost 1800000.gpu: gpu sched timeout, js=0, config=0x7b00, status=0x8, head=0xa123700, tail=0xa123700, sched_job=0000000094029d70
+[14723.827261] cedrus 1c0e000.video-codec: frame processing timed out!
+[14725.843287] cedrus 1c0e000.video-codec: frame processing timed out!
+[14727.859220] cedrus 1c0e000.video-codec: frame processing timed out!
+[14729.875055] cedrus 1c0e000.video-codec: frame processing timed out!
+[14731.891246] cedrus 1c0e000.video-codec: frame processing timed out!
+[14733.907193] cedrus 1c0e000.video-codec: frame processing timed out!
+[14735.923227] cedrus 1c0e000.video-codec: frame processing timed out!
+[14737.939030] cedrus 1c0e000.video-codec: frame processing timed out!
+[14739.955288] cedrus 1c0e000.video-codec: frame processing timed out!
+[14741.971222] cedrus 1c0e000.video-codec: frame processing timed out!
+[14743.987214] cedrus 1c0e000.video-codec: frame processing timed out!
+[14746.003191] cedrus 1c0e000.video-codec: frame processing timed out!
+[14748.019088] cedrus 1c0e000.video-codec: frame processing timed out!
+[14750.035212] cedrus 1c0e000.video-codec: frame processing timed out!
+[14752.051194] cedrus 1c0e000.video-codec: frame processing timed out!
+[14754.067215] cedrus 1c0e000.video-codec: frame processing timed out!
+[14756.083196] cedrus 1c0e000.video-codec: frame processing timed out!
+[14758.099176] cedrus 1c0e000.video-codec: frame processing timed out!
+[14760.115176] cedrus 1c0e000.video-codec: frame processing timed out!
+[14762.131175] cedrus 1c0e000.video-codec: frame processing timed out!
+[14764.147177] cedrus 1c0e000.video-codec: frame processing timed out!
+[14766.163213] cedrus 1c0e000.video-codec: frame processing timed out!
+[14768.179123] cedrus 1c0e000.video-codec: frame processing timed out!
+[14770.195100] cedrus 1c0e000.video-codec: frame processing timed out!
+[14772.211165] cedrus 1c0e000.video-codec: frame processing timed out!
+[14774.227149] cedrus 1c0e000.video-codec: frame processing timed out!
+[14776.243144] cedrus 1c0e000.video-codec: frame processing timed out!
+[14778.259167] cedrus 1c0e000.video-codec: frame processing timed out!
+[14780.279016] cedrus 1c0e000.video-codec: frame processing timed out!
+[14782.291136] cedrus 1c0e000.video-codec: frame processing timed out!
+[14784.307119] cedrus 1c0e000.video-codec: frame processing timed out!
+[14786.323131] cedrus 1c0e000.video-codec: frame processing timed out!
+[14788.339124] cedrus 1c0e000.video-codec: frame processing timed out!
+[14790.355135] cedrus 1c0e000.video-codec: frame processing timed out!
+[14792.371133] cedrus 1c0e000.video-codec: frame processing timed out!
+[14794.387049] cedrus 1c0e000.video-codec: frame processing timed out!
+[14796.403102] cedrus 1c0e000.video-codec: frame processing timed out!
+[14798.419073] cedrus 1c0e000.video-codec: frame processing timed out!
+[14800.435088] cedrus 1c0e000.video-codec: frame processing timed out!
+[14802.450945] cedrus 1c0e000.video-codec: frame processing timed out!
+[14804.467146] cedrus 1c0e000.video-codec: frame processing timed out!
+[14806.483082] cedrus 1c0e000.video-codec: frame processing timed out!
+[14808.499073] cedrus 1c0e000.video-codec: frame processing timed out!
+[14810.515068] cedrus 1c0e000.video-codec: frame processing timed out!
+[14812.531058] cedrus 1c0e000.video-codec: frame processing timed out!
+[14814.547065] cedrus 1c0e000.video-codec: frame processing timed out!
+[14816.562878] cedrus 1c0e000.video-codec: frame processing timed out!
+[14818.579032] cedrus 1c0e000.video-codec: frame processing timed out!
+[14820.595047] cedrus 1c0e000.video-codec: frame processing timed out!
+[14822.611038] cedrus 1c0e000.video-codec: frame processing timed out!
+[14824.627049] cedrus 1c0e000.video-codec: frame processing timed out!
+[14826.642857] cedrus 1c0e000.video-codec: frame processing timed out!
+[14828.659035] cedrus 1c0e000.video-codec: frame processing timed out!
+[14830.675018] cedrus 1c0e000.video-codec: frame processing timed out!
+[14832.691065] cedrus 1c0e000.video-codec: frame processing timed out!
+[14834.707009] cedrus 1c0e000.video-codec: frame processing timed out!
+[14836.723003] cedrus 1c0e000.video-codec: frame processing timed out!
+[14838.739005] cedrus 1c0e000.video-codec: frame processing timed out!
+[14840.755001] cedrus 1c0e000.video-codec: frame processing timed out!
+[14842.770861] cedrus 1c0e000.video-codec: frame processing timed out!
+[14844.786965] cedrus 1c0e000.video-codec: frame processing timed out!
+[14846.802932] cedrus 1c0e000.video-codec: frame processing timed out!
+[14848.818936] cedrus 1c0e000.video-codec: frame processing timed out!
+[14850.834979] cedrus 1c0e000.video-codec: frame processing timed out!
+[14852.850926] cedrus 1c0e000.video-codec: frame processing timed out!
+[14854.866945] cedrus 1c0e000.video-codec: frame processing timed out!
+[14856.882946] cedrus 1c0e000.video-codec: frame processing timed out!
+[14858.898908] cedrus 1c0e000.video-codec: frame processing timed out!
+[14860.914907] cedrus 1c0e000.video-codec: frame processing timed out!
+[14862.930953] cedrus 1c0e000.video-codec: frame processing timed out!
+[14864.946934] cedrus 1c0e000.video-codec: frame processing timed out!
+[14866.962921] cedrus 1c0e000.video-codec: frame processing timed out!
+[14868.979056] cedrus 1c0e000.video-codec: frame processing timed out!
+[14870.994880] cedrus 1c0e000.video-codec: frame processing timed out!
+[14873.010875] cedrus 1c0e000.video-codec: frame processing timed out!
+[14875.026888] cedrus 1c0e000.video-codec: frame processing timed out!
+[14877.042749] cedrus 1c0e000.video-codec: frame processing timed out!
+[14879.058739] cedrus 1c0e000.video-codec: frame processing timed out!
+[14881.074714] cedrus 1c0e000.video-codec: frame processing timed out!
+[14883.090707] cedrus 1c0e000.video-codec: frame processing timed out!
+[14885.106731] cedrus 1c0e000.video-codec: frame processing timed out!
+[14887.122709] cedrus 1c0e000.video-codec: frame processing timed out!
+[14889.138736] cedrus 1c0e000.video-codec: frame processing timed out!
+[14891.154718] cedrus 1c0e000.video-codec: frame processing timed out!
+[14893.170701] cedrus 1c0e000.video-codec: frame processing timed out!
+[14895.186693] cedrus 1c0e000.video-codec: frame processing timed out!
+[14897.202702] cedrus 1c0e000.video-codec: frame processing timed out!
+[14899.218711] cedrus 1c0e000.video-codec: frame processing timed out!
+[14901.234668] cedrus 1c0e000.video-codec: frame processing timed out!
+[14903.250698] cedrus 1c0e000.video-codec: frame processing timed out!
+[14905.266672] cedrus 1c0e000.video-codec: frame processing timed out!
+[14907.282739] cedrus 1c0e000.video-codec: frame processing timed out!
+[14909.298841] cedrus 1c0e000.video-codec: frame processing timed out!
+[14911.314882] cedrus 1c0e000.video-codec: frame processing timed out!
+[14913.330850] cedrus 1c0e000.video-codec: frame processing timed out!
+[14915.346839] cedrus 1c0e000.video-codec: frame processing timed out!
+[14917.362841] cedrus 1c0e000.video-codec: frame processing timed out!
+[14919.378789] cedrus 1c0e000.video-codec: frame processing timed out!
+[14921.394816] cedrus 1c0e000.video-codec: frame processing timed out!
+[14923.410838] cedrus 1c0e000.video-codec: frame processing timed out!
+[14925.426820] cedrus 1c0e000.video-codec: frame processing timed out!
+[14927.442789] cedrus 1c0e000.video-codec: frame processing timed out!
+[14929.458622] cedrus 1c0e000.video-codec: frame processing timed out!
+[14931.474774] cedrus 1c0e000.video-codec: frame processing timed out!
+[14933.490820] cedrus 1c0e000.video-codec: frame processing timed out!
+[14935.506807] cedrus 1c0e000.video-codec: frame processing timed out!
+[14937.522621] cedrus 1c0e000.video-codec: frame processing timed out!
+[14939.538794] cedrus 1c0e000.video-codec: frame processing timed out!
+[14941.554773] cedrus 1c0e000.video-codec: frame processing timed out!
+[14943.570764] cedrus 1c0e000.video-codec: frame processing timed out!
+[14945.586650] cedrus 1c0e000.video-codec: frame processing timed out!
+[14947.602741] cedrus 1c0e000.video-codec: frame processing timed out!
+[14949.618769] cedrus 1c0e000.video-codec: frame processing timed out!
+[14951.634786] cedrus 1c0e000.video-codec: frame processing timed out!
+[14953.650734] cedrus 1c0e000.video-codec: frame processing timed out!
+[14955.666625] cedrus 1c0e000.video-codec: frame processing timed out!
+[14957.682766] cedrus 1c0e000.video-codec: frame processing timed out!
+[14959.698735] cedrus 1c0e000.video-codec: frame processing timed out!
+[14961.714736] cedrus 1c0e000.video-codec: frame processing timed out!
+[14963.730726] cedrus 1c0e000.video-codec: frame processing timed out!
+[14965.746726] cedrus 1c0e000.video-codec: frame processing timed out!
+[14967.762711] cedrus 1c0e000.video-codec: frame processing timed out!
+[14969.778606] cedrus 1c0e000.video-codec: frame processing timed out!
+[14971.794668] cedrus 1c0e000.video-codec: frame processing timed out!
+[14973.810755] cedrus 1c0e000.video-codec: frame processing timed out!
+[14975.826679] cedrus 1c0e000.video-codec: frame processing timed out!
+[14977.842706] cedrus 1c0e000.video-codec: frame processing timed out!
+[14979.858688] cedrus 1c0e000.video-codec: frame processing timed out!
+[14981.874680] cedrus 1c0e000.video-codec: frame processing timed out!
+[14983.890596] cedrus 1c0e000.video-codec: frame processing timed out!
+[14985.970683] cedrus 1c0e000.video-codec: frame processing timed out!
+[14987.986682] cedrus 1c0e000.video-codec: frame processing timed out!
+[14990.002681] cedrus 1c0e000.video-codec: frame processing timed out!
+[14992.018480] cedrus 1c0e000.video-codec: frame processing timed out!
+[14994.034707] cedrus 1c0e000.video-codec: frame processing timed out!
+[14996.050717] cedrus 1c0e000.video-codec: frame processing timed out!
+[14998.066623] cedrus 1c0e000.video-codec: frame processing timed out!
+[15000.082726] cedrus 1c0e000.video-codec: frame processing timed out!
+[15002.098520] cedrus 1c0e000.video-codec: frame processing timed out!
+[15004.114614] cedrus 1c0e000.video-codec: frame processing timed out!
+[15006.130555] cedrus 1c0e000.video-codec: frame processing timed out!
+[15008.146637] cedrus 1c0e000.video-codec: frame processing timed out!
+[15010.162610] cedrus 1c0e000.video-codec: frame processing timed out!
+[15012.178608] cedrus 1c0e000.video-codec: frame processing timed out!
+[15014.194630] cedrus 1c0e000.video-codec: frame processing timed out!
+[15016.210578] cedrus 1c0e000.video-codec: frame processing timed out!
+[15018.226531] cedrus 1c0e000.video-codec: frame processing timed out!
+[15020.242612] cedrus 1c0e000.video-codec: frame processing timed out!
+[15022.258614] cedrus 1c0e000.video-codec: frame processing timed out!
+[15024.274580] cedrus 1c0e000.video-codec: frame processing timed out!
+[15026.290600] cedrus 1c0e000.video-codec: frame processing timed out!
+[15028.306571] cedrus 1c0e000.video-codec: frame processing timed out!
+[15030.326454] cedrus 1c0e000.video-codec: frame processing timed out!
+[15032.338444] cedrus 1c0e000.video-codec: frame processing timed out!
+[15034.354441] cedrus 1c0e000.video-codec: frame processing timed out!
+[15036.370642] cedrus 1c0e000.video-codec: frame processing timed out!
+[15038.386511] cedrus 1c0e000.video-codec: frame processing timed out!
+[15040.402535] cedrus 1c0e000.video-codec: frame processing timed out!
+[15042.418611] cedrus 1c0e000.video-codec: frame processing timed out!
+[15044.434482] cedrus 1c0e000.video-codec: frame processing timed out!
+[15046.450380] cedrus 1c0e000.video-codec: frame processing timed out!
+[15048.468484] cedrus 1c0e000.video-codec: frame processing timed out!
+[15050.482576] cedrus 1c0e000.video-codec: frame processing timed out!
+[15052.498541] cedrus 1c0e000.video-codec: frame processing timed out!
+[15054.514438] cedrus 1c0e000.video-codec: frame processing timed out!
+[15056.530337] cedrus 1c0e000.video-codec: frame processing timed out!
+[15058.546499] cedrus 1c0e000.video-codec: frame processing timed out!
+[15060.562390] cedrus 1c0e000.video-codec: frame processing timed out!
+[15062.578526] cedrus 1c0e000.video-codec: frame processing timed out!
+[15064.594431] cedrus 1c0e000.video-codec: frame processing timed out!
+[15066.610516] cedrus 1c0e000.video-codec: frame processing timed out!
+[15068.626462] cedrus 1c0e000.video-codec: frame processing timed out!
+[15070.642516] cedrus 1c0e000.video-codec: frame processing timed out!
+[15072.658327] cedrus 1c0e000.video-codec: frame processing timed out!
+[15074.674531] cedrus 1c0e000.video-codec: frame processing timed out!
+[15076.690471] cedrus 1c0e000.video-codec: frame processing timed out!
+[15078.706475] cedrus 1c0e000.video-codec: frame processing timed out!
+[15080.722464] cedrus 1c0e000.video-codec: frame processing timed out!
+[15082.738510] cedrus 1c0e000.video-codec: frame processing timed out!
+[15084.754517] cedrus 1c0e000.video-codec: frame processing timed out!
+[15086.770509] cedrus 1c0e000.video-codec: frame processing timed out!
+[15088.786260] cedrus 1c0e000.video-codec: frame processing timed out!
+[15090.802440] cedrus 1c0e000.video-codec: frame processing timed out!
+[15092.818436] cedrus 1c0e000.video-codec: frame processing timed out!
+[15094.834466] cedrus 1c0e000.video-codec: frame processing timed out!
+[15096.850335] cedrus 1c0e000.video-codec: frame processing timed out!
+[15098.866231] cedrus 1c0e000.video-codec: frame processing timed out!
+[15100.882228] cedrus 1c0e000.video-codec: frame processing timed out!
+[15102.898200] cedrus 1c0e000.video-codec: frame processing timed out!
+[15104.914220] cedrus 1c0e000.video-codec: frame processing timed out!
+[15106.930218] cedrus 1c0e000.video-codec: frame processing timed out!
+[15108.946268] cedrus 1c0e000.video-codec: frame processing timed out!
+[15110.962242] cedrus 1c0e000.video-codec: frame processing timed out!
+[15112.978197] cedrus 1c0e000.video-codec: frame processing timed out!
+[15114.994218] cedrus 1c0e000.video-codec: frame processing timed out!
+[15117.010237] cedrus 1c0e000.video-codec: frame processing timed out!
+[15119.026205] cedrus 1c0e000.video-codec: frame processing timed out!
+[15121.042269] cedrus 1c0e000.video-codec: frame processing timed out!
+[15123.058379] cedrus 1c0e000.video-codec: frame processing timed out!
+[15125.074387] cedrus 1c0e000.video-codec: frame processing timed out!
+[15127.090375] cedrus 1c0e000.video-codec: frame processing timed out!
+[15129.110220] cedrus 1c0e000.video-codec: frame processing timed out!
+[15131.122323] cedrus 1c0e000.video-codec: frame processing timed out!
+[15133.138261] cedrus 1c0e000.video-codec: frame processing timed out!
+[15133.973841] sun50i-iommu 30f0000.iommu: Page fault for 0x00000000f6ba0000 (master 2, dir rd)
+[15133.993355] sun50i-iommu 30f0000.iommu: Page fault for 0x000000000001f000 (master 2, dir rd)
+[15204.050114] cedrus 1c0e000.video-codec: frame processing timed out!
+[15206.066105] cedrus 1c0e000.video-codec: frame processing timed out!
+[15208.082102] cedrus 1c0e000.video-codec: frame processing timed out!
+[15210.098083] cedrus 1c0e000.video-codec: frame processing timed out!
+[15212.114091] cedrus 1c0e000.video-codec: frame processing timed out!
+[15214.226074] cedrus 1c0e000.video-codec: frame processing timed out!
+[15216.306093] cedrus 1c0e000.video-codec: frame processing timed out!
+[15218.322070] cedrus 1c0e000.video-codec: frame processing timed out!
+[15220.402067] cedrus 1c0e000.video-codec: frame processing timed out!
+[15222.482062] cedrus 1c0e000.video-codec: frame processing timed out!
+[15224.498063] cedrus 1c0e000.video-codec: frame processing timed out!
+[15226.514002] cedrus 1c0e000.video-codec: frame processing timed out!
+[15228.530045] cedrus 1c0e000.video-codec: frame processing timed out!
+[15230.610037] cedrus 1c0e000.video-codec: frame processing timed out!
+[15232.690040] cedrus 1c0e000.video-codec: frame processing timed out!
+[15234.705947] cedrus 1c0e000.video-codec: frame processing timed out!
+[15236.786026] cedrus 1c0e000.video-codec: frame processing timed out!
+[15238.866052] cedrus 1c0e000.video-codec: frame processing timed out!
+[15240.882072] cedrus 1c0e000.video-codec: frame processing timed out!
+[15242.898036] cedrus 1c0e000.video-codec: frame processing timed out!
+[15244.914036] cedrus 1c0e000.video-codec: frame processing timed out!
+[15246.994017] cedrus 1c0e000.video-codec: frame processing timed out!
+[15249.073995] cedrus 1c0e000.video-codec: frame processing timed out!
+[15251.089991] cedrus 1c0e000.video-codec: frame processing timed out!
+[15253.173879] cedrus 1c0e000.video-codec: frame processing timed out!
+[15255.249984] cedrus 1c0e000.video-codec: frame processing timed out!
+[15257.265878] cedrus 1c0e000.video-codec: frame processing timed out!
+[15259.281978] cedrus 1c0e000.video-codec: frame processing timed out!
+[15261.297979] cedrus 1c0e000.video-codec: frame processing timed out!
+[15263.377966] cedrus 1c0e000.video-codec: frame processing timed out!
+[15265.457966] cedrus 1c0e000.video-codec: frame processing timed out!
+[15267.474032] cedrus 1c0e000.video-codec: frame processing timed out!
+[15269.553976] cedrus 1c0e000.video-codec: frame processing timed out!
+[15271.633947] cedrus 1c0e000.video-codec: frame processing timed out!
+[15273.649934] cedrus 1c0e000.video-codec: frame processing timed out!
+[15275.665941] cedrus 1c0e000.video-codec: frame processing timed out!
+[15277.681938] cedrus 1c0e000.video-codec: frame processing timed out!
+[15279.761955] cedrus 1c0e000.video-codec: frame processing timed out!
+[15281.841938] cedrus 1c0e000.video-codec: frame processing timed out!
+[15283.857975] cedrus 1c0e000.video-codec: frame processing timed out!
+[15285.937931] cedrus 1c0e000.video-codec: frame processing timed out!
+[15288.017929] cedrus 1c0e000.video-codec: frame processing timed out!
+[15290.033822] cedrus 1c0e000.video-codec: frame processing timed out!
+[15292.049899] cedrus 1c0e000.video-codec: frame processing timed out!
+[15294.065986] cedrus 1c0e000.video-codec: frame processing timed out!
+[15296.145905] cedrus 1c0e000.video-codec: frame processing timed out!
+[15298.225778] cedrus 1c0e000.video-codec: frame processing timed out!
+[15300.241778] cedrus 1c0e000.video-codec: frame processing timed out!
+[15302.321888] cedrus 1c0e000.video-codec: frame processing timed out!
+[15304.401876] cedrus 1c0e000.video-codec: frame processing timed out!
+[15306.417877] cedrus 1c0e000.video-codec: frame processing timed out!
+[15308.433868] cedrus 1c0e000.video-codec: frame processing timed out!
+[15310.449855] cedrus 1c0e000.video-codec: frame processing timed out!
+[15312.529869] cedrus 1c0e000.video-codec: frame processing timed out!
+[15314.609811] cedrus 1c0e000.video-codec: frame processing timed out!
+[15316.625844] cedrus 1c0e000.video-codec: frame processing timed out!
+[15318.705860] cedrus 1c0e000.video-codec: frame processing timed out!
+[15320.785761] cedrus 1c0e000.video-codec: frame processing timed out!
+[15322.801840] cedrus 1c0e000.video-codec: frame processing timed out!
+[15324.817852] cedrus 1c0e000.video-codec: frame processing timed out!
+[15326.833822] cedrus 1c0e000.video-codec: frame processing timed out!
+[15328.913815] cedrus 1c0e000.video-codec: frame processing timed out!
+[15330.993813] cedrus 1c0e000.video-codec: frame processing timed out!
+[15333.009806] cedrus 1c0e000.video-codec: frame processing timed out!
+[15335.089806] cedrus 1c0e000.video-codec: frame processing timed out!
+[15337.169689] cedrus 1c0e000.video-codec: frame processing timed out!
+[15339.185698] cedrus 1c0e000.video-codec: frame processing timed out!
+[15341.201702] cedrus 1c0e000.video-codec: frame processing timed out!
+[15343.217678] cedrus 1c0e000.video-codec: frame processing timed out!
+[15345.297777] cedrus 1c0e000.video-codec: frame processing timed out!
+[15347.377664] cedrus 1c0e000.video-codec: frame processing timed out!
+[15349.393771] cedrus 1c0e000.video-codec: frame processing timed out!
+[15351.473770] cedrus 1c0e000.video-codec: frame processing timed out!
+[15353.553653] cedrus 1c0e000.video-codec: frame processing timed out!
+[15355.729707] cedrus 1c0e000.video-codec: frame processing timed out!
+[15357.745770] cedrus 1c0e000.video-codec: frame processing timed out!
+[15359.761631] cedrus 1c0e000.video-codec: frame processing timed out!
+[15361.777693] cedrus 1c0e000.video-codec: frame processing timed out!
+[15363.793629] cedrus 1c0e000.video-codec: frame processing timed out!
+[15365.809786] cedrus 1c0e000.video-codec: frame processing timed out!
+[15367.825767] cedrus 1c0e000.video-codec: frame processing timed out!
+[15369.841773] cedrus 1c0e000.video-codec: frame processing timed out!
+[15371.857758] cedrus 1c0e000.video-codec: frame processing timed out!
+[15373.873659] cedrus 1c0e000.video-codec: frame processing timed out!
+[15375.893600] cedrus 1c0e000.video-codec: frame processing timed out!
+[15377.905759] cedrus 1c0e000.video-codec: frame processing timed out!
+[15379.921723] cedrus 1c0e000.video-codec: frame processing timed out!
+[15381.937721] cedrus 1c0e000.video-codec: frame processing timed out!
+[15383.953586] cedrus 1c0e000.video-codec: frame processing timed out!
+[15385.969595] cedrus 1c0e000.video-codec: frame processing timed out!
+[15387.985637] cedrus 1c0e000.video-codec: frame processing timed out!
+[15390.001593] cedrus 1c0e000.video-codec: frame processing timed out!
+[15392.017571] cedrus 1c0e000.video-codec: frame processing timed out!
+[15394.033581] cedrus 1c0e000.video-codec: frame processing timed out!
+[15396.049578] cedrus 1c0e000.video-codec: frame processing timed out!
+[15398.065561] cedrus 1c0e000.video-codec: frame processing timed out!
+[15400.081589] cedrus 1c0e000.video-codec: frame processing timed out!
+[15402.097567] cedrus 1c0e000.video-codec: frame processing timed out!
+[15404.113572] cedrus 1c0e000.video-codec: frame processing timed out!
+[15406.129541] cedrus 1c0e000.video-codec: frame processing timed out!
+[15408.145558] cedrus 1c0e000.video-codec: frame processing timed out!
+[15410.161560] cedrus 1c0e000.video-codec: frame processing timed out!
+[15412.177557] cedrus 1c0e000.video-codec: frame processing timed out!
+[15414.193540] cedrus 1c0e000.video-codec: frame processing timed out!
+[15416.213559] cedrus 1c0e000.video-codec: frame processing timed out!
+[15418.225710] cedrus 1c0e000.video-codec: frame processing timed out!
+[15420.241689] cedrus 1c0e000.video-codec: frame processing timed out!
+[15422.257545] cedrus 1c0e000.video-codec: frame processing timed out!
+[15424.273543] cedrus 1c0e000.video-codec: frame processing timed out!
+[15426.289687] cedrus 1c0e000.video-codec: frame processing timed out!
+[15428.305672] cedrus 1c0e000.video-codec: frame processing timed out!
+[15430.321680] cedrus 1c0e000.video-codec: frame processing timed out!
+[15432.337660] cedrus 1c0e000.video-codec: frame processing timed out!
+[15434.353493] cedrus 1c0e000.video-codec: frame processing timed out!
+[15436.369537] cedrus 1c0e000.video-codec: frame processing timed out!
+[15438.385680] cedrus 1c0e000.video-codec: frame processing timed out!
+[15440.401657] cedrus 1c0e000.video-codec: frame processing timed out!
+[15442.417690] cedrus 1c0e000.video-codec: frame processing timed out!
+[15444.433626] cedrus 1c0e000.video-codec: frame processing timed out!
+[15446.449473] cedrus 1c0e000.video-codec: frame processing timed out!
+[15448.465497] cedrus 1c0e000.video-codec: frame processing timed out!
+[15450.481623] cedrus 1c0e000.video-codec: frame processing timed out!
+[15452.497625] cedrus 1c0e000.video-codec: frame processing timed out!
+[15454.513624] cedrus 1c0e000.video-codec: frame processing timed out!
+[15456.529622] cedrus 1c0e000.video-codec: frame processing timed out!
+[15458.545486] cedrus 1c0e000.video-codec: frame processing timed out!
+[15460.561444] cedrus 1c0e000.video-codec: frame processing timed out!
+[15462.577632] cedrus 1c0e000.video-codec: frame processing timed out!
+[15464.593605] cedrus 1c0e000.video-codec: frame processing timed out!
+[15466.609570] cedrus 1c0e000.video-codec: frame processing timed out!
+[15468.625590] cedrus 1c0e000.video-codec: frame processing timed out!
+[15470.641435] cedrus 1c0e000.video-codec: frame processing timed out!
+[15472.659027] cedrus 1c0e000.video-codec: frame processing timed out!
+[15474.673394] cedrus 1c0e000.video-codec: frame processing timed out!
+[15476.689576] cedrus 1c0e000.video-codec: frame processing timed out!
+[15478.705414] cedrus 1c0e000.video-codec: frame processing timed out!
+[15480.721386] cedrus 1c0e000.video-codec: frame processing timed out!
+[15482.737363] cedrus 1c0e000.video-codec: frame processing timed out!
+[15484.753386] cedrus 1c0e000.video-codec: frame processing timed out!
+[15486.769377] cedrus 1c0e000.video-codec: frame processing timed out!
+[15488.785362] cedrus 1c0e000.video-codec: frame processing timed out!
+[15490.801355] cedrus 1c0e000.video-codec: frame processing timed out!
+[15492.817334] cedrus 1c0e000.video-codec: frame processing timed out!
+[15494.833336] cedrus 1c0e000.video-codec: frame processing timed out!
+[15496.849375] cedrus 1c0e000.video-codec: frame processing timed out!
+[15498.865345] cedrus 1c0e000.video-codec: frame processing timed out!
+[15500.881336] cedrus 1c0e000.video-codec: frame processing timed out!
+[15502.897341] cedrus 1c0e000.video-codec: frame processing timed out!
+[15504.913311] cedrus 1c0e000.video-codec: frame processing timed out!
+[15506.929342] cedrus 1c0e000.video-codec: frame processing timed out!
+[15508.945343] cedrus 1c0e000.video-codec: frame processing timed out!
+[15510.961279] cedrus 1c0e000.video-codec: frame processing timed out!
+[15512.977496] cedrus 1c0e000.video-codec: frame processing timed out!
+[15514.993476] cedrus 1c0e000.video-codec: frame processing timed out!
+[15517.009498] cedrus 1c0e000.video-codec: frame processing timed out!
+[15519.025519] cedrus 1c0e000.video-codec: frame processing timed out!

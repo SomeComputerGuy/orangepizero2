@@ -85,7 +85,7 @@ declare -A VERSION=(
   [ffmpeg]=7:8.1.2-2ubuntu2
   [mpv]=0.41.0-2ubuntu5
 )
-declare -A REV=([ffmpeg]=1 [mpv]=1)
+declare -A REV=([ffmpeg]=2 [mpv]=1)
 declare -A PDIR=([ffmpeg]=ffmpeg [mpv]=mpv)
 # Architecture: all sources (built with -A); the rest build their arm64 packages
 declare -A BUILD=()

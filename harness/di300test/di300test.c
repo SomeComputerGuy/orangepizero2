@@ -18,6 +18,7 @@
  * -v prints the FMD statistics after each job (field-rate mode with -z).
  * -p sends the input as progressive (V4L2_FIELD_NONE): every mode but tnr
  *    must pass it through (-c weave).
+ * -P queues the OUTPUT buffers before the CAPTURE STREAMON.
  * -S mode@k changes the deinterlacing mode while streaming, once the
  *    first k input frames are done; -k k skips the first k input frames
  *    (to compare with a fresh stream in the new mode).
@@ -323,7 +324,7 @@ static void usage(void)
 		"usage: di300test -W w -H h -f fmt [-F capfmt]\n"
 		"         [-m field|frame|bob|bobfield|weave|tnr] [-S mode@k] [-p]\n"
 		"         [-t off|fixed|adaptive] [-s strength] [-l 0-2] [-b] [-z]\n"
-		"         [-w p0,p1] [-c weave|keep] [-r repeat] [-k skip] [-n frames]\n"
+		"         [-w p0,p1] [-c weave|keep] [-r repeat] [-k skip] [-n frames] [-P]\n"
 		"         [-d dev] [-v] -i in.yuv [-o out.yuv]\n"
 		"modes: field = Motion Adaptive, Field Rate; frame = Motion Adaptive, Frame Rate;\n"
 		"       bob = Bob, Frame Rate; bobfield = Bob, Field Rate; weave; tnr = Noise Reduction Only\n"
@@ -336,7 +337,7 @@ int main(int argc, char **argv)
 	const char *dev = NULL, *inpath = NULL, *outpath = NULL, *check = NULL;
 	int mode = 0, tnr = -1, strength = -1, level = -1, opt, smode = -1;
 	unsigned int repeat = 1, maxframes = 0, skip = 0, w0 = 3, w1 = 3, sat = 0;
-	bool bff = false, fmd = false, weave_set = false, prog = false;
+	bool bff = false, fmd = false, weave_set = false, prog = false, prime = false;
 	char sname[16];
 	FILE *fin, *fout = NULL;
 	struct v4l2_format f;
@@ -345,7 +346,7 @@ int main(int argc, char **argv)
 	size_t isz, osz;
 
 	ifmt = ofmt = NULL;
-	while ((opt = getopt(argc, argv, "W:H:f:F:m:S:pt:s:l:bzw:c:r:k:n:d:i:o:v")) != -1) {
+	while ((opt = getopt(argc, argv, "W:H:f:F:m:S:pPt:s:l:bzw:c:r:k:n:d:i:o:v")) != -1) {
 		switch (opt) {
 		case 'W': W = atoi(optarg); break;
 		case 'H': H = atoi(optarg); break;
@@ -358,6 +359,7 @@ int main(int argc, char **argv)
 			smode = find_idx(modes, NMODES, sname);
 			break;
 		case 'p': prog = true; break;
+		case 'P': prime = true; break;
 		case 'k': skip = atoi(optarg); break;
 		case 't': tnr = find_idx(tnrmodes, 3, optarg); break;
 		case 's': strength = atoi(optarg); break;
@@ -466,23 +468,31 @@ int main(int argc, char **argv)
 	for (unsigned int i = 0; i < NCAP; i++)
 		qbuf(V4L2_BUF_TYPE_VIDEO_CAPTURE, i, 0);
 
-	enum v4l2_buf_type t = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-	if (ioctl(fd, VIDIOC_STREAMON, &t))
-		die("STREAMON output");
-	t = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if (ioctl(fd, VIDIOC_STREAMON, &t))
-		die("STREAMON capture");
-
 	unsigned int total = nin * repeat, sent = 0, done_in = 0, outs = 0, mism = 0;
 	/* progressive input is passed through: one output per input */
 	unsigned int expect_per = mode_field_rate[mode] && !prog ? 2 : 1;
 	unsigned int switch_out = 0;	/* outputs before the -S switch */
 	bool ofree[NOUT];
 	uint8_t *packed = malloc(osz > isz ? osz : isz);
-	double t0 = now(), tlast = t0;
 
 	for (unsigned int i = 0; i < NOUT; i++)
 		ofree[i] = true;
+
+	enum v4l2_buf_type t = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+	if (ioctl(fd, VIDIOC_STREAMON, &t))
+		die("STREAMON output");
+	/* -P: queue the OUTPUT buffers before the later STREAMON */
+	for (unsigned int i = 0; prime && i < NOUT && sent < total; i++) {
+		copy_frame(ifmt, frames[sent % nin], obufs[i].p, obpl, true);
+		qbuf(V4L2_BUF_TYPE_VIDEO_OUTPUT, i, (uint64_t)sent * 40000);
+		ofree[i] = false;
+		sent++;
+	}
+	t = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	if (ioctl(fd, VIDIOC_STREAMON, &t))
+		die("STREAMON capture");
+
+	double t0 = now(), tlast = t0;
 
 	while (done_in < total) {
 		struct pollfd pfd = { .fd = fd, .events = POLLIN | POLLOUT };

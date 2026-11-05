@@ -37,6 +37,14 @@ if [ "$kind" = new ]; then
 	# timestamps and kept fields of the new item
 	run keep.bobfield $D -f i420 -m bobfield -c keep -v -n 6 -i m576.in.yuv
 	run keep.bobfield.b $D -b -f i420 -m bobfield -c keep -v -n 6 -i m576b.in.yuv
+	# first-frame second-field timestamp with the OUTPUT queue primed before the later STREAMON
+	run ts.bobfield.P $D -f i420 -m bobfield -P -v -n 4 -i m576.in.yuv
+	run ts.field.P $D -f i420 -m field -P -v -n 4 -i m576.in.yuv
+	# held sources come back at STREAMOFF/close: a short MA field-rate run, then killed mid-stream
+	dmesg -c > /dev/null
+	for k in 1 2 3; do timeout -s KILL 0.3 $T -W 1920 -H 1080 -f i420 -m field -r 50 -i m1080.in.yuv > /dev/null 2>&1; done
+	run after.kill $D -f nv12 -m weave -c weave -i m576.nv12.yuv
+	dmesg | grep -ciE 'WARNING|BUG|refcount|leak' | sed 's/^/kernel warnings after kill: /'
 	# progressive pass-through in every item (TNR-only filters instead)
 	for m in field frame bob bobfield weave; do
 		run prog.$m $D -p -f nv12 -m $m -c weave -i m576.nv12.yuv
@@ -61,4 +69,4 @@ v4l2-ctl -d "$DEV" -L > "$OUT/ctrls.txt" 2>&1
 timeout 600 v4l2-compliance -d "$DEV" -s > "$OUT/compliance.log" 2>&1
 grep -E '^Total|FAIL' "$OUT/compliance.log" | sed 's/^/compliance: /'
 (cd "$OUT" && md5sum *.yuv *.txt > md5.txt)
-dmesg | grep -iE 'di300|deinterlace|Page fault|timed out' | tail -5
+dmesg | grep -iE 'di300|deinterlace|Page fault|timed out|WARNING' | tail -5

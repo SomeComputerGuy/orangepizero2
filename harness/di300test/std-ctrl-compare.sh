@@ -37,6 +37,12 @@ for f in "$N"/prog.*.log; do
 	b=${f##*/}; grep -q 'weave check: PASS' "$f" && ok "pass-through ${b%.log}" PASS || ok "pass-through ${b%.log}" FAIL
 done
 grep -q '^PASS' "$N/di300err.log" && ok "di300err" PASS || ok "di300err" FAIL
+for m in bobfield field; do
+	grep -q '^out 1: ts 0.020000' "$N/ts.$m.P.log" && ok "$m -P: first frame's second field at +20 ms" PASS ||
+		ok "$m -P: first frame's second field at +20 ms" FAIL
+done
+grep -q 'weave check: PASS' "$N/after.kill.log" && ok "stream after SIGKILLed MA field runs" PASS ||
+	ok "stream after SIGKILLed MA field runs" FAIL
 for v in m576 m576b m1080 m1080b; do
 	n=$(stat -c %s "$N/$v.bobfield.yuv"); i=$(stat -c %s "$N/$v.weave.yuv")
 	[[ $n -eq $((2 * i)) ]] && ok "$v bobfield: 2 outputs per input" PASS || ok "$v bobfield: 2 outputs per input" FAIL

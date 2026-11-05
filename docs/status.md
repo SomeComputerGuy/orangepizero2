@@ -103,7 +103,7 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
    Write v4l2-request hwaccels for our non-upstream cedrus uAPIs: AVS2 (impl-avs2.md; userspace owns the DPB, today
    only harness avs2dec), AVS/AVS+ (patches.media/h616-avs), MPEG-1 (draft in docs/upstream-queue.md); check against
    avs2dec/davs2 md5s on the board. Fix the stale AVS/AVS+ GAP row in docs/datasheet-checklist.md.
-   Open question to the user: XFCE (recommended) or GNOME.
+   Desktop: GNOME, same as standard Armbian for orangepizero2 (user 2026-11-05); record idle RAM + 4K playback.
 7. User Manual review: one agent reads docs/vendor/H616_User_Manual_V1.0.pdf (831 pp; CCU, TVE, HDMI, Audio
    HUB/codec/OWA, EMAC, DMA, IOMMU, thermal, RTC, timers, TWI/UART/SPI/PWM/LRADC, Crypto/SID) and reviews the sunxi-7.3
    patches + DT, U-Boot (DRAM/CCU/PMIC), TF-A and docs/datasheet-checklist.md against it. Report wrong register use,

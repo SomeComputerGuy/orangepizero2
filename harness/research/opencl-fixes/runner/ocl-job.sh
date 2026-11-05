@@ -41,8 +41,14 @@ boot_trial() {
   [ "$($SSH -n 'md5sum < /boot/$(readlink /boot/Image) | cut -c1-32')" = "$want" ] || blocked "$T Image md5 mismatch after install"
   $SSH -n 'touch /run/vdec-ok; uname -v' | sed 's/^/kernel: /' | tee -a $OUT/runner.log
   # the kernel must carry the panfrost soft-stop/resume fix (fix/sunxi-panfrost-softstop-resume)
-  n=$($SSH -n 'f=$(modinfo -n panfrost 2>/dev/null); case $f in *.zst) zstdcat "$f";; *.xz) xzcat "$f";; *.gz) zcat "$f";; *) cat "$f";; esac 2>/dev/null | grep -c "soft-stopping it to resume"')
-  [ "${n:-0}" -ge 1 ] && log "kernel fix: present" || blocked "kernel $T lacks the panfrost soft-stop fix (merge fix/sunxi-panfrost-softstop-resume into test-cumulative and build first)"
+  # dev_dbg strings are compiled out (no CONFIG_DYNAMIC_DEBUG), so compare the board's module with the one built from a tree
+  # that contains the fix (e544ddb00 must be an ancestor of the tag's commit; cumul-build packages that tree's panfrost.ko).
+  c=$(awk -v t=$T '$1==t{print $3}' $H/kernel-check/cumulative-kernels.txt)
+  git -C $H/wt-cumulative merge-base --is-ancestor e544ddb00 "$c" 2>/dev/null || blocked "kernel $T ($c) lacks the panfrost soft-stop fix e544ddb00"
+  d=$(mktemp -d); tar xzf $H/kernel-check/vdec-serve/modules-$T.tgz -C $d 7.3.1/kernel/drivers/gpu/drm/panfrost/panfrost.ko
+  want_sv=$(md5sum < $d/7.3.1/kernel/drivers/gpu/drm/panfrost/panfrost.ko | cut -c1-32); rm -rf $d
+  have_sv=$($SSH -n 'md5sum < $(modinfo -n panfrost) | cut -c1-32')
+  [ -n "$want_sv" ] && [ "$want_sv" = "$have_sv" ] && log "kernel fix: present (panfrost.ko md5 $have_sv)" || blocked "panfrost.ko on the board ($have_sv) is not the $T module ($want_sv)"
   $SSH -n "test -f /root/opiz2-mesa/cl/env.sh && test -x $CTS/test_conformance/integer_ops/test_integer_ops && mkdir -p $R" || blocked "fork Mesa (/root/opiz2-mesa/cl) or the OpenCL CTS is missing on the board"; }
 others_waiting() { ls $H/harness/queue/board.wait 2>/dev/null | grep -v "\.$OWN\." | grep -q .; }
 cts_cmd() { echo "python3 $CTS/clcts-run.py --cts $CTS/test_conformance --profile $CTS/opencl_conformance_tests_mesa.csv --out $R/opencl-mesa --timeout 800 --only '$1'"; }

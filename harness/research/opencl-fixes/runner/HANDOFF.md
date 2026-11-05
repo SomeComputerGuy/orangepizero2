@@ -12,7 +12,7 @@ kernel (c11 or later) and serve it as kernel-check/vdec-serve/Image.<tag> + modu
 installs the NEWEST cumulative tag (last line of kernel-check/cumulative-kernels.txt) via
 harness/research/vdec-perf/install-kernel.sh with the one-shot fallback armed, like the vdec jobs; the HTTP server on
 10.56.0.1:8643 must be up. It checks that the installed panfrost module contains the string "soft-stopping it to
-resume"; if not it writes BLOCKED ("kernel lacks the panfrost soft-stop fix") and exits 2: report that, it is not a FAIL.
+resume": the tag's commit must contain e544ddb00 and the board's panfrost.ko md5 must equal the tag's module (dev_dbg strings are compiled out). If not, it writes BLOCKED and exits 2: report that, it is not a FAIL.
 The fork Mesa must be at /root/opiz2-mesa/cl on the board (it is, deployed 2026-11-05; nothing to install).
 
 DEV or TEST: TEST, about 55 min in 6 chunks of at most 15 min each (intops ~5, tdim ~7, math-a ~8, math-b ~8, reg ~7,

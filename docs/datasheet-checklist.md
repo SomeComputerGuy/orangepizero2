@@ -26,7 +26,7 @@ with a known gap · **GAP** = no driver/DT/config in our tree, or a test shows i
 |---|---|---|---|---|---|
 | 4× Cortex-A53 | quad-core | mainline DT, PSCI, cpufreq-nvmem | yes: 4 CPUs, DVFS 480–1512 MHz | OK | tracked (spec-checklist CPU row) |
 | ARMv8, 64-bit execution | AArch64 | arm64 kernel | yes | OK | — |
-| 32-bit execution state | "64 and 32bit execution states" | `CONFIG_COMPAT=y` (+ KUSER_HELPERS, ARMV8_DEPRECATED) since fix/sunxi-h616-small-gaps (merged, impl-small-gaps item 1). COMPAT_VDSO off (no arm32 cross compiler) | no (static armhf binary test pending) | OK\* | W6: run a static armhf busybox (`uname -m` → armv8l) |
+| 32-bit execution state | "64 and 32bit execution states" | `CONFIG_COMPAT=y` (+ KUSER_HELPERS, ARMV8_DEPRECATED) since fix/sunxi-h616-small-gaps (merged, impl-small-gaps item 1). COMPAT_VDSO off (no arm32 cross compiler) | no (runner job 19-datasheet-w: static armhf busybox) | OK\* | W6: job 19 runs `busybox-armhf uname -m` → armv8l |
 | TrustZone | supported | TF-A lts-v2.14.11 BL31 runs in the secure world (PSCI, suspend) | yes (PSCI, SYSTEM_SUSPEND) | OK | — |
 | NEON / Advanced SIMD | supported | `asimd` in `/proc/cpuinfo` Features | yes | OK | — |
 | LPAE | supported | AArch32 feature. arm64 uses 48-bit PA (`CONFIG_ARM64_PA_BITS=48`) | n/a | N/A (arm64 kernel; only relevant to a 32-bit kernel) | — |
@@ -100,7 +100,7 @@ Cedrus `/dev/video0` OUTPUT formats on the board (2026-11-03): `MG2S S264 S265 V
 | VP8 | 1080p@60 | `VP8F` | upstream + Jernej (>2048 px, frame-size check) | **yes**: libvpx vectors 60/61 bit-exact (= suite md5); 1080p60 300/300, 152 fps. The miss is mid-stream upscaling (FFmpeg fork does not reallocate) | OK | — |
 | AVS/AVS+ JiZhun | 1080p@60 | `AVSF` | ours (`patches.media/h616-avs`: uAPI + cedrus backend in the H.264 engine, VE_MODE 1), non-upstream uAPI | **yes** (harness avs1dec, image 4321861ff, impl-di-jpeg-avs.md §4.3): FATE bunny 60/60 equal to FFmpeg master (FATE/8.1 reference stale), AVS+ 1080i test card 5/5 (= FATE), NV12_32L32 same md5, AVSFileFormat.es clean; HW time 1080i 10.3 ms/frame (≈ 195 fields/s), 720p 4.2 ms | OK | FFmpeg `cavs_v4l2request` hwaccel for players: impl-desktop-ffmpeg-avs.md |
 | WMV9/VC-1 SP/MP/AP | 1080p@60 | `SVC1` (WMV9 = VC-1 Main) | Jernej `h616-cedrus` (non-upstream uAPI) | **AP yes**: SMPTE 6/6 bit-exact incl. 480i and 1080i interlaced, 116 fps 1080i. **MP 1/2**: SMM0005 B-frames wrong at the right edge. **SP untested** (no stream) | PARTIAL | harness/research/impl-legacy-decode.md §3.1 |
-| JPEG ("HFIF" [sic]) | 45 MPPS | **none** | VE JPEG block at VE+0xE00 (`VE_MODE` bit 5, vendor `cedar_ve` IRQ path). No V4L2 driver on any sunxi | — | **GAP** | **W21**: stateful/stateless JPEG decode in cedrus |
+| JPEG ("HFIF" [sic]) | 45 MPPS | `JPEG` (stateless, cedrus) | ours: `patches.media/h616-jpeg` (merged), cedrus JPEG engine; the VE+0xE00 "JPEG plus" block reads zero and is unused | **yes** (impl-di-jpeg-avs.md §4.2/§6.3, image 4321861ff): baseline 4:2:0/4:2:2/4:4:4 within 1 LSB of FFmpeg, 16×16 to 4096×2304, restart intervals, no-DHT, 3 parallel contexts; 1080p 4:2:0 **125.8 MPPS**, 4096×2304 131 MPPS (target 45). GStreamer `v4l2sljpegdec` bit-identical (gst-jpeg jobs 02/05/06). Refused cleanly to software: progressive, 4:1:1, 4:4:0, greyscale (engine writes no luma, §7) | PARTIAL (greyscale/4:1:1 in software) | W21: greyscale probe result (status.md 9) to fold in; otherwise done |
 | Decode up to 4K@60 (general) | 4K@60 | — | see rows above | 8-bit HEVC 81.8 fps tiled, AFBC10 83.9 fps (VE-bound) | PARTIAL | tracked |
 
 **User Manual V1.0 (2026-11-04, docs/vendor/H616_User_Manual_V1.0.pdf, 831 pp, git-ignored; source github.com/CharlieYu4994/aw-doc):** same decode list as the datasheet, but §4.4.1 gives **MPEG-4 SP/ASP max resolution 3840x2160** (rate still 1080p@60). New acceptance item: decode an MPEG-4 ASP 3840x2160 stream on the VE (bit-exact vs FFmpeg; fps reported, no 60 fps target). The manual has register chapters for CCU (§3.3), TVE (§7.2), HDMI (§7.3), Audio (ch. 8), EMAC (ch. 6), DMA, IOMMU, Crypto; no VE/GPU registers.
@@ -148,7 +148,7 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 
 | Feature | Datasheet claim | Driver/DT state | Verified? | Status | Next step |
 |---|---|---|---|---|---|
-| Offline m2m de-interlace, 8-bit NV12/NV21/YV12/YUV422 in/out, 32×32–2048×1280, weave/motion-adaptive, TNR, film-mode detection, 1080p60 @150 MHz | supported | DI300 driver + `deinterlace@1420000` node (`patches.media/h616-di/`, `CONFIG_VIDEO_SUN50I_DI300=m`, `iommus = <&iommu 1>`, SPI 89 = UM GIC DI) | see harness/research/impl-di-jpeg-avs.md | OK\* | W13 tests (impl-di-jpeg-avs.md) |
+| Offline m2m de-interlace, 8-bit NV12/NV21/YV12/YUV422 in/out, 32×32–2048×1280, weave/motion-adaptive, TNR, film-mode detection, 1080p60 @150 MHz | supported | DI300 driver + `deinterlace@1420000` node (`patches.media/h616-di/`, `CONFIG_VIDEO_SUN50I_DI300=m`, `iommus = <&iommu 1>`, SPI 89 = UM GIC DI) | yes (impl-di-jpeg-avs.md §4.1, 2026-11-03): weave byte-exact for all 7 formats incl. 32×32 and 2048×1280, 1080p field mode 187.7 out/s (target 60), FMD 3:2 cadence, v4l2-compliance 49/49, 3 contexts in parallel; motion-adaptive quality 33 dB (hardware interpolator). TNR/format fixes + standard mode controls merged (di300-std-controls, compliance-v2) | OK | W13: smoke test in runner job 19; TNR/conversion re-test after the fixes (D6/D7) still open |
 
 ### 2.5.3 Graphic 2D (G2D)
 
@@ -163,7 +163,7 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 | Timer0/Timer1 (32-bit down, 8 prescalers) | supported | `timer@3009000`, sun4i-timer (`CONFIG_SUN4I_TIMER=y`). Clockevent `sun4i_tick`, clocksource `timer` | yes (registered) | OK | — |
 | Watchdog | 12 timeouts, IRQ, reset | sunxi-wdt 16 s, systemd watchdog | yes | OK | — |
 | AVS0/AVS1 33-bit A/V sync counters | supported | no Linux driver anywhere | no | GAP | W26 (low value: expose as a clocksource/counter device or document) |
-| High-speed timer (56-bit) | supported | `hstimer@3005000` + Kconfig patch + `CONFIG_SUN5I_HSTIMER=y` (fix/sunxi-h616-small-gaps, merged). UM §3.7: D1 register layout, IRQ 45/46, AHB1 clock. The driver uses only the low 32 of the 56 counter bits | see harness/research/user-manual-review.md Board results | OK\* | W3: `available_clocksource` lists `hstimer` |
+| High-speed timer (56-bit) | supported | `hstimer@3005000` + Kconfig patch + `CONFIG_SUN5I_HSTIMER=y` (fix/sunxi-h616-small-gaps, merged). UM §3.7: D1 register layout, IRQ 45/46, AHB1 clock. The driver uses only the low 32 of the 56 counter bits (mask 32; a 56-bit LO/HI read would be a small driver change, optional) | no (runner job 19) | OK\* | W3: job 19 checks `available_clocksource` |
 | RTC (day/h/m/s counters) | supported | sun6i-rtc `rtc0`. No backup battery on the Zero2 | yes | OK | — |
 | RTC: 32.768 kHz from HOSC-calibrated RC | supported | sun6i-rtc-ccu, internal osc32k (UM §3.13: no external 32k crystal input on the H616) | yes: `osc32k` parent `iosc-32k`, 32768 Hz (impl-small-gaps 8e) | OK | — |
 | RTC alarm wake-up | supported | rtcwake | yes: 100/100 suspend cycles | OK | — |
@@ -176,7 +176,7 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 | Thermal: over-temperature alarm / shutdown interrupts | supported | sun8i-thermal uses only the data IRQ. Trips are software (passive 85, critical 110) | no | PARTIAL | W14 (low: the HW alarm IRQ is unused, software trips cover it) |
 | CPU configuration (core reset, status, debug) | supported | PSCI hotplug, cpuidle via TF-A | yes | OK | — |
 | IOMMU: hardware VA→PA | supported | sun50i-iommu `30f0000.iommu` (+ our page-size and sibling-reset patches) | yes | OK | — |
-| IOMMU masters DE, DI, VE_R, VE, G2D (parallel, bypass, prefetch, per-master IRQ) | supported | VE `<&iommu 3>, <&iommu 2>`, DE33 planes `<&iommu 0>`, deinterlace `<&iommu 1>`. UM §3.12.3 table 3-8: G2D is **master 6**, which the driver ignored (H6 masters 0-5): fix `fix/sunxi-h616-iommu-g2d-master` (not merged). No G2D node | VE yes (`/sys/kernel/iommu_groups`) | PARTIAL | G2D master with W25 (needs the master-6 fix) |
+| IOMMU masters DE, DI, VE_R, VE, G2D (parallel, bypass, prefetch, per-master IRQ) | supported | VE `<&iommu 3>, <&iommu 2>`, DE33 planes `<&iommu 0>`, deinterlace `<&iommu 1>`. UM §3.12.3 table 3-8: G2D is **master 6**, which the driver ignored (H6 masters 0-5): fix `fix/sunxi-h616-iommu-g2d-master` (merged in test-cumulative 4f711b354). No G2D node | VE yes (`/sys/kernel/iommu_groups`) | PARTIAL | G2D master with W25 (needs the master-6 fix) |
 | IOMMU 2-level TLB, PTW on miss, permission check | supported | used by the driver | yes (VE perf counters, impl-vdec-main10-perf §1) | OK | — |
 
 ## 2.7 Video output
@@ -212,11 +212,11 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 | LINEOUT differential / single-ended | supported | single-ended LINEOUTL/R on the 13-pin header (sch.: LINEOUTL G19, LINEOUTR G20) | no | OK\* | tracked |
 | Dynamic Range Controller (DRC) | supported | DRC/HPF switches + level-detector enum for the H616 DAC (fix/sunxi-h616-small-gaps item 7, merged), UM §8.4.6.7/8.4.6.10 bits re-verified. Curve coefficients not exposed | no (needs the 13-pin board) | OK\* | W17: `amixer` lists the DRC controls; listening test |
 | 128×24 FIFO, thresholds, DMA/IRQ | supported | used by the driver | — | OK\* | — |
-| Audio HUB: 2 DAMs | supported | vendor `sunxi_v2` AHUB. `ahub_dam_plat@5097000` bound, `ahub_dam_mach` disabled | no | OK\* | W18 |
-| AHUB: 3 external I2S/PCM + 1 to HDMI | supported | HDMI I2S (`ahub1`) + overlay `sun50i-h616-i2s3-ph` for I2S3 on the 26-pin header (PH5–PH9, fix/sunxi-h616-small-gaps item 6, merged). I2S0 (PI, RGMII) and I2S2 (PG, WiFi/BT) N/A | no | OK\* | W18: I2S DAC or DOUT0→DIN0 loopback on the header |
+| Audio HUB: 2 DAMs | supported | vendor `sunxi_v2` AHUB. `ahub_dam_plat@5097000` bound. `ahub_dam_mach` (control-only card `ahubdam`: 13 APBIF/I2S/DAM `Src Select` routing controls) enabled by the new overlay `sun50i-h616-ahub-dam` (fix/sunxi-h616-datasheet-w 821dfb5bd). The vendor BSP enables it unconditionally; enabling it in the base DT waits for the card-order check (a PCM-less card at index 0 would break ALSA `default`) | no (job 19 counts the controls and records the card order) | OK\* | W18 |
+| AHUB: 3 external I2S/PCM + 1 to HDMI | supported | HDMI I2S (`ahub1`) + overlay `sun50i-h616-i2s3-ph` for I2S3 on the 26-pin header (PH5–PH9, fix/sunxi-h616-small-gaps item 6, merged). I2S0 (PI, RGMII) and I2S2 (PG, WiFi/BT) N/A | no (job 19 streams play and capture without wiring) | OK\* | W18: DOUT0→DIN0 loopback (pin 21→24) or an I2S DAC: user hardware |
 | LJ/RJ/I2S/PCM/TDM, 8 ch 192 kHz, 16 ch 96 kHz | supported | vendor AHUB driver supports the formats | no | OK\* | W18 |
 | DMIC (8 PDM mics, 8–48 kHz) | supported | `CONFIG_SND_SUN50I_DMIC=y` matches only `sun50i-h6-dmic`. No H616 node | — | N/A: DMIC_CLK/DATA0–3 exist only on PI0–PI4 (§4.3), which are RGMII on the Zero2 | — |
-| OWA (S/PDIF) TX, IEC 60958, 16/20/24-bit | supported | `spdif@5093000` + overlay `sun50i-h616-spdif-out` (PH4, header pin 5, merged). UM §8.3 registers OK. Module clock lacks CLK_SET_RATE_PARENT, so S/PDIF alone can run at a wrong rate: fix `fix/sunxi-h616-spdif-clk-rate` (not merged) | no | OK\* | W19: 44.1/48 kHz out with nothing else played since boot, on a receiver or logic analyser |
+| OWA (S/PDIF) TX, IEC 60958, 16/20/24-bit | supported | `spdif@5093000` + overlay `sun50i-h616-spdif-out` (PH4, header pin 5, merged). UM §8.3 registers OK. Module clock lacks CLK_SET_RATE_PARENT, so S/PDIF alone can run at a wrong rate: fix `fix/sunxi-h616-spdif-clk-rate` (merged in test-cumulative 642752bdc) | no (job 19 reads the spdif clock under `aplay` at 48/44.1 kHz: 24576000/22579200 Hz) | OK\* | W19: the output itself needs an S/PDIF receiver or logic analyser on pin 5 (user) |
 
 ## 2.9 Security engine
 
@@ -251,8 +251,8 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 |---|---|---|---|---|---|
 | EMAC0 10/100/1000, RGMII/RMII, MDIO | supported | dwmac-sun8i, RTL8211F, `rgmii-rxid` | yes: 1000 Mbit/s, iperf3 ~870–910 Mbit/s | PARTIAL | tracked (10/100 + soak) |
 | EMAC1 10/100 with embedded EPHY | supported | `ethernet@5030000` disabled. AC300 PHY driver in config | — | N/A: the Zero2 has one RJ45, wired to the RTL8211F (sch. block "RTL8211F"). EPHY_TXP/N/RXP/N balls (A19–B21) appear only on the SoC symbol page. The text dump cannot prove they are unconnected → **unconfirmed** (prprep-emac1.md agrees: no EMAC1 on the Zero2) | — |
-| Full/half duplex, filters, descriptor DMA, FIFOs | supported | stmmac | full duplex yes | OK\* (half duplex untested) | W31 (forced 10/100 half duplex, with the tracked 10/100 test) |
-| Jumbo frames up to 16 KB | supported | UM ch. 6: RX_CTL0 bit 29 JUMBO_FRM_EN (9018 B), bit 30 / TX_CTL0 bit 30 frame-length control (16384 B), TX FIFO 4 KB, RX FIFO 16 KB, **descriptor buffer field 11 bits (≤ 2047 B)**. Image kernel: maxmtu 3712 (not usable above 2047). Branch fix/sunxi-h616-emac-jumbo: maxmtu 2018 (single descriptor) | yes (branch, round 2: MTU 2018 OK) | PARTIAL | W31: merge the jumbo branch. 16 KB needs frame-length control + multi-descriptor stmmac normal-descriptor RX/TX |
+| Full/half duplex, filters, descriptor DMA, FIFOs | supported | stmmac | full duplex yes | OK\* (half duplex untested) | W31: job 19 forces 100/10 half duplex and pings the host |
+| Jumbo frames up to 16 KB | supported | UM ch. 6: RX_CTL0 bit 29 JUMBO_FRM_EN (9018 B), bit 30 / TX_CTL0 bit 30 frame-length control (16384 B), TX FIFO 4 KB, RX FIFO 16 KB, **descriptor buffer field 11 bits (≤ 2047 B)**. Image kernel: maxmtu 3712 (not usable above 2047). fix/sunxi-h616-emac-jumbo (merged in test-cumulative): maxmtu 2018 (single descriptor); image knob `OPIZ2_ETH_MTU` (userpatches) | yes (MTU 2018 board-tested 2026-11-05) | PARTIAL | W31: 16 KB needs frame-length control + multi-descriptor stmmac normal-descriptor RX/TX (M/L) |
 
 ### 2.10.3 UART
 
@@ -262,9 +262,9 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 | UART1 4-wire (BT, flow control) | supported | UWE5622 BT over UART1 with RTS/CTS | yes (hci0 up, scan) | OK | — |
 | UART2–UART5 | supported | overlays (`uart2-ph`, `uart5`, …). UART5 on the header (PH2/PH3), UART2 on PH5–PH8 (header, shared with SPI1). UART3/4 only on PI (RGMII) → N/A | no | OK\* | tracked (26-pin header row) |
 | 16550, 5–8 bits, 1/1.5/2 stop, parity, DMA, HW/SW flow control | supported | 8250_dw (the H616 FIFO-config series v5 is pending upstream) | no | OK\* | tracked (header loopback) |
-| Up to 4 Mbit/s | supported | 8250_dw | no | OK\* | W32 (UART5↔UART2 loopback at 3/4 Mbit/s) |
-| IrDA 1.0 SIR | supported | **no IrDA in 8250_dw/serial core** | no | GAP | W32 (low) |
-| RS-485 / 9-bit mode | supported | UM §9.2.6.20: RS-485 is MCR[7:6] = 2 + RS485_CTL at 0xC0. 8250_dw misdetects DW RS-485/DLF on these offsets (RS-485 then does nothing; divisors truncated, 153600 baud +8.5 %): fix `fix/sunxi-h616-uart-dw-ext-regs` (not merged) | no | PARTIAL | W32: with the fix, em485 RTS on a logic analyser; 9-bit not supported in Linux |
+| Up to 4 Mbit/s | supported | 8250_dw. UART SCLK = APB2 = 24 MHz, so 1.5 Mbit/s is the maximum; 4 Mbit/s needs SCLK 64 MHz, which no APB2 parent/divider gives (impl-small-gaps.md 8d) | no | PARTIAL (1.5 Mbit/s by clock tree) | W32: UART5↔UART2 loopback at 1.5 Mbit/s needs header jumpers (user) |
+| IrDA 1.0 SIR | supported | **no IrDA in 8250_dw/serial core**: Linux removed the IrDA stack in 4.17, no SIR framing anywhere | no | N/A (removed upstream) | W32: documented |
+| RS-485 / 9-bit mode | supported | UM §9.2.6.20: RS-485 is MCR[7:6] = 2 + RS485_CTL at 0xC0. 8250_dw misdetects DW RS-485/DLF on these offsets (RS-485 then does nothing; divisors truncated, 153600 baud +8.5 %): fix `fix/sunxi-h616-uart-dw-ext-regs` (merged in test-cumulative 48491b60d) | no | PARTIAL | W32: em485 RTS on a logic analyser (user); 9-bit not supported in Linux |
 
 ### 2.10.4 SPI
 
@@ -274,7 +274,7 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 | SPI1 on the 26-pin header | supported | overlays `spidev1_*` | no | OK\* | tracked |
 | Master mode, modes 0–3, CS/CLK polarity, 64-byte FIFOs, IRQ/DMA, 3/4-wire, 1–32-bit frames | supported | spi-sun6i | partly (SPI0) | OK\* | tracked |
 | Slave mode | supported | **no target mode in spi-sun6i** | no | GAP | W33 |
-| Dual/Quad I/O | supported | H616 cfg with DUAL/QUAD (UM §9.3.6 SPI_BCC bit 28 DRM, bit 29 Quad_EN, re-verified) + Zero2 NOR `spi-rx-bus-width = <2>` (fix/sunxi-h616-small-gaps, merged). Quad N/A on the Zero2 (WP#/HOLD# not on PC15/PC16) | see harness/research/user-manual-review.md Board results | OK\* (dual) | W5: mtd0 sha256 unchanged, debugfs params `1S-1S-2S`. TCR sample mode: `fix/sunxi-h616-spi-sample-mode` |
+| Dual/Quad I/O | supported | H616 cfg with DUAL/QUAD (UM §9.3.6 SPI_BCC bit 28 DRM, bit 29 Quad_EN, re-verified) + Zero2 NOR `spi-rx-bus-width = <2>` (fix/sunxi-h616-small-gaps, merged). Quad N/A on the Zero2 (WP#/HOLD# not on PC15/PC16) | no (job 19: debugfs params `1S-1S-2S`, eGON.BT0 magic + two identical mtd0 reads) | OK\* (dual) | W5: job 19. TCR sample mode fix `fix/sunxi-h616-spi-sample-mode` merged (222161752) |
 
 ### 2.10.5 TWI
 
@@ -297,8 +297,8 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 | Feature | Datasheet claim | Driver/DT state | Verified? | Status | Next step |
 |---|---|---|---|---|---|
 | PWM1–4, output 0–24/100 MHz, 0–100 % duty, 1/65536 | supported | vendor `pwm-sunxi-enhance` (Armbian), overlays PH2/PH3 (header pins). PWM3/4 on PH0/PH1 = debug UART. PI variants = RGMII | no | OK\* | tracked (header row) |
-| PWM23 pair: complementary output, dead-time | supported | vendor driver has `dead_time`/bind | no | OK\* | W34 (PH2+PH3 complementary pair on a scope/logic analyser) |
-| Capture input + IRQ | supported | no capture in `pwm-sunxi-enhance` (mainline v10 series to check) | no | GAP | W34 |
+| PWM23 pair: complementary output, dead-time | supported | vendor driver has `dead_time`/bind | no | OK\* | W34: pairs are 01/23/45 (PDZCR01/23/45, PCCR01/23/45). Header: PH2 = pwm2, PH3 = pwm1 (not a pair); pwm3 = PH0 (debug UART TX), pwm0 PD28 / pwm5 PA12 not wired out. A pair test needs PH0+PH2 (console lost) and a logic analyser: user decision |
+| Capture input + IRQ | supported | no capture in `pwm-sunxi-enhance`; the mainline pwm-sun8i v10 series (kernel-check/dl-upstream/split-20260922-h616-pwm-v8-v10) has none either | no | GAP | W34: driver work (M) |
 
 ### 2.10.8 LRADC
 
@@ -321,12 +321,12 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 ## User Manual review rows (2026-11-05)
 
 Source: H616 User Manual v1.0 review, `harness/research/user-manual-review.md` (per chapter, with pages). Branches are
-on `stonking-orangepizero2` 8546e5fc1, not merged.
+on `stonking-orangepizero2` 8546e5fc1; all nine were merged into `test-cumulative` on 2026-11-05 (48491b60d … 4c8c3f819).
 
 | Feature | UM reference | Driver/DT state | Verified? | Status | Next step |
 |---|---|---|---|---|---|
 | CCU EPHY 25 MHz clock = PLL_PERI0(1X)/24 | §3.3.5.86 p.104 | modelled as a gate below ahb3 (reports 200 MHz). Fix `fix/sunxi-h616-ccu-emac-25m` | no | PARTIAL | `clk_summary`: `emac-25m` 25000000 under `pll-periph0` (AC300/EMAC1 boards) |
-| IOMMU master 6 (G2D) | §3.12.3 table 3-8 p.207 | driver handled masters 0-5 only. Fix `fix/sunxi-h616-iommu-g2d-master` | no | GAP | prerequisite of W25 |
+| IOMMU master 6 (G2D) | §3.12.3 table 3-8 p.207 | driver handled masters 0-5 only. Fix `fix/sunxi-h616-iommu-g2d-master` (merged 4f711b354) | no | OK\* (driver; no G2D node until W25) | prerequisite of W25 |
 | UART divisor without DW DLF | §9.2.6.18-20 p.620 | misdetected DLF truncates divisors. Fix `fix/sunxi-h616-uart-dw-ext-regs` | no | PARTIAL | UART5↔UART2 loopback at 153600 and 921600 baud (921600 needs APB2 = PERI0(1X)/8 = 75 MHz) |
 | TWI fast mode 400 kHz timing | §9.1.6.6 p.587 (CLK_DUTY) | duty bit cleared (tLOW 1.25 µs). Fix `fix/sunxi-h616-twi-fast-mode-duty` | no | PARTIAL | TWI3 at 400 kHz: scope tLOW ≥ 1.3 µs |
 | SPI sample mode (SDM/SDC) | §9.3.6.2 p.636 | not programmed on the H616. Fix `fix/sunxi-h616-spi-sample-mode` | no | PARTIAL | SPI1 spidev loopback at 10 MHz and 50/80 MHz |
@@ -358,36 +358,36 @@ referenced from the tables above.
 | # | Size | Item | Rows |
 |---|---|---|---|
 | W1 (S part) | S | Vulkan: document that panvk on G31 needs `PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1` and reports 1.0 non-conformant. Decide whether to set it image-wide | 2.2 |
-| W3 | S | Select `SUN5I_HSTIMER` on arm64 sunxi so the 56-bit high-speed timer registers | 2.6 |
-| W4 | S | CE PRNG on H616 (`.prng = CE_ALG_PRNG_V2` + `CONFIG_CRYPTO_DEV_SUN8I_CE_PRNG`) | 2.9 |
-| W6 | S | `CONFIG_COMPAT=y` (AArch32 execution state) | 2.1 |
-| W9 | S | USB-C data cable: FEL (`sunxi-fel`), musb gadget, OTG host overlay | 2.3.1, 2.10.1 |
-| W19 | S | S/PDIF (OWA) TX overlay on PH4 (26-pin header) + test | 2.8 |
-| W10 | S | SDIO UHS (SDR104/DDR50) for the UWE5622 on SMHC1 | 2.3.4 |
-| W17 | S | Codec: DRC controls for the H616 DAC | 2.8 |
-| W31 | S | EMAC0 jumbo frames + half duplex (with the tracked 10/100 test) | 2.10.2 |
-| W32 | S | UART 4 Mbit/s and RS-485 loopback tests. IrDA = document as unsupported in Linux | 2.10.3 |
-| W14 | S | RTC osc32k source, thermal accuracy and HW alarm IRQ (low value) | 2.6 |
-| W16 | S | HDMI IEC 61937 passthrough test (needs an AVR) | 2.7.2 |
-| W11 | S | DE33 plane/channel count and Porter-Duff check on a display | 2.5.1 |
-| W5 | S–M | SPI dual I/O for the H616 (check the register, add a cfg) | 2.10.4 |
-| **W2** | **M** | **Legacy decode conformance**: done 2026-11-03 (`harness/research/impl-legacy-decode.md`). Open: test the MPEG-2 1080-line MC-boundary fix (`fix/sunxi-h616-legacy-dec`); root-cause MPEG-4 interlaced B-VOPs, Xvid half-pel GMC, WMV9 MP B-frames; ISO 14496-4 ASP zips (licence gate); VC-1 SP stream; H.264 4:0:0; MPEG-4 data partitioning | 2.4.1 |
-| W2b | M | MPEG-1 decode: uAPI MPEG-1/full-pel flags, cedrus `TRIGGER_MPEG1`, FFmpeg `mpeg1_v4l2request` hwaccel | 2.4.1 |
-| W15 | M | TVE plug detection (DAC load detect) | 2.7.1 |
-| W18 | M | AHUB I2S3 on the 26-pin header (overlay + test). Enable the DAM path | 2.8 |
-| W30 | M | USB2 standby wake-up from suspend | 2.10.1 |
-| W34 | M | PWM complementary/dead-time test. Capture input (vendor driver lacks it; check mainline v10) | 2.10.7 |
+| W3 | S | ~~Select `SUN5I_HSTIMER`~~ **done** (small-gaps c82a0745c, merged); board check in job 19 | 2.6 |
+| W4 | S | ~~CE PRNG~~ **closed, N/A**: mainline removed the sun8i-ce crypto_rng PRNG (CVE-2026-80834, impl-small-gaps item 3); TRNG via hwrng OK | 2.9 |
+| W6 | S | ~~`CONFIG_COMPAT=y`~~ **done** (small-gaps 400c85da1, merged); armhf busybox check in job 19 | 2.1 |
+| W9 | S | USB-C data cable: FEL (`sunxi-fel`), musb gadget, OTG host overlay. Config/overlay/host tool present; **needs the cable (user)** | 2.3.1, 2.10.1 |
+| W19 | S | ~~S/PDIF overlay~~ **done** (79ef2101f + clk fix e11e400f6, merged); job 19 checks card + clock rate; output needs a receiver/analyser (user) | 2.8 |
+| W10 | S | ~~SDIO UHS~~ **done** (37a01e7b3, merged); `ios` timing check in job 19 | 2.3.4 |
+| W17 | S | ~~Codec DRC controls~~ **done** (28e0e7bbd, merged); job 19 lists them; listening needs the 13-pin board (user) | 2.8 |
+| W31 | S | EMAC0 jumbo: merged, MTU 2018 tested, `OPIZ2_ETH_MTU` knob; half duplex in job 19; 16 KB = stmmac multi-descriptor work (M/L) | 2.10.2 |
+| W32 | S | UART: 4 Mbit/s N/A by clock tree (1.5 Mbit/s max); RS-485/DLF fix merged; loopback + em485 need header jumpers/analyser (user); IrDA N/A upstream (documented) | 2.10.3 |
+| W14 | S | RTC osc32k source answered (OK, small-gaps 8e); thermal accuracy needs an IR thermometer (user); HW alarm IRQ low value | 2.6 |
+| W16 | S | HDMI IEC 61937 passthrough test: **needs an AVR (user)** | 2.7.2 |
+| W11 | S | DE33 plane count + pixel-blend-mode property: job 19 (`modetest -p`, no monitor); the visual Porter-Duff check needs an HDMI monitor (user) | 2.5.1 |
+| W5 | S–M | ~~SPI dual I/O~~ **done** (b01cc7712 + sample mode 5b15a201b, merged); job 19 | 2.10.4 |
+| **W2** | **M** | **Legacy decode conformance**: done 2026-11-03 (`harness/research/impl-legacy-decode.md`). MPEG-2 1080-line MC-boundary fix confirmed on HW (image 4321861ff). Open: root-cause MPEG-4 interlaced B-VOPs, Xvid half-pel GMC, WMV9 MP B-frames; ISO 14496-4 ASP zips (licence gate); VC-1 SP stream; H.264 4:0:0; MPEG-4 data partitioning | 2.4.1 |
+| W2b | M | ~~MPEG-1 decode~~ **done**: MG1S uAPI (fix/sunxi-cedrus-mpeg1-mg1s 8140b4eeb, merged c16), FFmpeg 0304/0309; runner job 11 | 2.4.1 |
+| W15 | M | TVE plug detection: DAC load detect merged, "Composite disconnected" verified; the plug test needs a 75 Ω load or CVBS display (user) | 2.7.1 |
+| W18 | M | AHUB I2S3 overlay (merged) + DAM card overlay `ahub-dam` (fix/sunxi-h616-datasheet-w 821dfb5bd); job 19; loopback/DAC test needs wiring (user) | 2.8 |
+| W30 | M | USB2 standby wake-up from suspend: needs the 13-pin expansion board + a USB keyboard (user) | 2.10.1 |
+| W34 | M | PWM complementary/dead-time: no header pair on the Zero2 (pair 23 = PH2 + PH0 debug UART), user decision + analyser. Capture input: driver work, mainline v10 has none either | 2.10.7 |
 | W33 | M | SPI slave and I2C slave modes (driver work in spi-sun6i / i2c-mv64xxx) | 2.10.4, 2.10.5 |
 | W22 | M | Extend `ve-encoder/SPEC.md` acceptance: MJPEG streams, 4096×4096, CBR/VBR 256k–100M, I/P single ref, 8 ROIs (needs a uAPI) | 2.4.2 |
 | W26 | M | AVS0/AVS1 counters: expose them or document them as unused (low value) | 2.6 |
-| W13 | L | De-interlacer (DI300): Jernej `h616-deinterlace-v1` + DT node + IOMMU master 1 + tests (weave/motion-adaptive, TNR, film mode) | 2.5.2 |
+| W13 | L | ~~De-interlacer (DI300)~~ **done**: driver + node + IOMMU master 1 merged, board-tested 2026-11-03 (§4.1); smoke test in job 19; D6/D7 re-test open | 2.5.2 |
 | W12 | L | DE33 10-bit/HDR path: P010/P210 planes, YUV 4:4:4/4:2:2/4:2:0 and 10-bit HDMI, HDR10/HLG metadata (LE 0256–0285, DE33 plan Stage B) | 2.5.1, 2.7.2 |
 | W20 | L | ~~AVS/AVS+ JiZhun decode~~ **done**: uAPI + cedrus backend (patches.media/h616-avs), board-verified 2026-11-03 (impl-di-jpeg-avs.md §4.3) | 2.4.1 |
-| W21 | L | VE JPEG decode (VE+0xE00), 45 MPPS | 2.4.1 |
+| W21 | L | ~~VE JPEG decode~~ **done** (patches.media/h616-jpeg merged, 125.8 MPPS 1080p); open: greyscale (§7 probe) and 4:1:1 (software) | 2.4.1 |
 | W24 | L | HDMI/DE 3D formats (frame packing, top-bottom, SbS) | 2.5.1, 2.7.2 |
 | W29 | L | CE: CTR/CTS/CFB/OFB/CBC-MAC/XTS, HMAC, RSA/ECC (sun8i-ce has none of these for any variant) | 2.9 |
 | W1 (full) | XL | Vulkan 1.1 on Bifrost G31 (panvk JM work) or the Arm DDK route | 2.2 |
-| W25 | XL | G2D driver (clean-room V4L2 m2m from the vendor GPL source) | 2.5.3 |
+| W25 | XL | G2D driver (clean-room V4L2 m2m from the vendor GPL source); IOMMU master-6 prerequisite merged | 2.5.3 |
 | W23 | XL | DE33 keystone, SmartColor 3.3, write-back, RCQ (no open code anywhere except LE write-back/RCQ) | 2.5.1 |
 | W28 | XL / blocked | HDCP 1.4/2.2 (needs key provisioning + ESM firmware) | 2.7.2 |
 | W27 | decision | Secure boot (irreversible eFuse burn) | 2.3.1 |

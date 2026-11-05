@@ -1,0 +1,55 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 20:15:28 +0000
+Subject: [PATCH] jpegparse: Take the container height only for interlaced
+ fields
+
+The caps height was taken from the container whenever it was larger
+than the height of the image, to report the frame height of interlaced
+MJPEG whose images are fields. That also hit a resolution change in the
+middle of a stream: a Matroska MJPEG track declared 640x480 whose images
+switch to 320x240 got caps of 320x480 with interlace-mode progressive.
+jpegdec, which takes an image of half the caps height for a field, then
+output nothing for the images after the switch, while decoders that
+parse the image themselves were not affected.
+
+Use the container height only when the stream was found interlaced, and
+take a smaller first image for a field only when it has the width of the
+frame: a field is half the frame height at the full frame width.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ gst/jpegformat/gstjpegparse.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/gst/jpegformat/gstjpegparse.c b/gst/jpegformat/gstjpegparse.c
+index f76d136..48c7b9b 100644
+--- a/gst/jpegformat/gstjpegparse.c
++++ b/gst/jpegformat/gstjpegparse.c
+@@ -579,7 +579,9 @@ gst_jpeg_parse_sof (GstJpegParse * parse, GstJpegSegment * seg)
+         sizeof (parse->sampling_factors));
+ 
+     if (parse->first_picture && !parse->multiscope) {
++      /* A field has the width of the frame and about half of its height. */
+       if (parse->orig_height > 0
++          && (parse->orig_width == 0 || parse->orig_width == hdr.width)
+           && parse->height < ((parse->orig_height * 3) / 4)) {
+         parse->interlace_mode = GST_VIDEO_INTERLACE_MODE_INTERLEAVED;
+       } else if (parse->avid) {
+@@ -1201,7 +1203,11 @@ gst_jpeg_parse_set_new_caps (GstJpegParse * parse)
+ 
+   if (parse->width > 0)
+     gst_caps_set_simple (caps, "width", G_TYPE_INT, parse->width, NULL);
+-  if (parse->orig_height > 0 && parse->orig_height > parse->height)
++  /* Interlaced MJPEG: every image is a field and the caps carry the frame
++   * height of the container. Otherwise the image size is the picture size,
++   * whatever the container said (the resolution may change mid-stream). */
++  if (parse->interlace_mode == GST_VIDEO_INTERLACE_MODE_INTERLEAVED
++      && parse->orig_height > parse->height)
+     gst_caps_set_simple (caps, "height", G_TYPE_INT, parse->orig_height, NULL);
+   else if (parse->height > 0)
+     gst_caps_set_simple (caps, "height", G_TYPE_INT, parse->height, NULL);
+-- 
+2.55.0
+

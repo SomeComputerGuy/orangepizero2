@@ -16,18 +16,21 @@ import numpy as np
 HANG = ('124', '137')
 
 def r4(x): return (x + 3) & ~3
+def r2(x): return (x + 1) & ~1
 
 def planes_gst(d, w, h):
-    ys, cs = r4(w), r4((w + 1) // 2)
-    cw, ch = (w + 1) // 2, (h + 1) // 2
-    fr = ys * h + 2 * cs * ch
+    # GstVideoInfo I420: strides rounded up to 4, the chroma planes start at
+    # stride * ROUND_UP_2(height) and are ROUND_UP_2(w)/2 x ROUND_UP_2(h)/2
+    ys, cs = r4(w), r4(r2(w) // 2)
+    cw, ch = (w + 1) // 2, r2(h) // 2
+    o1 = ys * r2(h); o2 = o1 + cs * ch; fr = o2 + cs * ch
     n = len(d) // fr
     out = []
     for i in range(n):
         f = d[i * fr:(i + 1) * fr]
         out.append((f[:ys * h].reshape(h, ys)[:, :w],
-                    f[ys * h:ys * h + cs * ch].reshape(ch, cs)[:, :cw],
-                    f[ys * h + cs * ch:].reshape(ch, cs)[:, :cw]))
+                    f[o1:o1 + cs * ch].reshape(ch, cs)[:(h + 1) // 2, :cw],
+                    f[o2:o2 + cs * ch].reshape(ch, cs)[:(h + 1) // 2, :cw]))
     return out
 
 def planes_drv(d, w, h):

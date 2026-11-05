@@ -10,8 +10,8 @@ restore() {
   $SSH -n '[ -f /boot/armbianEnv.txt.vdec ] && mv /boot/armbianEnv.txt.vdec /boot/armbianEnv.txt; ln -sfn vmlinuz-7.3.1-edge-sunxi64 /boot/Image; rm -f /boot/vdec-trial; sync'
   reboot_ && $SSH -n 'echo restored: $(uname -rv) $(readlink /boot/Image) cmdline-iommu: $(grep -o "iommu[^ ]*\|cma[^ ]*" /proc/cmdline | tr "\n" " ")' | tee -a $O/round.txt
 }
-$H/harness/board-lock.sh acquire vdec-queue || exit 1
-trap '$H/harness/board-lock.sh release vdec-queue' EXIT
+{ out=$($H/harness/board-lock.sh acquire vdec-r4) || exit 1; echo "$out"; case $out in *"already held"*) echo "lock already held under this owner: another session of mine is running, stop"; exit 1;; esac; }
+trap '$H/harness/board-lock.sh release vdec-r4' EXIT
 $SSH -n 'uname -r; readlink /boot/Image; grep -n extraargs /boot/armbianEnv.txt; free -m | sed -n 2p' | tee $O/board-info.txt
 [ "$($SSH -n 'readlink /boot/Image')" = vmlinuz-7.3.1-edge-sunxi64 ] || { echo "board not on the image kernel, stop"; exit 1; }
 $S/install-kernel.sh $T 2>&1 | tail -3 | tee -a $O/board-info.txt

@@ -8,8 +8,8 @@ mkdir -p $O
 waitup() { for i in $(seq 1 60); do sleep 5; $SSH -n true 2>/dev/null && return 0; done; return 1; }
 restore() { $SSH -n 'ln -sfn vmlinuz-7.3.1-edge-sunxi64 /boot/Image; rm -f /boot/vdec-trial; sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'
   waitup && $SSH -n 'echo restored: $(uname -rv) $(readlink /boot/Image)' | tee -a $O/round.txt; }
-$H/harness/board-lock.sh acquire vdec-queue || exit 1
-trap '$H/harness/board-lock.sh release vdec-queue' EXIT
+{ out=$($H/harness/board-lock.sh acquire vdec-$R) || exit 1; echo "$out"; case $out in *"already held"*) echo "lock already held under this owner: another session of mine is running, stop"; exit 1;; esac; }
+trap '$H/harness/board-lock.sh release vdec-$R' EXIT
 $SSH -n 'uname -r; readlink /boot/Image' | tee $O/board-info.txt
 want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32)
 have=$($SSH -n 'md5sum < /boot/$(readlink /boot/Image) | cut -c1-32')

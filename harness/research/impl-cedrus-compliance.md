@@ -29,6 +29,18 @@ Without 0003 the detection still failed (AFBC). /dev/video1 sun50i-di300: 49/49 
 
 Expected on a kernel with the branch: patched compliance 0 FAIL, stock compliance 1 FAIL (DECODER_CMD).
 
+### Verified on c8 (084fcccca, contains 8a3eb99bc), 2026-11-05
+
+Raw: `cedrus-compliance/c8-session.txt`, `cedrus-compliance/c-board/c8/` (script `session-compliance.sh`).
+c6/c7 requested; install-kernel.sh maps to the newest tag, which was c8 by then.
+
+| node | stock 1.32.0 | patched (0001-0003) |
+|---|---|---|
+| /dev/video0 cedrus | 49 / 48 ok / 1 FAIL (codecs.cpp(161) DECODER_CMD, userspace only) | **49 / 49 ok / 0 FAIL**, Detected Stateless Decoder |
+| /dev/video1 sun50i-di300 | 49 / 49 / 0 | 49 / 49 / 0 |
+
+ctrltry: 0 failing controls. Targets met. v4l2-compliance stays a test tool (not shipped in the image).
+
 ## 2. The 360 "frame processing timed out" lines
 
 They come from the AVS2 FFmpeg agent's test1_avs2 runs (kernel-check/avs2-board/ffmpeg-test1.log:
@@ -60,7 +72,5 @@ Copied to harness/research/opi5-bp/board/.
 
 ## Open
 
-- Board-verify fix/sunxi-cedrus-v4l2-compliance on the next cumulative kernel (stock + patched compliance).
-- Ship patched v4l2-compliance in the image (e.g. v4l-utils in scripts/build-media-debs.sh) if wanted.
 - Rebuild image to verify the gst rank and MTU hooks end to end.
-- AVS2 test1_avs2 VE timeouts: AVS2 owner.
+- AVS2 test1_avs2 VE timeouts: handed to the AVS2 owner.

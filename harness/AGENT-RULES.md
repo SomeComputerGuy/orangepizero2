@@ -37,6 +37,8 @@ Acceptance: docs/spec-checklist.md, docs/datasheet-checklist.md. Status/work lis
 ## Builds
 - Build caching is rule #1: ccache + Armbian artifact caches; no needless full rebuilds. No Docker. No sudo.
 - Do not run Armbian `compile.sh` image builds while another one is running (`pgrep -af compile.sh`).
+- Board lock owner names are per session (e.g. vdec-r4, vdec-soak), never shared between two scripts: acquire exits 3
+  if the name already holds the lock, and a release by the second script would free the first one's lock.
 - **Test kernels are cumulative** (user rule for all SBC projects, same as OPi5): fix B's test kernel contains A+B,
   C's contains A+B+C. There is ONE test branch, `test-cumulative` (armbian-build worktree `wt-cumulative`), and ONE
   build tree, `kernel-check/work-cumul`. Never build a private trial kernel in your own WORK tree from an older base.

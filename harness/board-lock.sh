@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # One owner on the board at a time (parallel agents share the single Orange Pi Zero2). First come, first served.
 #   harness/board-lock.sh acquire <owner> [max-wait-s]   queues, blocks until it is this owner's turn, then holds it
+#                                                        (exit 3 if <owner> already holds it: owner names are per session)
 #   harness/board-lock.sh release <owner>                frees it (only the owner may)
 #   harness/board-lock.sh status                         holder + waiting queue
 # Hold it only while the board is actively in use (never across host builds or idle waits), and leave the board
@@ -16,7 +17,9 @@ head_ok() { # am I the oldest live waiter? (waiters whose process is gone are dr
     [ "$f" = "$1" ]; return; done; return 1; }
 case "${1:-status}" in
   acquire) o=${2:?owner}; max=${3:-0}; t0=$(date +%s)
-    [ "$(cat "$L/owner" 2>/dev/null)" = "$o" ] && { echo "already held by $o"; exit 0; }
+    # Not re-entrant: a second session with the same owner name must not run on the first one's lock, and its
+    # release would free the lock under the first (2026-11-05). Use one distinct owner name per session.
+    [ "$(cat "$L/owner" 2>/dev/null)" = "$o" ] && { echo "ERROR: already held by $o (another session with the same owner name?); use a distinct owner name per session" >&2; exit 3; }
     tk=$(date +%s%N).${o//[^A-Za-z0-9_-]/_}.$$; : > "$W/$tk"; trap 'rm -f "$W/$tk"' EXIT
     until head_ok "$tk" && mkdir "$L" 2>/dev/null; do
       (( max > 0 && $(date +%s) - t0 > max )) && { echo "busy: $(cat "$L/owner" "$L/since" 2>/dev/null | tr '\n' ' ')"; exit 1; }

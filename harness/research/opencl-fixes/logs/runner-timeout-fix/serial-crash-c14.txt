@@ -1,0 +1,221 @@
+[20:45:09.799]          Starting [0;1;39msystemd-user-sessions.service[0m - Permit User Sessions...
+[20:45:10.300] [[0;32m  OK  [0m] Started [0;1;39munattended-upgrades.service[0m - Unattended Upgrades Shutdown.
+[20:45:10.300] unattended-upgrades.service
+[20:45:10.300] [[0;32m  OK  [0m] Started [0;1;39mvnstat.service[0m - vnStat network traffic monitor.
+[20:45:10.300] vnstat.service
+[20:45:10.300] [[0;32m  OK  [0m] Finished [0;1;39mopenvpn.service[0m - OpenVPN service.
+[20:45:10.300] openvpn.service
+[20:45:10.300] [[0;32m  OK  [0m] Finished [0;1;39msystemd-user-sessions.service[0m - Permit User Sessions.
+[20:45:10.300] systemd-user-sessions.service
+[20:45:10.300]          Starting [0;1;39mplymouth-quit-wait.servic…[0md until boot process finishes up...
+[20:45:10.300]          Starting [0;1;39mplymouth-quit.service[0m - Terminate Plymouth Boot Screen...
+[20:45:12.308] [!p]104\[0m[?7h[1G[0J7[32766;32766H[6n8[!p]104\[0m[?7h[1G[0J7[32766;32766H[6n8]3008;start=b04522a1b2e14e86b5e99f811f675644;user=root;hostname=orangepizero2;machineid=f6438c3cba07463986da7d99afa540be;bootid=7df662a286c24ccc997a9f29d52a654d;pid=1036;pidfdid=4348;comm=(agetty);servicename=serial-getty@ttyS0.service;invocationid=3a2f29
+[20:45:12.810] Armbian-unofficial 26.11.0-trunk Stonking ttyS0 
+[20:45:12.810] 
+[20:45:13.312] orangepizero2 login: Unable to handle kernel NULL pointer dereference at virtual address 00000000000000f8
+[20:47:44.017] Mem abort info:
+[20:47:44.017]   ESR = 0x0000000096000004
+[20:47:44.017]   EC = 0x25: DABT (current EL), IL = 32 bits
+[20:47:44.017]   SET = 0, FnV = 0
+[20:47:44.017]   EA = 0, S1PTW = 0
+[20:47:44.017]   FSC = 0x04: level 0 translation fault
+[20:47:44.017] Data abort info:
+[20:47:44.017]   ISV = 0, ISS = 0x00000004, ISS2 = 0x00000000
+[20:47:44.017]   CM = 0, WnR = 0, TnD = 0, TagAccess = 0
+[20:47:44.017]   GCS = 0, Overlay = 0, DirtyBit = 0
+[20:47:44.017] user pgtable: 4k pages, 48-bit VAs, pgdp=000000004af67000
+[20:47:44.017] [00000000000000f8] pgd=0000000000000000, p4d=0000000000000000
+[20:47:44.017] Internal error: Oops: 0000000096000004 [#1]  SMP
+[20:47:44.017] Modules linked in: bnep hci_uart btqca btrtl btbcm btintel bluetooth ecdh_generic ecc sprdwl_ng cfg80211 sunrpc snd_soc_hdmi_codec sunxi sun50i_h6_prcm_ppu musb_hdrc dw_hdmi_cec dw_hdmi_i2s_audio dwmac_sun8i phy_generic panfrost sun8i_ce sun50i_di300 gpu_sched crypto_engine drm_shmem_helper display_connector zram 842_decompress 842_compress binfmt_misc sch_fq_codel sprdbt_tty uwe5622_bsp_sdio sunxi_addr rfkill fuse configfs
+[20:47:44.017] CPU: 0 UID: 0 PID: 373 Comm: irq/309-panfros Tainted: G        W           7.3.1 #15 PREEMPT 
+[20:47:44.017] Tainted: [W]=WARN
+[20:47:44.017] Hardware name: OrangePi Zero2 (DT)
+[20:47:44.017] pstate: 00000005 (nzcv daif -PAN -UAO -TCO -DIT -SSBS BTYPE=--)
+[20:47:44.017] pc : panfrost_dequeue_job+0x2c/0xd8 [panfrost]
+[20:47:44.017] lr : panfrost_jm_handle_irqs+0x268/0x570 [panfrost]
+[20:47:44.017] sp : ffff800080c7bcb0
+[20:47:44.017] x29: ffff800080c7bcb0 x28: 0000000000000001 x27: 0000000000020002
+[20:47:44.017] x26: ffff00000885f000 x25: 0000000000020002 x24: 0000000000020002
+[20:47:44.017] x23: ffff800080c7bd90 x22: ffff00000885f010 x21: ffff00000885f000
+[20:47:44.017] x20: 0000000000000000 x19: 0000000000000001 x18: 0000000000000000
+[20:47:44.017] x17: ffff2ee3b10db000 x16: ffffd11c8de02c98 x15: 0020a659d77643c0
+[20:47:44.017] x14: 0000000000000107 x13: 00000017d794335c x12: ffffd11c8de55420
+[20:47:44.017] x11: 00000000000000c0 x10: 0000000000000b40 x9 : ffffd11c43340660
+[20:47:44.017] x8 : ffff0000053c68a0 x7 : 0000000000000000 x6 : 0000000000000000
+[20:47:44.017] x5 : ffff2ee3b10db000 x4 : 0000000000000000 x3 : 0000000000000001
+[20:47:44.017] x2 : 0000000000000000 x1 : 0000000000000001 x0 : ffff00000885f000
+[20:47:44.017] Call trace:
+[20:47:44.017]  panfrost_dequeue_job+0x2c/0xd8 [panfrost] (P)
+[20:47:44.017]  panfrost_jm_handle_irqs+0x268/0x570 [panfrost]
+[20:47:44.017]  panfrost_jm_irq_handler_thread+0x1c/0x60 [panfrost]
+[20:47:44.017]  irq_thread_fn+0x2c/0xb0
+[20:47:44.017]  irq_thread+0x190/0x2d8
+[20:47:44.017]  kthread+0x130/0x150
+[20:47:44.018]  ret_from_fork+0x10/0x20
+[20:47:44.018] Code: 8b335016 aa0003f5 f943d6d4 b40004f4 (3943e280) 
+[20:47:44.018] ---[ end trace 0000000000000000 ]---
+[20:47:44.018] note: irq/309-panfros[373] exited with preempt_count 1
+[20:47:44.520] genirq: exiting task "irq/309-panfros" (373) is an active IRQ thread (irq 309)
+[20:58:55.158] WCN: stop_loopcheck
+[20:59:12.737] rcu: INFO: rcu_preempt self-detected stall on CPU
+[20:59:12.737] rcu: 	2-....: (5250 ticks this GP) idle=4aa4/1/0x4000000000000000 softirq=13351/13351 fqs=2460
+[20:59:12.737] rcu: 	(t=5254 jiffies g=27625 q=2545 ncpus=4)
+[20:59:12.737] CPU: 2 UID: 0 PID: 3399 Comm: rusticl queue s Tainted: G      D W           7.3.1 #15 PREEMPT 
+[20:59:12.737] Tainted: [D]=DIE, [W]=WARN
+[20:59:12.737] Hardware name: OrangePi Zero2 (DT)
+[20:59:12.737] pstate: 00000005 (nzcv daif -PAN -UAO -TCO -DIT -SSBS BTYPE=--)
+[20:59:12.737] pc : queued_spin_lock_slowpath+0x5c/0x600
+[20:59:12.737] lr : _raw_spin_lock+0x60/0x70
+[20:59:12.737] sp : ffff8000865abab0
+[20:59:12.737] x29: ffff8000865abab0 x28: ffff000005703e00 x27: ffff8000865abdf8
+[20:59:12.737] x26: 0000000000000000 x25: 0000000000000000 x24: ffff0000050584f0
+[20:59:12.737] x23: ffff00000c6b1060 x22: 0000000000000000 x21: ffff00000885f148
+[20:59:12.737] x20: ffff00000885f000 x19: ffff000005f60c00 x18: 0000000000001000
+[20:59:12.737] x17: ffff000005538000 x16: ffffd11c8de02c98 x15: 0000000000000000
+[20:59:12.737] x14: 0000000000000040 x13: 0000000000000228 x12: ffff000005058450
+[20:59:12.737] x11: 0000000000000000 x10: 0000000000000000 x9 : ffffd11c8de02cf8
+[20:59:12.737] x8 : 0000000000000000 x7 : ffff8000865abad8 x6 : ffff000006a28000
+[20:59:12.737] x5 : 0000000000000000 x4 : 0000000000000001 x3 : ffff00000572a440
+[20:59:12.737] x2 : 0000000000000000 x1 : 0000000000000000 x0 : 0000000000000001
+[20:59:12.737] Call trace:
+[20:59:12.737]  queued_spin_lock_slowpath+0x5c/0x600 (P)
+[20:59:12.737]  panfrost_jm_ctx_destroy+0x40/0x1a0 [panfrost]
+[20:59:12.737]  panfrost_jm_close+0x48/0x100 [panfrost]
+[20:59:12.737]  panfrost_postclose+0x2c/0x50 [panfrost]
+[20:59:12.737]  drm_file_free+0x1b8/0x268
+[20:59:12.737]  drm_release+0xa8/0x178
+[20:59:12.737]  __fput+0xd4/0x300
+[20:59:12.737]  ____fput+0x18/0x28
+[20:59:12.737]  task_work_run+0x68/0xe0
+[20:59:12.737]  do_exit+0x26c/0xa10
+[20:59:12.737]  do_group_exit+0x34/0xb0
+[20:59:12.737]  get_signal+0xa08/0xa60
+[20:59:12.737]  arch_do_signal_or_restart+0x88/0x360
+[20:59:12.737]  exit_to_user_mode_loop+0x118/0x198
+[20:59:12.737]  el0_svc+0x1c0/0x1c8
+[20:59:12.737]  el0t_64_sync_handler+0x98/0xe0
+[20:59:12.737]  el0t_64_sync+0x170/0x178
+[20:59:42.372] BUG: workqueue lockup - pool cpus=2 node=0 flags=0x0 nice=0 stuck for 50s!
+[20:59:42.372] Showing busy workqueues and worker pools:
+[20:59:42.372] workqueue events: flags=0x100
+[20:59:42.372]   pwq 10: cpus=2 node=0 flags=0x0 nice=0 active=2 refcnt=3
+[20:59:42.372]     pending: delayed_vfree_work, dbs_work_handler
+[20:59:42.372] workqueue events_power_efficient: flags=0x180
+[20:59:42.372]   pwq 10: cpus=2 node=0 flags=0x0 nice=0 active=1 refcnt=2
+[20:59:42.372]     pending: check_lifetime
+[20:59:42.372] workqueue mm_percpu_wq: flags=0x108
+[20:59:42.372]   pwq 10: cpus=2 node=0 flags=0x0 nice=0 active=1 refcnt=2
+[20:59:42.372]     pending: vmstat_update
+[20:59:42.372] workqueue WCN_LOOPCHECK_QUEUE: flags=0x6000a
+[20:59:42.372]   pwq 16: cpus=0-3 flags=0x4 nice=0 active=1 refcnt=7
+[20:59:42.372]     in-flight: 42:loopcheck_work_queue [uwe5622_bsp_sdio] for 50s BAR(42)
+[20:59:42.372] workqueue panfrost-reset: flags=0x20002
+[20:59:42.372]   pwq 16: cpus=0-3 flags=0x4 nice=0 active=1 refcnt=6
+[20:59:42.372]     in-flight: 56:drm_sched_job_timedout [gpu_sched] for 717s
+[20:59:42.372] pool 16: cpus=0-3 flags=0x4 nice=0 hung=0s workers=5 idle: 89 7628 68
+[20:59:42.372] Showing backtraces of busy workers in stalled worker pools:
+[20:59:42.372] pool 10: no worker in running state, cpu=2 is busy (nr_workers=3 nr_idle=3)
+[20:59:42.372] The pool might have trouble waking an idle worker.
+[20:59:42.372] Backtrace of last woken worker:
+[20:59:42.372] task:kworker/2:0     state:R  running task     stack:0     pid:28    tgid:28    ppid:2      task_flags:0x4208060 flags:0x00000010
+[20:59:42.372] Workqueue:  0x0 (mm_percpu_wq)
+[20:59:42.372] Call trace:
+[20:59:42.372]  __switch_to+0xf0/0x1e8 (T)
+[20:59:42.372]  __schedule+0x384/0xec0
+[20:59:42.372]  schedule+0x38/0xd8
+[20:59:42.372]  worker_thread+0xcc/0x308
+[20:59:42.372]  kthread+0x130/0x150
+[20:59:42.372]  ret_from_fork+0x10/0x20
+[20:59:42.372] Sending NMI from CPU 0 to CPUs 2:
+[20:59:42.372] NMI backtrace for cpu 2
+[20:59:42.372] CPU: 2 UID: 0 PID: 3399 Comm: rusticl queue s Tainted: G      D W           7.3.1 #15 PREEMPT 
+[20:59:42.372] Tainted: [D]=DIE, [W]=WARN
+[20:59:42.372] Hardware name: OrangePi Zero2 (DT)
+[20:59:42.372] pstate: 00000005 (nzcv daif -PAN -UAO -TCO -DIT -SSBS BTYPE=--)
+[20:59:42.372] pc : queued_spin_lock_slowpath+0x5c/0x600
+[20:59:42.372] lr : _raw_spin_lock+0x60/0x70
+[20:59:42.372] sp : ffff8000865abab0
+[20:59:42.372] x29: ffff8000865abab0 x28: ffff000005703e00 x27: ffff8000865abdf8
+[20:59:42.372] x26: 0000000000000000 x25: 0000000000000000 x24: ffff0000050584f0
+[20:59:42.372] x23: ffff00000c6b1060 x22: 0000000000000000 x21: ffff00000885f148
+[20:59:42.372] x20: ffff00000885f000 x19: ffff000005f60c00 x18: 0000000000001000
+[20:59:42.372] x17: ffff000005538000 x16: ffffd11c8de02c98 x15: 0000000000000000
+[20:59:42.372] x14: 0000000000000040 x13: 0000000000000228 x12: ffff000005058450
+[20:59:42.372] x11: 0000000000000000 x10: 0000000000000000 x9 : ffffd11c8de02cf8
+[20:59:42.372] x8 : 0000000000000000 x7 : ffff8000865abad8 x6 : ffff000006a28000
+[20:59:42.372] x5 : 0000000000000000 x4 : 0000000000000001 x3 : ffff00000572a440
+[20:59:42.373] x2 : 0000000000000000 x1 : 0000000000000000 x0 : 0000000000000001
+[20:59:42.373] Call trace:
+[20:59:42.373]  queued_spin_lock_slowpath+0x5c/0x600 (P)
+[20:59:42.373]  panfrost_jm_ctx_destroy+0x40/0x1a0 [panfrost]
+[20:59:42.373]  panfrost_jm_close+0x48/0x100 [panfrost]
+[20:59:42.373]  panfrost_postclose+0x2c/0x50 [panfrost]
+[20:59:42.373]  drm_file_free+0x1b8/0x268
+[20:59:42.373]  drm_release+0xa8/0x178
+[20:59:42.373]  __fput+0xd4/0x300
+[20:59:42.373]  ____fput+0x18/0x28
+[20:59:42.373]  task_work_run+0x68/0xe0
+[20:59:42.373]  do_exit+0x26c/0xa10
+[20:59:42.373]  do_group_exit+0x34/0xb0
+[20:59:42.373]  get_signal+0xa08/0xa60
+[20:59:42.373]  arch_do_signal_or_restart+0x88/0x360
+[20:59:42.373]  exit_to_user_mode_loop+0x118/0x198
+[20:59:42.373]  el0_svc+0x1c0/0x1c8
+[20:59:42.373]  el0t_64_sync_handler+0x98/0xe0
+[20:59:42.373]  el0t_64_sync+0x170/0x178
+[21:00:09.489] sprdwl:[WIFI_CMD_SET_IE]timeout
+[21:00:09.489] sprdwl:ctx_id:0 cmd: WIFI_CMD_SET_IE[25] rsp timeout (mstime = 916041), num=44
+[21:00:09.489] unisoc_wifi unisoc_wifi wlan0: sprdwl_cfg80211_scan failed (-1)
+[21:00:09.991] sprdwl:sprdwl_atcmd_assert ctx_id:0, cmd_id:25, reason:3, cp_asserted:0
+[21:00:09.991] WCN: mdbg_assert_interface:[CMD] WIFI_CMD_SET_IE, [REASON] CMD_RSP_TIMEOUT_ERROR
+[21:00:09.991] WCN_ERR: mdbg_assert_interface,[CMD] WIFI_CMD_SET_IE, [REASON] CMD_RSP_TIMEOUT_ERROR reset & notify...
+[21:00:09.991] bluetooth_reset:reset callback coming
+[21:00:09.991] bluetooth_reset tty_insert_flip_string
+[21:00:09.991] bluetooth_reset before tty_insert_flip_string ret: 0, len: 5
+[21:00:09.991] bluetooth_reset ret: 5, len: 5
+[21:00:09.991] sprdwl:cp2 reset begin..........
+[21:00:09.991] sprdwl:cp2 reset finish..........
+[21:00:09.991] WCN: [marlin_cp2_reset], DO BSP RESET
+[21:00:09.991] WCN: marlin power state:5, subsys: [MARLIN_WIFI] power 0
+[21:00:09.991] WCN: can not power off, other module is on
+[21:00:09.991] WCN: start_loopcheck
+[21:00:09.991] WCN: marlin power state:1, subsys: [MARLIN_BLUETOOTH] power 0
+[21:00:09.991] WCN: stop_loopcheck
+[21:00:10.993] 
+[21:00:10.993] U-Boot SPL 2026.10_armbian-2026.10-S5508-P574f-Hf8df-V1b9e-Bcd80-R448a (Nov 04 2026 - 04:58:08 +0000)
+[21:00:10.993] DRAM: 1024 MiB
+[21:00:10.993] Trying to boot from MMC1
+[21:00:12.500] NOTICE:  BL31: v2.14.11(debug):armbian
+[21:00:12.500] NOTICE:  BL31: Built : 04:57:59, Nov  4 2026
+[21:00:12.500] NOTICE:  BL31: Detected Allwinner H616 SoC (1823)
+[21:00:12.500] NOTICE:  BL31: Found U-Boot DTB at 0x4a0ba6a8, model: OrangePi Zero2
+[21:00:12.500] INFO:    ARM GICv2 driver initialized
+[21:00:12.500] INFO:    Configuring SPC Controller
+[21:00:12.500] INFO:    Probing for PMIC on RSB:
+[21:00:12.500] INFO:    PMIC: found AXP305, setting up regulators
+[21:00:12.500] INFO:    PMIC: aldo1 voltage: 3.300V
+[21:00:12.500] INFO:    PMIC: aldo2 voltage: 3.300V
+[21:00:12.500] INFO:    PMIC: aldo3 voltage: 3.300V
+[21:00:12.500] INFO:    PMIC: bldo1 voltage: 1.800V
+[21:00:12.500] INFO:    PMIC: dcdcd voltage: 1.500V
+[21:00:12.500] INFO:    PMIC: dcdce voltage: 3.300V
+[21:00:12.500] INFO:    BL31: Platform setup done
+[21:00:12.500] INFO:    BL31: Initializing runtime services
+[21:00:12.500] INFO:    BL31: cortex_a53: CPU workaround for erratum 855873 was applied
+[21:00:12.500] INFO:    BL31: cortex_a53: CPU workaround for erratum 1530924 was applied
+[21:00:12.500] INFO:    PSCI: CPU suspend is available natively
+[21:00:12.500] INFO:    BL31: Preparing for EL3 exit to normal world
+[21:00:12.500] INFO:    Entry point address = 0x4a000000
+[21:00:12.500] INFO:    SPSR = 0x3c9
+[21:00:12.500] INFO:    Changed devicetree.
+[21:00:13.002] 
+[21:00:13.002] 
+[21:00:13.002] U-Boot 2026.10_armbian-2026.10-S5508-P574f-Hf8df-V1b9e-Bcd80-R448a (Nov 04 2026 - 04:58:08 +0000) Allwinner Technology
+[21:00:13.002] 
+[21:00:13.002] CPU:   Allwinner H616 (SUN50I)
+[21:00:13.002] Model: OrangePi Zero2
+[21:00:13.002] DRAM:  1 GiB
+[21:00:13.002] Core:  75 devices, 26 uclasses, devicetree: separate
+[21:00:13.002] WDT:   Not starting watchdog@30090a0
+[21:00:13.002] MMC:   mmc@4020000: 0
+[21:00:13.002] Loading Environment from nowhere...Loading Environment from nowhere... OK

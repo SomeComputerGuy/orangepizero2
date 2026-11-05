@@ -1,5 +1,5 @@
 #!/bin/bash
-# Runner package for the vdec board jobs: vdec-job.sh <t1f9|afbc|soak3|t1fix>
+# Runner package for the vdec board jobs: vdec-job.sh <t1f9|afbc|soak3|t1fix|avs2q>
 # Self-contained: board lock (fresh owner name per acquire), install the cumulative kernel (c9 for the first three jobs,
 # the newest one for t1fix, which must contain fix/sunxi-avs2-poc-base fa73c3e5e) with the vdec fallback armed,
 # run the job's board script in chunks of at most ~15 min under a stall watchdog, copy the results off after every chunk,
@@ -8,7 +8,7 @@
 # $OUT/state. Exit 0 = all chunks ran (pass/fail is judged from the results, see HANDOFF.md); 2 = blocked (reason in
 # $OUT/BLOCKED); 1 = setup error.
 set -u
-H=/home/aruni/orangepizero2; S=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh; J=${1:?job: t1f9|afbc|soak3|t1fix}; T=c9
+H=/home/aruni/orangepizero2; S=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh; J=${1:?job: t1f9|afbc|soak3|t1fix|avs2q}; T=c9
 CK=$H/kernel-check/cumulative-kernels.txt; FIX=fa73c3e5e80f5af2c77158bfa8d783ef6218a163
 K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
 OUT=$S/logs/runner-$J; mkdir -p $OUT; touch $OUT/state; rm -f $OUT/BLOCKED
@@ -21,6 +21,8 @@ case $J in
          T=$(tail -1 $CK | cut -d' ' -f1); sha=$(tail -1 $CK | cut -d' ' -f3)
          git -C $H/wt-cumulative merge-base --is-ancestor $FIX $sha 2>/dev/null || {
            echo "newest cumulative kernel $T ($sha) does not contain fix/sunxi-avs2-poc-base $FIX" | tee $OUT/BLOCKED; exit 2; } ;;
+  avs2q) BQ=board-queue-avs2q.sh; CHUNKS="1"; CT=1200; STALL=600; ENV=""; FETCH="/root/ffq/out/*"
+         T=$(tail -1 $CK | cut -d' ' -f1) ;;   # newest cumulative kernel; FFmpeg 0313 AVS2 request queueing
   *) echo "unknown job $J"; exit 1 ;;
 esac
 want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || exit 1

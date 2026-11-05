@@ -158,7 +158,8 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
   cedrus must accept it, and the rejection also applies to TRY_EXT_CTRLS. Shared FFmpeg 0309 is in ffmpeg-shared branch final
   b187e9c1e8, plus a kernel doc note (D optional). Take both byte-for-byte.
 - IOMMU faults at 0xfff00000 (master -1, c9, ~17:58, unidentified session): project-vdec.md.
-- AVS2 FFmpeg depth-2 queueing patch (aq1: gaps 151 -> 1, md5 PASS) into patches/ffmpeg + the shared OPi5 set.
+- AVS2 FFmpeg depth-2 queueing patch (aq1: gaps 151 -> 1, md5 PASS): landed as patches/ffmpeg 0313 + deb REV 4 (2026-11-05);
+  OPi5 adopts it from harness/research/ffmpeg-shared/HANDOFF-avs2-queue.md; board re-check = runner job 12-avs2-queue.
 - VP9 inter-frame upsize (svc_1280x720_3): REMOVE_BUFS + S_FMT while streaming (harness/vp9-vectors/RESULTS.md §5).
 - Vulkan subgroupelect hang: recheck on c13 (panfrost timeout fix), then root-cause.
 - GLES blend_equation_advanced mixedSequence (coherent); kbase insmod on c13+ (session2.sh) then GLES 3.2 traces.

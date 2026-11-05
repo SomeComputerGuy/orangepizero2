@@ -93,3 +93,26 @@ Checks, all on `logs/runner-t1fix/chunk-1.txt`:
 
 The summary must list: the `[seq]` line, the `[count]` line, the `[differing frames]` line (copied exactly), the five
 `[<stream>]` lines, the `timeouts` lines, and dmesg-1.txt.
+
+## Job avs2q: FFmpeg AVS2 request queueing (patches/ffmpeg 0313) md5 + starved-gap check (about 10 min, 1 chunk)
+Command: `bash harness/research/vdec-perf/runner/vdec-job.sh avs2q`
+
+Kernel: the newest cumulative kernel (last line of kernel-check/cumulative-kernels.txt; c15 fa73c3e5e or later). No debs:
+the board downloads the dev binary `ffmpeg-avs2q` (kernel-check/vdec-serve/avs2, sha256 starts 01a23cd93c89daf9 = the
+shared series head + 0313) and `refs-8bit.md5` (runner/refs-8bit.md5) from 10.56.0.1:8643. Results:
+`logs/runner-avs2q/chunk-1.txt`, per-frame md5 lists in `files/`.
+
+Checks, all on `chunk-1.txt`:
+- PASS if `grep -c ROUND-DONE` = 1 and no `download failed` line.
+- PASS if the `[binary]` line shows `sha256 01a23cd93c89daf9` and `avs2-decoder 1`.
+- PASS if both `[gaps cctv4k-10bit holdback rN]` lines show `gap starved n=X` with X <= 3 (aq1: 1 per run). The
+  `[gaps cctv4k-10bit lowdelay r1]` line is data (aq1: n=151); report its X too.
+- PASS if the `[md5 cctv4k-10bit]` line contains ` PASS ` (Main10 P010, ref be9985dea38abffc850d73024165c990).
+- PASS if `grep -c '^\[md5 .*\] PASS '` = 18 (cctv4k + 17 8-bit streams) and `grep -c '^\[md5 .*\] FAIL'` = 0. Each
+  FAIL line is a regression; copy it.
+- PASS if the first line (`kernel ... timeouts N`) and the last `timeouts N` line both show 0, and every `[md5 ...]`
+  line shows `new-timeouts 0`.
+- PASS if dmesg-1.txt has no `timed out` line. IOMMU `Page fault` lines are reported, not a FAIL of this job (open item 4).
+
+The summary must list: the `kernel` line, the `[binary]` line, the three `[gaps ...]` lines (copied exactly), the
+`[md5 ...]` PASS/FAIL counts and any FAIL lines, the `timeouts` lines, and dmesg-1.txt.

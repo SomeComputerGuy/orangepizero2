@@ -1,0 +1,6 @@
+tag c9
+7.3.1
+vmlinuz-7.3.1-vdec-c9
+c9 already booted (Image md5 c210a5b247cacdf366b38062385d3a3f), skipping the install
+7.3.1 #12 SMP PREEMPT Thu Nov  5 17:30:51 UTC 2026
+/dev/video0

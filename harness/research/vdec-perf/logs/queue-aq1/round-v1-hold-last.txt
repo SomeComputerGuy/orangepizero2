@@ -1,0 +1,51 @@
+kernel 7.3.1 #11 SMP PREEMPT Thu Nov  5 14:38:34 UTC 2026 clk 624000000 uptime 36.49 cedrus-timeouts-so-far 0
+cbe7f406b31971d5  /root/ffq/ffmpeg d42416f3764db428  /root/ffq/ffmpeg-old 
+== timelines (ve-timeline.sh; new = hold-back, lowdelay = -flags low_delay = depth 1, old = unpatched binary)
+[cctv4k-10bit new r1] rc=0 jobs=292 wall=5.61s span=4.95s | setup 0.14ms ve 16.15ms (max 16.66) | gap ready n=150 avg 0.072ms (wq 0.068ms) | gap starved n=142 avg 0.36ms max 11.11ms fps: ve-only 61.9, ve+setup 61.4, pipeline(span) 59.0, wall 52.1 | idle share: setup 0.8% ready-gap 0.2% starved 1.0%  rtime=5.105s
+[cctv4k-10bit lowdelay r1] rc=0 jobs=292 wall=5.68s span=5.00s | setup 0.14ms ve 16.24ms (max 16.99) | gap ready n=141 avg 0.083ms (wq 0.080ms) | gap starved n=151 avg 0.47ms max 3.35ms fps: ve-only 61.6, ve+setup 61.1, pipeline(span) 58.4, wall 51.4 | idle share: setup 0.8% ready-gap 0.2% starved 1.4%  rtime=5.166s
+[cctv4k-10bit old r1] rc=0 jobs=292 wall=5.77s span=5.05s | setup 0.15ms ve 16.25ms (max 16.63) | gap ready n=141 avg 0.097ms (wq 0.091ms) | gap starved n=151 avg 0.79ms max 4.79ms fps: ve-only 61.6, ve+setup 61.0, pipeline(span) 57.8, wall 50.6 | idle share: setup 0.9% ready-gap 0.3% starved 2.3%  rtime=5.223s
+[main-2160p-ra new r1] rc=0 jobs=20 wall=0.74s span=0.58s | setup 0.18ms ve 28.66ms (max 34.43) | gap ready n=11 avg 0.061ms (wq 0.058ms) | gap starved n=9 avg -23.80ms max 0.94ms fps: ve-only 34.9, ve+setup 34.7, pipeline(span) 34.4, wall 27.0 | idle share: setup 0.6% ready-gap 0.1% starved -36.8%  rtime=0.662s
+[main-2160p-ra lowdelay r1] rc=0 jobs=20 wall=0.74s span=0.58s | setup 0.17ms ve 28.38ms (max 32.62) | gap ready n=10 avg 0.063ms (wq 0.061ms) | gap starved n=10 avg -20.45ms max 6.56ms fps: ve-only 35.2, ve+setup 35.0, pipeline(span) 34.3, wall 27.1 | idle share: setup 0.6% ready-gap 0.1% starved -35.1%  rtime=0.663s
+[main-2160p-ra old r1] rc=0 jobs=20 wall=0.74s span=0.58s | setup 0.18ms ve 28.46ms (max 32.62) | gap ready n=10 avg 0.063ms (wq 0.060ms) | gap starved n=10 avg -20.55ms max 6.21ms fps: ve-only 35.1, ve+setup 34.9, pipeline(span) 34.2, wall 27.1 | idle share: setup 0.6% ready-gap 0.1% starved -35.2%  rtime=0.665s
+[ParkScene_1920x1080_24_ra new r1] rc=0 jobs=200 wall=1.10s span=1.00s | setup 0.12ms ve 4.60ms (max 5.63) | gap ready n=103 avg 0.057ms (wq 0.054ms) | gap starved n=97 avg 0.14ms max 1.17ms fps: ve-only 217.4, ve+setup 212.0, pipeline(span) 199.6, wall 181.8 | idle share: setup 2.3% ready-gap 0.6% starved 1.3%  rtime=1.031s
+[ParkScene_1920x1080_24_ra lowdelay r1] rc=0 jobs=200 wall=1.11s span=1.02s | setup 0.11ms ve 4.65ms (max 5.17) | gap ready n=97 avg 0.061ms (wq 0.058ms) | gap starved n=103 avg 0.18ms max 1.99ms fps: ve-only 215.1, ve+setup 210.0, pipeline(span) 196.8, wall 179.6 | idle share: setup 2.2% ready-gap 0.6% starved 1.8%  rtime=1.045s
+[ParkScene_1920x1080_24_ra old r1] rc=0 jobs=200 wall=1.11s span=1.01s | setup 0.11ms ve 4.64ms (max 5.25) | gap ready n=97 avg 0.062ms (wq 0.059ms) | gap starved n=103 avg 0.18ms max 2.21ms fps: ve-only 215.5, ve+setup 210.3, pipeline(span) 197.1, wall 180.2 | idle share: setup 2.3% ready-gap 0.6% starved 1.8%  rtime=1.043s
+[cctv4k-10bit new r2] rc=0 jobs=292 wall=5.70s span=5.01s | setup 0.15ms ve 16.28ms (max 17.85) | gap ready n=150 avg 0.107ms (wq 0.094ms) | gap starved n=142 avg 0.33ms max 12.47ms fps: ve-only 61.4, ve+setup 60.9, pipeline(span) 58.3, wall 51.2 | idle share: setup 0.8% ready-gap 0.3% starved 0.9%  rtime=5.173s
+[cctv4k-10bit lowdelay r2] rc=0 jobs=292 wall=5.75s span=5.01s | setup 0.14ms ve 16.23ms (max 16.64) | gap ready n=141 avg 0.082ms (wq 0.080ms) | gap starved n=151 avg 0.56ms max 4.77ms fps: ve-only 61.6, ve+setup 61.1, pipeline(span) 58.3, wall 50.8 | idle share: setup 0.8% ready-gap 0.2% starved 1.7%  rtime=5.181s
+[cctv4k-10bit old r2] rc=0 jobs=292 wall=5.79s span=5.05s | setup 0.15ms ve 16.24ms (max 16.62) | gap ready n=141 avg 0.090ms (wq 0.087ms) | gap starved n=151 avg 0.75ms max 5.10ms fps: ve-only 61.6, ve+setup 61.0, pipeline(span) 57.9, wall 50.4 | idle share: setup 0.9% ready-gap 0.3% starved 2.3%  rtime=5.223s
+[main-2160p-ra new r2] rc=0 jobs=20 wall=0.74s span=0.58s | setup 0.18ms ve 28.72ms (max 34.68) | gap ready n=11 avg 0.060ms (wq 0.057ms) | gap starved n=9 avg -23.78ms max 0.94ms fps: ve-only 34.8, ve+setup 34.6, pipeline(span) 34.3, wall 27.0 | idle share: setup 0.6% ready-gap 0.1% starved -36.7%  rtime=0.664s
+[main-2160p-ra lowdelay r2] rc=0 jobs=20 wall=0.74s span=0.58s | setup 0.17ms ve 28.42ms (max 32.65) | gap ready n=10 avg 0.066ms (wq 0.059ms) | gap starved n=10 avg -20.50ms max 6.22ms fps: ve-only 35.2, ve+setup 35.0, pipeline(span) 34.3, wall 27.0 | idle share: setup 0.6% ready-gap 0.1% starved -35.2%  rtime=0.664s
+[main-2160p-ra old r2] rc=0 jobs=20 wall=0.74s span=0.58s | setup 0.18ms ve 28.44ms (max 32.72) | gap ready n=10 avg 0.064ms (wq 0.061ms) | gap starved n=10 avg -20.50ms max 6.64ms fps: ve-only 35.2, ve+setup 34.9, pipeline(span) 34.2, wall 27.1 | idle share: setup 0.6% ready-gap 0.1% starved -35.1%  rtime=0.664s
+[ParkScene_1920x1080_24_ra new r2] rc=0 jobs=200 wall=1.10s span=1.00s | setup 0.12ms ve 4.59ms (max 5.62) | gap ready n=103 avg 0.056ms (wq 0.054ms) | gap starved n=97 avg 0.14ms max 1.21ms fps: ve-only 217.8, ve+setup 212.2, pipeline(span) 199.8, wall 182.1 | idle share: setup 2.4% ready-gap 0.6% starved 1.4%  rtime=1.031s
+[ParkScene_1920x1080_24_ra lowdelay r2] rc=0 jobs=200 wall=1.11s span=1.01s | setup 0.12ms ve 4.63ms (max 5.24) | gap ready n=97 avg 0.067ms (wq 0.062ms) | gap starved n=103 avg 0.17ms max 2.00ms fps: ve-only 216.1, ve+setup 210.8, pipeline(span) 197.5, wall 180.1 | idle share: setup 2.3% ready-gap 0.6% starved 1.8%  rtime=1.041s
+[ParkScene_1920x1080_24_ra old r2] rc=0 jobs=200 wall=1.24s span=1.12s | setup 0.14ms ve 5.05ms (max 6.29) | gap ready n=97 avg 0.106ms (wq 0.098ms) | gap starved n=103 avg 0.31ms max 2.64ms fps: ve-only 197.9, ve+setup 192.5, pipeline(span) 178.2, wall 161.9 | idle share: setup 2.5% ready-gap 0.9% starved 2.8%  rtime=1.153s
+== md5 (new binary, hold-back on)
+[md5 avs2-8bit-2160p-ra] PASS 3a3d5d7eb9a6f548042e160d9e461388
+[md5 avs2-10bit-cctv4k P010] PASS be9985dea38abffc850d73024165c990
+[md5 avs2-8bit-2160p-ra lowdelay] PASS 3a3d5d7eb9a6f548042e160d9e461388
+== 17 8-bit streams (board-avs2-ffmpeg.sh scheme: framemd5 + md5 + rtime), outputs in /root/ffq/out
+BasketballPass_416x240_50_ai rc=0 frames=100 MD5=531837190a7b825598d7b40c968f2ce4 rtime=0.058s
+BasketballPass_416x240_50_ld rc=0 frames=100 MD5=b3c024f8937e84a064403c37e49e0eaa rtime=0.055s
+BasketballPass_416x240_50_ra rc=0 frames=100 MD5=095fb60d8c2be3442c9d3b5a1c7d8231 rtime=0.063s
+BQMall_832x480_60_ra rc=0 frames=150 MD5=f81cf1cb18bb1c75a27a028bec3ea7cc rtime=0.185s
+BQSquare_416x240_60_ai rc=0 frames=100 MD5=2ca64532889b2e53ea2ddaad4274371c rtime=0.060s
+BQSquare_416x240_60_ld rc=0 frames=100 MD5=346e3fd17650e52fff5e1ea6482fc7f0 rtime=0.061s
+BQSquare_416x240_60_ra rc=0 frames=100 MD5=cf9babd3440b696c998179071a608b85 rtime=0.066s
+ParkScene_1920x1080_24_ra rc=0 frames=200 MD5=5362883e842d53ce466c1ec01167ccb0 rtime=1.024s
+PartyScene_832x480_50_ra rc=0 frames=200 MD5=53406eec8862d026cc8b452549763fe9 rtime=0.268s
+RaceHorses_416x240_30_ai rc=0 frames=100 MD5=c9e2997073c1160fd07ddd5d93dd2679 rtime=0.064s
+RaceHorses_416x240_30_ld rc=0 frames=100 MD5=a14aed1f60034e7e09389419140e2ce8 rtime=0.062s
+RaceHorses_416x240_30_ra rc=0 frames=100 MD5=842cd52fe2df92b5bddbf3757baa5184 rtime=0.066s
+main-1080p-ra rc=0 frames=30 MD5=13dbb783682495dd423b05f6decee8b2 rtime=0.179s
+main-1080p-ldp rc=0 frames=30 MD5=d499bea0e77a27bd89974533094b3f71 rtime=0.130s
+main-1080p-tid rc=0 frames=30 MD5=13dbb783682495dd423b05f6decee8b2 rtime=0.175s
+main-1080p-lf rc=0 frames=30 MD5=18c32c2e84cec242608b6742c0c1cb5e rtime=0.175s
+main-2160p-ra rc=0 frames=20 MD5=3a3d5d7eb9a6f548042e160d9e461388 rtime=0.715s
+[dmesg] [    0.199980] platform 1c0e000.video-codec: Adding to iommu group 0
+[dmesg] [    0.242790] cedrus 1c0e000.video-codec: Device registered as /dev/video0
+[dmesg] [    0.266466] bridge: filtering via arp/ip/ip6tables is no longer available by default. Update your scripts to load br_netfilter if you need this.
+[dmesg] [    0.308727] platform 1100000.planes: Adding to iommu group 0
+[dmesg] [    8.276666] systemd[1]: Queued start job for default target graphical.target.
+uptime 246.64 cedrus-timeouts 0
+ROUND-DONE
+restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64

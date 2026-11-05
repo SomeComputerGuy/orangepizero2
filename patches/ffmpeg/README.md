@@ -1,7 +1,7 @@
 # Shared FFmpeg v4l2-request series (orangepi5 RK3588 + orangepizero2 H616)
 
 Base: Ubuntu `ffmpeg 7:8.1.2-2ubuntu2` (= FFmpeg tag n8.1.2). Applied in file-name order, appended to
-debian/patches/series (scripts/build-media-debs.sh). All 35 apply with fuzz 0 on the Ubuntu source.
+debian/patches/series (scripts/build-media-debs.sh). All 36 apply with fuzz 0 on the Ubuntu source.
 
 | range | source |
 |---|---|
@@ -15,6 +15,7 @@ debian/patches/series (scripts/build-media-debs.sh). All 35 apply with fuzz 0 on
 | 0310 | shared glue: FATE vc1test_smm0005 reference for Jernej's 0201/0202 B-picture fixes |
 | 0311 | shared glue: FATE source list gains the four local uAPI headers |
 | 0312 | shared glue: AFBC fourcc fallbacks for distro headers |
+| 0313 | orangepizero2: AVS2 decoder output hold-back for asynchronous hwaccels (two decode requests in flight on v4l2request; `-flags low_delay` turns it off; aq1: starved VE gaps 151 -> 1 per 4K Main10 run, md5 unchanged) |
 | debian/0001 | packaging: --enable-v4l2-request --enable-libudev |
 
 uAPIs expected by the add-on hwaccels (local copies in libavcodec/v4l2-stateless-*.h, used only when the kernel

@@ -33,5 +33,6 @@ b46cde8bddcdf2db824dbcc706883b4665372dfc904a84896816f3d49f7160f4  0307-avcodec-a
 470941726d996a39b8a57a42a21df3388ee08f32a2f1d288069134c5a1e28652  0310-fate-vc1-update-the-SMM0005-reference-for-the-Simple.patch
 afcc610ee31ca978e5f35205410d654ebba4cdc59ffdd984ec10c9f8088b5ff4  0311-fate-source-list-the-local-V4L2-stateless-uAPI-heade.patch
 09a248f559729ae63f49f0af35d55670160d3efc6a922805d16b65428e272f17  0312-avutil-hwcontext_v4l2request-define-the-AFBC_16X16_S.patch
+251cdec797b0d461449726d9024abf2bb08c451e19e41d2ace92c487737b9d9c  0313-avcodec-avs2dec-return-a-picture-only-after-the-next.patch
 bc4e47dc691c4aeb0a1da47504213ca2e0a53a0535211951e156332bf94232cb  debian/0001-debian-Enable-the-V4L2-Request-API-hwaccels-on-Linux.patch
-0dbc642437085d5932cf5b723ed89e47218e668ff88d203145f237aa6d98fadb  README.md
+a73c080b616b723bb6f57a1760e773c2bd6582b91a2fc2d24a424409ea8a5787  README.md

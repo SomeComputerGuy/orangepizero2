@@ -1,0 +1,167 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 13:08:37 +0000
+Subject: [PATCH 313/313] avcodec/avs2dec: return a picture only after the next
+ one has been queued
+
+The hwaccels which only queue a picture in end_frame() and wait for the
+hardware when the frame is returned to the application
+(HWACCEL_CAP_ASYNC_SAFE, like v4l2request) keep two pictures in flight
+with the frame threaded software decoders: the frame of picture N is
+returned, and waited for, after thread N+1 has queued its picture. The
+native AVS2 decoder has no frame threading and bumps pictures out of its
+DPB as soon as they are decoded, so for a low delay stream, and for the
+lowest-level B pictures of a random access GOP (half of the pictures),
+the picture waited for is the one that was just queued: the hardware
+idles while the next picture is read, parsed and queued.
+
+Hold the picture being decoded back, when the hwaccel is asynchronous
+and AV_CODEC_FLAG_LOW_DELAY is not set, until the next picture has been
+queued: the hardware then always has a picture to decode while the
+application waits and the picture after it is parsed. The pictures bumped
+with it that were decoded earlier are not delayed, only the ones queued
+behind it in output order. Draining lifts the hold. The output order and
+the pictures are unchanged; has_b_frames accounts for the extra picture
+of delay.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/avs2dec.c | 44 ++++++++++++++++++++++++++++++++++++++------
+ libavcodec/avs2dec.h |  4 ++++
+ 2 files changed, 42 insertions(+), 6 deletions(-)
+
+diff --git a/libavcodec/avs2dec.c b/libavcodec/avs2dec.c
+index 539d750c8c..898bb1c4ad 100644
+--- a/libavcodec/avs2dec.c
++++ b/libavcodec/avs2dec.c
+@@ -38,6 +38,7 @@
+ #include "decode.h"
+ #include "hwaccel_internal.h"
+ #include "hwconfig.h"
++#include "internal.h"
+ 
+ /* decode_packet(): the packet has to wait until the DPB has been emptied */
+ #define AVS2_NEED_FLUSH 1
+@@ -62,6 +63,7 @@ static void avs2_dpb_reset(AVS2DecContext *s)
+     for (int i = 0; i < s->nb_out; i++)
+         av_frame_unref(s->out[i]);
+     s->nb_out             = 0;
++    s->nb_ready           = 0;
+     s->background         = NULL;
+     s->cur                = NULL;
+     s->doi_wrap           = 0;
+@@ -153,6 +155,17 @@ static int avs2_get_format(AVCodecContext *avctx)
+ 
+     avctx->pix_fmt = ret;
+ 
++    /*
++     * An asynchronous hwaccel only queues the picture in end_frame() and
++     * waits for it when the frame is returned to the application. Holding a
++     * picture back until the next one has been queued lets the hardware
++     * decode that one while the application waits and the picture after it
++     * is parsed (two decode requests in flight), like frame threading does
++     * for the software decoders.
++     */
++    s->out_delay = (ffhwaccel(avctx->hwaccel)->caps_internal & HWACCEL_CAP_ASYNC_SAFE) &&
++                   !(avctx->flags & AV_CODEC_FLAG_LOW_DELAY);
++
+     return 0;
+ }
+ 
+@@ -177,7 +190,6 @@ static int avs2_set_sequence(AVCodecContext *avctx, const AVS2SequenceHeader *se
+     avctx->level   = seq->level_id;
+     if (ff_avs2_frame_rate_tab[seq->frame_rate_code].num)
+         avctx->framerate = ff_avs2_frame_rate_tab[seq->frame_rate_code];
+-    avctx->has_b_frames = seq->picture_reorder_delay;
+ 
+     switch (seq->aspect_ratio) {
+     case 1:
+@@ -202,7 +214,12 @@ static int avs2_set_sequence(AVCodecContext *avctx, const AVS2SequenceHeader *se
+     s->seq       = *seq;
+     s->seq_valid = 1;
+ 
+-    return avs2_get_format(avctx);
++    ret = avs2_get_format(avctx);
++    if (ret < 0)
++        return ret;
++    avctx->has_b_frames = seq->picture_reorder_delay + s->out_delay;
++
++    return 0;
+ }
+ 
+ /* Do the new sequence parameters need new frames? */
+@@ -292,6 +309,10 @@ static int avs2_output_frame(AVS2DecContext *s, AVS2Frame *f)
+         return ret;
+     s->nb_out++;
+ 
++    /* The picture being decoded is returned once the next one is queued. */
++    if (s->nb_ready == s->nb_out - 1 && !(s->out_delay && f == s->cur))
++        s->nb_ready = s->nb_out;
++
+     av_log(s->avctx, AV_LOG_TRACE, "output poc %d (doi %"PRId64")\n",
+            f->poc, f->doi);
+ 
+@@ -542,13 +563,17 @@ static int avs2_decode_picture(AVCodecContext *avctx, const AVPacket *pkt,
+     if (ret < 0)
+         goto fail;
+ 
+-    s->cur = NULL;
+     if (intra)
+         s->seen_intra = 1;
+ 
+     avs2_mark_refs(s, cur);
+ 
+-    return avs2_bump(s, 0);
++    /* The pictures bumped before this one was queued may all be returned. */
++    s->nb_ready = s->nb_out;
++    ret = avs2_bump(s, 0);
++    s->cur = NULL;
++
++    return ret;
+ 
+ fail:
+     s->cur = NULL;
+@@ -672,9 +697,12 @@ static int avs2_receive_frame(AVCodecContext *avctx, AVFrame *frame)
+     int ret;
+ 
+     for (;;) {
+-        if (s->nb_out) {
++        /* The pictures past nb_ready are held back unless draining. */
++        if (s->nb_out && (s->nb_ready || avctx->internal->draining)) {
+             av_frame_move_ref(frame, s->out[0]);
+             s->nb_out--;
++            if (s->nb_ready)
++                s->nb_ready--;
+             for (int i = 0; i < s->nb_out; i++)
+                 FFSWAP(AVFrame *, s->out[i], s->out[i + 1]);
+             return 0;
+@@ -683,8 +711,12 @@ static int avs2_receive_frame(AVCodecContext *avctx, AVFrame *frame)
+         if (!s->pkt->data) {
+             ret = ff_decode_get_packet(avctx, s->pkt);
+             if (ret == AVERROR_EOF) {
+-                if (!avs2_pending_count(s))
++                if (!avs2_pending_count(s)) {
++                    /* draining is set now: the held picture goes out */
++                    if (s->nb_out)
++                        continue;
+                     return AVERROR_EOF;
++                }
+                 ret = avs2_bump(s, 1);
+                 if (ret < 0)
+                     return ret;
+diff --git a/libavcodec/avs2dec.h b/libavcodec/avs2dec.h
+index c8b373e9ee..7a1a40320b 100644
+--- a/libavcodec/avs2dec.h
++++ b/libavcodec/avs2dec.h
+@@ -80,6 +80,10 @@ typedef struct AVS2DecContext {
+     /* pictures bumped out of the DPB, waiting for receive_frame() */
+     AVFrame *out[AVS2_MAX_DPB + 1];
+     int nb_out;
++    /* out[0..nb_ready) may be returned: pictures queued before the latest one */
++    int nb_ready;
++    /* hold the picture just queued back until the next one has been queued */
++    int out_delay;
+ 
+     uint8_t *hdr_buf;
+     unsigned hdr_buf_size;

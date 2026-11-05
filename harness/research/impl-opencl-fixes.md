@@ -20,6 +20,13 @@ gles31-khr-main 1 Fail (`mixedSequence`).
 | 89dc6134c58 … 0301c677305 | 12 compiler/driver fixes from staging/26.2 (all in 26.2.5/26.2.6): nir_instr_set tex CSE (x2), no 64-bit iadd3, narrow_array_index, bi helper analysis tls-stores, lower_continue_constructs (x2), pan/lib (x3), panfrost free/leak (x2) | cherry-pick -x |
 | 9049a3c5f2c | pan/bi: don't end a shader with a BARRIER clause | ours (Generated-by: LLM) |
 
+**Kernel** `fix/sunxi-panfrost-softstop-resume` (armbian-build fork, worktree `wt-panfrost-softstop`, commit e544ddb00,
+patch `patches.armbian/drm-panfrost-resume-a-still-active-job-after-a-timeout-instead-of-resetting.patch`): on the 500 ms
+job watchdog, a slot that still reports ACTIVE is soft-stopped and resumed without the GPU reset (see "Root cause:
+panfrost job timeout" below). Tags `Assisted-by: LLM` + Signed-off-by; checkpatch clean (one quoted dmesg line > 75
+chars); panfrost_job.o built with W=1 in kernel-check/work-cumul (STAGE=patch: 834 patches applied, 0 failed). Not yet in
+test-cumulative: the coordinator merges it; runner job 04-opencl-timeout-fix validates it.
+
 **Kernel** `fix/sunxi-panfrost-mmu-map-warn` (armbian-build fork, worktree `wt-panfrost-mmu`), commit da59f9208
 "sunxi-7.3: drm/panfrost: don't WARN when a GEM mapping cannot get its pages": `WARN_ON(IS_ERR(sgt))` ->
 `IS_ERR(sgt)` in `panfrost_mmu_map()`, the error is still returned. Upstream (linux-next, drm-misc-next) still has
@@ -119,7 +126,51 @@ raw logs in `mesa-work/oclfix/b*/`.
   difference is still unknown.
 - **Images Kernel 2D float (1).** CL_RGB UNORM/SNORM_INT8 2D *array* reads return NaN.
 - **Integer Ops quick_(u)long_math.** 64-bit division/modulo give wrong values for some elements (pairs at index 14/15
-  mod 16).
+  mod 16). -> Root cause: kernel job timeout + GPU reset, see the section below. Math (multi-threaded) and Thread
+  Dimensions are expected to be the same.
+
+## Root cause: panfrost job timeout (2026-11-05, agent opencl-fixes-2)
+
+**Integer Ops quick_(u)long_math `/` and `%` are not a compiler bug.** Established host-side, without the board:
+- Interpreters for the Bifrost dumps (`mesa-work/oclfix/host/biemu.py` for the pre-/post-RA MIR, `biemu3.py` for the
+  final disassembly with tuples, passthrough t/t0/t1, staging registers and clause-end load delivery; copies in
+  `harness/analysis/gpu/oclfix/host/`) run the long16 division shader on the exact failing CTS inputs
+  (`pairs-cts.txt`) and on the CTS random distribution: 0 wrong results at every stage, both for the precomp-tool
+  compile (`panfrost_compile`, 16:53 spills) and for the real rusticl compile (167:1601 spills). The real shader comes
+  from host rusticl on the panfrost drm-shim as a fake G31 (`build-shim.sh` -> `mesa-work/build-host-shim`, asserts on;
+  `shim-env.sh`, `hostcl.py` drives rusticl through its ICD dispatch table; PAN_GPU_ID=7093 PAN_SHADER_PRESENT=1; the
+  shim needed the GET_PARAM additions committed as 45a7a7147d5 on the fork branch). `hazard.py` found no same-clause
+  register hazards.
+- The CTS data says the failures are positional, not data dependent: every work-item from one item on (28632 for long
+  `/`, 54405, 45804, 62428 for the other three) has elements 14/15 (the last 16-byte store of the kernel) stale while
+  0-13 are right; "got" values are 0 or old quotients, i.e. the buffer content before the kernel. Only the long16
+  division/modulo kernels are long enough to matter (65536 items x ~1900 clauses, > 500 ms).
+- `mesa-work/oclfix/b2/dmesg.txt` from that run has exactly four
+  `panfrost 1800000.gpu: gpu sched timeout, js=1, config=0x7300, status=0x8, head=..., tail=...` lines (status 0x8 =
+  ACTIVE), one per failing subtest.
+- Kernel (drivers/gpu/drm/panfrost/panfrost_job.c): JOB_TIMEOUT_MS = 500 -> panfrost_job_timedout -> panfrost_reset:
+  JS_COMMAND_SOFT_STOP on every slot, handle the STOPPED IRQ (`job->jc = JS_TAIL`, fence not signalled, so the job is
+  resumed), then **panfrost_device_reset (GPU_CMD_SOFT_RESET, no cache clean)** and drm_sched_resubmit_jobs. The soft
+  reset discards the dirty L2 lines (results of the tasks finished since the last write-back, and the hardware's resume
+  state in the job header), the resumed job completes and reports success. Math's `0xffffdead at index: 0` (14 lines in
+  the baseline log: the CTS fill pattern survives because the kernel's stores were lost), Thread Dimensions' lost rows
+  (quick_2d/3d: 64 M items, multi-second jobs) and the Images Kernel 3D int/uint/float 5000 s timeouts (a job reset and
+  resumed every 500 ms) fit the same mechanism; the runner job checks them.
+- Fix: branch `fix/sunxi-panfrost-softstop-resume` (above). On timeout with JS_STATUS == ACTIVE: soft-stop (100 ms
+  drain instead of 10), no karma, no core dump, no GPU reset; resubmission resumes the job from JS_TAIL as before. Faults,
+  soft-stop failure and the MMU-fault reset path still reset. Upstream still has the 500 ms reset (checked linux-7.3.1).
+- Board validation: runner job `harness/runner-queue/04-opencl-timeout-fix.md` (package
+  `harness/research/opencl-fixes/runner/`): Integer Ops, Thread Dimensions, Math in two halves (default multi-threaded),
+  a regression subset of 19 passing suites, Images (Kernel 3D int), dmesg must stay free of timeouts/faults. Needs the
+  next cumulative kernel to contain the branch (the script blocks otherwise).
+
+Open after this (not timeout related, still Mesa-side, next agent): Images (Samplerless int/uint/float) 1Dbuffer at
+width 329 (every format, first size; the own 1D-buffer repro passes), Basic enqueue_map_image IMAGE3D (also in Mesa CI's
+G610 fail list), Images (Kernel 2D float) CL_RGB UNORM/SNORM_INT8 2D array reads NaN, blend_equation_advanced
+mixedSequence. Math's real fp16 ULP errors (about 1400 ULP at half subnormals) can only be separated once the timeout fix
+is on the board. Note for the subgroup commit 55fb9c9c4d3: `panfrost_compile` passes gpu_id = arch << 28 (minor 0), so
+the precompiled libpan shaders for every v7 GPU are now built for 4-wide subgroups; right for the G31, wrong for a G52
+image if those shaders ever use subgroup ops (none do today).
 
 ## Full rerun on the fork (commit 9049a3c5f2c): PAUSED 2026-11-05 ~18:33 (user credit limit)
 

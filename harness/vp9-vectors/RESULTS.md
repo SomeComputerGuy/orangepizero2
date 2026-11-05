@@ -2,7 +2,8 @@
 
 Task: docs/status.md item 9, "port OPi5's VP9 resize fix (0606/2228 + GStreamer 0010); cedrus VP9 still fails 64
 vectors". Code agent, no board access. Kernel branch `fix/sunxi-cedrus-vp9-inter-resize` (armbian-build, pushed to
-`fork`, commit f8be54bac, off test-cumulative aa6e29312 = c9). Runner job `harness/runner-queue/04-vp9-vectors.md`.
+`fork`, commit f8be54bac, off test-cumulative aa6e29312 = c9; **merged as cumulative c10**, so c10..c14 contain it).
+Runner jobs: `04-vp9-vectors` (done, harness bug, see §6) and the rerun `harness/runner-queue/10-vp9-vectors.md`.
 
 ## 1. Which 64 vectors, and why (groups)
 
@@ -95,3 +96,43 @@ GST_DEBUG=v4l2codecs*:6 to see which stride it used), and the GstVideoMeta strid
   fixed-size).
 - Documentation of the TRY_FMT contract if this goes upstream (dev-stateless-decoder.rst), and agreement with the OPi5
   rkvdec side.
+
+## 6. Board runs
+
+### Job 04 (2026-11-05 20:17-20:31 UTC, kernel c13 = test-cumulative 626dff92e, #14; contains f8be54bac)
+
+Reported FAIL with 0/305, but the decoder was fine; two package bugs (both fixed, 2026-11-05 21:00):
+1. `check-results.py` only knew the emoji and the long words (`Success`...). fluster 0.7.1 with `-ne -so` writes the
+   plain-text tokens `OK/KO/ER/TO/NS` into the summary, so every `OK` row counted as a failure ("ER" in the runner
+   summary was the 5 expected HIGH errors plus 209 unparsed `OK`s). Now mapped (`TOKENS`).
+2. The stall watchdog in `run-job.sh` watches the ssh stdout, but `board-fluster.sh` sent every fluster line to
+   `out/<c>.log` only, so a chunk longer than 300 s was killed: c3 (97 vectors, the 36 key-frame resize ones take
+   ~11 s each) died after 51 vectors, all Success. Now every fluster line is echoed to stdout with a timestamp
+   (`python3 -u`, `tee`, `grep --line-buffered`), and c3 is split into c3 (05..14, 59 vectors, ~8 min) and c5
+   (15..22 + vp91, 38 vectors).
+   Also: CHECK 5 matched "iommu: **Default** domain type" via `iommu.*fault` (now `\bfault`); the fluster rc was the
+   exit status of the pipe; `kernel.txt` did not record which cN ran.
+
+Real numbers of job 04 (`logs/job04-c13/check-fixed-parser.txt`, re-read with the fixed parser):
+
+| group | success | total |
+|---|---|---|
+| quantizer (00) | 64 | 64 |
+| sharpness (01) | 7 | 7 |
+| size-02 (8..66 px) | 71 | 71 |
+| size-03 (196..226 px) + deltaq + 352x288 | 65 | 65 |
+| 02-size-lf-1920x1080 | 1 | 1 |
+| c3 partial (`out/c3.log`, no summary): 05-resize, 06..13, 14-resize-10frames x14, 14-resize-fp-tiles x14 | 51 | 51 |
+| HIGH: vp92 10-bit 4:2:0 | 1 | 1 |
+| HIGH: 12-bit, vp93 4:2:2/4:4:4 (expected: caps negotiation fails, gst-launch exit 1 -> ER) | 0 | 5 |
+
+So on c13: 208/208 of the summarised profile-0 vectors + 51/51 of c3's first half, incl. `vp90-2-05-resize.ivf`
+(group A, inter-frame downsize: **the fix works on at least this vector**) and all 28 key-frame resize vectors reached
+(group C, up to the 16-tile 4K-wide ones). dmesg clean (no timeouts, faults, Oops). The small sizes 8..66 px all pass
+(rkvdec fails 46 of them). Not yet measured: the 24 `21-resize_inter_*`, 18-resize, 15..20, 22-svc, vp91 (chunk c5)
+and 14-resize-fp-tiles 2-16 .. 8-4 (rest of c3).
+
+Rerun: job `harness/runner-queue/10-vp9-vectors.md` on c14 (0324a5d4b), with the pre-flight (`pre` chunk: fluster on
+vp90-2-00-quantizer-00.webm + a direct `gst-launch` with GST_DEBUG=2 into `out/pre.gst.txt`; not OK -> BLOCKED with
+the reason, no chunks) and CHECK 0 (kernel >= c10 and pre-flight OK). Bundle rebuilt (`make-bundle.sh`,
+board-fluster.sh changed; plugin unchanged).

@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Mechanical checks for the VP9 vectors job: check-results.py <logs/runner dir>
 
-Reads out/c1..c4.md (fluster summaries, plain text or emoji) and dmesg-*.txt, prints one line per vector
-(name GROUP Success|Fail|...), a per-group table and CHECK lines with PASS/FAIL. The last line is the verdict."""
+Reads kernel.txt, out/pre.md, out/c1..c5.md (fluster summaries; fluster 0.7.1 writes the plain-text tokens
+OK/KO/ER/TO/NS with -ne, the emoji otherwise, the long words in the console log) and dmesg-*.txt, prints one line per
+vector (name GROUP Success|Fail|...), a per-group table and CHECK lines with PASS/FAIL. The last line is the verdict."""
 import glob, os, re, sys
 
 GROUPS = [  # (group, prefixes), first match wins
@@ -27,7 +28,11 @@ EXPECTED_NOT_SUCCESS = {
     'vp93-2-20-12bit-yuv440.webm': 'profile 3 12-bit', 'vp93-2-20-12bit-yuv444.webm': 'profile 3 12-bit',
 }
 RESIZE_INTER = 'resize on inter frames (21, 05, 18)'
-EXPECTED_TOTAL = {'c1': 71, 'c2': 137, 'c3': 97, 'c4': 6}
+EXPECTED_TOTAL = {'c1': 71, 'c2': 137, 'c3': 59, 'c5': 38, 'c4': 6}
+TOKENS = {'OK': 'Success', 'KO': 'Fail', 'ER': 'Error', 'TO': 'Timeout', 'NS': 'Not supported',
+          '✔️': 'Success', '❌': 'Fail', '☠': 'Error', '⌛': 'Timeout', '○': 'Not supported'}
+FIX_KERNEL = 10  # cumulative kernel c10 = armbian-build f8be54bac (fix/sunxi-cedrus-vp9-inter-resize)
+GOOD = 'vp90-2-00-quantizer-00.webm'  # pre-flight vector
 
 def group(name):
     for g, pre in GROUPS:
@@ -35,28 +40,41 @@ def group(name):
             return g
     return 'other'
 
+def read_md(f):
+    out = {}
+    for line in open(f, encoding='utf-8', errors='replace'):
+        m = re.match(r'^\|(vp9[0-9]-[^|]+)\|([^|]*)\|', line)
+        if m:
+            name, r = m.group(1).strip(), m.group(2).strip()
+            out[name] = TOKENS.get(r, r)
+    return out
+
 def main(d):
     res = {}
     missing = []
-    for c in ('c1', 'c2', 'c3', 'c4'):
+    kf = os.path.join(d, 'kernel.txt')
+    kern = open(kf).read().split('\n') if os.path.exists(kf) else []
+    m = re.match(r'cumulative c(\d+) ', kern[0]) if kern else None
+    kn = int(m.group(1)) if m else None
+    print(f'# kernel: {" / ".join(k for k in kern if k)}')
+    pf = os.path.join(d, 'out', 'pre.md')
+    pre = read_md(pf).get(GOOD) if os.path.exists(pf) else None
+    print(f'# pre-flight {GOOD}: {pre}')
+    for c in ('c1', 'c2', 'c3', 'c5', 'c4'):
         f = os.path.join(d, 'out', c + '.md')
         if not os.path.exists(f):
             missing.append(c); continue
-        n = 0
-        for line in open(f, encoding='utf-8', errors='replace'):
-            m = re.match(r'^\|(vp9[0-9]-[^|]+)\|([^|]*)\|', line)
-            if not m:
-                continue
-            name, r = m.group(1).strip(), m.group(2).strip()
-            r = {'✔️': 'Success', '❌': 'Fail', '☠': 'Error', '⌚': 'Timeout', '〰️': 'Not supported'}.get(r, r)
-            res[name] = r; n += 1
-        print(f'# {c}: {n} vectors in {f} (expected {EXPECTED_TOTAL[c]})')
+        r = read_md(f)
+        res.update(r)
+        print(f'# {c}: {len(r)} vectors in {f} (expected {EXPECTED_TOTAL[c]})')
     for name in sorted(res):
         print(f'{name} [{group(name)}] {res[name]}')
     print()
     print('| group | success | total | failing |')
     print('|---|---|---|---|')
-    checks = []
+    checks = [('0 kernel is a cumulative kernel >= c10 (contains f8be54bac) and the pre-flight vector decoded',
+               kn is not None and kn >= FIX_KERNEL and pre == 'Success',
+               f'kernel.txt: {kern[0] if kern else "missing"}; pre-flight {GOOD}: {pre}')]
     bygroup = {}
     for name, r in res.items():
         bygroup.setdefault(group(name), []).append((name, r))
@@ -67,7 +85,7 @@ def main(d):
         print(f'| {g} | {len(ok)} | {len(v)} | {" ".join(sorted(bad))} |')
     print()
     # CHECK 1: all chunks present with all vectors
-    checks.append(('1 all four chunks ran (c1..c4.md present, 71/137/97/6 vectors)', not missing and len(res) == 311,
+    checks.append(('1 all five chunks ran (c1 c2 c3 c5 c4.md present, 71/137/59/38/6 vectors)', not missing and len(res) == 311,
                    f'missing chunks: {missing}; vectors seen: {len(res)} of 311'))
     # CHECK 2: the fix: every inter-frame resize vector decodes bit-exact
     ri = bygroup.get(RESIZE_INTER, [])
@@ -86,7 +104,7 @@ def main(d):
     bad_lines = []
     for f in sorted(glob.glob(os.path.join(d, 'dmesg-*.txt'))):
         for line in open(f, errors='replace'):
-            if re.search(r'timed out|Oops|BUG:|WARNING|Page fault|iommu.*fault|alloc fail', line, re.I):
+            if re.search(r'timed out|Oops|BUG:|WARNING|Page fault|iommu.*\bfault|alloc fail', line, re.I):
                 bad_lines.append(os.path.basename(f) + ': ' + line.rstrip())
     checks.append(('5 dmesg: no timeouts, IOMMU faults, Oops or WARNING', not bad_lines, '\n    '.join(bad_lines[:20]) or 'clean'))
     # CHECK 6: no timeouts inside fluster

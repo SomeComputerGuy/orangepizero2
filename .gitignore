@@ -45,3 +45,8 @@ harness/research/legacy-dec/iso-refsoft-dl/
 # media debs (scripts/build-media-debs.sh output)
 out/
 build/
+# Arm libmali blob, its traces and symlinks: never commit (Arm EULA, reference only)
+harness/research/arm-blob/
+harness/research/kbase-trace/kbtrace.so
+harness/research/kbase-trace/gles32probe
+harness/research/kbase-trace/kbdecode

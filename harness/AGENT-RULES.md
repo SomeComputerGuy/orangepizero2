@@ -38,10 +38,10 @@ Acceptance: docs/spec-checklist.md, docs/datasheet-checklist.md. Status/work lis
 - Build caching is rule #1: ccache + Armbian artifact caches; no needless full rebuilds. No Docker. No sudo.
 - Do not run Armbian `compile.sh` image builds while another one is running (`pgrep -af compile.sh`).
 - **Test kernels are cumulative** (user rule for all SBC projects, same as OPi5): fix B's test kernel contains A+B,
-  C's contains A+B+C. There is ONE test branch, `test/cumulative` (armbian-build worktree `wt-cumulative`), and ONE
+  C's contains A+B+C. There is ONE test branch, `test-cumulative` (armbian-build worktree `wt-cumulative`), and ONE
   build tree, `kernel-check/work-cumul`. Never build a private trial kernel in your own WORK tree from an older base.
-  - New fix: branch it from `test/cumulative`, commit, and hand the branch to the coordinator, who merges it into
-    `test/cumulative` (each merge = the next test kernel, c1, c2, ...).
+  - New fix: branch it from `test-cumulative`, commit, and hand the branch to the coordinator, who merges it into
+    `test-cumulative` (each merge = the next test kernel, c1, c2, ...).
   - Build: `ARMBIAN=/home/aruni/orangepizero2/wt-cumulative WORK=/home/aruni/orangepizero2/kernel-check/work-cumul
     kernel-check/build-kernel.sh` (STAGE=patch/dtbs for quick checks). build-kernel.sh takes a lock: one kernel
     build at a time; a second one waits.

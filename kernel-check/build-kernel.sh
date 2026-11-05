@@ -15,6 +15,12 @@ WORK="${WORK:-/home/aruni/orangepizero2/kernel-check/work}"
 PATCHROOT="$ARMBIAN/patch/kernel/archive/sunxi-7.3"
 UWE_COMMIT="$(grep -oP "uwe5622ver='commit:\K[0-9a-f]+" "$ARMBIAN/lib/functions/compilation/patch/drivers_network.sh")"
 JOBS="${JOBS:-$(nproc)}"
+# One kernel build at a time (as in the OPi5 project): parallel builds halve each other's speed and two builds
+# in one WORK tree corrupt each other. Test kernels are cumulative (harness/AGENT-RULES.md "Builds"): build the
+# newest test-cumulative in WORK=kernel-check/work-cumul, not a private tree from an older base.
+mkdir -p /home/aruni/orangepizero2/kernel-check/.locks
+exec 9>/home/aruni/orangepizero2/kernel-check/.locks/kernel-build.lock
+flock -n 9 || { echo "waiting for the kernel build lock (another build is running) ..."; flock 9; }
 export ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-
 # Always build through ccache (shared dir with Armbian) so rebuilds are incremental.
 # CCACHE_DIR left at the default (~/.cache/ccache, shared with the other projects).
@@ -26,9 +32,14 @@ cd "$WORK"
 # 1. Fetch kernel
 TARBALL="dl/linux-$KVER.tar.xz"
 [[ -f $TARBALL ]] || curl -fL -o "$TARBALL" "https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-$KVER.tar.xz"
-rm -rf "linux-$KVER"
-tar -xf "$TARBALL"
-cd "linux-$KVER"
+# The source is prepared in a scratch tree (stage/), then synced into the persistent build tree linux-$KVER with
+# content checksums: only files whose content changed get a new mtime, so kbuild rebuilds just what the new patches
+# touch (same idea as the OPi5 project's read-tree update). Files that the previous run's source had and this one
+# lacks are deleted (src-manifest). No manifest yet (first run, or INCREMENTAL=0) means a full re-extract.
+INCREMENTAL="${INCREMENTAL:-1}"
+rm -rf stage; mkdir stage
+tar -C stage -xf "$TARBALL"
+cd "stage/linux-$KVER"
 
 # 2a. uwe5622 WiFi driver first: Armbian injects drivers before series.conf (EXTRA_PATCH_FILES_FIRST), so patches.armbian may touch drivers/net/wireless/uwe5622
 UWESRC="$WORK/dl/uwe5622"
@@ -40,18 +51,18 @@ echo 'obj-$(CONFIG_SPARD_WLAN_SUPPORT) += uwe5622/' >> drivers/net/wireless/Make
 sed -i '/source "drivers\/net\/wireless\/ti\/Kconfig"/a source "drivers\/net\/wireless\/uwe5622\/Kconfig"' drivers/net/wireless/Kconfig
 
 # 2. Apply series.conf (active entries only: skip comments and '-'-prefixed disabled lines)
-: > ../patch-failures.txt
+: > "$WORK/patch-failures.txt"
 applied=0; failed=0
 while read -r p; do
-	if patch -p1 -N -s --no-backup-if-mismatch -i "$PATCHROOT/$p" > ../patch-last.log 2>&1; then
+	if patch -p1 -N -s --no-backup-if-mismatch -i "$PATCHROOT/$p" > "$WORK/patch-last.log" 2>&1; then
 		applied=$((applied + 1))
 	else
 		failed=$((failed + 1))
-		{ echo "=== $p"; cat ../patch-last.log; } >> ../patch-failures.txt
+		{ echo "=== $p"; cat "$WORK/patch-last.log"; } >> "$WORK/patch-failures.txt"
 	fi
 done < <(sed -e 's/#.*//' "$PATCHROOT/series.conf" | awk 'NF && $1 !~ /^-/ {print $1}')
 echo "patches applied: $applied, failed: $failed"
-[[ $failed -eq 0 ]] || { echo "patch failures (see $WORK/patch-failures.txt):"; grep '^===' ../patch-failures.txt; }
+[[ $failed -eq 0 ]] || { echo "patch failures (see $WORK/patch-failures.txt):"; grep '^===' "$WORK/patch-failures.txt"; }
 
 # 3. Copy bare DT and overlay dirs, add new dts to Makefile (Armbian auto-patch-dt-makefile)
 DTDIR=arch/arm64/boot/dts/allwinner
@@ -66,6 +77,19 @@ if [[ -f $DTDIR/overlay/Makefile ]] && ! grep -q 'subdir-y.*overlay' "$DTDIR/Mak
 	echo 'subdir-y += overlay' >> "$DTDIR/Makefile"
 fi
 
+
+# 4. Sync the staged source into the persistent tree (unchanged files keep their mtime)
+find . \( -type f -o -type l \) -printf '%P\n' | LC_ALL=C sort > "$WORK/src-manifest.new"
+cd "$WORK"
+if [[ $INCREMENTAL == 1 && -d linux-$KVER && -f src-manifest ]]; then
+	LC_ALL=C comm -23 src-manifest src-manifest.new | (cd "linux-$KVER" && xargs -r -d '\n' rm -f --)
+	rsync -rlpc "stage/linux-$KVER/" "linux-$KVER/"
+	echo "incremental source update: $(LC_ALL=C comm -23 src-manifest src-manifest.new | wc -l) files removed"
+else
+	rm -rf "linux-$KVER"; mv "stage/linux-$KVER" "linux-$KVER"; echo "full source tree (no manifest)"
+fi
+mv src-manifest.new src-manifest; rm -rf stage
+cd "linux-$KVER"
 
 [[ $STAGE == patch ]] && { echo "STAGE=patch done (tree in $PWD)"; exit "$failed"; }
 

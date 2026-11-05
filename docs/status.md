@@ -154,7 +154,9 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
 - MPEG-1 MG1S coded format (OPi5 final: ~/orangepi5/work/_out/mpeg1-rk3588/UAPI-MPEG1-FOURCC.md, copy byte-for-byte; 0x5331474d,
   after MPEG2_SLICE; flag iff MG1S, reject the flags with MG2S). Cedrus series + shared FFmpeg 0304. Notes from the paused desktop
   agent: cedrus_video.c format table and switches, cedrus_dec.c:52, cedrus_hw.c:51, cedrus_mpeg2.c:79, v4l2-ioctl.c:1511.
-  Plus the shared gap: advertise MPEG-1 D-picture support (cedrus decodes them; hantro doesn't), so FFmpeg 0309 falls back.
+  D-pictures (OPi5 final, Addendum A of the same file): the hwaccel probes VIDIOC_TRY_EXT_CTRLS with picture coding type D at init;
+  cedrus must accept it, and the rejection also applies to TRY_EXT_CTRLS. Shared FFmpeg 0309 is in ffmpeg-shared branch final
+  b187e9c1e8, plus a kernel doc note (D optional). Take both byte-for-byte.
 - IOMMU faults at 0xfff00000 (master -1, c9, ~17:58, unidentified session): project-vdec.md.
 - AVS2 FFmpeg depth-2 queueing patch (aq1: gaps 151 -> 1, md5 PASS) into patches/ffmpeg + the shared OPi5 set.
 - VP9 inter-frame upsize (svc_1280x720_3): REMOVE_BUFS + S_FMT while streaming (harness/vp9-vectors/RESULTS.md §5).

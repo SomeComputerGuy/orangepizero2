@@ -3,7 +3,7 @@
 # bit-exact against davs2 without a single VE timeout; regression of the other AVS2 streams.
 cd /root || exit 1
 A=/root/avs2/avs2dec-q; U=http://10.56.0.1:8643/avs2
-curl -sS $U/avs2dec-q -o $A; chmod +x $A
+mkdir -p /root/avs2; curl -sS --fail $U/avs2dec-q -o $A && chmod +x $A || { echo "avs2dec-q download failed"; exit 1; }
 to() { dmesg | grep -c "timed out"; }
 echo "kernel $(uname -rv) timeouts-at-start $(to)"
 t() { # t <stream> <expected md5>

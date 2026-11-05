@@ -5,7 +5,7 @@
 cd /root/vdec-streams || exit 1
 V=/root/vp; DM="python3 -I $V/devmem.py"; TL=$V/ve-timeline.sh; A=/root/avs2/avs2dec-q; U=http://10.56.0.1:8643/avs2
 F="$V/ffmpeg -hide_banner -nostats -loglevel error -hwaccel v4l2request"; FD="$F -hwaccel_output_format drm_prime"
-curl -sS $U/avs2dec-q -o $A; chmod +x $A; curl -sS $U/cctv4k-10bit.avs2 -o /tmp/cc.avs2; curl -sS $U/main-2160p-ra.avs2 -o /tmp/m8.avs2
+mkdir -p /root/avs2; curl -sS --fail $U/avs2dec-q -o $A && chmod +x $A || { echo "avs2dec-q download failed"; exit 1; }; curl -sS $U/cctv4k-10bit.avs2 -o /tmp/cc.avs2; curl -sS $U/main-2160p-ra.avs2 -o /tmp/m8.avs2
 mi() { awk -v k="$1:" '$1==k {print int($2/1024)}' /proc/meminfo; }
 echo "MODE=$MODE kernel $(uname -rv) cmdline: $(grep -o 'cma=[^ ]*\|iommu[^ ]*' /proc/cmdline | tr '\n' ' ') CmaTotal $(mi CmaTotal) MB CmaFree $(mi CmaFree) MB MemAvailable $(mi MemAvailable) MB"
 echo "iommu bypass $($DM 0x030f0030) enable $($DM 0x030f0020); VE iommus in live DT: [$(od -An -tx1 /proc/device-tree/soc/video-codec@1c0e000/iommus 2>/dev/null | tr -d ' \n')]; $(dmesg | grep -m2 -i '1c0e000.video-codec.*iommu\|cedrus.*registered' | tr '\n' ' ')"

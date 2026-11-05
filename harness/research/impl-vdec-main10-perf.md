@@ -281,5 +281,24 @@ VE port in the H6 table) is not programmed on H616 (0). Set with devmem.py, rest
   4), not the queue. Possible next steps: an IOMMU passthrough A/B for VP9 P010 with a larger CMA, and the VP9 secondary-output
   write registers in the vendor library. 4K60 VP9 display goes through AFBC anyway (DE33 AFBC scanout, §6, needs an HDMI 2.0
   sink we do not have).
-- Round 3 on cumulative kernel c2: confirm the 624 MHz default and the AVS2 AFBC capture, rerun the md5 regression, and a
-  longer 624 MHz soak.
+- A longer soak at the 624 MHz default on a cumulative kernel (round 2's 900 s soak was at 624 set by devmem).
+
+### 9.7 Round 3 on cumulative kernel c2 (2026-11-05) [M]
+Kernel c2 = test-cumulative b8258b7f2 (Image md5 45a73129…), with `e6229e03c` + `ba5caad1e` + kbase. Installed with
+the fallback armed, image DTB kept, board restored to image kernel #17 afterwards. Logs in `vdec-perf/logs/queue-r3/`.
+- The kernel default is now 624 MHz: `pll-ve 0x28001900`, `clk 624000000` at boot, no devmem.
+- Rates (VE-only / pipeline span, fps), FFmpeg at default threads, avs2dec depth 2:
+
+| stream | 624 (c2 default) | 624 + port 4 QoS HIGHEST | 600 (PLL N=24) |
+|---|---|---|---|
+| H.265 Main10 P010 | 63.3 / 62.8 | 65.4 / 63.9 | 60.9 / 60.6 |
+| VP9 P2 P010 | 59.3 / 59.0 | 58.8 / 58.6 | 58.8 / 58.6 |
+| AVS2 10-bit P010 | 62.5 / 61.3 | 62.3 / 61.0 | 59.1 / 58.0 |
+| AVS2 10-bit AFBC | 89.4 / 87.8 | 93.0 / 91.3 | 87.0 / 85.4 |
+
+  The c2 numbers repeat round 2. Ready gaps are 0.08–0.12 ms and starved gaps 0–5 per run, so the queue is still not the
+  limit. VP9 P2 P010 stays ~1 fps short at every setting.
+- md5 regression at the default rate: VP9 P2 `1e40c2b3…`, H.265 Main10 `e57bc497…`, AVS2 8-bit 4K `3a3d5d7e…`, AVS2
+  10-bit cctv4k P010 `be9985de…`, all PASS.
+- v4l2-compliance: 43/49, the same 6 pre-existing failures as the baseline (impl-avs2.md §7.4).
+- cedrus timeouts: 0 from boot (uptime 36 s) to the end (715 s). The round-2 timeout burst was not from these tests.

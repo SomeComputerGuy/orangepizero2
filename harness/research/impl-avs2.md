@@ -454,13 +454,40 @@ Board restored afterwards: image kernel `7.3.1-edge-sunxi64 #8`, `/boot/vdec-tri
 ### 8.4 Spec row "AVS2 JiZhun 10-bit 4K@60"
 - P010 through avs2dec: 57.7–58.7 fps at 600 MHz; **60.0 fps at 624 MHz** (VE-only 61.7). Bit-exact against davs2-10 on
   291/291 undamaged pictures.
-- AFBC10 capture: rate pending round 3 on c2. Expected near H.265/VP9 AFBC (84–86 fps), since the P010 write is what limits
-  P010. [I]
+- AFBC10 capture (round 3, kernel c2, §8.6): **87.8 fps pipeline at 624 MHz** (VE-only 89.4), 85.4 at 600 MHz. **Met with
+  margin.** P010 at the c2 default: 61.3 (VE-only 62.5). [M]
 
 ### 8.5 Open
-- Round 3 on c2 (AFBC rate, the 624 MHz default, regression).
 - Native AFBC output cannot be md5-checked (no AFBC decompressor). The evidence stays the AFBC reference loop inside the
   bit-exact P010 runs. Display of AFBC needs DE33 AFBC scanout (impl-vdec-main10-perf.md §6) and an HDMI 2.0 4K60 sink,
   which we do not have.
 - 10-bit SAO/ALF/WQ/background: no stream. A real 10-bit encoder (xavs2 has none) or the AVS WG conformance suite is needed.
 - FFmpeg AVS2 hwaccel (status item 6), using the avs2dec request-queue scheme.
+
+### 8.6 Round 3 on kernel c2 (2026-11-05) [M]
+c2 = test-cumulative b8258b7f2 with both patches of §8.3. The VE runs at 624 MHz by default. avs2dec-q, cctv4k 10-bit
+4K, 292 pictures, all decoded with rc 0:
+
+| capture | 624 (default) | 624 + port 4 QoS HIGHEST | 600 |
+|---|---|---|---|
+| P010, depth 2 | 62.5 / 61.3 | 62.3 / 61.0 | 59.1 / 58.0 |
+| AFBC, depth 2 | 89.4 / 87.8 | 93.0 / 91.3 | 87.0 / 85.4 |
+| AFBC, depth 3 | 89.3 / 87.4 | 92.8 / 90.6 | 86.9 / 85.1 |
+
+(fps VE-only / pipeline span. Depth 3 adds nothing: the VE is already >98 % busy at depth 2.)
+- Per picture, AFBC needs 11.2 ms of VE time against 16.0 ms for P010: the hidden P010 write costs about 30 % of the VE time.
+- md5 on c2: 10-bit P010 `be9985de…` and 8-bit `3a3d5d7e…` PASS, so the AFBC capture entry changed nothing for P010.
+  The AFBC capture writes the same reconstruction surface the bit-exact P010 path reads its references from. It cannot be
+  md5-checked directly (§8.5). [I]
+- v4l2-compliance 43/49, unchanged (§7.4). 0 cedrus timeouts.
+
+### 8.7 uAPI v6 (documentation only)
+Agreed with the OPi5 rkvdec (VDPU381) backend, which is bit-exact on v5 without changes. Branches:
+- `fix/sunxi-avs2-uapi-v6` 332956b3f (merged into test-cumulative): ref_poc optional for hardware that tracks reference
+  POCs; ALF coefficients as coded, with drivers deriving the centre tap (9.12.2); WQ in raster order, with drivers converting
+  (untested); 10-bit not tied to P010; field coding rejected.
+- `fix/sunxi-avs2-uapi-v6b` f993245ab: the matrix_8x8 kernel-doc wording.
+
+Layout, CIDs and control types are unchanged from v5 d0aa5a388. Checks: patch 829/0, full build 0 warnings, kernel-doc
+clean. The v4l-utils part is the AVS2_FRAME hunk already in patches/v4l-utils/0001. The RFC is held in
+docs/upstream-queue.md row 10.

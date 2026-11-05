@@ -1,0 +1,7 @@
+7.3.1-edge-sunxi64
+vmlinuz-7.3.1-edge-sunxi64
+shipped /root/stage/modules-c2.tgz eb5faf1399813353789eeaf65b2e6d30708acae2553d21c35d37ee40564511cc
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+7.3.1 #1 SMP PREEMPT Thu Nov  5 12:11:36 UTC 2026
+/dev/video0

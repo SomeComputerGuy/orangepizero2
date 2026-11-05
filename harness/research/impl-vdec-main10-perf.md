@@ -302,3 +302,39 @@ the fallback armed, image DTB kept, board restored to image kernel #17 afterward
   10-bit cctv4k P010 `be9985de…`, all PASS.
 - v4l2-compliance: 43/49, the same 6 pre-existing failures as the baseline (impl-avs2.md §7.4).
 - cedrus timeouts: 0 from boot (uptime 36 s) to the end (715 s). The round-2 timeout burst was not from these tests.
+
+### 9.8 VP9 Profile 2 P010: the IOMMU micro-TLB is the limit (round 4, 2026-11-05) [M]
+Cumulative kernel c5 (no cedrus change after c2), VE 624 MHz, FFmpeg default threads. Logs `vdec-perf/logs/queue-r4/`.
+Streams: the reference 4K stream (4 tile columns) and two 120-frame re-encodes of its first frames (libvpx, 40 Mbit/s)
+with 1 tile column (`tc0`) and 4 (`tc2`). IOMMU PMU per master: m2 = VE1 (reference reads), m3 = VE (writes).
+
+| run (fps VE-only / pipeline) | IOMMU on | m3 micro-TLB hit, lat/access | `iommu.passthrough=1 cma=640M` |
+|---|---|---|---|
+| VP9 P2 4K reference, P010 | 59.2 / 56.8 | 58 %, 14 | **66.6 / 64.6** (md5 PASS) |
+| VP9 tc0 (1 tile) P010 | 66.1 / 67.7 | 58 %, 11 | 72.6 / 73.8 (md5 PASS) |
+| VP9 tc2 (4 tiles) P010 | 63.8 / 65.5 | 58 %, 14 | 71.5 / 72.8 |
+| VP9 tc0 / tc2 AFBC | 101.7 / 101.5 | 94–95 %, 3 | 101.9 / 101.9 |
+| H.265 Main10 P010 | 63.3 / 62.7 | 96 %, 4 | 63.5 / 62.7 |
+
+- **Root cause:** the VP9 engine's P010 secondary write misses the 64-entry per-master micro-TLB on 42 % of its accesses.
+  The H.265 engine's write of the same format hits 96 %. Without translation VP9 P010 gains 12.5 % (59.2 → 66.6) and
+  passes 60 with margin. Without the P010 write (AFBC) and for H.265, passthrough changes nothing. [M]
+- **Not the tile layout:** 1 and 4 tile columns give the same 58 % hit rate. The 1-tile clip is faster only because its
+  content is easier. [M]
+- **Write pattern [I]:** about 61 bytes per P010 write access, so the engine writes each line of a 64×64 superblock in
+  64–128 byte pieces. One superblock touches 64 luma and 32 chroma lines, each on its own 4 KiB page at the 7680-byte
+  stride, so 96 pages > 64 TLB entries, revisited by the next superblock. That is an LRU thrash.
+- **IOMMU knobs, none helps [M]:** TLB prefetch for all masters (already 0x7f in the mainline driver), write buffer off for
+  master 3, out-of-order off for masters 2/3: VP9 P010 stays 59.2–59.8, md5 PASS. The H616 IOMMU translates 4 KiB pages
+  only (manual 3.12: `VA[31:12]` looked up in the micro TLB), so no larger mappings.
+- **Vendor programming is the same as ours [M, static RE]:** T527 `libawvp9HwAL.so` (DWARF, H616 code path).
+  - `Vp9AsicRun` FUNC_CTRL = 0x80000007 | 0x200 (secondary output), no `mcri_cache_en`.
+  - `Vp9SetTopSecReg` sets only the format, chroma length and strides at 0xe8/0xec/0xcc; `luma_align_mode` /
+    `chroma_align_mode` stay 0.
+  - `VP9Set10BitReg` sets only the 2-bit stride.
+  - The vendor path therefore has the same P010 limit; its 4K output is AFBC.
+- **What a fix needs:** physically contiguous capture buffers with the VE masters untranslated. That costs ~42 MB per 4K
+  P010 buffer, ~10 buffers in an FFmpeg pipeline, so ~450 MB of CMA on a 1 GB board (default CMA here is 64 MB). The 640 MB
+  CMA passthrough boot already logged SLUB allocation-failure output. Not proposed as a default.
+- **Status of the spec row:** VP9 P2 4K@60 is met with AFBC capture (102 fps on tc0/tc2, 85 on the reference stream,
+  §9.5). It is ~1 fps short with P010 behind the IOMMU (59.0 pipeline in round 3).

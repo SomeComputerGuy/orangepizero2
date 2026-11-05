@@ -1,0 +1,7 @@
+7.3.1-edge-sunxi64
+vmlinuz-7.3.1-edge-sunxi64
+Mem:             974         150         558           2         283         824
+shipped /root/stage/modules-c5.tgz f7ee3ae614b54e1871fdc3e39253c1dee80c108674b2dc10b5929c2ebaf70cbb
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+7.3.1 #7 SMP PREEMPT Thu Nov  5 14:05:26 UTC 2026

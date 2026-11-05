@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 29 Oct 2026 22:16:51 +0000
+Subject: [PATCH] debian: Build the v4l2request hwdecs
+
+Enable the v4l2request hwdec/interop added by the preceding patches
+(https://github.com/mpv-player/mpv/pull/14690). It needs an FFmpeg with the
+V4L2 Request API hwdevice (AV_HWDEVICE_TYPE_V4L2REQUEST); use "enabled" so
+the build fails rather than silently dropping it.
+
+Ubuntu's /etc/mpv/mpv.conf (hwdec=vaapi) is left as it is: on boards whose
+decoders are V4L2 stateless devices the VA-API driver over V4L2
+(v4l2-request-va-driver) serves hwdec=vaapi, and hwdec=auto/auto-copy
+(what libmpv front ends such as Jellyfin Desktop ask for) reach
+v4l2request through the auto-probe whitelist patch.
+
+Assisted-by: Claude:claude-opus-5-5
+---
+ debian/rules | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/debian/rules b/debian/rules
+index b52e7ea..6923f04 100755
+--- a/debian/rules
++++ b/debian/rules
+@@ -17,6 +17,7 @@ override_dh_auto_configure:
+ 		-Dbuild-date=false \
+ 		-Dcdda=enabled \
+ 		-Ddvdnav=enabled \
++		-Dv4l2request=enabled \
+ 		$(ARCH_CONFIGURE)
+ 
+ execute_after_dh_auto_install:

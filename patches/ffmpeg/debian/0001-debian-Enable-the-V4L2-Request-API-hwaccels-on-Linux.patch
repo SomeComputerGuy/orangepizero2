@@ -1,0 +1,46 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 29 Oct 2026 22:16:30 +0000
+Subject: [PATCH] debian: Enable the V4L2 Request API hwaccels on Linux
+
+Build with --enable-v4l2-request so the stateless V4L2 decoders (Rockchip
+rkvdec/Hantro/VPU981, Allwinner Cedrus, ...) can be used through the
+v4l2request hwaccels added by the preceding upstream patches
+(https://code.ffmpeg.org/FFmpeg/FFmpeg/pulls/20847). The hwdevice uses
+libudev to find the media and video device, so add libudev-dev to
+Build-Depends and pass --enable-libudev, which makes configure fail
+instead of silently dropping the hwaccels if it is missing.
+
+Assisted-by: Claude:claude-opus-5-5
+---
+ debian/control | 1 +
+ debian/rules   | 4 +++-
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/debian/control b/debian/control
+index b5fa7e3..4f7bdf0 100644
+--- a/debian/control
++++ b/debian/control
+@@ -146,6 +146,7 @@ Build-Depends:
+  libtheora-dev,
+ # --enable-libtwolame
+  libtwolame-dev,
++ libudev-dev [linux-any],
+ # This is not necessary, see explanation in debian/rules.
+ # # --enable-libv4l2
+ # libv4l-dev [!hurd-any],
+diff --git a/debian/rules b/debian/rules
+index 2f59121..cce3622 100755
+--- a/debian/rules
++++ b/debian/rules
+@@ -126,7 +126,9 @@ ifeq (linux,$(DEB_HOST_ARCH_OS))
+ 	CONFIG += \
+ 		--enable-libdc1394 \
+ 		--enable-libdrm \
+-		--enable-libiec61883
++		--enable-libiec61883 \
++		--enable-libudev \
++		--enable-v4l2-request
+ endif
+ 
+ # ffmpeg is involved in build-dependency cycles with x264 and chromaprint, so disable them in stage one.

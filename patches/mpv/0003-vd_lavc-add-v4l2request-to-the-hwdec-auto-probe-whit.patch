@@ -1,0 +1,77 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 30 Oct 2026 12:00:00 +0000
+Subject: [PATCH 3/3] vd_lavc: add v4l2request to the hwdec auto-probe whitelist
+
+The v4l2request hwdecs (V4L2 stateless decoders through FFmpeg's V4L2
+Request API hwaccels) are not in hwdec_autoprobe_info, so --hwdec=auto,
+auto-safe, yes and auto-copy never try them; only auto-unsafe does, and
+then last. Players that ask libmpv for "auto" or "auto-copy" (most GUI
+front ends) therefore fall back to software decoding on SoCs whose only
+video decoders are stateless (Rockchip RK3588/RK3399, Allwinner, NXP
+i.MX8M, MediaTek, Raspberry Pi 5 HEVC), even when the decoder is there.
+
+v4l2request is as safe to probe as drm:
+- the hwaccel only binds to a decoder that it has probed: the media
+  device's video node must list the codec's OUTPUT pixel format and the
+  stream's frame size (VIDIOC_ENUM_FMT/ENUM_FRAMESIZES). Otherwise frames
+  context creation fails, get_format_hwdec() sets hwdec_failed and mpv
+  moves on to the next hwdec or software, as for any other failing hwdec;
+- frames are DRM PRIME dmabufs, imported by the same drmprime interop as
+  --hwdec=drm, or downloaded with av_hwframe_transfer_data() for -copy;
+- on systems without V4L2 stateless decoders it is never selected.
+
+Place it right after drm (and v4l2request-copy after drm-copy), i.e.
+after vaapi/nvdec/vulkan, so systems with a native GPU decoder behave
+exactly as before.
+
+Assisted-by: Claude:claude-opus-5-5
+---
+ DOCS/interface-changes/hwdec-v4l2request-auto.txt | 1 +
+ DOCS/man/options.rst                              | 4 ++++
+ video/decode/vd_lavc.c                            | 2 ++
+ 3 files changed, 7 insertions(+)
+ create mode 100644 DOCS/interface-changes/hwdec-v4l2request-auto.txt
+
+diff --git a/DOCS/interface-changes/hwdec-v4l2request-auto.txt b/DOCS/interface-changes/hwdec-v4l2request-auto.txt
+new file mode 100644
+index 0000000..2c156ba
+--- /dev/null
++++ b/DOCS/interface-changes/hwdec-v4l2request-auto.txt
+@@ -0,0 +1 @@
++add `v4l2request` and `v4l2request-copy` to the hwdecs that `--hwdec=auto` and `--hwdec=auto-copy` try
+diff --git a/DOCS/man/options.rst b/DOCS/man/options.rst
+index fa71dc0..a850ea0 100644
+--- a/DOCS/man/options.rst
++++ b/DOCS/man/options.rst
+@@ -1371,6 +1371,10 @@ Video
+     :nvdec-copy: copies video back to system RAM (Any platform CUDA is available)
+     :drm:       requires ``--vo=gpu`` or ``--vo=gpu-next`` (Linux only)
+     :drm-copy:   copies video back to system RAM (Linux only)
++    :v4l2request: requires ``--vo=gpu``, ``--vo=gpu-next`` or ``--vo=dmabuf-wayland``
++                  (Linux with V4L2 stateless decoders, e.g. Rockchip, Allwinner,
++                  MediaTek, NXP; needs an FFmpeg with the V4L2 Request API hwaccels)
++    :v4l2request-copy: copies video back to system RAM (Linux only)
+     :vulkan:    requires ``--vo=gpu-next`` (Any platform with Vulkan Video Decoding)
+     :vulkan-copy: copies video back to system RAM (Any platform with Vulkan Video Decoding)
+ 
+diff --git a/video/decode/vd_lavc.c b/video/decode/vd_lavc.c
+index 399e1d5..75a29aa 100644
+--- a/video/decode/vd_lavc.c
++++ b/video/decode/vd_lavc.c
+@@ -270,6 +270,7 @@ const struct autoprobe_info hwdec_autoprobe_info[] = {
+     {"vaapi",           HWDEC_FLAG_AUTO | HWDEC_FLAG_WHITELIST},
+     {"vdpau",           HWDEC_FLAG_AUTO},
+     {"drm",             HWDEC_FLAG_AUTO | HWDEC_FLAG_WHITELIST},
++    {"v4l2request",     HWDEC_FLAG_AUTO | HWDEC_FLAG_WHITELIST},
+     {"mediacodec",      HWDEC_FLAG_AUTO},
+     {"videotoolbox",    HWDEC_FLAG_AUTO | HWDEC_FLAG_WHITELIST},
+     {"d3d11va-copy",    HWDEC_FLAG_AUTO | HWDEC_FLAG_WHITELIST},
+@@ -279,6 +280,7 @@ const struct autoprobe_info hwdec_autoprobe_info[] = {
+     {"vaapi-copy",      HWDEC_FLAG_AUTO | HWDEC_FLAG_WHITELIST},
+     {"vdpau-copy",      HWDEC_FLAG_AUTO | HWDEC_FLAG_WHITELIST},
+     {"drm-copy",        HWDEC_FLAG_AUTO | HWDEC_FLAG_WHITELIST},
++    {"v4l2request-copy", HWDEC_FLAG_AUTO | HWDEC_FLAG_WHITELIST},
+     {"mediacodec-copy", HWDEC_FLAG_AUTO | HWDEC_FLAG_WHITELIST},
+     {"videotoolbox-copy", HWDEC_FLAG_AUTO | HWDEC_FLAG_WHITELIST},
+     {0}

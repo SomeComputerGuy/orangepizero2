@@ -1,0 +1,238 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 06:24:47 +0000
+Subject: [PATCH] desktops: add Ubuntu 26.10 (stonking) as a copy of resolute
+
+Every release block, browser map entry and tier override that names resolute gets a stonking entry with the same content, so module_desktops and the build framework list and install desktops on stonking. Checked against the stonking arm64 archive: every package of the GNOME full tier exists there (apt.armbian.com-only packages aside).
+
+Assisted-by: Claude
+---
+ tools/modules/desktops/yaml/bianbu.yaml        |  9 +++++++++
+ tools/modules/desktops/yaml/cinnamon.yaml      | 12 ++++++++++++
+ tools/modules/desktops/yaml/common.yaml        | 17 +++++++++++++++++
+ tools/modules/desktops/yaml/enlightenment.yaml |  7 +++++++
+ tools/modules/desktops/yaml/gnome.yaml         | 17 +++++++++++++++++
+ tools/modules/desktops/yaml/i3-wm.yaml         | 10 ++++++++++
+ tools/modules/desktops/yaml/kde-plasma.yaml    |  7 +++++++
+ tools/modules/desktops/yaml/mate.yaml          | 12 ++++++++++++
+ tools/modules/desktops/yaml/xfce.yaml          | 12 ++++++++++++
+ tools/modules/desktops/yaml/xmonad.yaml        |  7 +++++++
+ 10 files changed, 110 insertions(+)
+
+diff --git a/tools/modules/desktops/yaml/bianbu.yaml b/tools/modules/desktops/yaml/bianbu.yaml
+index 65c4b01..f5dd95b 100644
+--- a/tools/modules/desktops/yaml/bianbu.yaml
++++ b/tools/modules/desktops/yaml/bianbu.yaml
+@@ -128,3 +128,12 @@ releases:
+       - "resolute-porting/snapshots/v3.0"
+       - "resolute-customization/snapshots/v3.0"
+       - "bianbu-v3.0-updates"
++  stonking: # Ubuntu 26.10: same as resolute
++    architectures: [riscv64]
++    repo_suite:
++      - "resolute/snapshots/v3.0"
++      - "resolute-security/snapshots/v3.0"
++      - "resolute-updates/snapshots/v3.0"
++      - "resolute-porting/snapshots/v3.0"
++      - "resolute-customization/snapshots/v3.0"
++      - "bianbu-v3.0-updates"
+diff --git a/tools/modules/desktops/yaml/cinnamon.yaml b/tools/modules/desktops/yaml/cinnamon.yaml
+index d4ffef4..6d2f7b0 100644
+--- a/tools/modules/desktops/yaml/cinnamon.yaml
++++ b/tools/modules/desktops/yaml/cinnamon.yaml
+@@ -118,3 +118,15 @@ releases:
+       - pavumeter
+     packages_uninstall:
+       - ubuntu-session
++  stonking: # Ubuntu 26.10: same as resolute
++    # Ubuntu 26.04 LTS — same as questing; pavumeter still absent.
++    architectures: [arm64, amd64, riscv64]
++    packages:
++      - polkitd
++      - pkexec
++      - libfido2-1
++    packages_remove:
++      # pavumeter remains absent from the Ubuntu archive (dropped in plucky).
++      - pavumeter
++    packages_uninstall:
++      - ubuntu-session
+diff --git a/tools/modules/desktops/yaml/common.yaml b/tools/modules/desktops/yaml/common.yaml
+index be6e29e..58afb94 100644
+--- a/tools/modules/desktops/yaml/common.yaml
++++ b/tools/modules/desktops/yaml/common.yaml
+@@ -197,6 +197,12 @@ browser:
+     arm64:   chromium
+     armhf:   chromium
+     riscv64: epiphany-browser   # same rationale as noble
++  stonking: # Ubuntu 26.10: same as resolute
++    # Ubuntu 26.04 LTS
++    amd64:   google-chrome-stable
++    arm64:   chromium
++    armhf:   chromium
++    riscv64: epiphany-browser   # same rationale as noble
+   forky:
+     # Debian 14 — same rules as trixie.
+     amd64:   google-chrome-stable
+@@ -264,6 +270,9 @@ releases:
+   resolute:
+     packages:
+       - libfprint-2-tod1
++  stonking: # Ubuntu 26.10: same as resolute
++    packages:
++      - libfprint-2-tod1
+ 
+ tier_overrides:
+   minimal:
+@@ -336,6 +345,10 @@ tier_overrides:
+         # loupe/armhf still missing — no GNOME armhf build.
+         architectures:
+           armhf:  { packages_remove: [loupe] }
++      stonking: # Ubuntu 26.10: same as resolute
++        # loupe/armhf still missing — no GNOME armhf build.
++        architectures:
++          armhf:  { packages_remove: [loupe] }
+   full:
+     # `code` (Microsoft VSCode) is published on apt.armbian.com for
+     # amd64/arm64/armhf only (no riscv64 upstream build).
+@@ -394,6 +407,10 @@ tier_overrides:
+         architectures:
+           armhf:    { packages_remove: [thunderbird] }
+           riscv64:  { packages_remove: [thunderbird] }
++      stonking: # Ubuntu 26.10: same as resolute
++        architectures:
++          armhf:    { packages_remove: [thunderbird] }
++          riscv64:  { packages_remove: [thunderbird] }
+       forky:
+         # thunderbird is missing on forky/armhf — carry the trixie gap
+         # forward; other arches are fine.
+diff --git a/tools/modules/desktops/yaml/enlightenment.yaml b/tools/modules/desktops/yaml/enlightenment.yaml
+index 094d58c..abb9a54 100644
+--- a/tools/modules/desktops/yaml/enlightenment.yaml
++++ b/tools/modules/desktops/yaml/enlightenment.yaml
+@@ -91,3 +91,10 @@ releases:
+       - polkitd
+       - pkexec
+       - libfido2-1
++  stonking: # Ubuntu 26.10: same as resolute
++    # Ubuntu 26.04 LTS — same as questing.
++    architectures: [arm64, amd64, armhf, riscv64]
++    packages:
++      - polkitd
++      - pkexec
++      - libfido2-1
+diff --git a/tools/modules/desktops/yaml/gnome.yaml b/tools/modules/desktops/yaml/gnome.yaml
+index d54b46f..3fc7e2a 100644
+--- a/tools/modules/desktops/yaml/gnome.yaml
++++ b/tools/modules/desktops/yaml/gnome.yaml
+@@ -176,3 +176,20 @@ releases:
+       - pavumeter
+     packages_uninstall:
+       - ubuntu-session
++  stonking: # Ubuntu 26.10: same as resolute
++    # Ubuntu 26.04 LTS — same as questing; pavumeter still absent.
++    architectures: [arm64, amd64]
++    packages:
++      - polkitd
++      - pkexec
++      - libfido2-1
++      # GNOME Software stack (see noble block above for rationale).
++      - packagekit
++      - gnome-software-plugin-flatpak
++      - gnome-software-plugin-fwupd
++      - appstream
++    packages_remove:
++      # pavumeter remains absent from the Ubuntu archive (dropped in plucky).
++      - pavumeter
++    packages_uninstall:
++      - ubuntu-session
+diff --git a/tools/modules/desktops/yaml/i3-wm.yaml b/tools/modules/desktops/yaml/i3-wm.yaml
+index 8ac8235..94307c2 100644
+--- a/tools/modules/desktops/yaml/i3-wm.yaml
++++ b/tools/modules/desktops/yaml/i3-wm.yaml
+@@ -106,3 +106,13 @@ releases:
+     packages_remove:
+       # pavumeter remains absent from the Ubuntu archive (dropped in plucky).
+       - pavumeter
++  stonking: # Ubuntu 26.10: same as resolute
++    # Ubuntu 26.04 LTS — same as questing; pavumeter still absent.
++    architectures: [arm64, amd64, armhf, riscv64]
++    packages:
++      - polkitd
++      - pkexec
++      - libfido2-1
++    packages_remove:
++      # pavumeter remains absent from the Ubuntu archive (dropped in plucky).
++      - pavumeter
+diff --git a/tools/modules/desktops/yaml/kde-plasma.yaml b/tools/modules/desktops/yaml/kde-plasma.yaml
+index 53ba648..470f603 100644
+--- a/tools/modules/desktops/yaml/kde-plasma.yaml
++++ b/tools/modules/desktops/yaml/kde-plasma.yaml
+@@ -132,3 +132,10 @@ releases:
+       - polkitd
+       - pkexec
+       - libfido2-1
++  stonking: # Ubuntu 26.10: same as resolute
++    # Ubuntu 26.04 LTS — same as questing.
++    architectures: [arm64, amd64]
++    packages:
++      - polkitd
++      - pkexec
++      - libfido2-1
+diff --git a/tools/modules/desktops/yaml/mate.yaml b/tools/modules/desktops/yaml/mate.yaml
+index d7958bb..10c0d80 100644
+--- a/tools/modules/desktops/yaml/mate.yaml
++++ b/tools/modules/desktops/yaml/mate.yaml
+@@ -125,3 +125,15 @@ releases:
+       - pavumeter
+     packages_uninstall:
+       - ubuntu-session
++  stonking: # Ubuntu 26.10: same as resolute
++    # Ubuntu 26.04 LTS — same as questing; pavumeter still absent.
++    architectures: [arm64, amd64, armhf, riscv64]
++    packages:
++      - polkitd
++      - pkexec
++      - libfido2-1
++    packages_remove:
++      # pavumeter remains absent from the Ubuntu archive (dropped in plucky).
++      - pavumeter
++    packages_uninstall:
++      - ubuntu-session
+diff --git a/tools/modules/desktops/yaml/xfce.yaml b/tools/modules/desktops/yaml/xfce.yaml
+index 153407b..b1a7732 100644
+--- a/tools/modules/desktops/yaml/xfce.yaml
++++ b/tools/modules/desktops/yaml/xfce.yaml
+@@ -126,3 +126,15 @@ releases:
+       - pavumeter
+     packages_uninstall:
+       - ubuntu-session
++  stonking: # Ubuntu 26.10: same as resolute
++    # Ubuntu 26.04 LTS — same as questing; pavumeter still absent.
++    architectures: [arm64, amd64, armhf, riscv64]
++    packages:
++      - polkitd
++      - pkexec
++      - libfido2-1
++    packages_remove:
++      # pavumeter remains absent from the Ubuntu archive (dropped in plucky).
++      - pavumeter
++    packages_uninstall:
++      - ubuntu-session
+diff --git a/tools/modules/desktops/yaml/xmonad.yaml b/tools/modules/desktops/yaml/xmonad.yaml
+index de522ed..981eebf 100644
+--- a/tools/modules/desktops/yaml/xmonad.yaml
++++ b/tools/modules/desktops/yaml/xmonad.yaml
+@@ -106,3 +106,10 @@ releases:
+       - polkitd
+       - pkexec
+       - libfido2-1
++  stonking: # Ubuntu 26.10: same as resolute
++    # Ubuntu 26.04 LTS — same as questing.
++    architectures: [arm64, amd64, armhf, riscv64]
++    packages:
++      - polkitd
++      - pkexec
++      - libfido2-1
+-- 
+2.55.0
+

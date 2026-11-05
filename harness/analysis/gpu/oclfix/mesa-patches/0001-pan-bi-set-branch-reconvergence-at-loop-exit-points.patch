@@ -1,0 +1,71 @@
+From 2df1ec10089d75927e23f22744cd6a2b4a31a6a4 Mon Sep 17 00:00:00 2001
+From: Ryan Mckeever <ryan.mckeever@collabora.com>
+Date: Wed, 15 Jul 2026 15:31:59 -0700
+Subject: [PATCH 01/17] pan/bi: set branch reconvergence at loop exit points
+
+A clause requires reconvergence if it has a successor that can be executed
+without first executing the clause itself. Separate iterations of a loop
+are treated separately here. So when the loop iteration count is not
+warp-invariant, we need branch reconvergence at loop exit points.
+
+This commit is setting reconvergence for all loop exit points, so we could
+do better by checking if the loop is warp-invariant.
+
+Reviewed-by: Lorenzo Rossi <lorenzo.rossi@collabora.com>
+Reviewed-by: Erik Faye-Lund <erik.faye-lund@collabora.com>
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/41981>
+(cherry picked from commit 8b03ae787f43edc6ea2e94952d68d81221770082)
+---
+ src/panfrost/compiler/bifrost/bifrost/bi_schedule.c | 3 ++-
+ src/panfrost/compiler/bifrost/bifrost_compile.c     | 6 ++++++
+ src/panfrost/compiler/bifrost/compiler.h            | 3 +++
+ 3 files changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/src/panfrost/compiler/bifrost/bifrost/bi_schedule.c b/src/panfrost/compiler/bifrost/bifrost/bi_schedule.c
+index c655956afae..070179d8617 100644
+--- a/src/panfrost/compiler/bifrost/bifrost/bi_schedule.c
++++ b/src/panfrost/compiler/bifrost/bifrost/bi_schedule.c
+@@ -2017,7 +2017,8 @@ bi_schedule_block(bi_context *ctx, bi_block *block)
+    if (!list_is_empty(&block->clauses)) {
+       bi_clause *last_clause =
+          list_last_entry(&block->clauses, bi_clause, link);
+-      if (bi_reconverge_branches(block))
++      if (bi_reconverge_branches(block) ||
++          block->needs_reconvergence_on_exit)
+          last_clause->flow_control = BIFROST_FLOW_NBTB_UNCONDITIONAL;
+    }
+ 
+diff --git a/src/panfrost/compiler/bifrost/bifrost_compile.c b/src/panfrost/compiler/bifrost/bifrost_compile.c
+index d3ec0ccb16b..28bf6ea91af 100644
+--- a/src/panfrost/compiler/bifrost/bifrost_compile.c
++++ b/src/panfrost/compiler/bifrost/bifrost_compile.c
+@@ -89,6 +89,12 @@ bi_emit_jump(bi_builder *b, nir_jump_instr *instr)
+    switch (instr->type) {
+    case nir_jump_break:
+       branch->branch_target = b->shader->break_block;
++
++      /* We need branch reconvergence in the break block of a loop unless
++       * the loop is warp-invariant.
++       * TODO: check for warp-invariance
++       */
++      b->shader->current_block->needs_reconvergence_on_exit = true;
+       break;
+    case nir_jump_continue:
+       branch->branch_target = b->shader->continue_block;
+diff --git a/src/panfrost/compiler/bifrost/compiler.h b/src/panfrost/compiler/bifrost/compiler.h
+index 95a012db0b3..8495f827583 100644
+--- a/src/panfrost/compiler/bifrost/compiler.h
++++ b/src/panfrost/compiler/bifrost/compiler.h
+@@ -970,6 +970,9 @@ typedef struct bi_block {
+    bool unconditional_jumps;
+    bool loop_header;
+ 
++   /* whether this is a loop exit point that needs branch reconvergence */
++   bool needs_reconvergence_on_exit;
++
+    /* Per 32-bit word live masks for the block indexed by node */
+    uint8_t *live_in;
+    uint8_t *live_out;
+-- 
+2.55.0
+

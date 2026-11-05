@@ -1,0 +1,8 @@
+images/kernel_read_write/test_image_streams CL_FILTER_NEAREST float 2D
+images/kernel_read_write/test_image_streams CL_FILTER_NEAREST float 2Darray
+images/clCopyImage/test_cl_copy_images 2D
+images/clCopyImage/test_cl_copy_images 2Darray
+images/clCopyImage/test_cl_copy_images 2Darrayto2D
+images/clCopyImage/test_cl_copy_images 2Darrayto3D
+images/clCopyImage/test_cl_copy_images 2Dto2Darray
+images/clCopyImage/test_cl_copy_images 2Dto3D

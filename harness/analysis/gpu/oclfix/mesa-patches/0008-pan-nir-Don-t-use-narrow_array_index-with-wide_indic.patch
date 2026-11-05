@@ -1,0 +1,32 @@
+From 03818ee2b76a0e4147d1fbbe9bbf66232ba04e00 Mon Sep 17 00:00:00 2001
+From: Faith Ekstrand <faith.ekstrand@collabora.com>
+Date: Fri, 9 Oct 2026 16:51:12 -0400
+Subject: [PATCH 08/17] pan/nir: Don't use narrow_array_index with wide_indices
+
+Fixes: ddfde51985ed ("pan/nir: Add a pass for lowering texture ops in NIR on Valhall+")
+Reviewed-by: Lorenzo Rossi <lorenzo.rossi@collabora.com>
+(cherry picked from commit 4449611a09f9c50d547f5a491c26ca067c80cd02)
+
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/45704>
+(cherry picked from commit 3ee733fe4c313b5f073ac26972b790d541f66727)
+---
+ src/panfrost/compiler/pan_nir_lower_tex.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/panfrost/compiler/pan_nir_lower_tex.c b/src/panfrost/compiler/pan_nir_lower_tex.c
+index c349ec86241..c46e6d847fc 100644
+--- a/src/panfrost/compiler/pan_nir_lower_tex.c
++++ b/src/panfrost/compiler/pan_nir_lower_tex.c
+@@ -840,7 +840,8 @@ va_lower_tex(nir_builder *b, nir_tex_instr *tex, uint64_t gpu_id)
+        * On v9 and v10, narrow_array_index is a U16 in bits [31:16].  However,
+        * it does not appear to bounds-check correctly so we can't use it.
+        */
+-      if (pan_arch(gpu_id) >= 11 && scalar_is_imm_i4(arr_idx, false)) {
++      if (pan_arch(gpu_id) >= 11 && !flags.wide_indices &&
++          scalar_is_imm_i4(arr_idx, false)) {
+          narrow |= scalar_as_imm_i4(arr_idx) << 12;
+       } else {
+          sr[VA_TEX_SR_ARRAY] = nir_mov_scalar(b, arr_idx);
+-- 
+2.55.0
+

@@ -11,17 +11,22 @@ build is done (mesa-work/build-cl); the script deploys it (rsync of a stripped s
 libvulkan_panfrost.so. It also copies a small Vulkan compute runner (`vkcomp`, aarch64) and 8 SPIR-V diagnostic shaders to
 `/root/vkhangs/`.
 
-Precondition: the board answers ssh and is booted on the newest cumulative kernel (it must carry the panfrost
-soft-stop/resume patch e544ddb00, c15 or later: the 7 frag cases are long jobs that the stock 500 ms watchdog kills).
-Any kernel is accepted by the script (no install, no restore; `uname -v` is recorded), the kernel is reported with the
-results. It must not run at the same time as another board job (the lock takes care of that).
+Kernel: the script installs the NEWEST cumulative tag (last line of kernel-check/cumulative-kernels.txt, served as
+kernel-check/vdec-serve/Image.<tag> + modules-<tag>.tgz) via harness/research/vdec-perf/install-kernel.sh with the
+one-shot fallback armed, exactly like harness/research/opencl-fixes/runner/ocl-job.sh; the HTTP server on
+10.56.0.1:8643 must be up. The tag must carry the panfrost soft-stop/resume patch e544ddb00 (c15 or later: the 7 frag
+cases are long jobs that the stock 500 ms watchdog kills); if it does not, the script exits 1 before touching the board
+(report "package not ready: kernel lacks e544ddb00"). The board must be on the stock image kernel
+(vmlinuz-7.3.1-edge-sunxi64) when the job starts, otherwise BLOCKED. The stock kernel is restored at the end and
+before every lock hand-over; `uname -v` is recorded. It must not run at the same time as another board job (the
+lock takes care of that).
 
 DEV or TEST: TEST, about 40 min in 10 chunks of at most 15 min (diag ~3, cases-sg ~2, cases-frag-a/-b ~2-12 each,
 subset1-4 together ~5-10 (later subset chunks end at once when the run is complete), ocl ~5, gles ~3). Chunks run the
 board command under `timeout 870`; the host kills a chunk after 870 s without output. Resumable: re-running the command
 skips the chunks listed in logs/runner/state (delete a line to rerun that chunk). Between chunks the lock is handed
-over when another session waits (no kernel to restore). `bash ... vk-hangs.sh --print` prints the board scripts
-without touching the board.
+over when another session waits (stock kernel restored first, trial kernel reinstalled after). Add ~3 min per
+install/restore reboot pair. `bash ... vk-hangs.sh --print` prints the board scripts without touching the board.
 
 Results: harness/research/vk-hangs/logs/runner/: runner.log, chunk-<c>.txt, dmesg-<c>.txt, files/diag/trace.tgz
 (pandecode traces of every diag run), files/cases-*/<case>.{txt,qpa}, files/subset4/{results.csv,summary.txt,cmp.txt}
@@ -32,8 +37,9 @@ Exit codes: 0 = all chunks ran, judge with the checks below; 2 = blocked (report
 runner.log); 1 = setup or lock error (report the last 10 lines of runner.log).
 
 ## Checks (mechanical)
-1. runner.log contains `fork: ` (must mention `contains b7a705442bd`), `deployed vk1 ok`, a `kernel: ` line and a
-   `usage:` line (vkcomp runs on the board). Report the four lines.
+1. runner.log contains `fork: ` (must mention `contains b7a705442bd`), `kernel fix: present`, `deployed vk1 ok`, a
+   `kernel: ` line (uname -v of the installed cumulative kernel) and a `usage:` line (vkcomp runs on the board), and
+   its last `restored: ` line mentions `7.3.1-edge-sunxi64`. Report the six lines.
 2. diag (chunk-diag.txt): 36 lines starting `DIAG `. A line is OK when it has `rc=0` and its `excs=[...]` contains only
    `x0x1` entries (every job header COMPLETE). Report the full table of the 36 lines as is (they are short), and for
    every line that is not OK also its `DMESG <tag>:` lines. The 12 `sys-*` lines are the system-Mesa baseline (8-wide
@@ -60,5 +66,5 @@ runner.log); 1 = setup or lock error (report the last 10 lines of runner.log).
    delete its line from logs/runner/state and rerun the command once; if it does not finish the second time, report
    NOT FINISHED with the last 10 lines of its chunk file). `CHUNK-RC` is the exit code of the chunk's test command.
 
-The summary must list: the four lines of check 1, the 36 DIAG lines, the 14 CASE lines with their t= values, the cmp.txt
+The summary must list: the six lines of check 1, the 36 DIAG lines, the 14 CASE lines with their t= values, the cmp.txt
 lines of check 5, the ocl rows, the gles summary, the dmesg counts per chunk, and the state file content.

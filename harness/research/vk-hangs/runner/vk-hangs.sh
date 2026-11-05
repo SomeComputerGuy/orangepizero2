@@ -2,17 +2,21 @@
 # Runner package for the Vulkan hangs (fork panfrost-opencl-fixes b7a705442bd, CLPER_OLD for read_invocation): vk-hangs.sh
 # Self-contained: board lock (fresh owner name per acquire), deploy the cross-built fork to /root/opiz2-mesa/vk1 (the
 # system Mesa and the older /root/opiz2-mesa/cl* stay untouched), copy the diagnostic Vulkan shaders + vkcomp, run the
-# chunks (each at most ~15 min) on the booted kernel under a stall watchdog, copy results off after every chunk,
-# release. No kernel change: nothing to restore. Between chunks the lock is handed over if another session waits.
+# chunks (each at most ~15 min) under a stall watchdog, copy results off after every chunk, release. Kernel: installs
+# the newest cumulative kernel with the one-shot fallback armed (harness/research/vdec-perf/install-kernel.sh, the
+# ocl-job.sh pattern; it must carry the panfrost soft-stop/resume fix e544ddb00) and restores the stock image kernel
+# (vmlinuz-7.3.1-edge-sunxi64) at the end and before every lock hand-over to another waiting session.
 # Resumable: re-running the same command skips chunks listed in $OUT/state. Exit 0 = all chunks ran (pass/fail is
 # judged from the results, see HANDOFF.md); 2 = blocked (reason in $OUT/BLOCKED); 1 = setup or lock error.
 set -u
-H=/home/aruni/orangepizero2; S=$H/harness/research/vk-hangs; MW=$H/mesa-work; SSH=$H/harness/ssh.sh
+H=/home/aruni/orangepizero2; S=$H/harness/research/vk-hangs; MW=$H/mesa-work; V=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh
 J=vkhangs
 K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
 OUT=$S/logs/runner; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED
 CHUNKS="diag cases-sg cases-frag-a cases-frag-b subset1 subset2 subset3 subset4 ocl gles"; CT=870; STALL=870
 FORK=b7a705442bd                          # mesa-cl commit the build must contain (CLPER_OLD for read_invocation)
+SOFTSTOP=e544ddb00                        # kernel commit the cumulative kernel must contain (panfrost soft-stop/resume)
+T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
 LIB=$MW/build-cl/src/panfrost/vulkan/libvulkan_panfrost.so
 B=/root/vkhangs                           # board work dir
 VK=/root/cts/deqp-vk; CTS=/root/cts/opencl-cts; GL=/root/cts/deqp-gles
@@ -29,7 +33,18 @@ log() { echo "$(date '+%F %T') $*" | tee -a $OUT/runner.log; }
 acquire() { OWN=runner-$J-$(date +%s); out=$($H/harness/board-lock.sh acquire $OWN) || { log "lock: $out"; exit 1; }
   case $out in *"already held"*) log "lock already held by $OWN"; exit 1;; esac; log "$out"; }
 release() { [ -n "$OWN" ] && $H/harness/board-lock.sh release $OWN | tee -a $OUT/runner.log; OWN=""; }
-blocked() { log "BLOCKED: $*"; echo "$*" > $OUT/BLOCKED; release; exit 2; }
+waitup() { for i in $(seq 1 60); do sleep 5; $SSH -n true 2>/dev/null && return 0; done; return 1; }
+restore() { $SSH -n 'ln -sfn vmlinuz-7.3.1-edge-sunxi64 /boot/Image; rm -f /boot/vdec-trial; sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'
+  sleep 15; if waitup; then log "restored: $($SSH -n 'uname -rv; readlink /boot/Image' | tr '\n' ' ')"
+  else log "BOARD UNREACHABLE after restore reboot"; echo "board unreachable after restore" > $OUT/BLOCKED; fi; }
+blocked() { log "BLOCKED: $*"; echo "$*" > $OUT/BLOCKED; restore; release; exit 2; }
+boot_trial() { # install the newest cumulative kernel with the fallback armed (ocl-job.sh pattern)
+  [ "$($SSH -n 'readlink /boot/Image')" = vmlinuz-7.3.1-edge-sunxi64 ] || blocked "board not on the stock image kernel at start"
+  $V/install-kernel.sh $T 2>&1 | tail -3 | tee -a $OUT/runner.log
+  $SSH -n 'sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'; sleep 15
+  waitup || { log "trial kernel did not come up (the fallback reverts on the next boot)"; echo "trial boot failed" > $OUT/BLOCKED; release; exit 2; }
+  [ "$($SSH -n 'md5sum < /boot/$(readlink /boot/Image) | cut -c1-32')" = "$KIMG" ] || blocked "$T Image md5 mismatch after install"
+  $SSH -n 'touch /run/vdec-ok'; log "kernel fix: present ($T contains $SOFTSTOP)"; }
 others_waiting() { ls $H/harness/queue/board.wait 2>/dev/null | grep -v "\.$OWN\." | grep -q .; }
 # host-side preconditions (no board needed)
 [ -f $LIB ] || { log "missing build: $LIB (run: . mesa-work/tools/env-cl.sh; ninja -C mesa-work/build-cl)"; exit 1; }
@@ -38,7 +53,10 @@ head=$(git -C $MW/mesa-cl rev-parse --short=11 HEAD)
 git -C $MW/mesa-cl merge-base --is-ancestor $FORK HEAD 2>/dev/null || { log "mesa-cl HEAD $head does not contain $FORK"; exit 1; }
 [ -z "$(git -C $MW/mesa-cl status --short -- src 2>/dev/null)" ] || log "note: mesa-cl has uncommitted changes under src/"
 [ "$(stat -c %Y $LIB)" -ge "$(git -C $MW/mesa-cl log -1 --format=%ct $FORK)" ] || { log "$LIB is older than commit $FORK: rebuild build-cl"; exit 1; }
-log "fork: $head (contains $FORK), lib $(md5sum < $LIB | cut -c1-32)"
+KIMG=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || { log "no served kernel Image.$T"; exit 1; }
+c=$(awk -v t=$T '$1==t{print $3}' $H/kernel-check/cumulative-kernels.txt)
+git -C $H/wt-cumulative merge-base --is-ancestor $SOFTSTOP "$c" 2>/dev/null || { log "kernel $T ($c) lacks the panfrost soft-stop fix $SOFTSTOP"; exit 1; }
+log "fork: $head (contains $FORK), lib $(md5sum < $LIB | cut -c1-32); kernel $T ($c, Image md5 $KIMG)"
 setup() { # deploy the fork to /root/opiz2-mesa/vk1, copy the diag tools, check the CTS trees
   $SSH -n true || blocked "board does not answer ssh"
   $SSH -n 'uname -v' | sed 's/^/kernel: /' | tee -a $OUT/runner.log
@@ -124,12 +142,12 @@ run_chunk() { # run_chunk <chunk>: remote command under timeout + stall watchdog
 [ "${1:-}" = "--print" ] && { for c in $CHUNKS; do echo "## $c"; chunk_script $c; done; exit 0; }
 log "job $J start, chunks: $CHUNKS, done before: $(tr '\n' ' ' < $OUT/state)"
 trap 'release' EXIT
-acquire; setup
+acquire; boot_trial; setup
 for c in $CHUNKS; do
   grep -qx "$c" $OUT/state && continue
-  if others_waiting; then log "another session waits: handing over the lock"; release; acquire; setup; fi
+  if others_waiting; then log "another session waits: handing over the lock"; restore; release; acquire; boot_trial; setup; fi
   log "chunk $c start"; run_chunk $c
 done
-release
+restore; release
 log "job $J end: $(wc -l < $OUT/state) of $(echo $CHUNKS | wc -w) chunks done"
 [ -f $OUT/BLOCKED ] && exit 2; exit 0

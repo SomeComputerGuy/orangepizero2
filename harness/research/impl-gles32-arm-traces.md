@@ -30,7 +30,13 @@ prcm_ppu domain, dcdcc, OPP table). Boot-time trial: overlay `sun50i-h616-gpu-kb
 then `Device runtime usage count unexpectedly non zero 1` -> probe -EINVAL. Fixed (warn only), rebuilt;
 panfrost rebound, /dev/dri/renderD128 back. Not re-run before the cumulative-kernel switch.
 
-## How to run (next session, on the cumulative kernel c1)
+## Runner package (2026-11-05 late): harness/research/kbase-trace/runner/{kbase-traces.sh,HANDOFF.md}, queued as
+harness/runner-queue/16-kbase-traces.md. It installs the newest cumulative kernel (c17 at submission; the BTF fix
+bd60a159b is in c7+), stages module + blob + tools in /root/armblob, unbinds panfrost, insmods kbase, runs probe and
+trace, fetches to harness/research/arm-blob/traces/runner/files/, rebinds panfrost and restores the stock kernel.
+`--check` prints the mechanical checks. The manual steps below are superseded by it (kbase-slot.sh stays for DEV use).
+
+## How to run manually (superseded by the runner package above)
 1. `kernel-check/kbase-trial/port/build.sh` (now defaults to KDIR=kernel-check/work-cumul/linux-7.3.1, release 7.3.1).
 2. `harness/research/kbase-trace/kbase-slot.sh stage|load|info|probe|trace|fetch run1|restore` under the board
    lock. Nothing is installed on the board (/root/armblob prefix, runtime unbind/bind), so a reboot restores panfrost.

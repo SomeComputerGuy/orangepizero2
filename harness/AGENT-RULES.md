@@ -40,6 +40,7 @@ Acceptance: docs/spec-checklist.md, docs/datasheet-checklist.md. Status/work lis
 - Hand back once per task, when done and verified or truly blocked. No interim or status messages.
 - Watchers sleep at least 10 min between checks. Long board runs must be pausable and resumable (never SIGSTOP), and dev turns beat long test runs.
 - Display: a mode the attached display doesn't support is NOT TESTED, never FAIL.
+- Long board tests are handed to a runner as a package: one self-contained script (pausable and resumable, board-lock handling, stall watchdog, restores the stock kernel, copies the results off), plus a HANDOFF.md with the exact command, kernel and debs, expected duration, pass/fail as mechanical checks (grep, count, threshold), the files to copy and what the summary must list. If the runner would need judgement beyond that, the package isn't ready.
 
 ## Builds
 - Build caching is rule #1: ccache + Armbian artifact caches; no needless full rebuilds. No Docker. No sudo.

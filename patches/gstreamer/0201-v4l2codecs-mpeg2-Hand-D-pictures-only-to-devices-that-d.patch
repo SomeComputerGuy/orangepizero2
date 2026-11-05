@@ -1,0 +1,157 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 21:43:07 +0000
+Subject: [PATCH] v4l2codecs: mpeg2: Hand D-pictures only to devices that
+ decode them
+
+The MPEG-2 decoder passes picture_coding_type 4 (an MPEG-1 D-picture,
+DC coefficients only) to the device as V4L2_MPEG2_PIC_CODING_TYPE_D for
+every stream. Decoding D-pictures is optional in the uAPI: a driver that
+cannot decode them rejects the value (Hantro), also in
+VIDIOC_TRY_EXT_CTRLS, and kernels without the MPEG-1 uAPI reject it for
+every driver. Each D-picture of such a stream then fails in the driver,
+one "Failed to decode frame" after the other, and in an MPEG-2 stream
+the value is not valid at all.
+
+Add gst_v4l2_decoder_try_controls() and ask the driver once, after the
+MPEG-1 coded format is set, whether it accepts a D-picture control.
+Only then hand D-pictures to the device; otherwise refuse them with a
+stream error, like a software decoder does. MPEG-2 streams never get
+D-pictures. Same rule as the FFmpeg V4L2 Request MPEG-1 hwaccel.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2codecs/gstv4l2codecmpeg2dec.c | 48 +++++++++++++++++++++++++++
+ sys/v4l2codecs/gstv4l2decoder.c       | 22 ++++++++++++
+ sys/v4l2codecs/gstv4l2decoder.h       |  4 +++
+ 3 files changed, 74 insertions(+)
+
+diff --git a/sys/v4l2codecs/gstv4l2codecmpeg2dec.c b/sys/v4l2codecs/gstv4l2codecmpeg2dec.c
+index 4882519..5d5e1ee 100644
+--- a/sys/v4l2codecs/gstv4l2codecmpeg2dec.c
++++ b/sys/v4l2codecs/gstv4l2codecmpeg2dec.c
+@@ -110,6 +110,7 @@ struct _GstV4l2CodecMpeg2Dec
+   GstMpegVideoProfile profile;
+   guint16 vbv_buffer_size;
+   gboolean mpeg1;
++  gboolean d_pictures;
+   gboolean need_sequence;
+   gboolean need_quantiser;
+ 
+@@ -255,6 +256,38 @@ get_pixel_bitdepth (GstV4l2CodecMpeg2Dec * self)
+   return depth;
+ }
+ 
++/* Decoding MPEG-1 D-pictures (DC coefficients only) is optional: a driver
++ * that cannot decode them rejects V4L2_MPEG2_PIC_CODING_TYPE_D, also in
++ * VIDIOC_TRY_EXT_CTRLS, and kernels without the MPEG-1 uAPI reject the value
++ * for every driver. Ask once, after the coded format is set. */
++static gboolean
++gst_v4l2_codec_mpeg2_dec_probe_d_pictures (GstV4l2CodecMpeg2Dec * self)
++{
++  /* *INDENT-OFF* */
++  struct v4l2_ctrl_mpeg2_picture picture = {
++    .picture_coding_type = V4L2_MPEG2_PIC_CODING_TYPE_D,
++    .picture_structure = V4L2_MPEG2_PIC_FRAME,
++    .flags = V4L2_MPEG2_PIC_FLAG_FRAME_PRED_DCT |
++             V4L2_MPEG2_PIC_FLAG_PROGRESSIVE,
++  };
++  struct v4l2_ext_control control[] = {
++    {
++      .id = V4L2_CID_STATELESS_MPEG2_PICTURE,
++      .ptr = &picture,
++      .size = sizeof (picture),
++    },
++  };
++  /* *INDENT-ON* */
++  gboolean ret;
++
++  ret = gst_v4l2_decoder_try_controls (self->decoder, control,
++      G_N_ELEMENTS (control));
++  GST_INFO_OBJECT (self, "D-pictures are %s by the device",
++      ret ? "decoded" : "not decoded");
++
++  return ret;
++}
++
+ static gboolean
+ gst_v4l2_codec_mpeg2_dec_negotiate (GstVideoDecoder * decoder)
+ {
+@@ -303,6 +336,10 @@ gst_v4l2_codec_mpeg2_dec_negotiate (GstVideoDecoder * decoder)
+     return FALSE;
+   }
+ 
++  /* D-pictures only exist in MPEG-1 streams */
++  self->d_pictures = self->mpeg1
++      && gst_v4l2_codec_mpeg2_dec_probe_d_pictures (self);
++
+   /* If the peer has ANY caps only advertise system memory caps */
+   peer_caps = gst_pad_peer_query_caps (decoder->srcpad, NULL);
+   static_filter =
+@@ -668,6 +705,17 @@ gst_v4l2_codec_mpeg2_dec_start_picture (GstMpeg2Decoder * decoder,
+   _parse_picture_coding_type (&self->v4l2_picture, picture);
+   _parse_picture_structure (&self->v4l2_picture, slice);
+ 
++  /* Without D-picture support the driver would fail every one of them;
++   * refuse them here like a software decoder does. */
++  if (self->v4l2_picture.picture_coding_type == V4L2_MPEG2_PIC_CODING_TYPE_D
++      && !self->d_pictures) {
++    GST_ELEMENT_ERROR (self, STREAM, DECODE,
++        ("The device does not decode MPEG-1 D-pictures"),
++        (self->mpeg1 ? "V4L2_MPEG2_PIC_CODING_TYPE_D is rejected by the driver"
++            : "D-pictures only exist in MPEG-1 streams"));
++    return GST_FLOW_ERROR;
++  }
++
+   if (self->mpeg1) {
+     if (slice->pic_hdr->full_pel_forward_vector)
+       self->v4l2_picture.flags |= V4L2_MPEG2_PIC_FLAG_FULL_PEL_FORWARD;
+diff --git a/sys/v4l2codecs/gstv4l2decoder.c b/sys/v4l2codecs/gstv4l2decoder.c
+index 98ee880..00c0e4e 100644
+--- a/sys/v4l2codecs/gstv4l2decoder.c
++++ b/sys/v4l2codecs/gstv4l2decoder.c
+@@ -1169,6 +1169,28 @@ gst_v4l2_decoder_get_controls (GstV4l2Decoder * self,
+   return TRUE;
+ }
+ 
++/* Ask the driver whether it accepts these control values. No error logging:
++ * the driver rejecting the values is the answer. */
++gboolean
++gst_v4l2_decoder_try_controls (GstV4l2Decoder * self,
++    struct v4l2_ext_control *control, guint count)
++{
++  gint ret;
++  struct v4l2_ext_controls controls = {
++    .controls = control,
++    .count = count,
++  };
++
++  ret = ioctl (self->video_fd, VIDIOC_TRY_EXT_CTRLS, &controls);
++  if (ret < 0) {
++    GST_DEBUG_OBJECT (self, "VIDIOC_TRY_EXT_CTRLS rejected: %s",
++        g_strerror (errno));
++    return FALSE;
++  }
++
++  return TRUE;
++}
++
+ gboolean
+ gst_v4l2_decoder_query_control_size (GstV4l2Decoder * self,
+     unsigned int control_id, unsigned int *control_size)
+diff --git a/sys/v4l2codecs/gstv4l2decoder.h b/sys/v4l2codecs/gstv4l2decoder.h
+index 3d666c7..715e73d 100644
+--- a/sys/v4l2codecs/gstv4l2decoder.h
++++ b/sys/v4l2codecs/gstv4l2decoder.h
+@@ -137,6 +137,10 @@ gboolean          gst_v4l2_decoder_get_controls (GstV4l2Decoder * self,
+                                                  struct v4l2_ext_control * control,
+                                                  guint count);
+ 
++gboolean          gst_v4l2_decoder_try_controls (GstV4l2Decoder * self,
++                                                 struct v4l2_ext_control * control,
++                                                 guint count);
++
+ gboolean          gst_v4l2_decoder_query_control_size (GstV4l2Decoder * self,
+                                                  unsigned int control_id,
+                                                  unsigned int *control_size);

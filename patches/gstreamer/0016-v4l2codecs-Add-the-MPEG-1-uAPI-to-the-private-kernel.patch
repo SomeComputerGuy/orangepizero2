@@ -1,0 +1,53 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 06:54:22 +0000
+Subject: [PATCH 16/17] v4l2codecs: Add the MPEG-1 uAPI to the private kernel
+ headers
+
+Add V4L2_PIX_FMT_MPEG1_SLICE, V4L2_MPEG2_SEQ_FLAG_MPEG1 and the
+V4L2_MPEG2_PIC_FLAG_FULL_PEL_* flags of the stateless MPEG-2 controls,
+from the kernel patches "media: uapi: mpeg2: add MPEG-1 sequence and
+full pel flags" and "media: uapi: add the MPEG-1 parsed slice format".
+The patches are not in a released kernel yet; update the headers from
+the kernel once they are.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2codecs/linux/v4l2-controls.h | 3 +++
+ sys/v4l2codecs/linux/videodev2.h     | 1 +
+ 2 files changed, 4 insertions(+)
+
+diff --git a/sys/v4l2codecs/linux/v4l2-controls.h b/sys/v4l2codecs/linux/v4l2-controls.h
+index 29539a4..60ae202 100644
+--- a/sys/v4l2codecs/linux/v4l2-controls.h
++++ b/sys/v4l2codecs/linux/v4l2-controls.h
+@@ -1979,6 +1979,7 @@ struct v4l2_ctrl_vp8_frame {
+ /* Stateless MPEG-2 controls */
+ 
+ #define V4L2_MPEG2_SEQ_FLAG_PROGRESSIVE	0x01
++#define V4L2_MPEG2_SEQ_FLAG_MPEG1	0x02
+ 
+ #define V4L2_CID_STATELESS_MPEG2_SEQUENCE (V4L2_CID_CODEC_STATELESS_BASE+220)
+ /**
+@@ -2027,6 +2028,8 @@ struct v4l2_ctrl_mpeg2_sequence {
+ #define V4L2_MPEG2_PIC_FLAG_ALT_SCAN			0x0020
+ #define V4L2_MPEG2_PIC_FLAG_REPEAT_FIRST		0x0040
+ #define V4L2_MPEG2_PIC_FLAG_PROGRESSIVE			0x0080
++#define V4L2_MPEG2_PIC_FLAG_FULL_PEL_FORWARD		0x0100
++#define V4L2_MPEG2_PIC_FLAG_FULL_PEL_BACKWARD		0x0200
+ 
+ #define V4L2_CID_STATELESS_MPEG2_PICTURE (V4L2_CID_CODEC_STATELESS_BASE+221)
+ /**
+diff --git a/sys/v4l2codecs/linux/videodev2.h b/sys/v4l2codecs/linux/videodev2.h
+index 4e43eca..f3e4639 100644
+--- a/sys/v4l2codecs/linux/videodev2.h
++++ b/sys/v4l2codecs/linux/videodev2.h
+@@ -721,6 +721,7 @@ struct v4l2_pix_format {
+ #define V4L2_PIX_FMT_MPEG1    v4l2_fourcc('M', 'P', 'G', '1') /* MPEG-1 ES     */
+ #define V4L2_PIX_FMT_MPEG2    v4l2_fourcc('M', 'P', 'G', '2') /* MPEG-2 ES     */
+ #define V4L2_PIX_FMT_MPEG2_SLICE v4l2_fourcc('M', 'G', '2', 'S') /* MPEG-2 parsed slice data */
++#define V4L2_PIX_FMT_MPEG1_SLICE v4l2_fourcc('M', 'G', '1', 'S') /* MPEG-1 parsed slice data */
+ #define V4L2_PIX_FMT_MPEG4    v4l2_fourcc('M', 'P', 'G', '4') /* MPEG-4 part 2 ES */
+ #define V4L2_PIX_FMT_XVID     v4l2_fourcc('X', 'V', 'I', 'D') /* Xvid           */
+ #define V4L2_PIX_FMT_VC1_ANNEX_G v4l2_fourcc('V', 'C', '1', 'G') /* SMPTE 421M Annex G compliant stream */

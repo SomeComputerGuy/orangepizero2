@@ -1,0 +1,137 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 06:55:07 +0000
+Subject: [PATCH 17/17] v4l2codecs: mpeg2: Decode MPEG-1
+
+Stateless decoders that decode MPEG-1 (ISO/IEC 11172-2) enumerate the
+V4L2_PIX_FMT_MPEG1_SLICE coded format and take the MPEG-2 controls with
+V4L2_MPEG2_SEQ_FLAG_MPEG1 for it (cedrus and the Rockchip VPU2 with the
+kernel patches that add the format).
+
+If the decoder enumerates the format, also accept mpegversion=1 on the
+sink pad, with the frame sizes of the MPEG-1 format. For MPEG-1
+sequences, for which the base class gives no sequence extension, set
+the MPEG-1 format, the MPEG-1 flag and the 4:2:0 progressive sequence
+values, and pass the full pel vector flags of the picture header;
+switching between MPEG-1 and MPEG-2 sequences renegotiates. This also
+fixes a NULL pointer dereference of the sequence extension when it is
+absent.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2codecs/gstv4l2codecmpeg2dec.c | 52 +++++++++++++++++++++++++--
+ 1 file changed, 49 insertions(+), 3 deletions(-)
+
+diff --git a/sys/v4l2codecs/gstv4l2codecmpeg2dec.c b/sys/v4l2codecs/gstv4l2codecmpeg2dec.c
+index dd4ae26..4882519 100644
+--- a/sys/v4l2codecs/gstv4l2codecmpeg2dec.c
++++ b/sys/v4l2codecs/gstv4l2codecmpeg2dec.c
+@@ -70,6 +70,10 @@ static GstStaticCaps static_sink_caps = GST_STATIC_CAPS ("video/mpeg, "
+     "systemstream=(boolean) false, "
+     "mpegversion=(int) 2, " "profile=(string) {main, simple} ");
+ 
++/* MPEG-1 has its own coded format and uses the MPEG-2 controls */
++static GstStaticCaps static_sink_caps_mpeg1 = GST_STATIC_CAPS ("video/mpeg, "
++    "systemstream=(boolean) false, " "mpegversion=(int) 1");
++
+ #define SRC_CAPS \
+     GST_VIDEO_DMA_DRM_CAPS_MAKE " ; " \
+     GST_VIDEO_CAPS_MAKE (GST_V4L2_DEFAULT_VIDEO_FORMATS)
+@@ -105,6 +109,7 @@ struct _GstV4l2CodecMpeg2Dec
+   gboolean interlaced;
+   GstMpegVideoProfile profile;
+   guint16 vbv_buffer_size;
++  gboolean mpeg1;
+   gboolean need_sequence;
+   gboolean need_quantiser;
+ 
+@@ -281,7 +286,8 @@ gst_v4l2_codec_mpeg2_dec_negotiate (GstVideoDecoder * decoder)
+ 
+   gst_v4l2_codec_mpeg2_dec_reset_allocation (self);
+ 
+-  if (!gst_v4l2_decoder_set_sink_fmt (self->decoder, V4L2_PIX_FMT_MPEG2_SLICE,
++  if (!gst_v4l2_decoder_set_sink_fmt (self->decoder,
++          self->mpeg1 ? V4L2_PIX_FMT_MPEG1_SLICE : V4L2_PIX_FMT_MPEG2_SLICE,
+           self->width, self->height, get_pixel_bitdepth (self))) {
+     GST_ELEMENT_ERROR (self, CORE, NEGOTIATION,
+         ("Failed to configure mpeg2 decoder"),
+@@ -493,6 +499,12 @@ gst_v4l2_codec_mpeg2_dec_new_sequence (GstMpeg2Decoder * decoder,
+     negotiation_needed = TRUE;
+   }
+ 
++  /* The base class gives no sequence extension for MPEG-1 sequences */
++  if (self->mpeg1 != !seq_ext) {
++    self->mpeg1 = !seq_ext;
++    negotiation_needed = TRUE;
++  }
++
+   mpeg_profile = GST_MPEG_VIDEO_PROFILE_MAIN;
+   if (seq_ext)
+     mpeg_profile = seq_ext->profile;
+@@ -532,8 +544,10 @@ gst_v4l2_codec_mpeg2_dec_new_sequence (GstMpeg2Decoder * decoder,
+     .profile_and_level_indication =
+         seq_ext ? (seq_ext->profile << 4) | (seq_ext->
+         level << 1) | seq_ext->profile_level_escape_bit : 0,
+-    .chroma_format = seq_ext ? seq_ext->chroma_format : 0,
+-    .flags = seq_ext->progressive ? V4L2_MPEG2_SEQ_FLAG_PROGRESSIVE : 0,
++    /* MPEG-1: 4:2:0 progressive (ISO/IEC 13818-2 values for MPEG-1) */
++    .chroma_format = seq_ext ? seq_ext->chroma_format : 1,
++    .flags = (!seq_ext || seq_ext->progressive ? V4L2_MPEG2_SEQ_FLAG_PROGRESSIVE : 0) |
++             (self->mpeg1 ? V4L2_MPEG2_SEQ_FLAG_MPEG1 : 0),
+   };
+   /* *INDENT-ON* */
+ 
+@@ -654,6 +668,13 @@ gst_v4l2_codec_mpeg2_dec_start_picture (GstMpeg2Decoder * decoder,
+   _parse_picture_coding_type (&self->v4l2_picture, picture);
+   _parse_picture_structure (&self->v4l2_picture, slice);
+ 
++  if (self->mpeg1) {
++    if (slice->pic_hdr->full_pel_forward_vector)
++      self->v4l2_picture.flags |= V4L2_MPEG2_PIC_FLAG_FULL_PEL_FORWARD;
++    if (slice->pic_hdr->full_pel_backward_vector)
++      self->v4l2_picture.flags |= V4L2_MPEG2_PIC_FLAG_FULL_PEL_BACKWARD;
++  }
++
+   /* slices share pic_ext and quant_matrix for the picture which might be there or not */
+   if (slice->pic_ext)
+     memcpy (&self->v4l2_picture.f_code, slice->pic_ext->f_code,
+@@ -1131,6 +1152,24 @@ gst_v4l2_codec_mpeg2_dec_class_init (GstV4l2CodecMpeg2DecClass * klass,
+   gst_v4l2_decoder_install_properties (gobject_class, PROP_LAST, device);
+ }
+ 
++/* Only decoders that enumerate V4L2_PIX_FMT_MPEG1_SLICE decode MPEG-1 */
++static gboolean
++gst_v4l2_codec_mpeg2_dec_has_mpeg1 (GstV4l2Decoder * decoder)
++{
++  guint32 fmt;
++  gint i;
++
++  for (i = 0; gst_v4l2_decoder_enum_sink_fmt (decoder, i, &fmt); i++) {
++    if (fmt == V4L2_PIX_FMT_MPEG1_SLICE) {
++      GST_INFO ("MPEG-1 supported");
++      return TRUE;
++    }
++  }
++
++  GST_INFO ("MPEG-1 not supported");
++  return FALSE;
++}
++
+ void
+ gst_v4l2_codec_mpeg2_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+     GstV4l2CodecDevice * device, guint rank)
+@@ -1172,6 +1211,13 @@ register_element:
+   sink_caps = gst_v4l2_decoder_probe_sink_caps (decoder,
+       V4L2_PIX_FMT_MPEG2_SLICE, &static_sink_caps);
+ 
++  if (gst_v4l2_decoder_in_doc_mode (decoder) ||
++      gst_v4l2_codec_mpeg2_dec_has_mpeg1 (decoder)) {
++    sink_caps = gst_caps_merge (sink_caps,
++        gst_v4l2_decoder_probe_sink_caps (decoder, V4L2_PIX_FMT_MPEG1_SLICE,
++            &static_sink_caps_mpeg1));
++  }
++
+   type_info.class_data = gst_v4l2_decoder_class_data_new (device,
+       sink_caps, tmpl_src_caps);
+   gst_v4l2_decoder_register (plugin, GST_TYPE_MPEG2_DECODER, &type_info,

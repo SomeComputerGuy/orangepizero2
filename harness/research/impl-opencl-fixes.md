@@ -19,6 +19,9 @@ gles31-khr-main 1 Fail (`mixedSequence`).
 | a2120a29e03 | pan/bi/nir: Scalarize the rest of nir_op_b(any\|all)_* | cherry-pick -x of main bab5285218a |
 | 89dc6134c58 … 0301c677305 | 12 compiler/driver fixes from staging/26.2 (all in 26.2.5/26.2.6): nir_instr_set tex CSE (x2), no 64-bit iadd3, narrow_array_index, bi helper analysis tls-stores, lower_continue_constructs (x2), pan/lib (x3), panfrost free/leak (x2) | cherry-pick -x |
 | 9049a3c5f2c | pan/bi: don't end a shader with a BARRIER clause | ours (Generated-by: LLM) |
+| 45a7a7147d5, c6e6e63990b | drm-shim: GET_PARAMs for the kmod layer; signalled sync file for SYNCOBJ_HANDLE_TO_FD (host tooling only, not shipped) | ours (Generated-by: LLM) |
+| ec376a8ee7e | nir/lower_cl_images: record buffer textures in texture_buffers (Bifrost texel-buffer attributes for read_image(image1d_buffer_t)) | ours (Generated-by: LLM) |
+| a0a4534b14d | rusticl/mem: fix the whole-slice fast path of sw_copy and the rect copies (clEnqueueMapImage 3D etc.) | ours (Generated-by: LLM) |
 
 **Kernel** `fix/sunxi-panfrost-softstop-resume` (armbian-build fork, worktree `wt-panfrost-softstop`, commit e544ddb00,
 patch `patches.armbian/drm-panfrost-resume-a-still-active-job-after-a-timeout-instead-of-resetting.patch`): on the 500 ms
@@ -120,11 +123,14 @@ raw logs in `mesa-work/oclfix/b*/`.
   atom_add) loses exactly one row (16368 of 16384 items) in two of three windows; the same kernel without the
   out-of-range error path (`t_tdim2.py`) passes.
 - **Basic enqueue_map_image (1).** IMAGE3D with ALLOC_HOST_PTR|COPY_HOST_PTR: "Sample 168218 (coord 0,4,0) Got 0,
-  expected 126". Also in Mesa CI's G610 fail list (upstream rusticl/panfrost issue).
+  expected 126". -> Root cause found and fixed host-side (rusticl sw_copy fast path, a0a4534b14d), see "Mesa-side
+  fixes" below; board confirmation = runner job 09-opencl-mesa2 chunk basic-b.
 - **Samplerless 1Dbuffer int/uint/float (3).** Every format fails at the first size (e.g. width 329, CL_R
-  SIGNED_INT8). My own 1D-buffer vs 1D-image repro with the same kernel shape passes for widths 1-16384, so the
-  difference is still unknown.
-- **Images Kernel 2D float (1).** CL_RGB UNORM/SNORM_INT8 2D *array* reads return NaN.
+  SIGNED_INT8). -> Root cause found and fixed host-side (texel-buffer attributes never emitted, ec376a8ee7e), see
+  "Mesa-side fixes" below; board confirmation = job 09 chunk sl.
+- **Images Kernel 2D float (1).** CL_RGB UNORM/SNORM_INT8 2D *array* reads return NaN. -> Analysed below (one lost
+  16-byte result per subtest, integer-coordinate reads only, seen once on the baseline); rerun on the fork = job 09
+  chunks f2d-*.
 - **Integer Ops quick_(u)long_math.** 64-bit division/modulo give wrong values for some elements (pairs at index 14/15
   mod 16). -> Root cause: kernel job timeout + GPU reset, see the section below. Math (multi-threaded) and Thread
   Dimensions are expected to be the same.
@@ -165,8 +171,8 @@ raw logs in `mesa-work/oclfix/b*/`.
   next cumulative kernel to contain the branch (the script blocks otherwise).
 
 Open after this (not timeout related, still Mesa-side, next agent): Images (Samplerless int/uint/float) 1Dbuffer at
-width 329 (every format, first size; the own 1D-buffer repro passes), Basic enqueue_map_image IMAGE3D (also in Mesa CI's
-G610 fail list), Images (Kernel 2D float) CL_RGB UNORM/SNORM_INT8 2D array reads NaN, blend_equation_advanced
+width 329 and Basic enqueue_map_image IMAGE3D -> both fixed in "Mesa-side fixes" below (agent opencl-mesa2); Images
+(Kernel 2D float) CL_RGB UNORM/SNORM_INT8 2D array reads NaN (analysed there, board rerun pending), blend_equation_advanced
 mixedSequence. Math's real fp16 ULP errors (about 1400 ULP at half subnormals) can only be separated once the timeout fix
 is on the board. Note for the subgroup commit 55fb9c9c4d3: `panfrost_compile` passes gpu_id = arch << 28 (minor 0), so
 the precompiled libpan shaders for every v7 GPU are now built for 4-wide subgroups; right for the G31, wrong for a G52
@@ -210,15 +216,80 @@ chunks now use the queue's settings: MemoryMax=600M, MemorySwapMax=64M, OOMPolic
 Still to do after the run: copy the kernel version per chunk into the table, then report the numbers to the
 coordinator (handback).
 
+## Mesa-side fixes (2026-11-05, agent opencl-mesa2): samplerless 1Dbuffer, enqueue_map_image 3D, Kernel 2D float RGB
+
+All host-side, no board. Fork commits ec376a8ee7e and a0a4534b14d (plus c6e6e63990b for the shim); build for the board
+done in `mesa-work/build-cl` (libRusticlOpenCL md5 180855aa3acd...); runner job `harness/runner-queue/09-opencl-mesa2.md`
+(package `harness/research/opencl-fixes/runner-mesa2/`, results will be in `harness/research/opencl-fixes/logs/runner-mesa2/`)
+deploys it as `/root/opiz2-mesa/cl2` and runs the affected suites + a regression subset on the stock kernel.
+
+**Host tooling added** (`mesa-work/oclfix/host/`, copies in `harness/analysis/gpu/oclfix/host/`):
+- `hostclk.py`: clk.py-compatible ctypes runner on the shim through rusticl's ICD dispatch table (the shim build exports
+  no cl* symbols; indices resolved from the table's pointers against `nm`, e.g. clCreateImage = 96, clEnqueueMapImage =
+  57). Images, samplers, maps, read/write image, supported formats. Run it with `python3` (not `-I`), after
+  `. shim-env.sh`; use `/usr/bin/python3` when numpy is needed (the venv python has none).
+- Shim fix c6e6e63990b: `SYNCOBJ_HANDLE_TO_FD` now returns a signalled eventfd, so panfrost_fence_create() works and
+  clFinish()/blocking maps no longer hang (the rusticl worker thread used to panic on "export failed"). Nothing
+  executes on the GPU, but every CPU path (uploads, maps, copies) really runs, and `PAN_MESA_DEBUG=trace
+  PANDECODE_DUMP_FILE=/tmp/x` dumps the full job chain (shader disassembly, texture/sampler/attribute descriptors).
+- `t_sl1db.py` (CTS samplerless 1Dbuffer kernel, `SWAP=1` puts the buffer image second), `t_rd2da.py` (CTS 2D-array
+  float read kernel), `t_map3d.py` (random map/unmap checks per image type), `t_map_cts.py` (exact replay of
+  basic/enqueue_map_image with the CTS MT19937 stream via numpy's `MT19937._legacy_seeding(0)`).
+
+### Samplerless 1Dbuffer int/uint/float (fixed: ec376a8ee7e)
+- The pandecode dump of the exact CTS kernel showed texture slot 0 (the `image1d_buffer_t`) as a null descriptor and
+  the shader reading the buffer image through `LEA_ATTR_IMM attribute_index:0` + `LD_CVT`: on Bifrost, panfrost reads
+  texel buffers through the attribute table (`pan_nir_lower_tex.c` bi_lower_txf_buf, `pan_nir_lower_res_indices.c`).
+  The compute job had `Attribute count: 0`, `Attributes: 0x0`: `panfrost_emit_image_texbuf_attribs()` returns early
+  when `shader->info.attribute_count == 0`, and pan_compiler.c derives that count from `shader_info::texture_buffers`,
+  which only the GLSL path (gl_nir_lower_samplers_as_deref) ever filled. OpenCL kernels go through
+  `nir_lower_cl_images`, which only set `image_buffers` (write images). Upstream main has the same gap (the CI runs the
+  CL CTS on T860 and G610 only, neither uses attributes for texel buffers).
+- Fix: `nir_lower_cl_images` sets `texture_buffers` for read-only buffer images. Dump after: `Attribute count: 1`,
+  attribute R8I on a 1D attribute buffer (stride 1, size 0x149 = 329); with the buffer image as texture 1 (`SWAP=1`):
+  count 2, attribute 1 = R32F, LEA_ATTR attribute_index:1, attribute 0 a CONSTANT placeholder.
+- Why the earlier board repro `t_img1db.py` passed is unexplained (its kernel also stores both raw reads, which the
+  host dump of that kernel could settle); the CTS kernel's dump above and the code path are authoritative, and job 09
+  chunk sl is the confirmation.
+
+### Basic enqueue_map_image IMAGE3D (fixed: a0a4534b14d)
+- `t_map_cts.py` reproduced the CTS failure byte for byte on the shim (no GPU involved): flag set
+  ALLOC_HOST_PTR|COPY_HOST_PTR, IMAGE3D 64x64x64, format RG SIGNED_INT8 (pitch 128), second map origin (26,0,41) region
+  (4,64,9): rows 0-3 of the mapped region were right, row 4 byte 0 "got 0 exp 126" = sample 168218, exactly the CTS
+  line. The first map region (0,54,57)+(43,7,4) is unrelated, so nothing zeroed that pixel: the map simply did not copy
+  it.
+- Cause: `sw_copy()` (used by Image::read for maps/clEnqueueReadImage) has a whole-slice fast path guarded by
+  `region[1] * pixel_size == src_row_pitch`, i.e. the ROW COUNT times the pixel size instead of the row length
+  (`region[0]`). 64 rows x 2 B == 128 matched, so it memcpy'd `region[0]*region[1]*pixel_size` = 512 bytes per slice
+  from the slice start and left the rest of the map uninitialised. `Buffer::copy_rect()` and `Buffer::write_rect()`
+  (clEnqueueCopyBufferRect / WriteBufferRect / image-from-buffer copies) have the same `region[1] == src_row_pitch`
+  test. Upstream main still has all three.
+- Fix: compare `region[0]` (times pixel_size for sw_copy). After it the full replay of all CTS flag sets (ALLOC, ALLOC|
+  COPY, USE, COPY, 0; 5 image types x 72-74 formats x 4 maps) reports FAILS 0 and random maps (`t_map3d.py`, 12 per
+  format, 3D/2Darray/1Darray/2D) BAD 0.
+
+### Images Kernel 2D float: CL_RGB SNORM/UNORM_INT8 2Darray NaN (analysed, board rerun pending)
+- Baseline log: the 4 failures are all 2Darray RGB8 reads with *integer* coordinates (`read_image (integer coords,
+  float results)` section, CLAMP_TO_EDGE and CLAMP), one sample per subtest with `(-nan,-nan,-nan,-nan)` = the 0xff
+  pre-fill of the results buffer, i.e. one work-item's 16-byte result never landed. The same kernel/coords (same seed per
+  subtest) fail at different sample indices (2624, 3852, 2508, 3084) for SNORM vs UNORM and CLAMP vs CLAMP_TO_EDGE,
+  so it is not coordinate- or data-determined; the float-coordinate variants of the same formats and all other formats
+  pass. Host dump of the kernel: texture descriptor RGB8 UNORM 21x32, 14 layers, row stride 64, surface stride 2048,
+  shader F32_TO_U32 (layer) + TEXC + STORE.i128 in the last clause; nothing format-specific in rusticl's lowering.
+- It was only ever seen on the baseline (system Mesa 26.2.4 + stock kernel); the fork's chunk run never reached this
+  suite. Job 09 splits it into 4 chunks (read 2D, read 2Darray, write, read_write). If f2d-r2da still fails on the fork
+  the next step is a board repro with the integer-coordinate kernel on RGB8 2Darray images, checking `dmesg` for a
+  job timeout (the reset loses dirty L2 lines; see the kernel section) and varying the local size.
+
 ## Shipping
 
 The image uses Ubuntu's mesa 26.2.4-1ubuntu1, so ship the branch as Debian patches on that package:
-1. `git -C mesa-work/mesa-cl format-patch mesa-26.2.4..panfrost-opencl-fixes` (17 patches; drop the
+1. `git -C mesa-work/mesa-cl format-patch mesa-26.2.4..panfrost-opencl-fixes` (21 patches incl. the two drm-shim ones, which can be dropped from the Debian series; drop the
    .pick_status.json hunks if quilt complains), put them in `debian/patches/opiz2/` of the Ubuntu source
    (`mesa-work/oclfix/dl-ubuntu-mesa/`) and append them to `debian/patches/series`.
 2. Bump to `26.2.4-1ubuntu1+opiz2.1` (dch), build with `dpkg-buildpackage` in an arm64 chroot or on the board
    (needs root, the user runs it), and add the resulting libgl1-mesa-dri, libegl-mesa0, libgbm1, mesa-vulkan-drivers,
    mesa-opencl-icd, mesa-libgallium debs to the image with `apt-mark hold` so the Ubuntu archive does not replace them.
 3. When Ubuntu moves to 26.2.6, the 12 stable cherry-picks drop out; the remaining ones are the two upstream main
-   cherry-picks and our three patches (SEG_ADD RA, subgroup size, trailing barrier). Our three are AI-generated:
+   cherry-picks and our five patches (SEG_ADD RA, subgroup size, trailing barrier, texture_buffers, sw_copy). Ours are AI-generated:
    per the user, they stay in our fork and are not sent to Mesa without asking.

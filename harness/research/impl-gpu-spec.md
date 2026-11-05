@@ -447,28 +447,46 @@ compute queue, D16_S8, ray tracing, geometry/tessellation and sparse. In the 1/1
   in `panvk-skips.txt` (Mesa does not even run them).
 * *API 1.0 only:* `create_device_unsupported_features.protected_memory_features` (device creation with the 1.1 struct
   `protectedMemory=TRUE` does not return `VK_ERROR_FEATURE_NOT_PRESENT`). It passes at 1.1 and 1.3, so it is a 1.0 + 1.1-struct corner, not a 1.1 blocker.
-* **Real driver bugs, G31-specific (not in any Mesa G52 list):**
-  - `spirv_assembly.type.vec4.{i8,i16,u16,u32,i64,u64}.*_frag` (7 in the sample, already at API 1.0): fragment job hangs
-    (`gpu sched timeout, js=0`), 2 per case. These are small-int vec4 bit_field_insert/u_extract/clamp in fragment shaders.
+* **Real driver bugs, G31-specific (not in any Mesa G52 list)** (updated 2026-11-05 by the vk-hangs agent, details and
+  host repro in `harness/research/vk-hangs/RESULTS.md`; board verification = runner job 14-vk-hangs):
+  - `spirv_assembly.type.vec4.{i8,i16,u16,u32,i64,u64}.*_frag` (7 in the sample, already at API 1.0): **long jobs, not
+    hangs.** Replayed on the host with a native deqp-vk on the fork panvk under the drm-shim: the CTS fragment shader loops
+    over the whole dataset in every one of the 65536 fragments (8210 iterations for `i8.clamp`, 5120 for
+    `u32.bit_field_insert`, 15-19 clauses with 3 SSBO loads + 1 store each; the passing vec4 cases have <= 2560). On the
+    stock kernel the 500 ms job watchdog resets the GPU (`gpu sched timeout, js=0`) and panvk's sync check aborts. The
+    kernel patch e544ddb00 (soft-stop and resume a still-ACTIVE job, in the cumulative kernel) is the fix; no Mesa change.
   - **Subgroup operations** (all only reachable with the 1.1+ override): `subgroups.basic.*` (elect, barrier, memory barriers; compute,
     graphics and fragment), `subgroups.{arithmetic,clustered,quad,shuffle,ballot_broadcast}.*`, the
     `memory_model.*.subgroup.*` scope cases and `glsl.derivate.dfdx*{subgroup,dynamic_*}`. The kernel logs `js fault ...
     status=INSTR_INVALID_ENC` on js=0 (fragment) and js=1 (compute/vertex): 261 faults + 28 hangs over the override runs.
-    In other words, the Bifrost compiler emits an instruction encoding the G31 rejects. The minimal reproducer is
-    `dEQP-VK.subgroups.basic.compute.subgroupelect` alone ("Incomplete job or timeout", then abort).
-    `builtin_var.compute.subgroupsize_compute` passes, but that only compares gl_SubgroupSize with the reported property.
-    Mesa runs the full vk-main on the G52 (same v7 arch) without these failures, so the cause is specific to the G31 (or to 26.2.4 vs main). One hypothesis, not
-    verified: `pan_subgroup_size()` gives every v7 an 8-wide subgroup (G52), and the G31 is a 4-wide core.
-    Next step: a debug Mesa build in `mesa-work/` (Ubuntu's release build prints nothing with `BIFROST_MESA_DEBUG=shaders`)
-    to disassemble the faulting shader.
+    Two compiler bugs, both G31 (v7.0) specific, both in the fork `panfrost-opencl-fixes` (`mesa-work/mesa-cl`):
+    1. `pan_subgroup_size()` gave every v7 GPU 8-wide subgroups; the G31 is 4-wide. Fixed by 55fb9c9c4d3 (OpenCL agent):
+       `WMASK.subgroup8`/`CLPER` 8-lane forms and wrong subgroup ids are gone, and so is INSTR_INVALID_ENC.
+    2. `nir_intrinsic_read_invocation` (subgroupBroadcast, and every shuffle/quad/rotate/read_first_invocation that
+       nir_lower_subgroups turns into it) emitted the full `CLPER.i32` encoding, which G71/G72/G31 (`BIFROST_LIMITED_CLPER`)
+       do not decode; only the derivative path used `bi_clper()`'s `CLPER_OLD`. Fixed by b7a705442bd: `CLPER_OLD.i32` on
+       those GPUs (host dump: 512 CLPER_OLD, 0 CLPER.i32 for `ballot_broadcast.compute.subgroupbroadcast_int8_t`).
+       Mesa main has the same bug (nobody runs Vulkan on v7.0).
+    Still open: with 55fb9c9c4d3 `dEQP-VK.subgroups.basic.compute.subgroupelect` still ends with "Incomplete job or
+    timeout" and no INSTR_INVALID_ENC. Its shader is loop-free: `WMASK.subgroup4` (ballot) -> find_lsb == `lane_id`, WLS
+    atomics, 16 workgroups of 1 thread first; the compute job descriptors match gallium's. So it is either another fault
+    status or a stall in `WMASK` on v7.0, which only the board can tell: runner job 14 runs 8 probe shaders (plain store,
+    ballot only, elect, WLS atomics only, subgroup ids, broadcast, any/all, the CTS elect shader) x 3 local sizes with
+    `PANVK_DEBUG=sync,trace` and records each job's exception status and dmesg, then the dEQP cases, then vk-subset +
+    OpenCL + GLES regression of the fork. `builtin_var.compute.subgroupsize_compute` passes (it only compares
+    gl_SubgroupSize with the property).
+    Host tooling for this (no GPU): fork panvk on the panfrost drm-shim as a fake G31, a minimal Vulkan compute runner
+    `vkcomp`, native deqp-vk and glslang (`harness/research/vk-hangs/`, `harness/analysis/gpu/build-deqp-vk-host.sh`).
 
 **What Vulkan 1.1 (datasheet row) would take from here:**
 1. *Version gate:* 26.2.4 returns 1.0 for v7. Mesa 26.3 (ba09d293e54) returns 1.3. For our image, either backport that one-line
    change to an image Mesa build, or wait for an Ubuntu 26.3 package.
 2. *Load gate:* v7 still needs `PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1` on main. The image would have to set it system-wide, or patch it out
    in our Mesa build. That is an explicit "experimental driver" decision for the user.
-3. *Make the 1.1 core subgroup ops work on the G31:* subgroup BASIC in compute is required in 1.1, and today `subgroupElect` faults the
-   GPU. This is the real blocker: a compiler bug to find and fix (item above), plus the 7 small-int fragment hangs.
+3. *Make the 1.1 core subgroup ops work on the G31:* subgroup BASIC in compute is required in 1.1. Two of the three
+   G31 compiler problems are fixed in the fork (4-wide subgroups, CLPER_OLD for broadcasts); whether `WMASK` (ballot,
+   elect, any/all) works on v7.0 is decided by runner job 14 (`harness/research/vk-hangs/RESULTS.md`). The 7 small-int
+   fragment "hangs" are long jobs that need the kernel soft-stop fix, not a Mesa change.
 4. *Then* run the full 3.25 M-case vk-main at 1.1. Scaling the 1/100 timings gives roughly 14 h at 1.1 and about 23 h at 1.3, in board slots
    (resumable). Classify against the G52 lists. "Vulkan 1.1 conformant" in the Khronos sense also needs a submission (none
    exists for panvk on Bifrost), so this project can reach "Vulkan 1.1 functional, CTS-tested", not "conformant".

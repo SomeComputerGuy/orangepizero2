@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Arun Iyengar <aiyengar1990@gmail.com>
 Date: Thu, 5 Nov 2026 11:29:02 +0000
-Subject: [PATCH] avutil/hwcontext_v4l2request: define the AFBC_16X16_SPLIT
+Subject: [PATCH 312/312] avutil/hwcontext_v4l2request: define the AFBC_16X16_SPLIT
  fourccs when missing
 
 The AFBC capture formats added for Cedrus are guarded by
@@ -21,7 +21,7 @@ Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
  1 file changed, 12 insertions(+)
 
 diff --git a/libavutil/hwcontext_v4l2request.c b/libavutil/hwcontext_v4l2request.c
-index b6633d9..6705cee 100644
+index b6633d9081..6705cee48d 100644
 --- a/libavutil/hwcontext_v4l2request.c
 +++ b/libavutil/hwcontext_v4l2request.c
 @@ -34,6 +34,18 @@

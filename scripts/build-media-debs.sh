@@ -76,6 +76,9 @@ WORK=$TOP/build/media
 SUITE=stonking
 MIRROR=http://ports.ubuntu.com/ubuntu-ports
 COMPONENTS="main restricted universe multiverse"
+# mmdebstrap's chroot lives in $TMPDIR: the full ffmpeg build needs ~20 GB there. /tmp is a shared tmpfs on
+# this host, so default to /var/tmp (disk, world-traversable for the unshared root).
+export TMPDIR=${OPIZ2_MEDIA_TMPDIR:-/var/tmp}
 JOBS=${MEDIA_JOBS:-10}         # the host is shared; qemu-user runs one CPU per job
 # Archive version each patch set was made for, and our revision of it
 declare -A VERSION=(
@@ -146,7 +149,7 @@ index_repo() {
 index_repo
 # apt runs as the unshared root (a subordinate uid), which can't read $HOME, so
 # the local repository is served from a world-readable copy
-STAGE=$(mktemp -d /tmp/opiz2-media-repo.XXXXXX)
+STAGE=$(mktemp -d /tmp/opiz2-media-repo.XXXXXX)   # small; the chroot sees it at the same path
 trap 'rm -rf "$STAGE"' EXIT
 chmod 755 "$STAGE"
 

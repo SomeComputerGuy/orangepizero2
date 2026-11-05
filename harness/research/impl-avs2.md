@@ -491,3 +491,15 @@ Agreed with the OPi5 rkvdec (VDPU381) backend, which is bit-exact on v5 without 
 Layout, CIDs and control types are unchanged from v5 d0aa5a388. Checks: patch 829/0, full build 0 warnings, kernel-doc
 clean. The v4l-utils part is the AVS2_FRAME hunk already in patches/v4l-utils/0001. The RFC is held in
 docs/upstream-queue.md row 10.
+
+### 8.8 test1.avs2 (854x480): the 9-bit order counts (2026-11-05)
+On c9 all 2096 pictures decode (PIC_SIZE rounded to 8, 91c6912a4) but 72 differ from davs2, in four bursts. The first
+wrong picture of each burst (B 382, F 896, F 1408, B 1916, all with bit-exact references) has a picture with
+POC & 0x1ff = 0x180 as its current picture or as reference 0 (the co-located picture). The driver wrote the unwrapped
+POC masked to 9 bits; the vendor writes the reference-software values (8-bit coding_order + output_delay -
+reorder_delay, stored counts lowered by 256 at each wrap = POC - 256 x wraps), which stay in about -23..290 on this
+stream. So the engine is not indifferent to the absolute 9-bit value (0x180 is poison, 0x080 is fine), although every
+difference is the same. Fix: `cedrus_avs2_poc_base()` subtracts the vendor's base from every table entry (branch
+`fix/sunxi-avs2-poc-base`, fa73c3e5e; patch `media-cedrus-AVS2-program-the-vendor-s-picture-order-counts.patch`).
+Board check: runner job 07-avs2-test1 (vdec-perf/runner, `vdec-job.sh t1fix`; test1 per-frame md5 + 4 regression
+streams). Analysis: vdec-perf/RESULTS.md open item 1.

@@ -1,8 +1,9 @@
-# vdec runner jobs (t1f9, afbc, soak3): handoff
+# vdec runner jobs (t1f9, afbc, soak3, t1fix): handoff
 
-One script runs all three: `harness/research/vdec-perf/runner/vdec-job.sh <job>`. It handles the board lock (a fresh
-owner `runner-<job>-<epoch>` per acquire), installs cumulative kernel **c9** (test-cumulative aa6e29312, Image md5
-c210a5b247cacdf366b38062385d3a3f, from kernel-check/vdec-serve) with the vdec fallback armed, runs chunks of 15 min or
+One script runs all four: `harness/research/vdec-perf/runner/vdec-job.sh <job>`. It handles the board lock (a fresh
+owner `runner-<job>-<epoch>` per acquire), installs the cumulative kernel (**c9**, test-cumulative aa6e29312, Image md5
+c210a5b247cacdf366b38062385d3a3f, for t1f9/afbc/soak3; the **newest** cumulative kernel for t1fix, see below; all from
+kernel-check/vdec-serve) with the vdec fallback armed, runs chunks of 15 min or
 less under a stall watchdog, copies the results off after every chunk, restores the stock kernel
 vmlinuz-7.3.1-edge-sunxi64 and releases the lock. It hands the lock over between chunks if another session is waiting.
 It is resumable: re-running the same command skips the chunks listed in `logs/runner-<job>/state`. No debs are needed.
@@ -70,3 +71,25 @@ Checks:
 
 The summary must list one row per chunk (N, I, O, X, T, V, Z), plus the IOMMU, timeout and fault lines from the
 dmesg-<n>.txt files.
+
+## Job t1fix: test1.avs2 bit-exact after the AVS2 order-count fix (about 8 min, 1 chunk)
+Command: `bash harness/research/vdec-perf/runner/vdec-job.sh t1fix`
+
+Kernel: the newest cumulative kernel (last line of kernel-check/cumulative-kernels.txt). It must contain
+fix/sunxi-avs2-poc-base (commit fa73c3e5e, merged into test-cumulative by the coordinator). The script checks this
+itself and exits 2 with `BLOCKED` ("does not contain fix/sunxi-avs2-poc-base") if the newest kernel predates the merge:
+report that as "not ready: kernel without the fix", do not count it as FAIL.
+
+Checks, all on `logs/runner-t1fix/chunk-1.txt`:
+- PASS if `grep -c ROUND-DONE` = 1.
+- PASS if the line `[count] frames 2096 differing 0` is present (per-frame md5 of test1.avs2 against davs2). Any other
+  N is FAIL; report N and the `[differing frames]` line.
+- PASS if each of the five lines `[test1.avs2]`, `[main-2160p-ra.avs2]`, `[cctv4k-10bit.avs2]`, `[main-1080p-ra.avs2]`,
+  `[BQSquare_416x240_60_ra.avs2]` contains ` PASS ` (whole-stream md5 equal to the reference). Each FAIL is a
+  regression; report the line.
+- PASS if the first `timeouts` line (`kernel ... timeouts N`) and the last line `timeouts N` both show 0, and every
+  `[<stream>]` line shows `new-timeouts 0`.
+- PASS if `files/t1.got` has 2096 lines.
+
+The summary must list: the `[seq]` line, the `[count]` line, the `[differing frames]` line (copied exactly), the five
+`[<stream>]` lines, the `timeouts` lines, and dmesg-1.txt.

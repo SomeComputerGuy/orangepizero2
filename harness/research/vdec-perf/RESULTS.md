@@ -1,8 +1,8 @@
 # vdec (cedrus H616) results and open items, 2026-11-05
 
 Detail: harness/research/impl-vdec-main10-perf.md (§9.7 round 3, §9.8 round 4 + deferred ideas), impl-avs2.md (§8).
-The board jobs still to run are packaged in runner/ (vdec-job.sh + HANDOFF.md). Job files:
-harness/runner-queue/01-t1f9.md, 02-afbc.md, 03-soak3.md.
+The board jobs are packaged in runner/ (vdec-job.sh + HANDOFF.md). Job files: harness/runner-queue/01-t1f9.md (done),
+02-afbc.md (held), 03-soak3.md (done), 07-avs2-test1.md (t1fix, waiting for the merge of fix/sunxi-avs2-poc-base).
 
 ## Current state (cumulative kernel c9 = test-cumulative aa6e29312, VE at 624 MHz)
 - **Bit-exact (P010 or linear):** H.265 Main10 P010 62.8 fps, AVS2 10-bit P010 61.3 fps, AVS2 AFBC 87.8 fps, VP9 P2
@@ -16,23 +16,30 @@ harness/runner-queue/01-t1f9.md, 02-afbc.md, 03-soak3.md.
 
 ## Open items
 1. **test1.avs2 (854x480, LCU 32, 8-bit) md5 mismatch: 72 of 2096 frames differ from davs2** (t1f9 on c9).
-   - The differences come in bursts: 381-383, 889-895, and more (only the first 10 were captured).
-   - Frame 382 is wrong although both its references (384 I, 380 B) match. The errors then spread to 381 and 383,
-     which reference 382.
-   - Other B pictures before an I picture (for example 46, 94) are fine, so the cause is content-dependent.
-   - Hypotheses:
-     a. Right-edge handling. 854 is not a multiple of 8: the VE codes 856 columns, and the last LCU column (x 832-855)
-        is partial. Reference padding or MV clamping beyond x=853 may differ from davs2.
-     b. Temporal direct / co-located MV scaling for particular POC distances.
-     c. The kernel capture format (NV12 bpl 864, height 480): not likely, since 96 % of frames are exact.
-   - Job 01-t1f9 prints, for frames 380-384 and 888-896, the differing pixels per plane and per 32x32 LCU (col,row),
-     plus the full list of differing frames.
-     - If every difference starts in LCU column 26 (x ≥ 832): (a). Compare MV clamping or padding with davs2
-       (kernel-check/avs2-build/davs2-8) and the vendor library (kernel-check/dl-vdec/re/libawavs2.dis,
-       Avs2SetHeaderReg).
-     - Otherwise: (b). Dump the co-located picture's reference POC table.
-   - The host tools work: harness/avs2dec builds with `-I <kernel>/usr/include`, and `-p -v` maps output frames to
-     picture headers (/tmp/vdq/a2/out.map approach).
+   **Root cause found, fix on `fix/sunxi-avs2-poc-base` (fa73c3e5e, pushed to fork, to be merged); board check =
+   job 07-avs2-test1 (runner t1fix).**
+   - Not the right edge: frame 382's errors are in LCU columns 10-14 (x 349-450), frame 896's cover the whole picture.
+   - Decode-order analysis (avs2dec `-p -v`, /tmp/t1a/pv.txt): the first wrong picture of each burst is
+     B 382 (refs 384 I, 380), F 896 (refs 888, 886), F 1408 (refs 1400, 1398), B 1916 (refs 1920 I, 1912); all their
+     references are bit-exact. Common factor: a picture whose POC & 0x1ff = **0x180** (384, 896, 1408, 1920) is the
+     current picture (F) or reference 0 = the co-located picture (B). Pictures the vendor would program as 0x080
+     (128, 640, 1152, 1664) and the hundreds of pictures with POC 256-511 whose bit 8 differs from the vendor's value
+     are all fine; 0x180 as reference 1 (B 385-391, 1921-1927) or as the single reference of F 392/1928 is fine too.
+     With the I picture as co-located picture B 380 is fine but B 382 and B 1916 are wrong: content-dependent (a mode
+     that scales by the backward distance), so the engine is not purely modular in the order counts.
+   - The driver wrote `poc & 0x1ff` of the unwrapped POC. The vendor library (Avs2ParsePictureHeaderInf, dis 0xbb24)
+     writes the reference-software values: 8-bit coding_order + output_delay - reorder_delay, and lowers the stored
+     counts of all frames by 256 at each coding_order wrap (`AVS2_FRAME_INFO.poc` is an s16; the RD code is
+     `calc_picture_distance` in Amlogic's avs2_bufmgr.c). That equals POC - 256 x wraps, so the differences are the
+     same but the values stay in about -23..290 and never hit 0x180.
+   - Fix: `cedrus_avs2_poc_base()` derives that base from decode_order_index, picture_output_delay and
+     picture_reorder_delay (fallback: `poc & ~0xff` if the fields are inconsistent) and subtracts it from every table
+     entry (references, current picture, stored ref-POC lists, background substitution). Patch
+     `media-cedrus-AVS2-program-the-vendor-s-picture-order-counts.patch` after the h616-vdec group; gcc syntax check
+     with the kernel flags clean (-Wall -Wextra -Werror), checkpatch --strict clean. Simulated on test1's picture list:
+     the table values become -10..256, no 0x180.
+   - If 07-avs2-test1 still shows differing frames: the pattern then tells whether the value is a sentinel (count
+     unchanged -> different cause) or the engine wants exactly the vendor's values (try base from the 8-bit DOI only).
 2. **AFBC capture md5: inconclusive.** afbc-check2 on c9, logs/queue-afbc/.
    - The board's Mesa fork at /root/opiz2-mesa/main is missing. The system Mesa 26.2.4 rejects every AFBC YUV dma-buf
      import (EGL 0x3009), so no frame was compared. This is an environment problem, not a VE result.
@@ -66,9 +73,9 @@ harness/runner-queue/01-t1f9.md, 02-afbc.md, 03-soak3.md.
      ffmpeg-avs2-queue/README for the state of that hand-over.
 
 ## For a fresh agent, from the runner summaries
-- **01-t1f9:** pick (a) or (b) from the LCU locations and fix in the right layer (the cedrus_avs2 register programming
-  or the uAPI fill in avs2dec). Make a fix branch from test-cumulative and package a re-run of the same job (pass =
-  `differing 0`).
+- **01-t1f9:** done (root cause and fix above). **07-avs2-test1 (t1fix):** pass = `[count] frames 2096 differing 0`,
+  five `[<stream>] PASS` lines, 0 timeouts. On PASS: mark the test1 row done (docs/status.md), note it in
+  impl-avs2.md §8.8. On FAIL: see the last bullet of open item 1.
 - **02-afbc:** if blocked on Mesa, put "deploy Mesa fork to board" on the work list. If it ran, write §10.2 (per-codec
   F/C/M table) and commit logs/runner-afbc.
 - **03-soak3:** if all checks PASS, mark the soak row done in docs/status.md. Any `[FAIL` line or timeout is a

@@ -3,7 +3,7 @@
 You are the single board-test runner, on a cheap model, running packages one at a time. Read harness/AGENT-RULES.md first.
 
 ## Each job
-1. Take the oldest job in `harness/runner-queue/` (`<NN>-<name>.md`). It points to a package: a self-contained script and its HANDOFF.md.
+1. Take the oldest job in `harness/runner-queue/` (`<NN>-<name>.md`); short DEV jobs go before long TEST runs, and the coordinator may reorder the queue at any time. ~/.claude/CLAUDE.md (global rules) comes first. It points to a package: a self-contained script and its HANDOFF.md.
 2. Run the exact command from HANDOFF.md. Nothing else: no fixes, no edits to the script, no judgement calls. If HANDOFF.md doesn't cover something, stop and report "package not ready: <what>".
 3. The script handles the board lock (a distinct owner name), the stall watchdog, restoring the stock image kernel and copying results off. Wait on its completion with one background command, or a watcher that sleeps at least 10 min between checks. Spend no turns re-reading logs.
 4. Apply the mechanical pass/fail checks from HANDOFF.md (grep, count, threshold) and write `harness/runner-queue/done/<NN>-<name>.summary.md`. It contains the job, the kernel (`uname -v`), start and end times, each check with its PASS/FAIL value, the paths of the copied results, and anything abnormal in dmesg (copy the lines exactly).

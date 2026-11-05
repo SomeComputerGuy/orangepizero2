@@ -170,6 +170,46 @@ raw logs in `mesa-work/oclfix/b*/`.
   a regression subset of 19 passing suites, Images (Kernel 3D int), dmesg must stay free of timeouts/faults. Needs the
   next cumulative kernel to contain the branch (the script blocks otherwise).
 
+### Oops on c14 and the follow-up 0b7e3a208 (2026-11-05, agent panfrost-softstop)
+
+e544ddb00 alone crashed cumulative kernel c14 about 2 min into the Integer Ops chunk
+(`logs/runner-timeout-fix/serial-crash-c14.txt`): `Unable to handle kernel NULL pointer dereference at virtual address
+00000000000000f8`, pc `panfrost_dequeue_job+0x2c` from `panfrost_jm_handle_irqs+0x268` in the job IRQ thread (0xf8 =
+`job->is_profiled` of a NULL `pfdev->jobs[slot][0]`), then `panfrost_jm_ctx_destroy` hangs in `panfrost_postclose`, a
+`panfrost-reset` workqueue lockup, reboot at 21:00.
+
+Root cause: panfrost_reset() waits for the soft-stops by polling **JOB_INT_JS_STATE, which is not live**. kbase's register
+map documents it as "status==active and _next == busy snapshot from last JOB_IRQ_CLEAR" (panfrost's own IRQ handler says
+the same). For a job started into an idle slot (rusticl submits one kernel at a time, so the last CLEAR saw the slot
+idle) the snapshot reads idle and the wait returns at once, before the soft-stop has done anything. Upstream never
+noticed because the GPU reset that follows kills the job regardless. Without the reset (e544ddb00) the sequence is: wait
+returns, `panfrost_jm_handle_irqs` finds nothing, the leftover loop drops the job from `pfdev->jobs[]`, resubmission
+writes the job again into `_NEXT` with START while the first incarnation is still stopping. Then either
+(a) the first run reports STOPPED: the ERR handler writes NOP to `_NEXT` (cancels the resubmission), dequeues the job,
+records TAIL, and nothing restarts it; 500 ms later the watchdog sees status 0x3, not ACTIVE, and resets after all
+(no crash, but the fix is defeated); or (b) the first run reports DONE (jobs of ~500-600 ms, the Integer Ops long16
+division case, are about to finish when the watchdog fires): the handler dequeues the resubmission's entry and signals
+the fence, the job manager auto-starts `_NEXT` after a DONE, and that second run completes on a slot with no software job
+-> `panfrost_dequeue_job` on NULL. The checked hypotheses that were wrong: no refcount problem (the job object is kept by
+the scheduler across the resubmission), no STOPPED-handling problem (the STOPPED path is kbase's: TAIL, resume).
+
+Fix 0b7e3a208 (`patches.armbian/drm-panfrost-wait-for-the-soft-stopped-slots-with-the-live-status.patch`, on
+fix/sunxi-panfrost-softstop-resume on top of e544ddb00, pushed to fork): poll the live `JS_STATUS(i)` of every slot until
+none reads ACTIVE (0x08) (`read_poll_timeout(panfrost_slots_idle, ...)`, 100 ms for an active job, 10 ms otherwise,
+"Soft-stop failed" + reset on expiry as before), so the pending DONE/STOPPED interrupt is handled before the
+resubmission (DONE -> jc = 0, skipped; STOPPED -> resumed from TAIL); hold a runtime PM reference across the stop and the
+resubmission (the stopped job's `pm_runtime_put_autosuspend` could otherwise let the 50 ms autosuspend power the L2 off
+under the soft-stopped job); `panfrost_dequeue_job` returns NULL for an empty slot (WARN, not Oops; every caller copes).
+Compiled with the kernel's own flags (`.panfrost_job.o.cmd` of the c17 tree) plus `-Wextra -Werror`; checkpatch clean
+except the quoted Oops line. The design stays soft-stop + resume (kbase's time-slicing), not a plain "re-arm the
+timeout": a job that never stops still gets reset after 100 ms of not stopping.
+
+Board validation: runner job `harness/runner-queue/18-panfrost-softstop.md` (same package, fix check now requires
+0b7e3a208, needs c18+). New first chunk `stress`: Integer Ops quick_(u)long_math x2, Thread Dimensions quick_2d x1, the 7
+Vulkan spirv_assembly vec4 frag long jobs x2 (panvk from /root/opiz2-mesa/cl, PANVK_DEBUG=sync); fail-fast on
+`Unable to handle|Oops|workqueue lockup|panfrost_dequeue_job` in the serial log (watched during the chunk) or dmesg
+(exit 3, logs/runner-timeout-fix/OOPS). Held jobs 08, 09, 14, 15 stay held until it passes.
+
 Open after this (not timeout related, still Mesa-side, next agent): Images (Samplerless int/uint/float) 1Dbuffer at
 width 329 and Basic enqueue_map_image IMAGE3D -> both fixed in "Mesa-side fixes" below (agent opencl-mesa2); Images
 (Kernel 2D float) CL_RGB UNORM/SNORM_INT8 2D array reads NaN (analysed there, board rerun pending), blend_equation_advanced

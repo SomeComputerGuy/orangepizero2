@@ -24,14 +24,14 @@ bac91cfc20ea6528f3ba45bcc549ea9d178d43f1b871052824ef2c9f94ae14cf  0208-avcodec-a
 36dfbdfe0c47b6016cf93ee3f1c75dd690f6673125532f2e5394eacb19cd3abc  0301-avcodec-mpeg4video-scale-field-direct-vertical-vecto.patch
 cbb2589447c59645dbadb75dfa3a0f1bce4e033d2562dce1825633a3acadfb77  0302-avcodec-v4l2_request_mpeg4-decode-interlaced-B-VOP-s.patch
 382b5b4450fdc055e5761a5eecc7b19e3fe8d977e3fe345ac29dc0860aa44fca  0303-avcodec-mpeg4videodec-do-not-round-the-GMC1-average-.patch
-7c8b56397493acd6551662df24e75b6e6e856751015e9fdbaea90ace571996cb  0304-avcodec-add-V4L2-Request-API-MPEG-1-hwaccel.patch
+4a622a4f9af88b7f47121c10a864383d32bc1cc01a5da1ba20b531f5f1425c2d  0304-avcodec-add-V4L2-Request-API-MPEG-1-hwaccel.patch
 83e049c99b2629b05726959a319004a91cfae168dc7e345c8b36d1e95274840e  0305-avcodec-cavsdec-add-the-plumbing-for-hwaccels.patch
 af9c60fd5fbad401e624beace715a0129bac0e5d3865d06915d52d5d110eb73b  0306-avcodec-add-V4L2-Request-API-AVS1-and-AVS-hwaccel.patch
 b46cde8bddcdf2db824dbcc706883b4665372dfc904a84896816f3d49f7160f4  0307-avcodec-add-a-native-AVS2-decoder-for-hardware-accel.patch
 5098b30cd497b08bfa73b72a1982c562fe791ac78d268f4fabf96d0ad3405e21  0308-avcodec-add-V4L2-Request-API-AVS2-hwaccel.patch
-caabac21f4df18472a1e9e5eb324efedccadee12d574e87deb7f4e44849dc657  0309-avcodec-mpeg12dec-hand-D-pictures-only-to-hwaccels-t.patch
+4e11ef48dfd9b2094da345a09fa90b3d9bd6a567a85735f9f628eec81179bf86  0309-avcodec-mpeg12dec-hand-D-pictures-only-to-hwaccels-t.patch
 470941726d996a39b8a57a42a21df3388ee08f32a2f1d288069134c5a1e28652  0310-fate-vc1-update-the-SMM0005-reference-for-the-Simple.patch
 afcc610ee31ca978e5f35205410d654ebba4cdc59ffdd984ec10c9f8088b5ff4  0311-fate-source-list-the-local-V4L2-stateless-uAPI-heade.patch
 09a248f559729ae63f49f0af35d55670160d3efc6a922805d16b65428e272f17  0312-avutil-hwcontext_v4l2request-define-the-AFBC_16X16_S.patch
 bc4e47dc691c4aeb0a1da47504213ca2e0a53a0535211951e156332bf94232cb  debian/0001-debian-Enable-the-V4L2-Request-API-hwaccels-on-Linux.patch
-3c7eeb1305149e53a54fcd98f470120bff8db9c638f2ed86a88b48c8f4700cec  README.md
+0dbc642437085d5932cf5b723ed89e47218e668ff88d203145f237aa6d98fadb  README.md

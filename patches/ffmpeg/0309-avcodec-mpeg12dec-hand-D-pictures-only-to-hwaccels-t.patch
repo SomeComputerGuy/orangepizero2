@@ -6,43 +6,52 @@ Subject: [PATCH 309/311] avcodec/mpeg12dec: hand D-pictures only to hwaccels
 
 The MPEG-1 hwaccel change passed every picture with picture_coding_type 4
 to any active hwaccel as an I-picture. That also covered MPEG-2 streams,
-where the value is invalid, and the VDPAU, NVDEC and VideoToolbox MPEG-1
-hwaccels, which cannot decode D-pictures and would now decode their DC-only
-slices as I-picture slices instead of the picture being rejected.
+where the value is invalid, the VDPAU, NVDEC and VideoToolbox MPEG-1
+hwaccels, which cannot decode D-pictures and would now decode their
+DC-only slices as I-picture slices instead of the picture being rejected,
+and V4L2 decoders without D-picture support (Hantro), whose driver then
+fails every D-picture, so that an all-D stream gives decode errors.
 
-Add HWACCEL_CAP_MPEG1_D_PICTURES, set it on the V4L2 Request MPEG-1/2
-hwaccels (the only ones that pass V4L2_MPEG2_PIC_CODING_TYPE_D on) and take
-the D-picture path only for MPEG-1 streams with such a hwaccel. Everything
-else rejects D-pictures as before.
+Add HWACCEL_CAP_MPEG1_D_PICTURES and MPVContext.hwaccel_d_pictures. The
+V4L2 Request MPEG-1/2 hwaccels have the capability and set the flag in
+their init if the device accepts V4L2_MPEG2_PIC_CODING_TYPE_D in
+VIDIOC_TRY_EXT_CTRLS (drivers without D-picture support reject it, and
+kernels without the MPEG-1 uAPI reject it for every driver). Take the
+D-picture path only for MPEG-1 streams with such a hwaccel and device.
+Everything else rejects D-pictures as before, like the software decoder.
 
 Assisted-by: LLM
 Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
 ---
- libavcodec/hwaccel_internal.h   | 7 +++++++
- libavcodec/mpeg12dec.c          | 6 ++++--
- libavcodec/v4l2_request_mpeg2.c | 3 ++-
- 3 files changed, 13 insertions(+), 3 deletions(-)
+ libavcodec/hwaccel_internal.h   |  8 ++++++
+ libavcodec/mpeg12dec.c          |  6 +++--
+ libavcodec/mpegvideo.h          |  1 +
+ libavcodec/v4l2_request.c       | 16 ++++++++++++
+ libavcodec/v4l2_request.h       |  3 +++
+ libavcodec/v4l2_request_mpeg2.c | 43 +++++++++++++++++++++++++++++++--
+ 6 files changed, 73 insertions(+), 4 deletions(-)
 
 diff --git a/libavcodec/hwaccel_internal.h b/libavcodec/hwaccel_internal.h
-index 2d03f39c77..9daf7051eb 100644
+index 2d03f39c77..8cf324adf0 100644
 --- a/libavcodec/hwaccel_internal.h
 +++ b/libavcodec/hwaccel_internal.h
-@@ -37,6 +37,13 @@
+@@ -37,6 +37,14 @@
   * parsed into the decoder context (mb_x, mb_y, qscale).
   */
  #define HWACCEL_CAP_RESYNC_SLICES   (1 << 2)
 +/**
-+ * The hwaccel decodes MPEG-1 D-pictures (picture_coding_type 4, DC
-+ * coefficients only). The MPEG-1/2 decoder hands such pictures to it as
-+ * I-pictures with MPVContext.mpeg1_d_picture set; without this capability
-+ * they are rejected as before.
++ * The hwaccel may decode MPEG-1 D-pictures (picture_coding_type 4, DC
++ * coefficients only): its init sets MPVContext.hwaccel_d_pictures if the
++ * device decodes them. The MPEG-1/2 decoder then hands such pictures to it
++ * as I-pictures with MPVContext.mpeg1_d_picture set; otherwise they are
++ * rejected as before.
 + */
 +#define HWACCEL_CAP_MPEG1_D_PICTURES (1 << 3)
  
  typedef struct FFHWAccel {
      /**
 diff --git a/libavcodec/mpeg12dec.c b/libavcodec/mpeg12dec.c
-index 1a52f87b77..9ec54af2ad 100644
+index 1a52f87b77..c7e58a359e 100644
 --- a/libavcodec/mpeg12dec.c
 +++ b/libavcodec/mpeg12dec.c
 @@ -995,8 +995,10 @@ static int mpeg1_decode_picture(AVCodecContext *avctx, const uint8_t *buf,
@@ -53,16 +62,118 @@ index 1a52f87b77..9ec54af2ad 100644
 -    if (s->pict_type == 4 && avctx->hwaccel) {
 +    /* D-pictures: only some hwaccels decode them; carry them as I-pictures. */
 +    if (s->pict_type == 4 && avctx->codec_id == AV_CODEC_ID_MPEG1VIDEO &&
-+        avctx->hwaccel &&
++        avctx->hwaccel && s->hwaccel_d_pictures &&
 +        (ffhwaccel(avctx->hwaccel)->caps_internal & HWACCEL_CAP_MPEG1_D_PICTURES)) {
          s->mpeg1_d_picture = 1;
          s->pict_type       = AV_PICTURE_TYPE_I;
      }
+diff --git a/libavcodec/mpegvideo.h b/libavcodec/mpegvideo.h
+index 989a78c85c..2d67f72792 100644
+--- a/libavcodec/mpegvideo.h
++++ b/libavcodec/mpegvideo.h
+@@ -270,6 +270,7 @@ typedef struct MpegEncContext {
+     int progressive_frame;
+     int full_pel[2];
+     int mpeg1_d_picture;    ///< MPEG-1 D-picture (DC only); decoded as I by the code here, only hwaccels decode it
++    int hwaccel_d_pictures; ///< the hwaccel (HWACCEL_CAP_MPEG1_D_PICTURES) decodes D-pictures on its device
+     int interlaced_dct;
+     int first_field;         ///< is 1 for the first field of a field picture 0 otherwise
+ 
+diff --git a/libavcodec/v4l2_request.c b/libavcodec/v4l2_request.c
+index 36eec85402..b0d8829ce3 100644
+--- a/libavcodec/v4l2_request.c
++++ b/libavcodec/v4l2_request.c
+@@ -127,6 +127,22 @@ int ff_v4l2_request_set_controls(AVCodecContext *avctx,
+     return ret;
+ }
+ 
++int ff_v4l2_request_try_controls(AVCodecContext *avctx,
++                                 struct v4l2_ext_control *control, int count)
++{
++    V4L2RequestContext *ctx = v4l2_request_context(avctx);
++    struct v4l2_ext_controls controls = {
++        .controls = control,
++        .count = count,
++    };
++
++    // No error logging: the driver rejecting the values is the answer
++    if (ioctl(ctx->fctxi->video_fd, VIDIOC_TRY_EXT_CTRLS, &controls) < 0)
++        return AVERROR(errno);
++
++    return 0;
++}
++
+ static int v4l2_request_queue_buffer(V4L2RequestContext *ctx,
+                                      struct v4l2_buffer *buffer)
+ {
+diff --git a/libavcodec/v4l2_request.h b/libavcodec/v4l2_request.h
+index 53759f20bb..8ddb478e0e 100644
+--- a/libavcodec/v4l2_request.h
++++ b/libavcodec/v4l2_request.h
+@@ -70,6 +70,9 @@ int ff_v4l2_request_query_control_default_value(AVCodecContext *avctx,
+ int ff_v4l2_request_set_controls(AVCodecContext *avctx,
+                                  struct v4l2_ext_control *control, int count);
+ 
++int ff_v4l2_request_try_controls(AVCodecContext *avctx,
++                                 struct v4l2_ext_control *control, int count);
++
+ int ff_v4l2_request_append_output(AVCodecContext *avctx,
+                                   V4L2RequestPictureContext *pic,
+                                   const uint8_t *data, uint32_t size);
 diff --git a/libavcodec/v4l2_request_mpeg2.c b/libavcodec/v4l2_request_mpeg2.c
-index 28b625e416..e8493f00d4 100644
+index 33d4cdd9ec..536e7575fe 100644
 --- a/libavcodec/v4l2_request_mpeg2.c
 +++ b/libavcodec/v4l2_request_mpeg2.c
-@@ -204,7 +204,8 @@ const FFHWAccel ff_ ## codec ## _v4l2request_hwaccel = {                     \
+@@ -180,9 +180,47 @@ static int v4l2_request_mpeg2_end_frame(AVCodecContext *avctx)
+                                         control, FF_ARRAY_ELEMS(control));
+ }
+ 
++/*
++ * Decoding MPEG-1 D-pictures (DC coefficients only) is optional: a driver
++ * that cannot decode them rejects V4L2_MPEG2_PIC_CODING_TYPE_D, and kernels
++ * without the MPEG-1 uAPI reject the value for every driver. Ask the driver
++ * once; without D-pictures the MPEG-1/2 decoder rejects them as it does in
++ * software, instead of every one of them failing in the driver.
++ */
++static int v4l2_request_mpeg1_post_frames_ctx(AVCodecContext *avctx)
++{
++    MpegEncContext *s = avctx->priv_data;
++    struct v4l2_ctrl_mpeg2_picture picture = {
++        .picture_coding_type = V4L2_MPEG2_PIC_CODING_TYPE_D,
++        .picture_structure = V4L2_MPEG2_PIC_FRAME,
++        .flags = V4L2_MPEG2_PIC_FLAG_FRAME_PRED_DCT |
++                 V4L2_MPEG2_PIC_FLAG_PROGRESSIVE,
++    };
++    struct v4l2_ext_control control[] = {
++        {
++            .id = V4L2_CID_STATELESS_MPEG2_PICTURE,
++            .ptr = &picture,
++            .size = sizeof(picture),
++        },
++    };
++
++    s->hwaccel_d_pictures =
++        !ff_v4l2_request_try_controls(avctx, control, FF_ARRAY_ELEMS(control));
++    av_log(avctx, AV_LOG_VERBOSE, "D-pictures are %s by the device\n",
++           s->hwaccel_d_pictures ? "decoded" : "not decoded");
++
++    return 0;
++}
++
+ static int v4l2_request_mpeg2_init(AVCodecContext *avctx)
+ {
+-    return ff_v4l2_request_init(avctx, NULL, 0, NULL);
++    MpegEncContext *s = avctx->priv_data;
++
++    s->hwaccel_d_pictures = 0;
++
++    return ff_v4l2_request_init(avctx, NULL, 0,
++                                avctx->codec_id == AV_CODEC_ID_MPEG1VIDEO ?
++                                v4l2_request_mpeg1_post_frames_ctx : NULL);
+ }
+ 
+ static int v4l2_request_mpeg2_frame_params(AVCodecContext *avctx,
+@@ -213,7 +251,8 @@ const FFHWAccel ff_ ## codec ## _v4l2request_hwaccel = {                     \
      .uninit             = ff_v4l2_request_uninit,                            \
      .priv_data_size     = sizeof(V4L2RequestContext),                        \
      .frame_params       = v4l2_request_mpeg2_frame_params,                   \

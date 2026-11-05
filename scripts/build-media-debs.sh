@@ -88,7 +88,7 @@ declare -A VERSION=(
   [mpv]=0.41.0-2ubuntu5
   [gst-plugins-bad1.0]=1.28.6-1ubuntu1
 )
-declare -A REV=([ffmpeg]=2 [mpv]=1 [gst-plugins-bad1.0]=1)
+declare -A REV=([ffmpeg]=3 [mpv]=1 [gst-plugins-bad1.0]=1)
 declare -A PDIR=([ffmpeg]=ffmpeg [mpv]=mpv [gst-plugins-bad1.0]=gstreamer)
 # Architecture: all sources (built with -A); the rest build their arm64 packages
 declare -A BUILD=()

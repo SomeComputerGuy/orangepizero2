@@ -3,24 +3,32 @@ From: Arun Iyengar <aiyengar1990@gmail.com>
 Date: Thu, 5 Nov 2026 06:07:39 +0000
 Subject: [PATCH 304/311] avcodec: add V4L2 Request API MPEG-1 hwaccel
 
-Cedrus decodes MPEG-1 through the MPEG-2 stateless controls with a
-small downstream uAPI extension: V4L2_MPEG2_SEQ_FLAG_MPEG1 and the
-FULL_PEL_FORWARD/BACKWARD picture flags (the MPEG-1 picture header
-fields that MPEG-2 dropped), plus D-pictures as picture coding type 4.
+Cedrus and the Hantro/Rockchip VPU2 decode MPEG-1 through the MPEG-2
+stateless controls with a small downstream uAPI extension:
+V4L2_MPEG2_SEQ_FLAG_MPEG1 and the FULL_PEL_FORWARD/BACKWARD picture
+flags (the MPEG-1 picture header fields that MPEG-2 dropped), plus
+D-pictures as picture coding type 4.
 Register mpeg1_v4l2request on top of the MPEG-2 hwaccel. D-pictures are
 passed to the hwaccel as I-pictures in the parser; the software decoder
 still rejects them.
 
+The decoders advertise MPEG-1 with their own coded format,
+V4L2_PIX_FMT_MPEG1_SLICE ('MG1S'), and use the MPEG-2 controls for it.
+The MPEG-1 hwaccel only probes that format: decoders that only offer
+V4L2_PIX_FMT_MPEG2_SLICE ignore the MPEG-1 flags and would decode MPEG-1
+as MPEG-2, so on them the hwaccel fails to initialise and MPEG-1 is
+decoded in software.
+
 Assisted-by: LLM
 Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
 ---
- configure                       |  2 ++
+ configure                       |  2 +
  libavcodec/Makefile             |  1 +
  libavcodec/hwaccels.h           |  1 +
- libavcodec/mpeg12dec.c          | 12 +++++++
+ libavcodec/mpeg12dec.c          | 12 ++++++
  libavcodec/mpegvideo.h          |  1 +
- libavcodec/v4l2_request_mpeg2.c | 63 ++++++++++++++++++++++++---------
- 6 files changed, 64 insertions(+), 16 deletions(-)
+ libavcodec/v4l2_request_mpeg2.c | 72 +++++++++++++++++++++++++--------
+ 6 files changed, 73 insertions(+), 16 deletions(-)
 
 diff --git a/configure b/configure
 index 985428bbff..e6e6c91d2a 100755
@@ -109,7 +117,7 @@ index d448ac6b5a..989a78c85c 100644
      int first_field;         ///< is 1 for the first field of a field picture 0 otherwise
  
 diff --git a/libavcodec/v4l2_request_mpeg2.c b/libavcodec/v4l2_request_mpeg2.c
-index 5d89b7168e..28b625e416 100644
+index 5d89b7168e..33d4cdd9ec 100644
 --- a/libavcodec/v4l2_request_mpeg2.c
 +++ b/libavcodec/v4l2_request_mpeg2.c
 @@ -17,6 +17,7 @@
@@ -120,7 +128,7 @@ index 5d89b7168e..28b625e416 100644
  
  #include "hwaccel_internal.h"
  #include "hwconfig.h"
-@@ -24,6 +25,13 @@
+@@ -24,6 +25,16 @@
  #include "mpegvideo.h"
  #include "v4l2_request.h"
  
@@ -130,11 +138,14 @@ index 5d89b7168e..28b625e416 100644
 +#define V4L2_MPEG2_PIC_FLAG_FULL_PEL_FORWARD    0x0100
 +#define V4L2_MPEG2_PIC_FLAG_FULL_PEL_BACKWARD   0x0200
 +#endif
++#ifndef V4L2_PIX_FMT_MPEG1_SLICE
++#define V4L2_PIX_FMT_MPEG1_SLICE v4l2_fourcc('M', 'G', '1', 'S')
++#endif
 +
  typedef struct V4L2RequestControlsMPEG2 {
      V4L2RequestPictureContext pic;
      struct v4l2_ctrl_mpeg2_sequence sequence;
-@@ -58,9 +66,17 @@ static int v4l2_request_mpeg2_start_frame(AVCodecContext *avctx,
+@@ -58,9 +69,17 @@ static int v4l2_request_mpeg2_start_frame(AVCodecContext *avctx,
      if (s->progressive_sequence)
          controls->sequence.flags |= V4L2_MPEG2_SEQ_FLAG_PROGRESSIVE;
  
@@ -153,7 +164,7 @@ index 5d89b7168e..28b625e416 100644
  
          /* ISO/IEC 13818-2, ITU-T Rec. H.262: Picture coding extension */
          .f_code[0][0] = s->mpeg_f_code[0][0],
-@@ -95,6 +111,13 @@ static int v4l2_request_mpeg2_start_frame(AVCodecContext *avctx,
+@@ -95,6 +114,13 @@ static int v4l2_request_mpeg2_start_frame(AVCodecContext *avctx,
      if (s->progressive_frame)
          controls->picture.flags |= V4L2_MPEG2_PIC_FLAG_PROGRESSIVE;
  
@@ -167,7 +178,17 @@ index 5d89b7168e..28b625e416 100644
      switch (s->pict_type) {
      case AV_PICTURE_TYPE_B:
          if (s->next_pic.ptr)
-@@ -166,19 +189,27 @@ static int v4l2_request_mpeg2_frame_params(AVCodecContext *avctx,
+@@ -162,23 +188,37 @@ static int v4l2_request_mpeg2_init(AVCodecContext *avctx)
+ static int v4l2_request_mpeg2_frame_params(AVCodecContext *avctx,
+                                            AVBufferRef *hw_frames_ctx)
+ {
++    /*
++     * MPEG-1 has its own coded format: only decoders that enumerate it
++     * decode MPEG-1, MPEG-2 decoders would decode it as MPEG-2.
++     */
+     return ff_v4l2_request_frame_params(avctx, hw_frames_ctx,
++                                        avctx->codec_id == AV_CODEC_ID_MPEG1VIDEO ?
++                                        V4L2_PIX_FMT_MPEG1_SLICE :
                                          V4L2_PIX_FMT_MPEG2_SLICE, 8);
  }
  

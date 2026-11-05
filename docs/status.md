@@ -126,7 +126,15 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
    - MPEG-4 ASP 3840x2160 decode acceptance test (datasheet-checklist).
    - Datasheet W-items in docs/datasheet-checklist.md (W1-W34: CONFIG_COMPAT, hstimer, CE PRNG, SPI dual/quad,
      deinterlacer, DE33 10-bit/HDR, I2S/SPDIF overlays, ...).
-   - Video encoder H.264/JPEG (reverse engineering, last).
+   - Video encoder H.264/JPEG (reverse engineering, last). Decided 2026-11-05: build it on Paul Kocialkowski's
+     stateless H.264 encode uAPI (2026-05 [PATCH 00/14], as OPi5 does), not a stateful cedrus encoder; re-plan
+     harness/research/ve-encoder/PLAN.md.
+   - Cross-check follow-ups (harness/research/opi5-crosscheck.md; user decisions 2026-11-05): take OPi5 fixes 1407
+     (rebased), 0514, 1102, 1103, 2206, 1913 into sunxi-7.3 and test with the suspend test; port their VP9 resize fix
+     (0606/2228 + GStreamer patch; cedrus VP9 still fails 64 vectors). Deinterlacer: standard
+     V4L2_CID_DEINTERLACING_MODE (decided) and move the DI300 private IDs into a reserved range. FFmpeg base: Kwiboo
+     v4l2-request (PR 20847) + Jernej's work + our hwaccels, shared with OPi5 (decided). AVS2 v6 as one joint RFC with
+     rkvdec. Findings sent to the OPi5 session 2026-11-05. Open: AI trailer form (coding-assistants.rst).
 
 ### C. Needs hardware from the user
 10. HDMI display (HDMI 4K60, HDMI audio, CEC, AFBC 4K60 output), TV (CVBS), 13-pin expansion board (IR, line-out,

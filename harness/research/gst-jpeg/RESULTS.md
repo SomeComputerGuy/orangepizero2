@@ -1,54 +1,94 @@
-# GStreamer hardware JPEG decode on cedrus (v4l2sljpegdec): state 2026-11-05
+# GStreamer hardware JPEG decode on cedrus (v4l2sljpegdec): state 2026-11-05 (gaps closed in code, board run queued)
 
-## Findings
-- OPi5 has **no** stateless/V4L2 JPEG GStreamer element (patches/gstreamer 0001-0014: v4l2codecs caps, kmssink, h264/h265
-  release, VP9 resize, stateless H.264/H.265 encoders; work/_out/jpeg-dec/DESIGN.md plans a stateful-style kernel JPEG
-  for v4l2jpegdec). Their set is adopted unchanged as patches/gstreamer/0001-0014, ours on top as 0101-0103.
-- cedrus JPEG takes one JFIF per OUTPUT buffer and parses it in the driver; requests are allowed (not required), no
-  controls. Driver refusals (kernel `cedrus_jpeg_setup`): components != 3 (greyscale), chroma factors != 1x1, luma
-  factors other than 2x2/2x1/1x1/4x1 (4:4:0 refused by v4l2_jpeg_parse_header), precision != 8, non-interleaved scan,
-  Cb/Cr tables differing, > 4096x2304. 4:1:1 needs a linear capture format.
-- jpegparse caps `sampling` cannot express the factor layout: FFmpeg writes 4:2:2 as Y2x2/C1x2 and 4:4:4 as 1x2 for all
-  components (both refused by the hardware but named YCbCr-4:2:2 / 4:4:4). Refusing on the first frame cannot make
-  decodebin fall back, so jpegparse now also exports `sampling-factors` ("2x2:1x1:1x1"), and the decoder's sink
-  template keys on it.
-- The hardware is not bit-exact with libjpeg (max |d| 1, Y ~65 dB, impl-di-jpeg-avs.md J2), so "md5 equal to jpegdec"
-  cannot hold. The test instead checks md5(v4l2sljpegdec) == md5(jpegtest, same driver) and PSNR/max|d| vs jpegdec.
-- v4l2jpegdec (gst-plugins-good, PRIMARY+1) stays MARGINAL in the image: it cannot drive cedrus (7.6) and at equal rank
-  it sorts before v4l2sljpegdec. The override comment in userpatches gets updated with the integration patch.
+## First board run (runner job 02-gst-jpeg, summary harness/runner-queue/done/02-gst-jpeg.summary.md)
+- Works: v4l2sljpegdec registered at PRIMARY+1; s420/s422/s444/s411/dri7/nodht/opt420/z16x16/z2049x64/z4096x2304
+  decode, byte-identical to the driver's own output (jpegtest); decodebin/playbin/decodebin3 pick it for them and
+  pick jpegdec for grey/prog/s440/mjpeg422/mj422/mj444; mjmix (resolution change) decodes; trunc completes.
+- Quality vs jpegdec: Y PSNR 51.3 dB (stills), 59.3 dB (mj420), max |d| 4 (stills) / 3 (clip). Check 4's
+  "max|d| <= 2" was too strict for this IDCT (impl-di-jpeg-avs.md J2 measured 65 dB / 1 against ffmpeg -idct int;
+  jpegdec's islow differs more). PSNR >= 48 is the criterion from here on.
+- Check 7 "FAIL": only the `norank` line timed out (rc=124), which is the expected v4l2jpegdec hang that check 10
+  documents (why the MARGINAL override stays). No v4l2sljpegdec run hung.
+- **The gap this round closes**: `crtable` (Cr DQT differs) passed the caps, decodebin picked v4l2sljpegdec, the
+  driver refused every image ("Cb and Cr DQT tables differ") and the output was empty (hw rc=0, 0 bytes), no
+  fallback. The same held for non-interleaved scans (element error) and 4096x4096 (hw rc=1, picked v4l2sljpegdec:
+  cedrus has no VIDIOC_ENUM_FRAMESIZES, so the probed sink caps carry no size range).
+- Other open observations (not touched here, work list): z17x33 and z17x33-411 `hw==drv DIFF` and db/pb/db3 md5s
+  differ from each other (odd-size cropping/stride in the GStreamer path); mjmix hw output 8640000 B vs sw 6912000 B
+  (frame sizes after a resolution change); perf mj1080 10.7 s vs jpegdec 4.9 s for 300 1080p frames (~28 vs ~61 fps:
+  one image in flight, synchronous request, memcpy of the bitstream); dmesg had 30 "failed to parse JPEG header: -22"
+  pairs from the `hw` runs of refused images (mj422/mj444 frames reach the driver through the direct pipeline).
 
-## Design (patches/gstreamer)
-- 0101 v4l2codecs decoder: keep V4L2_BUF_FLAG_ERROR per request, `gst_v4l2_request_has_buf_error()` (other decoders
-  unchanged).
-- 0102 jpegparse: `sampling-factors` caps field, renegotiates on change.
-- 0103 v4l2codecs: `v4l2sl*jpegdec` (GstVideoDecoder subclass, rank PRIMARY+1). Sink: `image/jpeg, parsed=true,
-  sof-marker={0,1}, colorspace=sYUV, sampling-factors={2x2:1x1:1x1, 2x1:1x1:1x1, 1x1:1x1:1x1, 4x1:1x1:1x1},
-  interlace-mode=progressive` + device frame sizes. One image in flight (synchronous request), OUTPUT buffer sized from
-  the image (renegotiates if a later one is bigger, or on size / 4:1:1 change). Per image: unsupported (12-bit,
-  non-interleaved) = element error; corrupt or driver error flag = dropped frame (GST_VIDEO_DECODER_ERROR). 4:1:1 ->
-  NV12/I420 only. Output colorimetry full-range BT.601 like jpegdec.
+## What the hardware can do (checked against the driver and the vendor notes, 2026-11-05)
+- cedrus_jpeg.c (kernel-check/work-cumul/linux-7.3.1 drivers/staging/media/sunxi/cedrus): the JPEG decoder is the
+  MPEG engine. Quantisation goes through the two MPEG matrices (VE_DEC_MPEG_IQMINPUT INTRA = Y, NON_INTRA = chroma);
+  the Huffman SRAM holds exactly four descriptors (Y-DC, Y-AC, C-DC, C-AC) and four HUFFVAL arrays, with no
+  per-component selector register. The vendor libawmjpeg writes the same four tables (impl-di-jpeg-avs.md §7.1).
+  So "Cb and Cr with different tables" is a true hardware limit, not a driver choice; the driver compares table
+  *content*, so different selectors naming identical tables are fine (and must stay on the hardware path).
+- Non-interleaved scans: the engine consumes one scan as interleaved MCUs of the trigger's chroma format (the
+  greyscale probe in impl-di-jpeg-avs.md §7 showed it parsing a 1-component scan as a 3-component one). Merging
+  per-component scans into one would need a full entropy decode on the CPU. True hardware limit.
+- Both therefore go to jpegdec, decided at caps negotiation. No driver change for them; the driver's refusals stay
+  as the last line of defence.
+- Picture size: a real limit (4096x2304 for JPEG) that the driver knew but did not report.
 
-## Code state
-- Source git: build/gst-jpeg/src (clone of ~/orangepi5/work/gst-reopen), branch `opiz2`: Ubuntu 1.28.6-1ubuntu1 +
-  OPi5 0001-0014 + ours (0101-0103 = the last three commits; local tree, nothing pushed). The bundled dev .so predates
-  only a cosmetic `#define GST_USE_UNSTABLE_API` in 0103.
-- Exported: patches/gstreamer/0101-0103 (project repo). scripts/build-media-debs.sh knows gst-plugins-bad1.0
-  (+opiz2.1, PDIR gstreamer) but does not build it by default.
-- Dev build (arm64 .so only, ~5 min): harness/gst-jpeg/build-dev.sh -> build/gst-jpeg/out/{libgstv4l2codecs,libgstjpegformat}.so.
-  It compiles with no warnings in our files. **Never run on the board.**
-- Image integration (not applied): harness/research/gst-jpeg/image-integration.patch = build.sh builds
-  gst-plugins-bad1.0 for every variant + config hook `post_repo_customize_image__opiz2_gst_media` (minimal/server get
-  the gst-plugins-bad packages from /opt/opiz2-media, pinned) + updated v4l2jpegdec comment. These hunks had been swept
-  into 1c65b98 by another commit while untested; they are reverted in this commit.
+## Design (patches/gstreamer, source build/gst-jpeg/src branch opiz2, commits 92e0dc5 0ce2d76 42d3c43 ...)
+- 0101 v4l2codecs decoder: keep V4L2_BUF_FLAG_ERROR per request, `gst_v4l2_request_has_buf_error()`.
+- 0102 jpegparse: `sampling-factors` caps field ("2x2:1x1:1x1"), renegotiates on change.
+- 0103 v4l2codecs: `v4l2sl*jpegdec` (GstVideoDecoder subclass, rank PRIMARY+1), one image in flight, OUTPUT buffer
+  sized from the image, 4:1:1 -> NV12/I420 only, full-range BT.601 output colorimetry.
+- **0104 jpegparse (new)**: parses DQT, DHT and SOS too and sets, once the whole image is parsed, `scans=(int)N`
+  (number of SOS) and `component-tables=(string){shared,luma-chroma,separate}`: how the components share their
+  quantisation+Huffman tables *by content* (shared = one set for all, luma-chroma = first component vs. the rest,
+  separate = components after the first differ). Undefined tables are the annex K defaults, told apart by selector
+  (MJPEG without DHT -> luma-chroma). Each component takes the tables in force when its scan starts (tables redefined
+  between scans count). Reset per image (SOI; MPF sub-images keep the primary's). A change renegotiates.
+- **0105 v4l2sljpegdec (new)**: sink caps add `scans=1, component-tables={shared,luma-chroma}`; the per-image check
+  also parses DQT/DHT and refuses (element error, not a silent drop) what the caps cannot show: 16-bit DQT,
+  Huffman selectors > 1 (driver limit, SOF1 only), Cb/Cr tables differing in content.
+- Fallback semantics now: caps refuse -> decodebin/playbin plug jpegdec (grey, RGB/CMYK, progressive, lossless,
+  non-1x1 chroma factors, 4:4:0, >1 scan, separate chroma tables, and with the kernel fix below sizes above
+  4096x2304). Per-image element error remains for: 12-bit samples (SOF1 P=12), SOF1 with Th 2/3, DNL (height 0),
+  scan component order != frame order. All are rare and loud; jpegparse has no field for them (12-bit has no
+  software decoder in GStreamer core either).
+
+## Kernel: fix/sunxi-cedrus-enum-framesizes (armbian-build, pushed to `fork`, for the coordinator to merge)
+- Commit 3c0ecd788 on top of test-cumulative f8be54bac (c10): patch
+  `patches.media/h616-vdec/media-cedrus-enumerate-the-coded-frame-sizes.patch` + series.conf. cedrus gets
+  `vidioc_enum_framesizes`: coded formats report STEPWISE 16x16..cedrus_max_size() (4096x2304; H.265/AVS2
+  6144x4320; AVS 1920x1088) step 16; capture formats -EINVAL (no scaler; v4l2codecs reads capture frame sizes as
+  scaling capabilities, v4l2-compliance treats EINVAL at index 0 as "no frame sizes").
+- Effect: `gst_v4l2_decoder_probe_sink_caps()` (OPi5 patch 0002) gives every v4l2sl* decoder a width/height range,
+  so 4096x4096 JPEG (and oversize streams of the other codecs) go to the software decoder up front.
+- Verified: applies on the c10 series (834 patches, 0 failures), cedrus_video.o compiles with the kernel flags
+  (kernel-check/run-framesizes-patch.log), checkpatch --strict clean. Not board-tested; worktree wt-cedrus-framesizes.
+
+## Vectors and test package (harness/gst-jpeg/gaps/, runner job harness/runner-queue/05-gst-jpeg-gaps.md)
+- harness/jpegtest/jpegtool.py gained `cr-table-same` (Cr -> DQT slot 2 with the same content: must stay on the
+  hardware), `cr-huffman` (Cr recoded with the luma Huffman tables, one interleaved scan: tables differ, same
+  picture) and `split-scans N` (3 = Y, Cb, Cr each alone; 2 = Y then Cb+Cr): a small entropy transcoder (F.1.2/F.2.2,
+  restart intervals in, none out). Every edited vector decodes identically to its source with ffmpeg (gen-vectors.sh
+  checks the md5).
+- gen-vectors.sh -> build/gst-jpeg/vec-gaps (cases.txt: NAME W H EXPECT scans:tables): hw = s420, crtq2, mj-crtq2;
+  fallback = crtable, crhuff, noninter, noninter2, dri7-noninter, mj-crhuff, mj-noninter; size = z4096x4096
+  (SKIPPED unless the kernel enumerates frame sizes). Bundle build/gst-jpeg/bundle-gaps (dev .so with 0101-0105,
+  built 2026-11-05 19:51 with build-dev.sh, no warnings).
+- board-test.sh records per case: jpegparse caps (scans/component-tables), direct hw decode, jpegdec decode,
+  decodebin/playbin/decodebin3 (clips: playbin3) pick + md5, driver output for hw cases, dmesg delta. compare.py
+  turns that into one PASS/FAIL(reasons)/SKIPPED line per case (hw: md5 == driver, PSNR >= 48 dB vs jpegdec, autoplug
+  picked v4l2sljpegdec; fallback: direct hw link refused without hang, autoplug picked jpegdec, md5 == jpegdec) plus
+  SUMMARY and DMESG lines; HANDOFF.md checks 1-7 are greps on those.
+- 02-gst-jpeg's package (harness/gst-jpeg/, build/gst-jpeg/bundle) is untouched.
 
 ## Next steps
-1. Runner job harness/runner-queue/01-gst-jpeg.md (package harness/gst-jpeg/HANDOFF.md) on the booted kernel. If the
-   coordinator wants the newest cN, install it first (harness/research/vdec-perf/install-kernel.sh cN) - not in the job.
-2. Fix what fails (likely spots: the bitstream sizing in negotiate, the 4:1:1 linear-format filter, decodebin3
-   picking), rebuild with build-dev.sh, rerun.
-3. When checks 2-9 pass: run
-   `scripts/build-media-debs.sh gst-plugins-bad1.0` (cold ccache, ~1-2 h qemu), `git apply
-   harness/research/gst-jpeg/image-integration.patch`, add gst-plugins-bad1.0 to the default SOURCES, image build,
-   verify-board on the image (gst-inspect v4l2sljpegdec, playbin on a 4:2:0 JPEG picks it).
-4. Open: images whose Cb/Cr tables differ (crtable) or with non-interleaved baseline scans pass the caps and fail per
-   frame (dropped, no fallback); jpegparse does not parse DQT, so no caps-level refusal for those.
+1. Runner job 05-gst-jpeg-gaps on the booted kernel (any); rerun once c11 (with the framesizes fix) is on the board
+   for the z4096x4096 case.
+2. If a fallback case FAILs with `caps` in its reasons, the jpegparse field logic is wrong (look at out/NAME.caps.log);
+   with `hw-accepted`, the sink caps of 0105 did not take effect (check inspect.txt). `psnr` on crtq2 would mean the
+   driver mishandles Tq=2 (it shouldn't: it indexes 0..3).
+3. Then the integration path from before: `scripts/build-media-debs.sh gst-plugins-bad1.0`, apply
+   harness/research/gst-jpeg/image-integration.patch (now needs 0104/0105 in the series: PDIR gstreamer picks up all
+   patches/gstreamer/*.patch), image build, verify-board. Re-check the 02 package's check 4 threshold (PSNR only).
+4. Work list (from the 02 run): odd-size output path (z17x33 DIFF), mjmix output size, throughput (pipeline the
+   requests: 2 images in flight), the `hw` direct pipeline sending refused frames to the driver (cosmetic dmesg noise).

@@ -1,0 +1,344 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 19:44:41 +0000
+Subject: [PATCH 104/105] jpegparse: Add the scan count and the table layout to
+ the caps
+
+Hardware JPEG decoders tend to decode one interleaved scan with one set
+of tables for luma and one for chroma, which neither the sof-marker nor
+the sampling fields show: a sequential image coded in one scan per
+component, or one whose Cb and Cr components use different quantization
+or Huffman tables, passes the caps of such a decoder and then fails on
+every image, too late for decodebin to pick another decoder.
+
+Parse the DQT, DHT and SOS segments as well and add two caps fields set
+once the whole image is parsed: "scans", the number of scans, and
+"component-tables", how the components share their tables by content
+("shared" for one set for all components, "luma-chroma" for the first
+component against the rest, "separate" otherwise); two selectors naming
+identical tables count as one table, and undefined tables are the
+default ones, told apart by their selector. A change renegotiates like
+a change of the sampling.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ gst/jpegformat/gstjpegparse.c | 192 ++++++++++++++++++++++++++++++++++
+ gst/jpegformat/gstjpegparse.h |  28 +++++
+ 2 files changed, 220 insertions(+)
+
+diff --git a/gst/jpegformat/gstjpegparse.c b/gst/jpegformat/gstjpegparse.c
+index 11aa758..f76d136 100644
+--- a/gst/jpegformat/gstjpegparse.c
++++ b/gst/jpegformat/gstjpegparse.c
+@@ -160,6 +160,147 @@ static const gchar *gst_jpeg_sampling_strings[] = {
+   [GST_JPEG_SAMPLING_GRAYSCALE] = "GRAYSCALE",
+ };
+ 
++/* How the components share their quantization and Huffman tables, by table
++ * content (two selectors naming identical tables count as one table). */
++enum GstJPEGTables
++{
++  GST_JPEG_TABLES_NONE,
++  GST_JPEG_TABLES_SHARED,       /* one set for every component */
++  GST_JPEG_TABLES_LUMA_CHROMA,  /* the first component vs. the others */
++  GST_JPEG_TABLES_SEPARATE,     /* components after the first differ */
++};
++
++static const gchar *gst_jpeg_tables_strings[] = {
++  [GST_JPEG_TABLES_NONE] = NULL,
++  [GST_JPEG_TABLES_SHARED] = "shared",
++  [GST_JPEG_TABLES_LUMA_CHROMA] = "luma-chroma",
++  [GST_JPEG_TABLES_SEPARATE] = "separate",
++};
++
++/* Forget the tables and scans of the current image. */
++static void
++gst_jpeg_parse_reset_tables (GstJpegParse * parse)
++{
++  memset (&parse->quant_tables, 0, sizeof (parse->quant_tables));
++  memset (&parse->huff_tables, 0, sizeof (parse->huff_tables));
++  memset (parse->component_tables, 0, sizeof (parse->component_tables));
++  parse->num_components = 0;
++  parse->scans = 0;
++}
++
++/* A table that was never defined is one of the default tables (ITU-T T.81
++ * annex K, as Motion JPEG without DHT segments uses them), so two undefined
++ * tables are the same table if they have the same selector. */
++static gboolean
++gst_jpeg_parse_quant_table_equal (const GstJpegParseComponentTables * a,
++    const GstJpegParseComponentTables * b)
++{
++  if (!a->quant.valid || !b->quant.valid)
++    return a->quant.valid == b->quant.valid
++        && a->quant_selector == b->quant_selector;
++
++  return a->quant.quant_precision == b->quant.quant_precision
++      && memcmp (a->quant.quant_table, b->quant.quant_table,
++      sizeof (a->quant.quant_table)) == 0;
++}
++
++static gboolean
++gst_jpeg_parse_huffman_table_equal (const GstJpegHuffmanTable * a,
++    const GstJpegHuffmanTable * b, guint8 selector_a, guint8 selector_b)
++{
++  guint i, count = 0;
++
++  if (!a->valid || !b->valid)
++    return a->valid == b->valid && selector_a == selector_b;
++
++  if (memcmp (a->huf_bits, b->huf_bits, sizeof (a->huf_bits)) != 0)
++    return FALSE;
++
++  for (i = 0; i < G_N_ELEMENTS (a->huf_bits); i++)
++    count += a->huf_bits[i];
++
++  return memcmp (a->huf_values, b->huf_values,
++      MIN (count, G_N_ELEMENTS (a->huf_values))) == 0;
++}
++
++static gboolean
++gst_jpeg_parse_component_tables_equal (const GstJpegParseComponentTables * a,
++    const GstJpegParseComponentTables * b)
++{
++  return gst_jpeg_parse_quant_table_equal (a, b)
++      && gst_jpeg_parse_huffman_table_equal (&a->dc, &b->dc, a->dc_selector,
++      b->dc_selector)
++      && gst_jpeg_parse_huffman_table_equal (&a->ac, &b->ac, a->ac_selector,
++      b->ac_selector);
++}
++
++static enum GstJPEGTables
++gst_jpeg_parse_tables_layout (GstJpegParse * parse)
++{
++  const GstJpegParseComponentTables *first = &parse->component_tables[0];
++  const GstJpegParseComponentTables *chroma = &parse->component_tables[1];
++  gboolean shared = TRUE, luma_chroma = TRUE;
++  guint i;
++
++  if (parse->num_components == 0 || !first->set)
++    return GST_JPEG_TABLES_NONE;
++
++  for (i = 1; i < parse->num_components; i++) {
++    const GstJpegParseComponentTables *c = &parse->component_tables[i];
++
++    /* not coded: a truncated image */
++    if (!c->set)
++      continue;
++
++    if (!gst_jpeg_parse_component_tables_equal (first, c))
++      shared = FALSE;
++    if (!gst_jpeg_parse_component_tables_equal (chroma, c))
++      luma_chroma = FALSE;
++  }
++
++  if (shared)
++    return GST_JPEG_TABLES_SHARED;
++  if (luma_chroma)
++    return GST_JPEG_TABLES_LUMA_CHROMA;
++  return GST_JPEG_TABLES_SEPARATE;
++}
++
++static gboolean
++gst_jpeg_parse_sos (GstJpegParse * parse, GstJpegSegment * seg)
++{
++  GstJpegScanHdr hdr = { 0, };
++  guint i, k;
++
++  if (!gst_jpeg_segment_parse_scan_header (seg, &hdr))
++    return FALSE;
++
++  if (parse->mpf.mode
++      && parse->mpf.primary_image_index != parse->mpf.cur_image_index)
++    return TRUE;
++
++  parse->scans++;
++
++  /* Each component takes the tables in force when its scan starts. */
++  for (i = 0; i < hdr.num_components; i++) {
++    for (k = 0; k < parse->num_components; k++) {
++      GstJpegParseComponentTables *c = &parse->component_tables[k];
++
++      if (c->set || c->identifier != hdr.components[i].component_selector)
++        continue;
++
++      c->set = TRUE;
++      c->dc_selector = hdr.components[i].dc_selector;
++      c->ac_selector = hdr.components[i].ac_selector;
++      c->quant = parse->quant_tables.quant_tables[c->quant_selector];
++      c->dc = parse->huff_tables.dc_tables[c->dc_selector];
++      c->ac = parse->huff_tables.ac_tables[c->ac_selector];
++      break;
++    }
++  }
++
++  return TRUE;
++}
++
+ static void
+ gst_jpeg_parse_class_init (GstJpegParseClass * klass)
+ {
+@@ -342,6 +483,17 @@ gst_jpeg_parse_sof (GstJpegParse * parse, GstJpegSegment * seg)
+     return TRUE;
+   }
+ 
++  /* The components whose tables the caps describe (see gst_jpeg_parse_sos) */
++  parse->num_components = hdr.num_components <= GST_JPEG_PARSE_MAX_COMPONENTS ?
++      hdr.num_components : 0;
++  for (i = 0; i < parse->num_components; i++) {
++    GstJpegParseComponentTables *c = &parse->component_tables[i];
++
++    memset (c, 0, sizeof (*c));
++    c->identifier = hdr.components[i].identifier;
++    c->quant_selector = hdr.components[i].quant_table_selector;
++  }
++
+   colorspace = GST_JPEG_COLORSPACE_NONE;
+   sampling = GST_JPEG_SAMPLING_NONE;
+ 
+@@ -1020,6 +1172,7 @@ gst_jpeg_parse_reset (GstJpegParse * parse)
+   parse->state = 0;
+   parse->adobe_transform = 0;
+   parse->field = 0;
++  gst_jpeg_parse_reset_tables (parse);
+ 
+   if (parse->tags) {
+     gst_tag_list_unref (parse->tags);
+@@ -1066,6 +1219,12 @@ gst_jpeg_parse_set_new_caps (GstJpegParse * parse)
+     gst_caps_set_simple (caps, "sampling-factors", G_TYPE_STRING,
+         parse->sampling_factors, NULL);
+   }
++  if (parse->caps_scans > 0)
++    gst_caps_set_simple (caps, "scans", G_TYPE_INT, parse->caps_scans, NULL);
++  if (parse->caps_tables != GST_JPEG_TABLES_NONE) {
++    gst_caps_set_simple (caps, "component-tables", G_TYPE_STRING,
++        gst_jpeg_tables_strings[parse->caps_tables], NULL);
++  }
+ 
+   if (parse->colorimetry) {
+     gst_caps_set_simple (caps, "colorimetry", G_TYPE_STRING, parse->colorimetry,
+@@ -1112,10 +1271,19 @@ gst_jpeg_parse_finish_frame (GstJpegParse * parse, GstBaseParseFrame * frame,
+ {
+   GstBaseParse *bparse = GST_BASE_PARSE (parse);
+   GstFlowReturn ret;
++  guint tables;
+ 
+   if (parse->tags)
+     gst_base_parse_merge_tags (bparse, parse->tags, GST_TAG_MERGE_REPLACE);
+ 
++  /* Only known once the whole image is parsed, unlike the frame header. */
++  tables = gst_jpeg_parse_tables_layout (parse);
++  if (parse->scans != parse->caps_scans || tables != parse->caps_tables) {
++    parse->caps_scans = parse->scans;
++    parse->caps_tables = tables;
++    parse->renegotiate = TRUE;
++  }
++
+   if (!gst_jpeg_parse_set_new_caps (parse))
+     return GST_FLOW_ERROR;
+ 
+@@ -1241,6 +1409,11 @@ gst_jpeg_parse_handle_frame (GstBaseParse * bparse, GstBaseParseFrame * frame,
+         /* unset tags */
+         gst_base_parse_merge_tags (bparse, NULL, GST_TAG_MERGE_UNDEFINED);
+         parse->state |= GST_JPEG_PARSER_STATE_GOT_SOI;
++        /* A new image (the second field of an interlaced frame too); the
++         * images of a multi-picture file share the buffer with the primary
++         * one, whose tables are kept. */
++        if (!parse->mpf.mode)
++          gst_jpeg_parse_reset_tables (parse);
+         break;
+       case GST_JPEG_MARKER_EOI:
+         if (gst_jpeg_parse_should_finish_buffer (parse, marker)) {
+@@ -1263,6 +1436,16 @@ gst_jpeg_parse_handle_frame (GstBaseParse * bparse, GstBaseParseFrame * frame,
+         if (!valid_state (parse->state, GST_JPEG_PARSER_STATE_GOT_SOF))
+           GST_WARNING_OBJECT (parse, "SOS marker without SOF one");
+         parse->state |= GST_JPEG_PARSER_STATE_GOT_SOS;
++        if (!gst_jpeg_parse_sos (parse, &seg))
++          GST_WARNING_OBJECT (parse, "Failed to parse scan header");
++        break;
++      case GST_JPEG_MARKER_DQT:
++        if (parse->mpf.mode
++            && parse->mpf.primary_image_index != parse->mpf.cur_image_index)
++          break;
++        if (!gst_jpeg_segment_parse_quantization_table (&seg,
++                &parse->quant_tables))
++          GST_WARNING_OBJECT (parse, "Failed to parse quantization table");
+         break;
+       case GST_JPEG_MARKER_COM:
+         if (!gst_jpeg_parse_com (parse, &seg))
+@@ -1285,6 +1468,12 @@ gst_jpeg_parse_handle_frame (GstBaseParse * bparse, GstBaseParseFrame * frame,
+           GST_WARNING_OBJECT (parse, "Failed to parse app14 segment");
+         break;
+       case GST_JPEG_MARKER_DHT:
++        if (parse->mpf.mode
++            && parse->mpf.primary_image_index != parse->mpf.cur_image_index)
++          break;
++        if (!gst_jpeg_segment_parse_huffman_table (&seg, &parse->huff_tables))
++          GST_WARNING_OBJECT (parse, "Failed to parse Huffman table");
++        break;
+       case GST_JPEG_MARKER_DAC:
+         /* to avoid break the below SOF interval */
+         break;
+@@ -1355,6 +1544,9 @@ gst_jpeg_parse_start (GstBaseParse * bparse)
+   parse->interlace_mode = GST_VIDEO_INTERLACE_MODE_PROGRESSIVE;
+   parse->field_order = GST_VIDEO_FIELD_ORDER_TOP_FIELD_FIRST;
+ 
++  parse->caps_scans = 0;
++  parse->caps_tables = GST_JPEG_TABLES_NONE;
++
+   gst_jpeg_parse_reset (parse);
+ 
+   gst_base_parse_set_min_frame_size (bparse, 2);
+diff --git a/gst/jpegformat/gstjpegparse.h b/gst/jpegformat/gstjpegparse.h
+index 9e889bd..45a0110 100644
+--- a/gst/jpegformat/gstjpegparse.h
++++ b/gst/jpegformat/gstjpegparse.h
+@@ -27,9 +27,25 @@
+ #include <gst/gst.h>
+ #include <gst/base/gstbaseparse.h>
+ #include <gst/video/video.h>
++#include <gst/codecparsers/gstjpegparser.h>
+ 
+ G_BEGIN_DECLS
+ 
++/* Components whose tables are tracked for the caps (jpegdec decodes up to
++ * four: YCbCr, RGB, CMYK, YCCK). */
++#define GST_JPEG_PARSE_MAX_COMPONENTS 4
++
++/* The tables a frame component is coded with: the quantization table of the
++ * frame header and the Huffman tables of the scan that codes it, as they
++ * stood when that scan started. */
++typedef struct {
++  gboolean set;
++  guint8 identifier;
++  guint8 quant_selector, dc_selector, ac_selector;
++  GstJpegQuantTable quant;
++  GstJpegHuffmanTable dc, ac;
++} GstJpegParseComponentTables;
++
+ #define GST_TYPE_JPEG_PARSE \
+   (gst_jpeg_parse_get_type())
+ #define GST_JPEG_PARSE(obj) \
+@@ -82,6 +98,18 @@ struct _GstJpegParse {
+   guint sampling;
+   /* per component HxV sampling factors, e.g. "2x2:1x1:1x1" */
+   gchar sampling_factors[16];
++
++  /* tables and scans of the current image, for the "scans" and
++   * "component-tables" caps fields */
++  GstJpegQuantTables quant_tables;
++  GstJpegHuffmanTables huff_tables;
++  GstJpegParseComponentTables component_tables[GST_JPEG_PARSE_MAX_COMPONENTS];
++  guint num_components;
++  guint scans;
++  /* what the caps say */
++  guint caps_scans;
++  guint caps_tables;
++
+   gint par_num;
+   gint par_den;
+   GstCaps *prev_caps;
+-- 
+2.55.0
+

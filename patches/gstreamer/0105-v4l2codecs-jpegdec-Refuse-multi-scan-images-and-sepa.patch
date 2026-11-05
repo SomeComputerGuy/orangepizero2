@@ -1,0 +1,176 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 19:44:41 +0000
+Subject: [PATCH 105/105] v4l2codecs: jpegdec: Refuse multi-scan images and
+ separate chroma tables in the caps
+
+The cedrus JPEG engine decodes one interleaved scan and holds one luma
+and one chroma set of quantization and Huffman tables. Images coded in
+several scans, or whose Cb and Cr components use different tables, got
+past the sink caps and were then refused by the element or the driver
+on every image, with no software fallback.
+
+Require scans=1 and component-tables shared or luma-chroma, which
+jpegparse now reports, so that decodebin and playbin plug jpegdec for
+those images, and check the tables on every image as well, like the
+driver does (same content, selectors 0 and 1, 8-bit quantization
+tables): what the caps did not show is an error, not a silent drop.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2codecs/gstv4l2codecjpegdec.c | 96 +++++++++++++++++++++++++---
+ 1 file changed, 88 insertions(+), 8 deletions(-)
+
+diff --git a/sys/v4l2codecs/gstv4l2codecjpegdec.c b/sys/v4l2codecs/gstv4l2codecjpegdec.c
+index d275d92..dbba6b3 100644
+--- a/sys/v4l2codecs/gstv4l2codecjpegdec.c
++++ b/sys/v4l2codecs/gstv4l2codecjpegdec.c
+@@ -30,14 +30,16 @@
+  *
+  * The sink caps only accept what the hardware path decodes, as jpegparse
+  * describes it: baseline or extended sequential Huffman coding, YCbCr with
+- * 4:2:0, 4:2:2, 4:4:4 or 4:1:1 sampling and 1x1 chroma sampling factors,
++ * 4:2:0, 4:2:2, 4:4:4 or 4:1:1 sampling and 1x1 chroma sampling factors, one
++ * interleaved scan, Cb and Cr sharing their quantization and Huffman tables,
+  * progressive scan (not field-interleaved MJPEG). Greyscale, RGB, CMYK,
+- * progressive and lossless JPEG and other sampling factor layouts are
+- * refused at caps negotiation, so decodebin and playbin pick a software
+- * decoder (jpegdec) for them. What the caps do not show (12-bit samples, a
+- * non-interleaved scan) is checked on every image and reported as an error;
+- * images the driver refuses (e.g. different Cb and Cr tables) are dropped
+- * with a decode error.
++ * progressive and lossless JPEG, other sampling factor layouts, images coded
++ * in several scans and images whose Cb and Cr tables differ are refused at
++ * caps negotiation, so decodebin and playbin pick a software decoder
++ * (jpegdec) for them. What the caps do not show (12-bit samples, Huffman
++ * table selectors above 1) is checked on every image and reported as an
++ * error; images the driver refuses or cannot finish are dropped with a decode
++ * error.
+  *
+  * ## Example launch line
+  * ```
+@@ -72,13 +74,17 @@ enum
+ 
+ /* What jpegparse puts in its caps, restricted to what the hardware path
+  * decodes (see the class documentation). sampling-factors lists the HxV
+- * factors of Y, Cb and Cr: the chroma ones must be 1x1. */
++ * factors of Y, Cb and Cr: the chroma ones must be 1x1. One interleaved scan
++ * carries all components, and Cb and Cr share their quantization and Huffman
++ * tables (component-tables "luma-chroma", or "shared" with Y as well). */
+ static GstStaticCaps static_sink_caps = GST_STATIC_CAPS ("image/jpeg, "
+     "parsed = (boolean) true, "
+     "sof-marker = (int) { 0, 1 }, "
+     "colorspace = (string) sYUV, "
+     "sampling-factors = (string) { \"2x2:1x1:1x1\", \"2x1:1x1:1x1\", "
+     "\"1x1:1x1:1x1\", \"4x1:1x1:1x1\" }, "
++    "scans = (int) 1, "
++    "component-tables = (string) { shared, luma-chroma }, "
+     "interlace-mode = (string) progressive");
+ 
+ #define SRC_CAPS \
+@@ -140,6 +146,27 @@ typedef struct
+ 
+ static GstElementClass *parent_class = NULL;
+ 
++/* A table that is not defined is a default table (ITU-T T.81 annex K), so
++ * two undefined tables are the same one when their selectors are. */
++static gboolean
++gst_v4l2_codec_jpeg_dec_huffman_equal (const GstJpegHuffmanTable * a,
++    const GstJpegHuffmanTable * b, guint selector_a, guint selector_b)
++{
++  guint i, count = 0;
++
++  if (!a->valid || !b->valid)
++    return a->valid == b->valid && selector_a == selector_b;
++
++  if (memcmp (a->huf_bits, b->huf_bits, sizeof (a->huf_bits)) != 0)
++    return FALSE;
++
++  for (i = 0; i < G_N_ELEMENTS (a->huf_bits); i++)
++    count += a->huf_bits[i];
++
++  return memcmp (a->huf_values, b->huf_values,
++      MIN (count, G_N_ELEMENTS (a->huf_values))) == 0;
++}
++
+ /* Check the parts of the image the hardware path cares about; *reason says
+  * what is wrong unless JPEG_OK is returned. */
+ static GstV4l2CodecJpegCheck
+@@ -148,6 +175,8 @@ gst_v4l2_codec_jpeg_dec_parse (const guint8 * data, gsize size,
+ {
+   GstJpegFrameHdr frame = { 0, };
+   GstJpegScanHdr scan = { 0, };
++  GstJpegQuantTables quant = { 0, };
++  GstJpegHuffmanTables huff = { 0, };
+   GstJpegSegment seg;
+   gboolean have_frame = FALSE;
+   guint offset = 0;
+@@ -179,6 +208,16 @@ gst_v4l2_codec_jpeg_dec_parse (const guint8 * data, gsize size,
+         return JPEG_CORRUPT;
+       }
+       have_frame = TRUE;
++    } else if (seg.marker == GST_JPEG_MARKER_DQT) {
++      if (!gst_jpeg_segment_parse_quantization_table (&seg, &quant)) {
++        *reason = "invalid quantization table";
++        return JPEG_CORRUPT;
++      }
++    } else if (seg.marker == GST_JPEG_MARKER_DHT) {
++      if (!gst_jpeg_segment_parse_huffman_table (&seg, &huff)) {
++        *reason = "invalid Huffman table";
++        return JPEG_CORRUPT;
++      }
+     } else if (seg.marker == GST_JPEG_MARKER_SOS) {
+       if (!have_frame)
+         return JPEG_CORRUPT;
+@@ -227,6 +266,47 @@ gst_v4l2_codec_jpeg_dec_parse (const guint8 * data, gsize size,
+     }
+   }
+ 
++  /* The hardware holds one luma and one chroma set of tables: Cb and Cr
++   * must be coded with the same quantization and Huffman tables (the same
++   * content; the selectors may differ). The driver takes Huffman selectors
++   * 0 and 1 and 8-bit quantization tables, as baseline JPEG has. */
++  for (i = 0; i < 3; i++) {
++    const GstJpegQuantTable *q =
++        &quant.quant_tables[frame.components[i].quant_table_selector];
++
++    if (!q->valid) {
++      *reason = "missing quantization table";
++      return JPEG_CORRUPT;
++    }
++    if (q->quant_precision != 0) {
++      *reason = "16-bit quantization table";
++      return JPEG_UNSUPPORTED;
++    }
++    if (scan.components[i].dc_selector > 1 ||
++        scan.components[i].ac_selector > 1) {
++      *reason = "Huffman table selector above 1";
++      return JPEG_UNSUPPORTED;
++    }
++  }
++  if (memcmp (quant.quant_tables[frame.components[1].quant_table_selector].
++          quant_table,
++          quant.quant_tables[frame.components[2].quant_table_selector].
++          quant_table, sizeof (quant.quant_tables[0].quant_table)) != 0) {
++    *reason = "Cb and Cr quantization tables differ";
++    return JPEG_UNSUPPORTED;
++  }
++  if (!gst_v4l2_codec_jpeg_dec_huffman_equal (&huff.dc_tables[scan.
++              components[1].dc_selector],
++          &huff.dc_tables[scan.components[2].dc_selector],
++          scan.components[1].dc_selector, scan.components[2].dc_selector) ||
++      !gst_v4l2_codec_jpeg_dec_huffman_equal (&huff.ac_tables[scan.
++              components[1].ac_selector],
++          &huff.ac_tables[scan.components[2].ac_selector],
++          scan.components[1].ac_selector, scan.components[2].ac_selector)) {
++    *reason = "Cb and Cr Huffman tables differ";
++    return JPEG_UNSUPPORTED;
++  }
++
+   h0 = frame.components[0].horizontal_factor;
+   v0 = frame.components[0].vertical_factor;
+   switch (h0 << 4 | v0) {
+-- 
+2.55.0
+

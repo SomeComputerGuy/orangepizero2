@@ -147,6 +147,10 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
      rkvdec. Findings sent to the OPi5 session 2026-11-05. Open: AI trailer form (coding-assistants.rst).
 
 ### Code queue (next fresh agent when a slot frees, in order)
+- Runner results to analyse (2026-11-05 evening, harness/runner-queue/done/):
+  - 04-vp9-vectors: every vector ER, chunk c3 produced nothing. Package or env problem first (fluster bundle / plugin load), then rerun.
+  - 05-gst-jpeg-gaps: z4096x4096 not refused although the kernel has ENUM_FRAMESIZES (KSIZES=1).
+  - 06-gst-jpeg-oddsize: z33x17-422 and z15x15-444 c-ref FAIL, mj-z33x17 PSNR FAIL, norank dmesg +1055, check 1 found no v4l2sljpegdec in inspect.txt.
 - MPEG-1 MG1S coded format (OPi5 final: ~/orangepi5/work/_out/mpeg1-rk3588/UAPI-MPEG1-FOURCC.md, copy byte-for-byte; 0x5331474d,
   after MPEG2_SLICE; flag iff MG1S, reject the flags with MG2S). Cedrus series + shared FFmpeg 0304. Notes from the paused desktop
   agent: cedrus_video.c format table and switches, cedrus_dec.c:52, cedrus_hw.c:51, cedrus_mpeg2.c:79, v4l2-ioctl.c:1511.

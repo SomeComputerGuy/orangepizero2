@@ -4,17 +4,19 @@
 #   ffmpeg              V4L2 Request API (stateless decoder) hwaccels: Jernej Skrabec's v4l2request-mpeg4 series
 #                       (Kwiboo's hwaccels + VC-1 + MPEG-4) 00xx, shared with the orangepi5 build 01xx, ours 02xx
 #   mpv                 v4l2request hwdec + DRM PRIME interop; needs our ffmpeg
+#   gst-plugins-bad1.0  the orangepi5 build's v4l2codecs/kmssink set 00xx (patches/gstreamer, shared) and ours 01xx:
+#                       v4l2sljpegdec (cedrus JPEG) and jpegparse sampling-factors caps
 # Adapted from the orangepi5 project's scripts/build-media-debs.sh (same author; the method, structure and
 # the mpv/debian patches are copied from there), cut down to ffmpeg + mpv and with a build stamp so an
 # unchanged source is not rebuilt (build caching rule #1).
 # Rootless: mmdebstrap --mode=unshare + qemu-user binfmt, no sudo.
-# Usage: build-media-debs.sh [--force] [source...]     (default: ffmpeg mpv, in that order)
+# Usage: build-media-debs.sh [--force] [source...]     (default: ffmpeg mpv, in that order; gst-plugins-bad1.0 on request)
 # Output: out/debs-media/*.deb plus a Packages index (a flat apt repository that the desktop variant of
 #         userpatches/config-opiz2-printserver.conf installs from).
 #
 # patches/<dir>/*.patch are appended to debian/patches/series (upstream code,
 # applied by dpkg-source); patches/<dir>/debian/*.patch change the packaging
-# itself. <dir> is the source package name. The version gets "+opiz2.<rev>", so it sorts above the archive
+# itself. <dir> is the source package name, except gstreamer for gst-plugins-bad1.0. The version gets "+opiz2.<rev>", so it sorts above the archive
 # version it was built from, and the image pins *+opiz2* versions (etc/apt/preferences.d).
 # When Ubuntu updates one of these packages, bump its version below and rebuild.
 set -euo pipefail
@@ -84,9 +86,10 @@ JOBS=${MEDIA_JOBS:-10}         # the host is shared; qemu-user runs one CPU per 
 declare -A VERSION=(
   [ffmpeg]=7:8.1.2-2ubuntu2
   [mpv]=0.41.0-2ubuntu5
+  [gst-plugins-bad1.0]=1.28.6-1ubuntu1
 )
-declare -A REV=([ffmpeg]=2 [mpv]=1)
-declare -A PDIR=([ffmpeg]=ffmpeg [mpv]=mpv)
+declare -A REV=([ffmpeg]=2 [mpv]=1 [gst-plugins-bad1.0]=1)
+declare -A PDIR=([ffmpeg]=ffmpeg [mpv]=mpv [gst-plugins-bad1.0]=gstreamer)
 # Architecture: all sources (built with -A); the rest build their arm64 packages
 declare -A BUILD=()
 
@@ -95,7 +98,7 @@ if [ "${1:-}" = --force ]; then FORCE=1; shift; fi
 if [ $# -gt 0 ]; then
   SOURCES=("$@")
 else
-  SOURCES=(ffmpeg mpv)
+  SOURCES=(ffmpeg mpv)   # gst-plugins-bad1.0 joins after its board test (harness/research/gst-jpeg)
 fi
 
 # apt cache: apt-cacher-ng on 127.0.0.1:3142 is used if it is listening

@@ -1,0 +1,228 @@
+From 3b7818bd864697991fe0d00ceec6115411617726 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Sun, 1 Nov 2026 22:08:18 +0000
+Subject: [PATCH] v4l2codecs: vp9: Decode inter frame resolution changes in
+ place
+
+VP9 inter frames can change the frame size and then predict from the
+references at their previous size, through scaled motion compensation.
+v4l2slvp9dec only allowed that when the driver supports
+VIDIOC_REMOVE_BUFS, which lets it replace the CAPTURE buffers one by
+one; otherwise the base class dropped every frame from the change until
+the next key frame, which in streams like the vp90-2-21-resize_inter_*
+conformance vectors never comes.
+
+A frame that is not larger than the CAPTURE format does not need new
+buffers: the driver decodes it at the top-left corner of a buffer, with
+the stride and plane offsets of the format, and the references stay
+where they are. Enable non key frame format changes unconditionally
+and, when the new frame fits in the current buffers, keep the V4L2
+formats and the allocators and only renegotiate the output caps.
+decide_allocation() now keeps the current buffers whenever they exist:
+negotiate() releases them first when the V4L2 formats actually change,
+and the OUTPUT queue cannot be re-requested while streaming anyway. The
+GstVideoMeta of the output buffers describes the frame rather than the
+whole buffer (with the buffer's stride and plane offsets), as the other
+V4L2 elements do, so downstream sees the real size. A frame that does
+not fit, on a driver without VIDIOC_REMOVE_BUFS, is reported as an
+element error instead of being rejected by the driver with a misleading
+message. Drivers with VIDIOC_REMOVE_BUFS keep their current behaviour
+for frames that do not fit.
+
+Drivers must accept inter frames smaller than the CAPTURE format for
+this. This is the userspace half of the rkvdec change "media: rkvdec:
+vdpu381-vp9: allow frames smaller than the CAPTURE format", aimed at
+the 24 vp90-2-21-resize_inter_* vectors of the VP9 test suite on
+RK3588, which shrink on an inter frame.
+
+Assisted-by: Claude:claude-opus-5-5
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2codecs/gstv4l2codecvp9dec.c | 102 ++++++++++++++++++++++++++--
+ 1 file changed, 95 insertions(+), 7 deletions(-)
+
+diff --git a/sys/v4l2codecs/gstv4l2codecvp9dec.c b/sys/v4l2codecs/gstv4l2codecvp9dec.c
+index fb3c260..37609f0 100644
+--- a/sys/v4l2codecs/gstv4l2codecvp9dec.c
++++ b/sys/v4l2codecs/gstv4l2codecvp9dec.c
+@@ -123,6 +123,9 @@ struct _GstV4l2CodecVp9Dec
+   gboolean streaming;
+   gboolean copy_frames;
+   gboolean need_negotiation;
++  /* An inter frame resolution change that fits in the CAPTURE buffers:
++   * negotiate only the output caps and keep the V4L2 formats and buffers. */
++  gboolean resize_in_place;
+ 
+   struct v4l2_ctrl_vp9_frame v4l2_vp9_frame;
+   struct v4l2_ctrl_vp9_compressed_hdr v4l2_delta_probs;
+@@ -434,8 +437,11 @@ gst_v4l2_codec_vp9_dec_open (GstVideoDecoder * decoder)
+       gst_v4l2_decoder_query_control_size (self->decoder,
+       V4L2_CID_STATELESS_VP9_COMPRESSED_HDR, NULL);
+ 
+-  gst_vp9_decoder_set_non_keyframe_format_change_support (vp9dec,
+-      gst_v4l2_decoder_has_remove_bufs (self->decoder));
++  /* Inter frames may change the frame size and predict from the references
++   * at their previous size (scaled motion compensation). Frames that fit in
++   * the CAPTURE buffers are decoded in place, larger ones need the driver to
++   * replace the buffers one by one, see new_picture(). */
++  gst_vp9_decoder_set_non_keyframe_format_change_support (vp9dec, TRUE);
+ 
+   return TRUE;
+ }
+@@ -515,6 +521,15 @@ gst_v4l2_codec_vp9_dec_negotiate (GstVideoDecoder * decoder)
+ 
+   self->need_negotiation = FALSE;
+ 
++  if (self->resize_in_place) {
++    self->resize_in_place = FALSE;
++    GST_DEBUG_OBJECT (self, "Decoding %ix%i frames in the %ix%i buffers",
++        self->width, self->height,
++        GST_VIDEO_INFO_WIDTH (&self->vinfo_drm.vinfo),
++        GST_VIDEO_INFO_HEIGHT (&self->vinfo_drm.vinfo));
++    goto done;
++  }
++
+   GST_DEBUG_OBJECT (self, "Negotiate");
+ 
+   gst_v4l2_codec_vp9_dec_reset_allocation (self);
+@@ -608,10 +623,6 @@ gst_v4l2_codec_vp9_dec_decide_allocation (GstVideoDecoder * decoder,
+   guint num_bitstream;
+   gboolean has_videometa;
+ 
+-  g_clear_object (&self->src_pool);
+-  g_clear_object (&self->src_allocator);
+-  g_clear_object (&self->sink_allocator);
+-
+   has_videometa = gst_query_find_allocation_meta (query,
+       GST_VIDEO_META_API_TYPE, NULL);
+ 
+@@ -649,6 +660,19 @@ gst_v4l2_codec_vp9_dec_decide_allocation (GstVideoDecoder * decoder,
+     self->copy_frames = FALSE;
+   }
+ 
++  /* The buffers are released in negotiate() when the V4L2 formats change.
++   * Otherwise (downstream renegotiation, in-place resize) keep them: they
++   * hold the reference frames, and the OUTPUT queue cannot be re-requested
++   * while streaming. */
++  if (self->sink_allocator && self->src_allocator) {
++    GST_DEBUG_OBJECT (self, "Keeping the current decoder buffers");
++    goto done;
++  }
++
++  g_clear_object (&self->src_pool);
++  g_clear_object (&self->src_allocator);
++  g_clear_object (&self->sink_allocator);
++
+   if (gst_query_get_n_allocation_pools (query) > 0)
+     gst_query_parse_nth_allocation_pool (query, 0, NULL, NULL, &min, NULL);
+ 
+@@ -677,6 +701,7 @@ gst_v4l2_codec_vp9_dec_decide_allocation (GstVideoDecoder * decoder,
+   self->src_pool =
+       gst_v4l2_codec_pool_new (self->src_allocator, &self->vinfo_drm);
+ 
++done:
+   /* Our buffer pool is internal, we will let the base class create a video
+    * pool, and use it if we are running out of buffers or if downstream does
+    * not support GstVideoMeta */
+@@ -684,6 +709,30 @@ gst_v4l2_codec_vp9_dec_decide_allocation (GstVideoDecoder * decoder,
+       (decoder, query);
+ }
+ 
++/* Whether a frame of this size can be decoded into the CAPTURE buffers of the
++ * current format (the driver decodes it at the top-left corner, with the
++ * stride and plane offsets of the format). */
++static gboolean
++gst_v4l2_codec_vp9_dec_fits_in_buffers (GstV4l2CodecVp9Dec * self,
++    const GstVp9FrameHeader * frame_hdr)
++{
++  const GstVideoInfo *vinfo = &self->vinfo_drm.vinfo;
++
++  if (!self->streaming || !self->src_allocator)
++    return FALSE;
++
++  /* Only the frame size can change on an inter frame: the other parameters
++   * are inherited from the last key frame. */
++  if (frame_hdr->subsampling_x != self->subsampling_x ||
++      frame_hdr->subsampling_y != self->subsampling_y ||
++      frame_hdr->bit_depth != self->bit_depth ||
++      frame_hdr->profile != self->profile)
++    return FALSE;
++
++  return frame_hdr->width <= GST_VIDEO_INFO_WIDTH (vinfo) &&
++      frame_hdr->height <= GST_VIDEO_INFO_HEIGHT (vinfo);
++}
++
+ static gboolean
+ gst_v4l2_codec_vp9_dec_is_format_change (GstV4l2CodecVp9Dec * self,
+     const GstVp9FrameHeader * frame_hdr)
+@@ -751,13 +800,33 @@ gst_v4l2_codec_vp9_dec_new_picture (GstVp9Decoder * decoder,
+     GstVideoCodecFrame * frame, GstVp9Picture * picture)
+ {
+   GstV4l2CodecVp9Dec *self = GST_V4L2_CODEC_VP9_DEC (decoder);
++  const GstVp9FrameHeader *frame_hdr = &picture->frame_hdr;
++  gboolean fits = gst_v4l2_codec_vp9_dec_fits_in_buffers (self, frame_hdr);
+ 
+   self->need_negotiation =
+-      gst_v4l2_codec_vp9_dec_is_format_change (self, &picture->frame_hdr);
++      gst_v4l2_codec_vp9_dec_is_format_change (self, frame_hdr);
+ 
+   if (!self->need_negotiation)
+     return GST_FLOW_OK;
+ 
++  /* Key frames are handled in new_sequence(), so this is an inter frame
++   * changing the resolution. It predicts from the references at their
++   * previous size, which the driver can only do if their buffers survive:
++   * decode in place when the frame fits in them, else replace the buffers
++   * one by one, which needs VIDIOC_REMOVE_BUFS. */
++  if (fits) {
++    self->resize_in_place = TRUE;
++  } else if (!gst_v4l2_decoder_has_remove_bufs (self->decoder)) {
++    GST_ELEMENT_ERROR (self, STREAM, DECODE,
++        ("Unsupported resolution change on an inter frame"),
++        ("%ix%i frame %u does not fit in the %ix%i buffers and the driver "
++            "cannot replace them while streaming", frame_hdr->width,
++            frame_hdr->height, frame->system_frame_number,
++            GST_VIDEO_INFO_WIDTH (&self->vinfo_drm.vinfo),
++            GST_VIDEO_INFO_HEIGHT (&self->vinfo_drm.vinfo)));
++    return GST_FLOW_ERROR;
++  }
++
+   if (!gst_video_decoder_negotiate (GST_VIDEO_DECODER (self))) {
+     GST_ERROR_OBJECT (self, "Failed to negotiate with downstream");
+     return GST_FLOW_ERROR;
+@@ -1051,6 +1120,23 @@ gst_v4l2_codec_vp9_dec_duplicate_picture (GstVp9Decoder * decoder,
+   return new_picture;
+ }
+ 
++/* The pool describes the whole buffer in the GstVideoMeta. Make it describe
++ * the frame instead, which is smaller than the buffer after an inter frame
++ * resolution change (and by the driver's alignment otherwise), keeping the
++ * stride and plane offsets of the buffer. */
++static void
++gst_v4l2_codec_vp9_dec_set_output_meta (GstV4l2CodecVp9Dec * self,
++    GstBuffer * buffer)
++{
++  GstVideoMeta *vmeta = gst_buffer_get_video_meta (buffer);
++
++  if (!vmeta)
++    return;
++
++  vmeta->width = self->width;
++  vmeta->height = self->height;
++}
++
+ static GstFlowReturn
+ gst_v4l2_codec_vp9_dec_output_picture (GstVp9Decoder * decoder,
+     GstVideoCodecFrame * frame, GstVp9Picture * picture)
+@@ -1110,6 +1196,8 @@ gst_v4l2_codec_vp9_dec_output_picture (GstVp9Decoder * decoder,
+     goto error;
+   }
+ 
++  gst_v4l2_codec_vp9_dec_set_output_meta (self, frame->output_buffer);
++
+   if (self->copy_frames)
+     gst_v4l2_codec_vp9_dec_copy_output_buffer (self, frame);
+ 
+-- 
+2.55.0
+

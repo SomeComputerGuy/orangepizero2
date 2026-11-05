@@ -1,0 +1,1953 @@
+From e5e9f2be4dbc03c0c4aa82445aced9904dc7ab4e Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 06:30:15 +0000
+Subject: [PATCH] v4l2codecs: Add a stateless H.264 encoder
+
+Add v4l2slh264enc for encoders that implement the H.264 stateless encode
+uAPI (V4L2_CID_STATELESS_H264_ENCODE_PARAMS): the RK3588 VEPU580
+(rockchip-venc) and the Hantro H1.
+
+With that uAPI the kernel writes the parameter sets and slice headers,
+keeps the reconstructed reference picture and runs the rate control, so
+the element only sets the SPS and PPS once and describes each picture
+(slice type, IDR, frame_num, picture order count) in its request.
+
+The common part of the encoders is the abstract GstV4l2CodecBaseEnc
+class, a GstVideoEncoder that negotiates the formats, imports or copies
+the input pictures, keeps up to max-inflight requests queued (2 by
+default, so the driver always has the next picture while userspace
+completes the previous one), finishes the pictures in order and offers
+its buffer pool upstream for zero-copy input. It provides the rate
+control modes:
+
+- cqp: constant QP (qp-i, qp-p), the driver rate control disabled;
+- cbr: the driver's constant bitrate rate control, within qp-min and
+  qp-max;
+- vbr: a frame-level rate control in the element that sets the QP of
+  each picture in its request: a bits = complexity * 2^(-QP/6) model per
+  picture type, corrected by the accumulated error to the target bitrate
+  and limited by max-bitrate over one second.
+
+The H.264 encoder produces Constrained Baseline, Main or High profile
+(chosen by the downstream caps, High by default) I and P pictures with
+one reference picture, CABAC by default on Main and High, an IDR picture
+every key-int-max pictures or on request, at the lowest level that fits
+the size, frame rate and bitrate.
+
+The profile and level handling derive from the work on stateless
+encoders by Michael Grzeschik, Denis Shimizu and Paul Kocialkowski
+(gstreamer MR !5676 and the v4l2codecs/h264enc branch of Paul
+Kocialkowski), which uses the same uAPI; the element itself is new.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2codecs/gstv4l2codecbaseenc.c | 1051 ++++++++++++++++++++++++++
+ sys/v4l2codecs/gstv4l2codecbaseenc.h |  151 ++++
+ sys/v4l2codecs/gstv4l2codech264enc.c |  538 +++++++++++++
+ sys/v4l2codecs/gstv4l2codech264enc.h |   34 +
+ sys/v4l2codecs/meson.build           |    6 +-
+ sys/v4l2codecs/plugin.c              |   35 +
+ 6 files changed, 1814 insertions(+), 1 deletion(-)
+ create mode 100644 sys/v4l2codecs/gstv4l2codecbaseenc.c
+ create mode 100644 sys/v4l2codecs/gstv4l2codecbaseenc.h
+ create mode 100644 sys/v4l2codecs/gstv4l2codech264enc.c
+ create mode 100644 sys/v4l2codecs/gstv4l2codech264enc.h
+
+diff --git a/sys/v4l2codecs/gstv4l2codecbaseenc.c b/sys/v4l2codecs/gstv4l2codecbaseenc.c
+new file mode 100644
+index 0000000..60332c5
+--- /dev/null
++++ b/sys/v4l2codecs/gstv4l2codecbaseenc.c
+@@ -0,0 +1,1051 @@
++/* GStreamer
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++/*
++ * Common part of the V4L2 stateless encoders (v4l2slh264enc, v4l2slh265enc).
++ *
++ * The stateless encode uAPIs this targets are "kernel-driven": the kernel
++ * writes the parameter sets and slice headers and tracks the reference
++ * pictures, and it runs the bitrate control for CBR. Userspace configures
++ * the sequence with SPS/PPS controls and describes each picture (type,
++ * reference marking, POC) in a request. This class does the format and
++ * buffer handling, the GOP structure, the rate control setup (constant QP
++ * and CBR in the kernel, a frame-level VBR in userspace with per-request
++ * QPs), and keeps a few requests queued so that the hardware never waits
++ * for userspace between pictures.
++ */
++
++#ifdef HAVE_CONFIG_H
++#include <config.h>
++#endif
++
++#include "gstv4l2codecbaseenc.h"
++#include "linux/v4l2-controls.h"
++
++#include <math.h>
++#include <string.h>
++
++GST_DEBUG_CATEGORY_STATIC (v4l2_base_enc_debug);
++#define GST_CAT_DEFAULT v4l2_base_enc_debug
++
++#define DEFAULT_RATE_CONTROL GST_V4L2_ENC_RC_CBR
++#define DEFAULT_BITRATE 0
++#define DEFAULT_MAX_BITRATE 0
++#define DEFAULT_QP_I 26
++#define DEFAULT_QP_P 28
++#define DEFAULT_QP_MIN 10
++#define DEFAULT_QP_MAX 51
++#define DEFAULT_KEY_INT_MAX 0
++#define DEFAULT_MAX_INFLIGHT 2
++#define MAX_INFLIGHT 8
++
++#define REQUEST_TIMEOUT (2 * GST_SECOND)
++
++enum
++{
++  PROP_0,
++  PROP_RATE_CONTROL,
++  PROP_BITRATE,
++  PROP_MAX_BITRATE,
++  PROP_QP_I,
++  PROP_QP_P,
++  PROP_QP_MIN,
++  PROP_QP_MAX,
++  PROP_KEY_INT_MAX,
++  PROP_MAX_INFLIGHT,
++};
++
++enum
++{
++  PROP_DEVICE_0 = 0x100,
++};
++
++#define GST_TYPE_V4L2_ENC_RATE_CONTROL (gst_v4l2_enc_rate_control_get_type ())
++static GType
++gst_v4l2_enc_rate_control_get_type (void)
++{
++  static const GEnumValue values[] = {
++    {GST_V4L2_ENC_RC_CQP, "Constant QP (qp-i, qp-p)", "cqp"},
++    {GST_V4L2_ENC_RC_CBR, "Constant bitrate (driver rate control)", "cbr"},
++    {GST_V4L2_ENC_RC_VBR, "Variable bitrate (frame-level, in the element)",
++        "vbr"},
++    {0, NULL, NULL},
++  };
++  static GType type = 0;
++
++  if (g_once_init_enter (&type)) {
++    GType t = g_enum_register_static ("GstV4l2EncRateControl", values);
++    g_once_init_leave (&type, t);
++  }
++
++  return type;
++}
++
++#define parent_class gst_v4l2_codec_base_enc_parent_class
++G_DEFINE_ABSTRACT_TYPE_WITH_CODE (GstV4l2CodecBaseEnc, gst_v4l2_codec_base_enc,
++    GST_TYPE_VIDEO_ENCODER,
++    GST_DEBUG_CATEGORY_INIT (v4l2_base_enc_debug, "v4l2codecs-enc", 0,
++        "V4L2 stateless encoder"));
++
++static void
++enc_frame_free (GstV4l2CodecEncFrame * f)
++{
++  if (f->request)
++    gst_v4l2_encode_request_recycle (f->request);
++  if (f->frame)
++    gst_video_codec_frame_unref (f->frame);
++  g_free (f);
++}
++
++static void
++gst_v4l2_codec_base_enc_drop_pending (GstV4l2CodecBaseEnc * self)
++{
++  GstV4l2CodecEncFrame *f;
++
++  while ((f = g_queue_pop_head (&self->pending)))
++    enc_frame_free (f);
++}
++
++static void
++gst_v4l2_codec_base_enc_set_flushing (GstV4l2CodecBaseEnc * self,
++    gboolean flushing)
++{
++  if (self->sink_allocator)
++    gst_v4l2_codec_allocator_set_flushing (self->sink_allocator, flushing);
++  if (self->src_allocator)
++    gst_v4l2_codec_allocator_set_flushing (self->src_allocator, flushing);
++}
++
++static void
++gst_v4l2_codec_base_enc_reset_allocation (GstV4l2CodecBaseEnc * self)
++{
++  if (self->sink_allocator) {
++    gst_v4l2_codec_allocator_detach (self->sink_allocator);
++    g_clear_object (&self->sink_pool);
++    g_clear_object (&self->sink_allocator);
++  }
++
++  if (self->src_allocator) {
++    gst_v4l2_codec_allocator_detach (self->src_allocator);
++    g_clear_object (&self->src_pool);
++    g_clear_object (&self->src_allocator);
++  }
++}
++
++static void
++gst_v4l2_codec_base_enc_streamoff (GstV4l2CodecBaseEnc * self)
++{
++  if (!self->streaming)
++    return;
++
++  gst_v4l2_encoder_streamoff (self->encoder, GST_PAD_SINK);
++  gst_v4l2_encoder_streamoff (self->encoder, GST_PAD_SRC);
++  self->streaming = FALSE;
++  /* STREAMOFF cancelled whatever was still queued. */
++  gst_v4l2_codec_base_enc_drop_pending (self);
++}
++
++static gboolean
++gst_v4l2_codec_base_enc_open (GstVideoEncoder * encoder)
++{
++  GstV4l2CodecBaseEnc *self = GST_V4L2_CODEC_BASE_ENC (encoder);
++
++  if (!gst_v4l2_encoder_open (self->encoder)) {
++    GST_ELEMENT_ERROR (self, RESOURCE, OPEN_READ_WRITE,
++        ("Failed to open the encoder"),
++        ("gst_v4l2_encoder_open() failed: %s", g_strerror (errno)));
++    return FALSE;
++  }
++
++  return TRUE;
++}
++
++static gboolean
++gst_v4l2_codec_base_enc_close (GstVideoEncoder * encoder)
++{
++  GstV4l2CodecBaseEnc *self = GST_V4L2_CODEC_BASE_ENC (encoder);
++
++  gst_v4l2_encoder_close (self->encoder);
++
++  return TRUE;
++}
++
++static gboolean
++gst_v4l2_codec_base_enc_start (GstVideoEncoder * encoder)
++{
++  GstV4l2CodecBaseEnc *self = GST_V4L2_CODEC_BASE_ENC (encoder);
++
++  self->next_id = 1;
++  self->last_id = 0;
++  self->frames_since_idr = 0;
++  self->idr_count = 0;
++  self->force_idr = TRUE;
++  self->total_bytes = 0;
++  self->total_frames = 0;
++  self->copied_frames = 0;
++
++  return TRUE;
++}
++
++static gboolean
++gst_v4l2_codec_base_enc_stop (GstVideoEncoder * encoder)
++{
++  GstV4l2CodecBaseEnc *self = GST_V4L2_CODEC_BASE_ENC (encoder);
++
++  if (self->total_frames)
++    GST_INFO_OBJECT (self, "Encoded %" G_GUINT64_FORMAT " pictures (%"
++        G_GUINT64_FORMAT " copied), %" G_GUINT64_FORMAT " bytes, %.1f kbit/s",
++        self->total_frames, self->copied_frames, self->total_bytes,
++        self->total_bytes * 8.0 * self->fps_n / self->fps_d /
++        self->total_frames / 1000.0);
++
++  gst_v4l2_codec_base_enc_streamoff (self);
++  gst_v4l2_codec_base_enc_reset_allocation (self);
++  g_clear_pointer (&self->output_state, gst_video_codec_state_unref);
++  g_clear_pointer (&self->vbr_win, g_free);
++
++  return TRUE;
++}
++
++static GstCaps *
++gst_v4l2_codec_base_enc_getcaps (GstVideoEncoder * encoder, GstCaps * filter)
++{
++  GstV4l2CodecBaseEnc *self = GST_V4L2_CODEC_BASE_ENC (encoder);
++  GstV4l2CodecBaseEncClass *klass = GST_V4L2_CODEC_BASE_ENC_GET_CLASS (self);
++  GstCaps *caps = NULL, *result;
++  struct v4l2_frmsize_stepwise range;
++
++  caps = gst_v4l2_encoder_list_sink_formats (self->encoder);
++  if (caps && gst_v4l2_encoder_get_frame_size_range (self->encoder,
++          klass->coded_fourcc, &range)) {
++    GstStructure *s = gst_caps_get_structure (caps, 0);
++
++    if (range.min_width == range.max_width)
++      gst_structure_set (s, "width", G_TYPE_INT, range.min_width, NULL);
++    else
++      gst_structure_set (s, "width", GST_TYPE_INT_RANGE, range.min_width,
++          range.max_width, NULL);
++    if (range.min_height == range.max_height)
++      gst_structure_set (s, "height", G_TYPE_INT, range.min_height, NULL);
++    else
++      gst_structure_set (s, "height", GST_TYPE_INT_RANGE, range.min_height,
++          range.max_height, NULL);
++  }
++
++  result = gst_video_encoder_proxy_getcaps (encoder, caps, filter);
++  gst_clear_caps (&caps);
++
++  GST_DEBUG_OBJECT (self, "Returning sink caps %" GST_PTR_FORMAT, result);
++
++  return result;
++}
++
++static gboolean
++gst_v4l2_codec_base_enc_propose_allocation (GstVideoEncoder * encoder,
++    GstQuery * query)
++{
++  GstV4l2CodecBaseEnc *self = GST_V4L2_CODEC_BASE_ENC (encoder);
++  gboolean need_pool;
++
++  gst_query_parse_allocation (query, NULL, &need_pool);
++
++  /* Pictures written into the encoder's own buffers are imported without a
++   * copy. */
++  if (need_pool && self->sink_pool)
++    gst_query_add_allocation_pool (query, GST_BUFFER_POOL (self->sink_pool),
++        self->vinfo_drm.vinfo.size, 0, 0);
++  gst_query_add_allocation_meta (query, GST_VIDEO_META_API_TYPE, NULL);
++
++  return GST_VIDEO_ENCODER_CLASS (parent_class)->propose_allocation (encoder,
++      query);
++}
++
++static gboolean
++gst_v4l2_codec_base_enc_set_rc_controls (GstV4l2CodecBaseEnc * self)
++{
++  GstV4l2CodecBaseEncClass *klass = GST_V4L2_CODEC_BASE_ENC_GET_CLASS (self);
++  struct v4l2_query_ext_ctrl q;
++  struct v4l2_ext_control c[8];
++  guint n = 0;
++
++  memset (c, 0, sizeof (c));
++  c[n].id = klass->cid_min_qp;
++  c[n++].value = self->qp_min;
++  c[n].id = klass->cid_max_qp;
++  c[n++].value = self->qp_max;
++
++  switch (self->rate_control) {
++    case GST_V4L2_ENC_RC_CBR:
++      c[n].id = V4L2_CID_MPEG_VIDEO_FRAME_RC_ENABLE;
++      c[n++].value = 1;
++      c[n].id = V4L2_CID_MPEG_VIDEO_BITRATE_MODE;
++      c[n++].value = V4L2_MPEG_VIDEO_BITRATE_MODE_CBR;
++      c[n].id = V4L2_CID_MPEG_VIDEO_BITRATE;
++      c[n++].value = self->bitrate;
++      break;
++    case GST_V4L2_ENC_RC_CQP:
++    case GST_V4L2_ENC_RC_VBR:
++      c[n].id = V4L2_CID_MPEG_VIDEO_FRAME_RC_ENABLE;
++      c[n++].value = 0;
++      c[n].id = klass->cid_i_qp;
++      c[n++].value = self->qp_i;
++      c[n].id = klass->cid_p_qp;
++      c[n++].value = self->qp_p;
++      break;
++  }
++
++  if (gst_v4l2_encoder_query_control (self->encoder,
++          V4L2_CID_MPEG_VIDEO_PREPEND_SPSPPS_TO_IDR, &q)) {
++    c[n].id = V4L2_CID_MPEG_VIDEO_PREPEND_SPSPPS_TO_IDR;
++    c[n++].value = 1;
++  }
++
++  if (self->rate_control == GST_V4L2_ENC_RC_CBR &&
++      !gst_v4l2_encoder_query_menu (self->encoder,
++          V4L2_CID_MPEG_VIDEO_BITRATE_MODE, V4L2_MPEG_VIDEO_BITRATE_MODE_CBR)) {
++    GST_ELEMENT_ERROR (self, CORE, NEGOTIATION,
++        ("The driver has no constant bitrate control."), (NULL));
++    return FALSE;
++  }
++
++  if (!gst_v4l2_encoder_set_controls (self->encoder, NULL, c, n)) {
++    GST_ELEMENT_ERROR (self, RESOURCE, SETTINGS,
++        ("Driver did not accept the rate control settings."), (NULL));
++    return FALSE;
++  }
++
++  return TRUE;
++}
++
++static void
++gst_v4l2_codec_base_enc_latch_properties (GstV4l2CodecBaseEnc * self)
++{
++  GstV4l2CodecBaseEncClass *klass = GST_V4L2_CODEC_BASE_ENC_GET_CLASS (self);
++  gdouble pixels_per_s;
++
++  GST_OBJECT_LOCK (self);
++  self->rate_control = self->prop_rate_control;
++  self->bitrate = self->prop_bitrate * 1000;
++  self->max_bitrate = self->prop_max_bitrate * 1000;
++  self->qp_i = self->prop_qp_i;
++  self->qp_p = self->prop_qp_p;
++  self->qp_min = MIN (self->prop_qp_min, self->prop_qp_max);
++  self->qp_max = MAX (self->prop_qp_min, self->prop_qp_max);
++  self->key_int = self->prop_key_int_max;
++  self->max_inflight = self->prop_max_inflight;
++  GST_OBJECT_UNLOCK (self);
++
++  pixels_per_s = (gdouble) GST_VIDEO_INFO_WIDTH (&self->in_info) *
++      GST_VIDEO_INFO_HEIGHT (&self->in_info) * self->fps_n / self->fps_d;
++  if (!self->bitrate)
++    self->bitrate = MIN (pixels_per_s * klass->default_bpp, G_MAXINT32);
++  if (!self->max_bitrate || self->max_bitrate < self->bitrate)
++    self->max_bitrate = MIN ((guint64) self->bitrate * 3 / 2, G_MAXINT32);
++  /* Default: an IDR picture every 2 seconds */
++  if (!self->key_int)
++    self->key_int = MAX (1, (2 * self->fps_n + self->fps_d / 2) / self->fps_d);
++  self->qp_i = CLAMP (self->qp_i, self->qp_min, self->qp_max);
++  self->qp_p = CLAMP (self->qp_p, self->qp_min, self->qp_max);
++
++  GST_INFO_OBJECT (self, "rate control %d, bitrate %u (max %u), qp i/p %u/%u "
++      "[%u, %u], key-int %u, in flight %u", self->rate_control, self->bitrate,
++      self->max_bitrate, self->qp_i, self->qp_p, self->qp_min, self->qp_max,
++      self->key_int, self->max_inflight);
++}
++
++/* Frame-level VBR: a rate model bits = complexity * 2^(-qp/6) per picture
++ * type, the P QP chosen so that a GOP meets the target, a correction from
++ * the accumulated error over about two seconds, a peak constraint over one
++ * second, and at most one QP step per picture. */
++static void
++vbr_reset (GstV4l2CodecBaseEnc * self)
++{
++  gdouble bpp = (gdouble) self->bitrate * self->fps_d / self->fps_n /
++      (GST_VIDEO_INFO_WIDTH (&self->in_info) *
++      GST_VIDEO_INFO_HEIGHT (&self->in_info));
++
++  /* Rough start: QP 26 at 0.15 bit per pixel for an average picture */
++  self->vbr_qp = CLAMP (26.0 - 6.0 * log2 (bpp / 0.15), self->qp_min,
++      self->qp_max);
++  self->vbr_cplx[0] = self->vbr_cplx[1] = 0;
++  self->vbr_err = 0;
++  g_free (self->vbr_win);
++  self->vbr_win_len = MAX (1, self->fps_n / self->fps_d);
++  self->vbr_win = g_new0 (guint64, self->vbr_win_len);
++  self->vbr_win_pos = 0;
++  self->vbr_win_sum = 0;
++}
++
++static gint
++vbr_pick_qp (GstV4l2CodecBaseEnc * self, gboolean idr)
++{
++  gdouble target = (gdouble) self->bitrate * self->fps_d / self->fps_n;
++  gdouble n = self->key_int, qp = self->vbr_qp, want;
++  gdouble ci = self->vbr_cplx[0], cp = self->vbr_cplx[1];
++  gdouble window = 2.0 * self->fps_n / self->fps_d;
++  gdouble peak = (gdouble) self->max_bitrate;
++
++  if (ci > 0 || cp > 0) {
++    if (cp <= 0)
++      cp = ci / 4;
++    if (ci <= 0)
++      ci = cp * 4;
++    /* I pictures are coded 3 QP lower than P pictures */
++    want = 6.0 * log2 ((ci * pow (2.0, 0.5) + (n - 1) * cp) / (n * target));
++    want += 6.0 * log2 (MAX (0.25, 1.0 + self->vbr_err / (window * target)));
++    if (self->vbr_win_sum > peak)
++      want += 2;
++    want = CLAMP (want, self->qp_min, self->qp_max);
++    /* Smooth: one step per picture */
++    qp += CLAMP (want - qp, -1.0, 1.0);
++    self->vbr_qp = qp;
++  }
++
++  qp = idr ? qp - 3 : qp;
++  return CLAMP ((gint) lround (qp), (gint) self->qp_min, (gint) self->qp_max);
++}
++
++static void
++vbr_record (GstV4l2CodecBaseEnc * self, gboolean idr, gint qp, gsize bytes)
++{
++  gdouble target = (gdouble) self->bitrate * self->fps_d / self->fps_n;
++  gdouble bits = bytes * 8.0;
++  gdouble c = bits * pow (2.0, qp / 6.0);
++  gdouble window = 2.0 * self->fps_n / self->fps_d;
++  gint t = idr ? 0 : 1;
++
++  if (self->vbr_cplx[t] <= 0)
++    self->vbr_cplx[t] = c;
++  else
++    self->vbr_cplx[t] += (c - self->vbr_cplx[t]) * (idr ? 0.5 : 0.2);
++
++  self->vbr_err = self->vbr_err * (1.0 - 1.0 / window) + (bits - target);
++
++  self->vbr_win_sum -= self->vbr_win[self->vbr_win_pos];
++  self->vbr_win[self->vbr_win_pos] = bytes * 8;
++  self->vbr_win_sum += bytes * 8;
++  self->vbr_win_pos = (self->vbr_win_pos + 1) % self->vbr_win_len;
++}
++
++static GstFlowReturn gst_v4l2_codec_base_enc_complete_oldest (GstV4l2CodecBaseEnc * self);
++
++static gboolean
++gst_v4l2_codec_base_enc_set_format (GstVideoEncoder * encoder,
++    GstVideoCodecState * state)
++{
++  GstV4l2CodecBaseEnc *self = GST_V4L2_CODEC_BASE_ENC (encoder);
++  GstV4l2CodecBaseEncClass *klass = GST_V4L2_CODEC_BASE_ENC_GET_CLASS (self);
++  GstClockTime latency;
++  GstCaps *caps;
++  guint pool_size;
++
++  GST_DEBUG_OBJECT (self, "Input caps %" GST_PTR_FORMAT, state->caps);
++
++  /* Finish the pictures of the previous format first. */
++  while (self->streaming && self->pending.length)
++    if (gst_v4l2_codec_base_enc_complete_oldest (self) != GST_FLOW_OK)
++      break;
++  gst_v4l2_codec_base_enc_streamoff (self);
++  gst_v4l2_codec_base_enc_reset_allocation (self);
++
++  self->in_info = state->info;
++  self->fps_n = GST_VIDEO_INFO_FPS_N (&state->info);
++  self->fps_d = GST_VIDEO_INFO_FPS_D (&state->info);
++  if (self->fps_n <= 0 || self->fps_d <= 0) {
++    self->fps_n = 30;
++    self->fps_d = 1;
++  }
++
++  if (!gst_v4l2_encoder_set_src_fmt (self->encoder, klass->coded_fourcc,
++          GST_VIDEO_INFO_WIDTH (&state->info),
++          GST_VIDEO_INFO_HEIGHT (&state->info))) {
++    GST_ELEMENT_ERROR (self, CORE, NEGOTIATION, ("Unsupported coded format"),
++        ("The driver rejected %" GST_FOURCC_FORMAT " %dx%d",
++            GST_FOURCC_ARGS (klass->coded_fourcc),
++            GST_VIDEO_INFO_WIDTH (&state->info),
++            GST_VIDEO_INFO_HEIGHT (&state->info)));
++    return FALSE;
++  }
++
++  if (!gst_v4l2_encoder_select_sink_format (self->encoder, &self->in_info,
++          &self->vinfo_drm)) {
++    GST_ELEMENT_ERROR (self, CORE, NEGOTIATION, ("Unsupported input format"),
++        ("The driver rejected %" GST_PTR_FORMAT, state->caps));
++    return FALSE;
++  }
++
++  /* The kernel writes the VUI timing from it. */
++  gst_v4l2_encoder_set_fps (self->encoder, &self->in_info);
++
++  gst_v4l2_codec_base_enc_latch_properties (self);
++  vbr_reset (self);
++
++  caps = klass->negotiate_codec (self, state);
++  if (!caps)
++    return FALSE;
++
++  g_clear_pointer (&self->output_state, gst_video_codec_state_unref);
++  self->output_state = gst_video_encoder_set_output_state (encoder, caps,
++      state);
++  if (!gst_video_encoder_negotiate (encoder)) {
++    GST_ELEMENT_ERROR (self, CORE, NEGOTIATION, (NULL),
++        ("Downstream did not accept %" GST_PTR_FORMAT,
++            self->output_state->caps));
++    return FALSE;
++  }
++
++  if (!gst_v4l2_codec_base_enc_set_rc_controls (self))
++    return FALSE;
++
++  if (!klass->configure (self))
++    return FALSE;
++
++  pool_size = self->max_inflight + 3;
++  self->sink_allocator = gst_v4l2_codec_encoder_allocator_new (self->encoder,
++      GST_PAD_SINK, pool_size);
++  if (!self->sink_allocator) {
++    GST_ELEMENT_ERROR (self, RESOURCE, NO_SPACE_LEFT,
++        ("Not enough memory to allocate picture buffers."), (NULL));
++    return FALSE;
++  }
++  self->sink_pool = gst_v4l2_codec_pool_new (self->sink_allocator,
++      &self->vinfo_drm);
++
++  self->src_allocator = gst_v4l2_codec_encoder_allocator_new (self->encoder,
++      GST_PAD_SRC, self->max_inflight + 1);
++  if (!self->src_allocator) {
++    GST_ELEMENT_ERROR (self, RESOURCE, NO_SPACE_LEFT,
++        ("Not enough memory to allocate bitstream buffers."), (NULL));
++    gst_v4l2_codec_base_enc_reset_allocation (self);
++    return FALSE;
++  }
++  self->src_pool = gst_v4l2_codec_pool_new (self->src_allocator,
++      &self->vinfo_drm);
++
++  if (!gst_v4l2_encoder_streamon (self->encoder, GST_PAD_SINK) ||
++      !gst_v4l2_encoder_streamon (self->encoder, GST_PAD_SRC)) {
++    GST_ELEMENT_ERROR (self, RESOURCE, FAILED,
++        ("Could not start the encoder."), ("VIDIOC_STREAMON failed: %s",
++            g_strerror (errno)));
++    return FALSE;
++  }
++  self->streaming = TRUE;
++  self->force_idr = TRUE;
++
++  latency = gst_util_uint64_scale (self->max_inflight * GST_SECOND,
++      self->fps_d, self->fps_n);
++  gst_video_encoder_set_latency (encoder, latency, latency);
++
++  return TRUE;
++}
++
++static GstFlowReturn
++gst_v4l2_codec_base_enc_complete_oldest (GstV4l2CodecBaseEnc * self)
++{
++  GstV4l2CodecBaseEncClass *klass = GST_V4L2_CODEC_BASE_ENC_GET_CLASS (self);
++  GstVideoEncoder *venc = GST_VIDEO_ENCODER (self);
++  GstV4l2CodecEncFrame *f = g_queue_pop_head (&self->pending);
++  GstVideoCodecFrame *frame;
++  guint32 bytesused, flags;
++  GstMapInfo in, out;
++  GstBuffer *bitstream;
++  GstFlowReturn ret;
++
++  if (!f)
++    return GST_FLOW_OK;
++
++  if (!gst_v4l2_encode_request_wait (f->request, REQUEST_TIMEOUT, &bytesused,
++          &flags) || !bytesused) {
++    GST_ELEMENT_ERROR (self, STREAM, ENCODE, ("Failed to encode a picture."),
++        ("Picture %" G_GUINT64_FORMAT " failed, %u bytes", f->id, bytesused));
++    enc_frame_free (f);
++    return GST_FLOW_ERROR;
++  }
++
++  if (klass->frame_done)
++    klass->frame_done (self, f);
++
++  frame = f->frame;
++  f->frame = NULL;
++
++  ret = gst_video_encoder_allocate_output_frame (venc, frame, bytesused);
++  if (ret != GST_FLOW_OK) {
++    enc_frame_free (f);
++    gst_video_encoder_finish_frame (venc, frame);
++    return ret;
++  }
++
++  bitstream = gst_v4l2_encode_request_get_bitstream (f->request);
++  if (!gst_buffer_map (bitstream, &in, GST_MAP_READ)) {
++    enc_frame_free (f);
++    gst_video_codec_frame_unref (frame);
++    return GST_FLOW_ERROR;
++  }
++  gst_buffer_map (frame->output_buffer, &out, GST_MAP_WRITE);
++  memcpy (out.data, in.data, MIN (bytesused, in.size));
++  gst_buffer_unmap (frame->output_buffer, &out);
++  gst_buffer_unmap (bitstream, &in);
++
++  if (self->rate_control == GST_V4L2_ENC_RC_VBR)
++    vbr_record (self, f->idr, f->qp, bytesused);
++
++  GST_LOG_OBJECT (self, "Picture %" G_GUINT64_FORMAT " %c: %u bytes, qp %d, "
++      "average qp %d", f->id, f->idr ? 'I' : 'P', bytesused, f->qp, f->avg_qp);
++
++  self->total_bytes += bytesused;
++  self->total_frames++;
++
++  if (f->idr) {
++    GST_VIDEO_CODEC_FRAME_SET_SYNC_POINT (frame);
++    GST_BUFFER_FLAG_UNSET (frame->output_buffer, GST_BUFFER_FLAG_DELTA_UNIT);
++  } else {
++    GST_VIDEO_CODEC_FRAME_UNSET_SYNC_POINT (frame);
++    GST_BUFFER_FLAG_SET (frame->output_buffer, GST_BUFFER_FLAG_DELTA_UNIT);
++  }
++  /* No reordering */
++  frame->dts = frame->pts;
++
++  enc_frame_free (f);
++
++  return gst_video_encoder_finish_frame (venc, frame);
++}
++
++static GstFlowReturn
++gst_v4l2_codec_base_enc_copy_input (GstV4l2CodecBaseEnc * self,
++    GstVideoCodecFrame * frame, GstBuffer ** out)
++{
++  GstVideoFrame src, dst;
++  GstBuffer *buffer = NULL;
++  GstFlowReturn flow;
++  gboolean ok = FALSE;
++
++  flow = gst_buffer_pool_acquire_buffer (GST_BUFFER_POOL (self->sink_pool),
++      &buffer, NULL);
++  if (flow != GST_FLOW_OK)
++    return flow;
++
++  if (gst_video_frame_map (&src, &self->in_info, frame->input_buffer,
++          GST_MAP_READ)) {
++    if (gst_video_frame_map (&dst, &self->vinfo_drm.vinfo, buffer,
++            GST_MAP_WRITE)) {
++      ok = gst_video_frame_copy (&dst, &src);
++      gst_video_frame_unmap (&dst);
++    }
++    gst_video_frame_unmap (&src);
++  }
++
++  if (!ok) {
++    gst_buffer_unref (buffer);
++    GST_ELEMENT_ERROR (self, STREAM, ENCODE,
++        ("Failed to copy the picture into the encoder's buffer."), (NULL));
++    return GST_FLOW_ERROR;
++  }
++
++  *out = buffer;
++  return GST_FLOW_OK;
++}
++
++static GstFlowReturn
++gst_v4l2_codec_base_enc_handle_frame (GstVideoEncoder * encoder,
++    GstVideoCodecFrame * frame)
++{
++  GstV4l2CodecBaseEnc *self = GST_V4L2_CODEC_BASE_ENC (encoder);
++  GstV4l2CodecBaseEncClass *klass = GST_V4L2_CODEC_BASE_ENC_GET_CLASS (self);
++  GstV4l2CodecEncFrame *f;
++  GstBuffer *pic = NULL, *bitstream = NULL;
++  GstFlowReturn ret = GST_FLOW_OK;
++
++  if (!self->streaming) {
++    gst_video_codec_frame_unref (frame);
++    return GST_FLOW_NOT_NEGOTIATED;
++  }
++
++  f = g_new0 (GstV4l2CodecEncFrame, 1);
++  f->frame = frame;
++  f->qp = -1;
++  f->avg_qp = -1;
++  f->id = self->next_id++;
++  f->prev_id = self->last_id;
++
++  if (self->force_idr || GST_VIDEO_CODEC_FRAME_IS_FORCE_KEYFRAME (frame) ||
++      self->frames_since_idr >= self->key_int) {
++    f->idr = TRUE;
++    self->frames_since_idr = 0;
++    self->force_idr = FALSE;
++    f->idr_count = self->idr_count++;
++  } else {
++    f->idr_count = self->idr_count - 1;
++  }
++  f->poc = self->frames_since_idr++;
++  self->last_id = f->id;
++
++  if (gst_v4l2_encoder_can_import (self->encoder, frame->input_buffer)) {
++    pic = gst_buffer_ref (frame->input_buffer);
++  } else {
++    GST_LOG_OBJECT (self, "Copying the picture, it cannot be imported");
++    self->copied_frames++;
++    ret = gst_v4l2_codec_base_enc_copy_input (self, frame, &pic);
++    if (ret != GST_FLOW_OK) {
++      GST_DEBUG_OBJECT (self, "No picture buffer: %s", gst_flow_get_name (ret));
++      goto drop;
++    }
++  }
++
++  ret = gst_buffer_pool_acquire_buffer (GST_BUFFER_POOL (self->src_pool),
++      &bitstream, NULL);
++  if (ret != GST_FLOW_OK)
++    goto drop;
++
++  f->request = gst_v4l2_encoder_alloc_request (self->encoder, f->id, pic,
++      bitstream);
++  gst_clear_buffer (&pic);
++  gst_clear_buffer (&bitstream);
++  if (!f->request) {
++    GST_ELEMENT_ERROR (self, RESOURCE, NO_SPACE_LEFT,
++        ("Failed to allocate a media request object."), (NULL));
++    ret = GST_FLOW_ERROR;
++    goto drop;
++  }
++
++  switch (self->rate_control) {
++    case GST_V4L2_ENC_RC_CQP:
++      f->qp = f->idr ? self->qp_i : self->qp_p;
++      break;
++    case GST_V4L2_ENC_RC_VBR:{
++      struct v4l2_ext_control c[2] = { {0} };
++
++      f->qp = vbr_pick_qp (self, f->idr);
++      c[0].id = klass->cid_i_qp;
++      c[0].value = f->qp;
++      c[1].id = klass->cid_p_qp;
++      c[1].value = f->qp;
++      if (!gst_v4l2_encoder_set_controls (self->encoder, f->request, c, 2)) {
++        GST_ELEMENT_ERROR (self, RESOURCE, WRITE,
++            ("Driver did not accept the picture QP."), (NULL));
++        ret = GST_FLOW_ERROR;
++        goto drop;
++      }
++      break;
++    }
++    case GST_V4L2_ENC_RC_CBR:
++      break;
++  }
++
++  if (!klass->prepare_frame (self, f)) {
++    ret = GST_FLOW_ERROR;
++    goto drop;
++  }
++
++  if (!gst_v4l2_encode_request_queue (f->request)) {
++    GST_ELEMENT_ERROR (self, RESOURCE, WRITE,
++        ("Driver did not accept the encode request."), (NULL));
++    ret = GST_FLOW_ERROR;
++    goto drop;
++  }
++
++  g_queue_push_tail (&self->pending, f);
++
++  while (ret == GST_FLOW_OK && self->pending.length >= self->max_inflight)
++    ret = gst_v4l2_codec_base_enc_complete_oldest (self);
++
++  return ret;
++
++drop:
++  gst_clear_buffer (&pic);
++  gst_clear_buffer (&bitstream);
++  f->frame = NULL;
++  enc_frame_free (f);
++  /* An IDR that was not sent must be sent again. */
++  self->force_idr = TRUE;
++  gst_video_encoder_finish_frame (encoder, frame);
++  return ret;
++}
++
++static GstFlowReturn
++gst_v4l2_codec_base_enc_finish (GstVideoEncoder * encoder)
++{
++  GstV4l2CodecBaseEnc *self = GST_V4L2_CODEC_BASE_ENC (encoder);
++  GstFlowReturn ret = GST_FLOW_OK;
++
++  while (ret == GST_FLOW_OK && self->pending.length)
++    ret = gst_v4l2_codec_base_enc_complete_oldest (self);
++
++  return ret;
++}
++
++static gboolean
++gst_v4l2_codec_base_enc_flush (GstVideoEncoder * encoder)
++{
++  GstV4l2CodecBaseEnc *self = GST_V4L2_CODEC_BASE_ENC (encoder);
++
++  GST_DEBUG_OBJECT (self, "Flushing");
++
++  if (self->streaming) {
++    gst_v4l2_codec_base_enc_streamoff (self);
++    if (gst_v4l2_encoder_streamon (self->encoder, GST_PAD_SINK) &&
++        gst_v4l2_encoder_streamon (self->encoder, GST_PAD_SRC))
++      self->streaming = TRUE;
++  }
++  gst_v4l2_codec_base_enc_set_flushing (self, FALSE);
++  self->force_idr = TRUE;
++
++  return TRUE;
++}
++
++static gboolean
++gst_v4l2_codec_base_enc_sink_event (GstVideoEncoder * encoder,
++    GstEvent * event)
++{
++  GstV4l2CodecBaseEnc *self = GST_V4L2_CODEC_BASE_ENC (encoder);
++
++  if (GST_EVENT_TYPE (event) == GST_EVENT_FLUSH_START)
++    gst_v4l2_codec_base_enc_set_flushing (self, TRUE);
++
++  return GST_VIDEO_ENCODER_CLASS (parent_class)->sink_event (encoder, event);
++}
++
++static GstStateChangeReturn
++gst_v4l2_codec_base_enc_change_state (GstElement * element,
++    GstStateChange transition)
++{
++  GstV4l2CodecBaseEnc *self = GST_V4L2_CODEC_BASE_ENC (element);
++
++  if (transition == GST_STATE_CHANGE_PAUSED_TO_READY)
++    gst_v4l2_codec_base_enc_set_flushing (self, TRUE);
++
++  return GST_ELEMENT_CLASS (parent_class)->change_state (element, transition);
++}
++
++static void
++gst_v4l2_codec_base_enc_set_property (GObject * object, guint prop_id,
++    const GValue * value, GParamSpec * pspec)
++{
++  GstV4l2CodecBaseEnc *self = GST_V4L2_CODEC_BASE_ENC (object);
++
++  GST_OBJECT_LOCK (self);
++  switch (prop_id) {
++    case PROP_RATE_CONTROL:
++      self->prop_rate_control = g_value_get_enum (value);
++      break;
++    case PROP_BITRATE:
++      self->prop_bitrate = g_value_get_uint (value);
++      break;
++    case PROP_MAX_BITRATE:
++      self->prop_max_bitrate = g_value_get_uint (value);
++      break;
++    case PROP_QP_I:
++      self->prop_qp_i = g_value_get_uint (value);
++      break;
++    case PROP_QP_P:
++      self->prop_qp_p = g_value_get_uint (value);
++      break;
++    case PROP_QP_MIN:
++      self->prop_qp_min = g_value_get_uint (value);
++      break;
++    case PROP_QP_MAX:
++      self->prop_qp_max = g_value_get_uint (value);
++      break;
++    case PROP_KEY_INT_MAX:
++      self->prop_key_int_max = g_value_get_uint (value);
++      break;
++    case PROP_MAX_INFLIGHT:
++      self->prop_max_inflight = g_value_get_uint (value);
++      break;
++    default:
++      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
++      break;
++  }
++  GST_OBJECT_UNLOCK (self);
++}
++
++static void
++gst_v4l2_codec_base_enc_get_property (GObject * object, guint prop_id,
++    GValue * value, GParamSpec * pspec)
++{
++  GstV4l2CodecBaseEnc *self = GST_V4L2_CODEC_BASE_ENC (object);
++
++  GST_OBJECT_LOCK (self);
++  switch (prop_id) {
++    case PROP_RATE_CONTROL:
++      g_value_set_enum (value, self->prop_rate_control);
++      break;
++    case PROP_BITRATE:
++      g_value_set_uint (value, self->prop_bitrate);
++      break;
++    case PROP_MAX_BITRATE:
++      g_value_set_uint (value, self->prop_max_bitrate);
++      break;
++    case PROP_QP_I:
++      g_value_set_uint (value, self->prop_qp_i);
++      break;
++    case PROP_QP_P:
++      g_value_set_uint (value, self->prop_qp_p);
++      break;
++    case PROP_QP_MIN:
++      g_value_set_uint (value, self->prop_qp_min);
++      break;
++    case PROP_QP_MAX:
++      g_value_set_uint (value, self->prop_qp_max);
++      break;
++    case PROP_KEY_INT_MAX:
++      g_value_set_uint (value, self->prop_key_int_max);
++      break;
++    case PROP_MAX_INFLIGHT:
++      g_value_set_uint (value, self->prop_max_inflight);
++      break;
++    default:
++      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
++      break;
++  }
++  GST_OBJECT_UNLOCK (self);
++}
++
++static void
++gst_v4l2_codec_base_enc_dispose (GObject * object)
++{
++  GstV4l2CodecBaseEnc *self = GST_V4L2_CODEC_BASE_ENC (object);
++
++  gst_v4l2_codec_base_enc_drop_pending (self);
++  gst_clear_object (&self->encoder);
++
++  G_OBJECT_CLASS (parent_class)->dispose (object);
++}
++
++static void
++gst_v4l2_codec_base_enc_init (GstV4l2CodecBaseEnc * self)
++{
++  g_queue_init (&self->pending);
++  self->prop_rate_control = DEFAULT_RATE_CONTROL;
++  self->prop_bitrate = DEFAULT_BITRATE;
++  self->prop_max_bitrate = DEFAULT_MAX_BITRATE;
++  self->prop_qp_i = DEFAULT_QP_I;
++  self->prop_qp_p = DEFAULT_QP_P;
++  self->prop_qp_min = DEFAULT_QP_MIN;
++  self->prop_qp_max = DEFAULT_QP_MAX;
++  self->prop_key_int_max = DEFAULT_KEY_INT_MAX;
++  self->prop_max_inflight = DEFAULT_MAX_INFLIGHT;
++}
++
++static void
++gst_v4l2_codec_base_enc_class_init (GstV4l2CodecBaseEncClass * klass)
++{
++  GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
++  GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
++  GstVideoEncoderClass *encoder_class = GST_VIDEO_ENCODER_CLASS (klass);
++  const GParamFlags flags = G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
++      GST_PARAM_MUTABLE_READY;
++
++  gobject_class->set_property = gst_v4l2_codec_base_enc_set_property;
++  gobject_class->get_property = gst_v4l2_codec_base_enc_get_property;
++  gobject_class->dispose = gst_v4l2_codec_base_enc_dispose;
++
++  element_class->change_state =
++      GST_DEBUG_FUNCPTR (gst_v4l2_codec_base_enc_change_state);
++
++  encoder_class->open = GST_DEBUG_FUNCPTR (gst_v4l2_codec_base_enc_open);
++  encoder_class->close = GST_DEBUG_FUNCPTR (gst_v4l2_codec_base_enc_close);
++  encoder_class->start = GST_DEBUG_FUNCPTR (gst_v4l2_codec_base_enc_start);
++  encoder_class->stop = GST_DEBUG_FUNCPTR (gst_v4l2_codec_base_enc_stop);
++  encoder_class->set_format =
++      GST_DEBUG_FUNCPTR (gst_v4l2_codec_base_enc_set_format);
++  encoder_class->handle_frame =
++      GST_DEBUG_FUNCPTR (gst_v4l2_codec_base_enc_handle_frame);
++  encoder_class->finish = GST_DEBUG_FUNCPTR (gst_v4l2_codec_base_enc_finish);
++  encoder_class->flush = GST_DEBUG_FUNCPTR (gst_v4l2_codec_base_enc_flush);
++  encoder_class->sink_event =
++      GST_DEBUG_FUNCPTR (gst_v4l2_codec_base_enc_sink_event);
++  encoder_class->getcaps = GST_DEBUG_FUNCPTR (gst_v4l2_codec_base_enc_getcaps);
++  encoder_class->propose_allocation =
++      GST_DEBUG_FUNCPTR (gst_v4l2_codec_base_enc_propose_allocation);
++
++  g_object_class_install_property (gobject_class, PROP_RATE_CONTROL,
++      g_param_spec_enum ("rate-control", "Rate control",
++          "Rate control mode", GST_TYPE_V4L2_ENC_RATE_CONTROL,
++          DEFAULT_RATE_CONTROL, flags));
++  g_object_class_install_property (gobject_class, PROP_BITRATE,
++      g_param_spec_uint ("bitrate", "Bitrate",
++          "Target bitrate in kbit/s for cbr and vbr (0: from the resolution "
++          "and frame rate)", 0, G_MAXINT32 / 1000, DEFAULT_BITRATE, flags));
++  g_object_class_install_property (gobject_class, PROP_MAX_BITRATE,
++      g_param_spec_uint ("max-bitrate", "Maximum bitrate",
++          "Peak bitrate in kbit/s over one second for vbr (0: 1.5 x bitrate)",
++          0, G_MAXINT32 / 1000, DEFAULT_MAX_BITRATE, flags));
++  g_object_class_install_property (gobject_class, PROP_QP_I,
++      g_param_spec_uint ("qp-i", "I QP", "QP of IDR pictures for cqp",
++          0, 51, DEFAULT_QP_I, flags));
++  g_object_class_install_property (gobject_class, PROP_QP_P,
++      g_param_spec_uint ("qp-p", "P QP", "QP of P pictures for cqp",
++          0, 51, DEFAULT_QP_P, flags));
++  g_object_class_install_property (gobject_class, PROP_QP_MIN,
++      g_param_spec_uint ("qp-min", "Minimum QP",
++          "Minimum QP for cbr and vbr", 0, 51, DEFAULT_QP_MIN, flags));
++  g_object_class_install_property (gobject_class, PROP_QP_MAX,
++      g_param_spec_uint ("qp-max", "Maximum QP",
++          "Maximum QP for cbr and vbr", 0, 51, DEFAULT_QP_MAX, flags));
++  g_object_class_install_property (gobject_class, PROP_KEY_INT_MAX,
++      g_param_spec_uint ("key-int-max", "Maximum key frame interval",
++          "Pictures from one IDR picture to the next (0: 2 seconds)",
++          0, G_MAXINT32, DEFAULT_KEY_INT_MAX, flags));
++  g_object_class_install_property (gobject_class, PROP_MAX_INFLIGHT,
++      g_param_spec_uint ("max-inflight", "Pictures in flight",
++          "Pictures queued to the driver at a time (more hides the time "
++          "userspace takes per picture, adds latency)", 1, MAX_INFLIGHT,
++          DEFAULT_MAX_INFLIGHT, flags));
++
++  gst_type_mark_as_plugin_api (GST_TYPE_V4L2_CODEC_BASE_ENC, 0);
++  gst_type_mark_as_plugin_api (GST_TYPE_V4L2_ENC_RATE_CONTROL, 0);
++}
++
++/* Per-device element classes: the device paths */
++
++static void
++device_set_property (GObject * object, guint prop_id, const GValue * value,
++    GParamSpec * pspec)
++{
++  GstV4l2CodecBaseEnc *self = GST_V4L2_CODEC_BASE_ENC (object);
++
++  gst_v4l2_encoder_set_property (G_OBJECT (self->encoder),
++      prop_id - PROP_DEVICE_0, value, pspec);
++}
++
++static void
++device_get_property (GObject * object, guint prop_id, GValue * value,
++    GParamSpec * pspec)
++{
++  GstV4l2CodecBaseEnc *self = GST_V4L2_CODEC_BASE_ENC (object);
++
++  gst_v4l2_encoder_get_property (G_OBJECT (self->encoder),
++      prop_id - PROP_DEVICE_0, value, pspec);
++}
++
++void
++gst_v4l2_codec_base_enc_install_device_properties (GObjectClass *
++    gobject_class, GstV4l2CodecDevice * device)
++{
++  gobject_class->set_property = device_set_property;
++  gobject_class->get_property = device_get_property;
++  gst_v4l2_encoder_install_properties (gobject_class, PROP_DEVICE_0, device);
++}
++
++void
++gst_v4l2_codec_base_enc_init_device (GstV4l2CodecBaseEnc * self,
++    GstV4l2CodecDevice * device)
++{
++  self->encoder = gst_v4l2_encoder_new (device);
++}
+diff --git a/sys/v4l2codecs/gstv4l2codecbaseenc.h b/sys/v4l2codecs/gstv4l2codecbaseenc.h
+new file mode 100644
+index 0000000..eebd3da
+--- /dev/null
++++ b/sys/v4l2codecs/gstv4l2codecbaseenc.h
+@@ -0,0 +1,151 @@
++/* GStreamer
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#ifndef __GST_V4L2_CODEC_BASE_ENC_H__
++#define __GST_V4L2_CODEC_BASE_ENC_H__
++
++#define GST_USE_UNSTABLE_API
++#include <gst/video/video.h>
++
++#include "gstv4l2codecallocator.h"
++#include "gstv4l2codecdevice.h"
++#include "gstv4l2codecpool.h"
++#include "gstv4l2encoder.h"
++
++G_BEGIN_DECLS
++
++#define GST_TYPE_V4L2_CODEC_BASE_ENC           (gst_v4l2_codec_base_enc_get_type())
++#define GST_V4L2_CODEC_BASE_ENC(obj)           (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_V4L2_CODEC_BASE_ENC,GstV4l2CodecBaseEnc))
++#define GST_V4L2_CODEC_BASE_ENC_CLASS(klass)   (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_V4L2_CODEC_BASE_ENC,GstV4l2CodecBaseEncClass))
++#define GST_V4L2_CODEC_BASE_ENC_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj),GST_TYPE_V4L2_CODEC_BASE_ENC,GstV4l2CodecBaseEncClass))
++
++typedef struct _GstV4l2CodecBaseEnc GstV4l2CodecBaseEnc;
++typedef struct _GstV4l2CodecBaseEncClass GstV4l2CodecBaseEncClass;
++typedef struct _GstV4l2CodecEncFrame GstV4l2CodecEncFrame;
++
++typedef enum
++{
++  GST_V4L2_ENC_RC_CQP,
++  GST_V4L2_ENC_RC_CBR,
++  GST_V4L2_ENC_RC_VBR,
++} GstV4l2EncRateControl;
++
++/* One picture on its way through the encoder. */
++struct _GstV4l2CodecEncFrame
++{
++  GstVideoCodecFrame *frame;
++  GstV4l2EncodeRequest *request;
++  guint64 id;                   /* V4L2 timestamp: GST_V4L2_ENCODER_FRAME_TS (id) */
++  guint64 prev_id;              /* previous picture, the reference of a P picture */
++  gboolean idr;
++  guint idr_count;              /* number of IDR pictures before this one */
++  guint poc;                    /* pictures since the last IDR */
++  gint qp;                      /* frame QP chosen by the element, or -1 */
++  gint avg_qp;                  /* reported by the driver, or -1 */
++};
++
++struct _GstV4l2CodecBaseEnc
++{
++  GstVideoEncoder parent;
++
++  /* < protected > */
++  GstV4l2Encoder *encoder;
++  GstVideoInfo in_info;         /* negotiated input */
++  GstVideoInfoDmaDrm vinfo_drm; /* driver picture layout */
++  gint fps_n, fps_d;            /* never 0 */
++
++  /* properties, latched at set_format */
++  GstV4l2EncRateControl rate_control;
++  guint bitrate;                /* bit/s, resolved (never 0) */
++  guint max_bitrate;            /* bit/s, resolved */
++  guint qp_i, qp_p, qp_min, qp_max;
++  guint key_int;                /* resolved */
++
++  /* < private > */
++  guint prop_bitrate, prop_max_bitrate, prop_key_int_max;
++  guint prop_max_inflight;
++  GstV4l2EncRateControl prop_rate_control;
++  guint prop_qp_i, prop_qp_p, prop_qp_min, prop_qp_max;
++
++  GstV4l2CodecAllocator *sink_allocator, *src_allocator;
++  GstV4l2CodecPool *sink_pool, *src_pool;
++  GstVideoCodecState *output_state;
++  GQueue pending;               /* GstV4l2CodecEncFrame, oldest first */
++  guint max_inflight;
++  gboolean streaming;
++
++  guint64 next_id, last_id;
++  guint frames_since_idr, idr_count;
++  gboolean force_idr;
++
++  /* userspace VBR state */
++  gdouble vbr_cplx[2];          /* bits * 2^(qp/6), [0] intra, [1] inter */
++  gdouble vbr_err;              /* leaky sum of actual - target bits */
++  gdouble vbr_qp;
++  guint64 *vbr_win;             /* bits of the last fps frames */
++  guint vbr_win_len, vbr_win_pos;
++  guint64 vbr_win_sum;
++
++  /* statistics */
++  guint64 total_bytes;
++  guint64 total_frames;
++  guint64 copied_frames;        /* input pictures that could not be imported */
++};
++
++struct _GstV4l2CodecBaseEncClass
++{
++  GstVideoEncoderClass parent_class;
++
++  GstV4l2CodecDevice *device;
++  guint32 coded_fourcc;
++  gdouble default_bpp;          /* bits per pixel of the default bitrate */
++  guint32 cid_i_qp, cid_p_qp, cid_min_qp, cid_max_qp;
++
++  /* Chooses profile and level and returns the src caps (transfer full) */
++  GstCaps *   (*negotiate_codec) (GstV4l2CodecBaseEnc * self,
++                                  GstVideoCodecState * state);
++
++  /* Sets the sequence-level controls, after S_FMT and before STREAMON */
++  gboolean    (*configure)       (GstV4l2CodecBaseEnc * self);
++
++  /* Sets the per-picture controls in the request */
++  gboolean    (*prepare_frame)   (GstV4l2CodecBaseEnc * self,
++                                  GstV4l2CodecEncFrame * frame);
++
++  /* Optional, reads the feedback of a completed picture */
++  void        (*frame_done)      (GstV4l2CodecBaseEnc * self,
++                                  GstV4l2CodecEncFrame * frame);
++};
++
++GType gst_v4l2_codec_base_enc_get_type (void);
++
++/* Installs the media-device and video-device properties of a per-device
++ * element class and their handlers. */
++void  gst_v4l2_codec_base_enc_install_device_properties (GObjectClass * gobject_class,
++                                                         GstV4l2CodecDevice * device);
++
++/* Creates the GstV4l2Encoder of a per-device element instance. */
++void  gst_v4l2_codec_base_enc_init_device (GstV4l2CodecBaseEnc * self,
++                                           GstV4l2CodecDevice * device);
++
++G_DEFINE_AUTOPTR_CLEANUP_FUNC (GstV4l2CodecBaseEnc, gst_object_unref)
++
++G_END_DECLS
++
++#endif /* __GST_V4L2_CODEC_BASE_ENC_H__ */
+diff --git a/sys/v4l2codecs/gstv4l2codech264enc.c b/sys/v4l2codecs/gstv4l2codech264enc.c
+new file mode 100644
+index 0000000..746c2e4
+--- /dev/null
++++ b/sys/v4l2codecs/gstv4l2codech264enc.c
+@@ -0,0 +1,538 @@
++/* GStreamer
++ * Copyright (C) 2023 Michael Grzeschik <m.grzeschik@pengutronix.de>
++ * Copyright (C) 2023 Denis Shimizu <denis.shimizu@collabora.com>
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++/**
++ * SECTION:element-v4l2slh264enc
++ * @title: v4l2slh264enc
++ *
++ * H.264 encoder for V4L2 stateless (request API) encoders that implement the
++ * H.264 stateless encode uAPI (V4L2_CID_STATELESS_H264_ENCODE_PARAMS). The
++ * kernel writes the parameter sets and slice headers; the element sets the
++ * SPS and PPS and describes every picture. Outputs I and P pictures with one
++ * reference, as an Annex B byte-stream with SPS and PPS before every IDR.
++ *
++ * ## Example launch line
++ * |[
++ * gst-launch-1.0 videotestsrc num-buffers=300 ! video/x-raw,width=1920,height=1080 ! \
++ *     v4l2slh264enc bitrate=8000 ! h264parse ! mp4mux ! filesink location=out.mp4
++ * ]|
++ *
++ * The profile, level and entropy coding derive from the original work on
++ * the v4l2codecs stateless H.264 encoder (gstreamer MR !5676 and Paul
++ * Kocialkowski's v4l2codecs/h264enc branch).
++ */
++
++#ifdef HAVE_CONFIG_H
++#include <config.h>
++#endif
++
++#include "gstv4l2codech264enc.h"
++#include "linux/v4l2-controls.h"
++
++#include <string.h>
++
++#define V4L2_MIN_KERNEL_VER_MAJOR 5
++#define V4L2_MIN_KERNEL_VER_MINOR 17
++#define V4L2_MIN_KERNEL_VERSION KERNEL_VERSION(V4L2_MIN_KERNEL_VER_MAJOR, V4L2_MIN_KERNEL_VER_MINOR, 0)
++#define KERNEL_VERSION(a,b,c) (((a) << 16) + ((b) << 8) + (c))
++
++GST_DEBUG_CATEGORY_STATIC (v4l2_h264enc_debug);
++#define GST_CAT_DEFAULT v4l2_h264enc_debug
++
++#define DEFAULT_CABAC TRUE
++
++enum
++{
++  PROP_0,
++  PROP_CABAC,
++};
++
++#define GST_TYPE_V4L2_CODEC_H264_ENC (gst_v4l2_codec_h264_enc_get_type ())
++G_DECLARE_DERIVABLE_TYPE (GstV4l2CodecH264Enc, gst_v4l2_codec_h264_enc,
++    GST, V4L2_CODEC_H264_ENC, GstV4l2CodecBaseEnc);
++
++struct _GstV4l2CodecH264EncClass
++{
++  GstV4l2CodecBaseEncClass parent_class;
++};
++
++typedef struct
++{
++  gboolean prop_cabac;
++
++  /* negotiated */
++  guint8 profile_idc;
++  guint8 constraint_set_flags;
++  guint8 level_idc;
++  gboolean cabac;
++  gboolean transform_8x8;
++  const gchar *profile_name;
++  const gchar *level_name;
++  gboolean has_average_qp;
++} GstV4l2CodecH264EncPrivate;
++
++G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (GstV4l2CodecH264Enc,
++    gst_v4l2_codec_h264_enc, GST_TYPE_V4L2_CODEC_BASE_ENC);
++
++#define parent_class gst_v4l2_codec_h264_enc_parent_class
++#define PRIV(self) ((GstV4l2CodecH264EncPrivate *) \
++    gst_v4l2_codec_h264_enc_get_instance_private (GST_V4L2_CODEC_H264_ENC (self)))
++
++static GstStaticPadTemplate sink_template =
++GST_STATIC_PAD_TEMPLATE (GST_VIDEO_ENCODER_SINK_NAME,
++    GST_PAD_SINK, GST_PAD_ALWAYS,
++    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE ("{ NV12, NV21, I420, YUY2, UYVY }")));
++
++static GstStaticPadTemplate src_template =
++GST_STATIC_PAD_TEMPLATE (GST_VIDEO_ENCODER_SRC_NAME,
++    GST_PAD_SRC, GST_PAD_ALWAYS,
++    GST_STATIC_CAPS ("video/x-h264, "
++        "framerate = (fraction) [0/1, MAX], "
++        "width = (int) [ 1, MAX ], height = (int) [ 1, MAX ], "
++        "stream-format = (string) byte-stream, alignment = (string) au, "
++        "profile = (string) { high, main, constrained-baseline }"));
++
++/* From the VA plugin: ITU-T H.264 Table A-1 */
++typedef struct
++{
++  const char *level;
++  guint8 idc;
++  guint max_mbs_per_second;
++  guint max_frame_size_in_mbs;
++  guint max_dpb_mbs;
++  guint max_bitrate;            /* kbit/s, Baseline/Main; x1.25 for High */
++} H264LevelLimits;
++
++static const H264LevelLimits h264_levels[] = {
++  {"1", 10, 1485, 99, 396, 64},
++  {"1.1", 11, 3000, 396, 900, 192},
++  {"1.2", 12, 6000, 396, 2376, 384},
++  {"1.3", 13, 11880, 396, 2376, 768},
++  {"2", 20, 11880, 396, 2376, 2000},
++  {"2.1", 21, 19800, 792, 4752, 4000},
++  {"2.2", 22, 20250, 1620, 8100, 4000},
++  {"3", 30, 40500, 1620, 8100, 10000},
++  {"3.1", 31, 108000, 3600, 18000, 14000},
++  {"3.2", 32, 216000, 5120, 20480, 20000},
++  {"4", 40, 245760, 8192, 32768, 20000},
++  {"4.1", 41, 245760, 8192, 32768, 50000},
++  {"4.2", 42, 522240, 8704, 34816, 50000},
++  {"5", 50, 589824, 22080, 110400, 135000},
++  {"5.1", 51, 983040, 36864, 184320, 240000},
++  {"5.2", 52, 2073600, 36864, 184320, 240000},
++  {"6", 60, 4177920, 139264, 696320, 240000},
++  {"6.1", 61, 8355840, 139264, 696320, 480000},
++  {"6.2", 62, 16711680, 139264, 696320, 800000},
++};
++
++static gboolean
++gst_v4l2_codec_h264_enc_api_check (GstV4l2Encoder * encoder)
++{
++  /* *INDENT-OFF* */
++  static const struct
++  {
++    const gchar *name;
++    guint32 id;
++    guint32 size;
++  } controls[] = {
++    { "ENCODE_PARAMS", V4L2_CID_STATELESS_H264_ENCODE_PARAMS,
++      sizeof (struct v4l2_ctrl_h264_encode_params) },
++    { "SPS", V4L2_CID_STATELESS_H264_SPS, sizeof (struct v4l2_ctrl_h264_sps) },
++    { "PPS", V4L2_CID_STATELESS_H264_PPS, sizeof (struct v4l2_ctrl_h264_pps) },
++  };
++  /* *INDENT-ON* */
++  struct v4l2_query_ext_ctrl q;
++  guint i;
++
++  for (i = 0; i < G_N_ELEMENTS (controls); i++) {
++    if (!gst_v4l2_encoder_query_control (encoder, controls[i].id, &q)) {
++      GST_WARNING ("Driver is missing the %s control", controls[i].name);
++      return FALSE;
++    }
++    if (q.elem_size != controls[i].size) {
++      GST_WARNING ("%s control size mismatch: got %u bytes, %u expected",
++          controls[i].name, q.elem_size, controls[i].size);
++      return FALSE;
++    }
++  }
++
++  return TRUE;
++}
++
++static GstCaps *
++gst_v4l2_codec_h264_enc_negotiate_codec (GstV4l2CodecBaseEnc * base,
++    GstVideoCodecState * state)
++{
++  GstV4l2CodecH264EncPrivate *priv = PRIV (base);
++  GstCaps *allowed;
++  const gchar *profile = NULL, *level = NULL;
++  guint width_mbs, height_mbs, frame_mbs, mbs_per_s, kbps, i, min_level;
++  gdouble factor;
++
++  allowed = gst_pad_get_allowed_caps (GST_VIDEO_ENCODER_SRC_PAD (base));
++  if (allowed && !gst_caps_is_empty (allowed)) {
++    GstStructure *s;
++
++    allowed = gst_caps_fixate (allowed);
++    s = gst_caps_get_structure (allowed, 0);
++    profile = gst_structure_get_string (s, "profile");
++    level = gst_structure_get_string (s, "level");
++  }
++
++  priv->transform_8x8 = FALSE;
++  priv->constraint_set_flags = 0;
++  GST_OBJECT_LOCK (base);
++  priv->cabac = priv->prop_cabac;
++  GST_OBJECT_UNLOCK (base);
++
++  if (!profile || g_str_equal (profile, "high")) {
++    priv->profile_name = "high";
++    priv->profile_idc = 100;
++    priv->transform_8x8 = TRUE;
++  } else if (g_str_equal (profile, "main")) {
++    priv->profile_name = "main";
++    priv->profile_idc = 77;
++  } else if (g_str_equal (profile, "constrained-baseline")) {
++    priv->profile_name = "constrained-baseline";
++    priv->profile_idc = 66;
++    priv->constraint_set_flags = V4L2_H264_SPS_CONSTRAINT_SET0_FLAG |
++        V4L2_H264_SPS_CONSTRAINT_SET1_FLAG;
++    priv->cabac = FALSE;
++  } else {
++    GST_ELEMENT_ERROR (base, CORE, NEGOTIATION,
++        ("Unsupported H.264 profile '%s'.", profile), (NULL));
++    gst_clear_caps (&allowed);
++    return NULL;
++  }
++
++  /* Lowest level that fits the stream */
++  width_mbs = (GST_VIDEO_INFO_WIDTH (&state->info) + 15) / 16;
++  height_mbs = (GST_VIDEO_INFO_HEIGHT (&state->info) + 15) / 16;
++  frame_mbs = width_mbs * height_mbs;
++  mbs_per_s = gst_util_uint64_scale_ceil (frame_mbs, base->fps_n, base->fps_d);
++  factor = priv->profile_idc == 100 ? 1.25 : 1.0;
++  kbps = (base->rate_control == GST_V4L2_ENC_RC_VBR ? base->max_bitrate :
++      base->bitrate) / 1000;
++  if (base->rate_control == GST_V4L2_ENC_RC_CQP)
++    kbps = 0;
++
++  for (min_level = 0; min_level < G_N_ELEMENTS (h264_levels); min_level++) {
++    const H264LevelLimits *l = &h264_levels[min_level];
++
++    /* One reference picture plus the current one in the DPB */
++    if (mbs_per_s <= l->max_mbs_per_second &&
++        frame_mbs <= l->max_frame_size_in_mbs &&
++        frame_mbs <= l->max_dpb_mbs && kbps <= l->max_bitrate * factor &&
++        width_mbs * width_mbs <= 8 * l->max_frame_size_in_mbs &&
++        height_mbs * height_mbs <= 8 * l->max_frame_size_in_mbs)
++      break;
++  }
++  if (min_level == G_N_ELEMENTS (h264_levels))
++    min_level--;
++
++  i = min_level;
++  if (level) {
++    for (i = 0; i < G_N_ELEMENTS (h264_levels); i++)
++      if (g_str_equal (h264_levels[i].level, level))
++        break;
++    if (i == G_N_ELEMENTS (h264_levels) || i < min_level) {
++      GST_ELEMENT_ERROR (base, CORE, NEGOTIATION,
++          ("H.264 level '%s' cannot be used, at least %s is needed.", level,
++              h264_levels[min_level].level), (NULL));
++      gst_clear_caps (&allowed);
++      return NULL;
++    }
++  }
++  priv->level_idc = h264_levels[i].idc;
++  priv->level_name = h264_levels[i].level;
++  gst_clear_caps (&allowed);
++
++  GST_INFO_OBJECT (base, "H.264 profile %s level %s, %s", priv->profile_name,
++      priv->level_name, priv->cabac ? "CABAC" : "CAVLC");
++
++  return gst_caps_new_simple ("video/x-h264",
++      "stream-format", G_TYPE_STRING, "byte-stream",
++      "alignment", G_TYPE_STRING, "au",
++      "profile", G_TYPE_STRING, priv->profile_name,
++      "level", G_TYPE_STRING, priv->level_name, NULL);
++}
++
++static gint
++sar_idc (gint par_n, gint par_d)
++{
++  static const gint sar[][2] = {
++    {0, 0}, {1, 1}, {12, 11}, {10, 11}, {16, 11}, {40, 33}, {24, 11},
++    {20, 11}, {32, 11}, {80, 33}, {18, 11}, {15, 11}, {64, 33}, {160, 99},
++    {4, 3}, {3, 2}, {2, 1},
++  };
++  guint i;
++
++  for (i = 1; i < G_N_ELEMENTS (sar); i++)
++    if (sar[i][0] == par_n && sar[i][1] == par_d)
++      return i;
++  return V4L2_MPEG_VIDEO_H264_VUI_SAR_IDC_EXTENDED;
++}
++
++static gboolean
++gst_v4l2_codec_h264_enc_configure (GstV4l2CodecBaseEnc * base)
++{
++  GstV4l2CodecH264EncPrivate *priv = PRIV (base);
++  struct v4l2_ctrl_h264_sps sps = { 0 };
++  struct v4l2_ctrl_h264_pps pps = { 0 };
++  struct v4l2_ext_control c[2] = { {0} };
++  struct v4l2_query_ext_ctrl q;
++  gint par_n = GST_VIDEO_INFO_PAR_N (&base->in_info);
++  gint par_d = GST_VIDEO_INFO_PAR_D (&base->in_info);
++
++  sps.profile_idc = priv->profile_idc;
++  sps.constraint_set_flags = priv->constraint_set_flags;
++  sps.level_idc = priv->level_idc;
++  sps.chroma_format_idc = 1;
++  /* frame_num and the POC LSB wrap after 65536 pictures */
++  sps.log2_max_frame_num_minus4 = 12;
++  sps.pic_order_cnt_type = 0;
++  sps.log2_max_pic_order_cnt_lsb_minus4 = 12;
++  sps.max_num_ref_frames = 1;
++  sps.pic_width_in_mbs_minus1 =
++      (GST_VIDEO_INFO_WIDTH (&base->in_info) + 15) / 16 - 1;
++  sps.pic_height_in_map_units_minus1 =
++      (GST_VIDEO_INFO_HEIGHT (&base->in_info) + 15) / 16 - 1;
++  sps.flags = V4L2_H264_SPS_FLAG_FRAME_MBS_ONLY |
++      V4L2_H264_SPS_FLAG_DIRECT_8X8_INFERENCE;
++
++  pps.pic_init_qp_minus26 = 0;
++  pps.flags = V4L2_H264_PPS_FLAG_DEBLOCKING_FILTER_CONTROL_PRESENT;
++  if (priv->cabac)
++    pps.flags |= V4L2_H264_PPS_FLAG_ENTROPY_CODING_MODE;
++  if (priv->transform_8x8)
++    pps.flags |= V4L2_H264_PPS_FLAG_TRANSFORM_8X8_MODE;
++
++  c[0].id = V4L2_CID_STATELESS_H264_SPS;
++  c[0].ptr = &sps;
++  c[0].size = sizeof (sps);
++  c[1].id = V4L2_CID_STATELESS_H264_PPS;
++  c[1].ptr = &pps;
++  c[1].size = sizeof (pps);
++
++  if (!gst_v4l2_encoder_set_controls (base->encoder, NULL, c, 2)) {
++    GST_ELEMENT_ERROR (base, RESOURCE, SETTINGS,
++        ("Driver did not accept the SPS and PPS."), (NULL));
++    return FALSE;
++  }
++
++  priv->has_average_qp = gst_v4l2_encoder_query_control (base->encoder,
++      V4L2_CID_MPEG_VIDEO_AVERAGE_QP, &q);
++
++  /* Sample aspect ratio, when it is not square */
++  if (par_n > 0 && par_d > 0 && par_n != par_d &&
++      gst_v4l2_encoder_query_control (base->encoder,
++          V4L2_CID_MPEG_VIDEO_H264_VUI_SAR_ENABLE, &q)) {
++    struct v4l2_ext_control sar[4] = { {0} };
++    gint idc = sar_idc (par_n, par_d);
++
++    sar[0].id = V4L2_CID_MPEG_VIDEO_H264_VUI_SAR_ENABLE;
++    sar[0].value = 1;
++    sar[1].id = V4L2_CID_MPEG_VIDEO_H264_VUI_SAR_IDC;
++    sar[1].value = idc;
++    sar[2].id = V4L2_CID_MPEG_VIDEO_H264_VUI_EXT_SAR_WIDTH;
++    sar[2].value = par_n;
++    sar[3].id = V4L2_CID_MPEG_VIDEO_H264_VUI_EXT_SAR_HEIGHT;
++    sar[3].value = par_d;
++    gst_v4l2_encoder_set_controls (base->encoder, NULL, sar,
++        idc == V4L2_MPEG_VIDEO_H264_VUI_SAR_IDC_EXTENDED ? 4 : 2);
++  }
++
++  return TRUE;
++}
++
++static gboolean
++gst_v4l2_codec_h264_enc_prepare_frame (GstV4l2CodecBaseEnc * base,
++    GstV4l2CodecEncFrame * f)
++{
++  GstV4l2CodecH264EncPrivate *priv = PRIV (base);
++  struct v4l2_ctrl_h264_encode_params ep = { 0 };
++  struct v4l2_ext_control c = {
++    .id = V4L2_CID_STATELESS_H264_ENCODE_PARAMS,
++    .ptr = &ep,
++    .size = sizeof (ep),
++  };
++
++  /* Every picture is a reference for the next one (sliding window, one
++   * reference picture). */
++  ep.nal_ref_idc = f->idr ? 3 : 2;
++  ep.slice_type = f->idr ? V4L2_H264_SLICE_TYPE_I : V4L2_H264_SLICE_TYPE_P;
++  ep.pic_parameter_set_id = 0;
++  ep.frame_num = f->poc & 0xffff;
++  /* Consecutive IDR pictures need different idr_pic_id */
++  ep.idr_pic_id = f->idr_count & 1;
++  ep.pic_order_cnt_lsb = (f->poc * 2) & 0xffff;
++  ep.cabac_init_idc = 0;
++  ep.disable_deblocking_filter_idc = 0;
++  if (f->idr)
++    ep.flags |= V4L2_H264_ENCODE_FLAG_IDR_PIC;
++
++  (void) priv;
++
++  if (!gst_v4l2_encoder_set_controls (base->encoder, f->request, &c, 1)) {
++    GST_ELEMENT_ERROR (base, RESOURCE, WRITE,
++        ("Driver did not accept the encode parameters."), (NULL));
++    return FALSE;
++  }
++
++  return TRUE;
++}
++
++static void
++gst_v4l2_codec_h264_enc_frame_done (GstV4l2CodecBaseEnc * base,
++    GstV4l2CodecEncFrame * f)
++{
++  struct v4l2_ext_control c = {.id = V4L2_CID_MPEG_VIDEO_AVERAGE_QP, };
++
++  if (PRIV (base)->has_average_qp &&
++      gst_v4l2_encoder_get_controls (base->encoder, f->request, &c, 1))
++    f->avg_qp = c.value;
++}
++
++static void
++gst_v4l2_codec_h264_enc_set_property (GObject * object, guint prop_id,
++    const GValue * value, GParamSpec * pspec)
++{
++  GstV4l2CodecH264EncPrivate *priv = PRIV (object);
++
++  GST_OBJECT_LOCK (object);
++  switch (prop_id) {
++    case PROP_CABAC:
++      priv->prop_cabac = g_value_get_boolean (value);
++      break;
++    default:
++      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
++      break;
++  }
++  GST_OBJECT_UNLOCK (object);
++}
++
++static void
++gst_v4l2_codec_h264_enc_get_property (GObject * object, guint prop_id,
++    GValue * value, GParamSpec * pspec)
++{
++  GstV4l2CodecH264EncPrivate *priv = PRIV (object);
++
++  GST_OBJECT_LOCK (object);
++  switch (prop_id) {
++    case PROP_CABAC:
++      g_value_set_boolean (value, priv->prop_cabac);
++      break;
++    default:
++      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
++      break;
++  }
++  GST_OBJECT_UNLOCK (object);
++}
++
++static void
++gst_v4l2_codec_h264_enc_init (GstV4l2CodecH264Enc * self)
++{
++  PRIV (self)->prop_cabac = DEFAULT_CABAC;
++}
++
++static void
++gst_v4l2_codec_h264_enc_class_init (GstV4l2CodecH264EncClass * klass)
++{
++  GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
++  GstV4l2CodecBaseEncClass *base_class = GST_V4L2_CODEC_BASE_ENC_CLASS (klass);
++
++  gobject_class->set_property = gst_v4l2_codec_h264_enc_set_property;
++  gobject_class->get_property = gst_v4l2_codec_h264_enc_get_property;
++
++  base_class->coded_fourcc = V4L2_PIX_FMT_H264_SLICE;
++  base_class->default_bpp = 0.07;
++  base_class->cid_i_qp = V4L2_CID_MPEG_VIDEO_H264_I_FRAME_QP;
++  base_class->cid_p_qp = V4L2_CID_MPEG_VIDEO_H264_P_FRAME_QP;
++  base_class->cid_min_qp = V4L2_CID_MPEG_VIDEO_H264_MIN_QP;
++  base_class->cid_max_qp = V4L2_CID_MPEG_VIDEO_H264_MAX_QP;
++  base_class->negotiate_codec = gst_v4l2_codec_h264_enc_negotiate_codec;
++  base_class->configure = gst_v4l2_codec_h264_enc_configure;
++  base_class->prepare_frame = gst_v4l2_codec_h264_enc_prepare_frame;
++  base_class->frame_done = gst_v4l2_codec_h264_enc_frame_done;
++
++  g_object_class_install_property (gobject_class, PROP_CABAC,
++      g_param_spec_boolean ("cabac", "CABAC",
++          "CABAC entropy coding (main and high profiles)", DEFAULT_CABAC,
++          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
++          GST_PARAM_MUTABLE_READY));
++
++  gst_type_mark_as_plugin_api (GST_TYPE_V4L2_CODEC_H264_ENC, 0);
++}
++
++static void
++gst_v4l2_codec_h264_enc_subinit (GstV4l2CodecH264Enc * self,
++    GstV4l2CodecBaseEncClass * klass)
++{
++  gst_v4l2_codec_base_enc_init_device (GST_V4L2_CODEC_BASE_ENC (self),
++      klass->device);
++}
++
++static void
++gst_v4l2_codec_h264_enc_subclass_init (GstV4l2CodecBaseEncClass * klass,
++    GstV4l2CodecDevice * device)
++{
++  GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
++  GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
++
++  gst_element_class_set_metadata (element_class,
++      "V4L2 Stateless H.264 Video Encoder",
++      "Codec/Encoder/Video/Hardware",
++      "A V4L2 based H.264 video encoder",
++      "Arun Iyengar <aiyengar1990@gmail.com>");
++
++  gst_element_class_add_static_pad_template (element_class, &sink_template);
++  gst_element_class_add_static_pad_template (element_class, &src_template);
++
++  klass->device = device;
++  gst_v4l2_codec_base_enc_install_device_properties (gobject_class, device);
++}
++
++void
++gst_v4l2_codec_h264_enc_register (GstPlugin * plugin, GstV4l2Encoder * encoder,
++    GstV4l2CodecDevice * device, guint rank)
++{
++  guint version;
++
++  GST_DEBUG_CATEGORY_INIT (v4l2_h264enc_debug, "v4l2codecs-h264enc", 0,
++      "V4L2 stateless H.264 encoder");
++
++  version = gst_v4l2_encoder_get_version (encoder);
++  if (version < V4L2_MIN_KERNEL_VERSION)
++    GST_WARNING ("V4L2 API v%u.%u too old, at least v%u.%u required",
++        (version >> 16) & 0xff, (version >> 8) & 0xff,
++        V4L2_MIN_KERNEL_VER_MAJOR, V4L2_MIN_KERNEL_VER_MINOR);
++
++  if (!gst_v4l2_codec_h264_enc_api_check (encoder)) {
++    GST_WARNING ("Not registering the H.264 encoder, it failed the API check");
++    return;
++  }
++
++  gst_v4l2_encoder_register (plugin, GST_TYPE_V4L2_CODEC_H264_ENC,
++      (GClassInitFunc) gst_v4l2_codec_h264_enc_subclass_init,
++      gst_mini_object_ref (GST_MINI_OBJECT (device)),
++      (GInstanceInitFunc) gst_v4l2_codec_h264_enc_subinit,
++      "v4l2sl%sh264enc", device, rank, NULL);
++}
+diff --git a/sys/v4l2codecs/gstv4l2codech264enc.h b/sys/v4l2codecs/gstv4l2codech264enc.h
+new file mode 100644
+index 0000000..7a5b50c
+--- /dev/null
++++ b/sys/v4l2codecs/gstv4l2codech264enc.h
+@@ -0,0 +1,34 @@
++/* GStreamer
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#ifndef __GST_V4L2_CODEC_H264_ENC_H__
++#define __GST_V4L2_CODEC_H264_ENC_H__
++
++#include "gstv4l2codecbaseenc.h"
++
++G_BEGIN_DECLS
++
++void gst_v4l2_codec_h264_enc_register (GstPlugin * plugin,
++                                       GstV4l2Encoder * encoder,
++                                       GstV4l2CodecDevice * device,
++                                       guint rank);
++
++G_END_DECLS
++
++#endif /* __GST_V4L2_CODEC_H264_ENC_H__ */
+diff --git a/sys/v4l2codecs/meson.build b/sys/v4l2codecs/meson.build
+index d77b75a..c9b4294 100644
+--- a/sys/v4l2codecs/meson.build
++++ b/sys/v4l2codecs/meson.build
+@@ -13,6 +13,8 @@ v4l2codecs_sources = [
+   'gstv4l2format.c',
+   'gstv4l2codecalphadecodebin.c',
+   'gstv4l2encoder.c',
++  'gstv4l2codecbaseenc.c',
++  'gstv4l2codech264enc.c',
+ ]
+ 
+ v4l2codecs_headers = [
+@@ -29,6 +31,8 @@ v4l2codecs_headers = [
+   'gstv4l2codecdevice.h',
+   'gstv4l2codecpool.h',
+   'gstv4l2encoder.h',
++  'gstv4l2codecbaseenc.h',
++  'gstv4l2codech264enc.h',
+ ]
+ 
+ doc_sources = []
+@@ -69,7 +73,7 @@ if have_v4l2 and libgudev_dep.found()
+     cpp_args: gst_plugins_bad_args,
+     include_directories : [configinc],
+     dependencies : [gstbase_dep, gstcodecs_dep, gstallocators_dep, libgudev_dep,
+-                   gstpbutils_dep,],
++                   gstpbutils_dep, libm],
+     install : true,
+     install_dir : plugins_install_dir,
+   )
+diff --git a/sys/v4l2codecs/plugin.c b/sys/v4l2codecs/plugin.c
+index 890c650..50a925b 100644
+--- a/sys/v4l2codecs/plugin.c
++++ b/sys/v4l2codecs/plugin.c
+@@ -47,11 +47,13 @@
+ #include "gstv4l2codecav1dec.h"
+ #include "gstv4l2codecdevice.h"
+ #include "gstv4l2codech264dec.h"
++#include "gstv4l2codech264enc.h"
+ #include "gstv4l2codech265dec.h"
+ #include "gstv4l2codecmpeg2dec.h"
+ #include "gstv4l2codecvp8dec.h"
+ #include "gstv4l2codecvp9dec.h"
+ #include "gstv4l2decoder.h"
++#include "gstv4l2encoder.h"
+ #include "linux/v4l2-controls.h"
+ #include "linux/media.h"
+ 
+@@ -119,6 +121,36 @@ register_video_decoder (GstPlugin * plugin, GstV4l2CodecDevice * device)
+   g_object_unref (decoder);
+ }
+ 
++static void
++register_video_encoder (GstPlugin * plugin, GstV4l2CodecDevice * device)
++{
++  GstV4l2Encoder *encoder = gst_v4l2_encoder_new (device);
++  guint32 fmt;
++  gint i;
++
++  if (!gst_v4l2_encoder_open (encoder)) {
++    g_object_unref (encoder);
++    return;
++  }
++
++  for (i = 0; gst_v4l2_encoder_enum_src_formats (encoder, i, &fmt); i++) {
++    switch (fmt) {
++      case V4L2_PIX_FMT_H264_SLICE:
++        GST_INFO_OBJECT (encoder, "Registering %s as H264 Encoder",
++            device->name);
++        gst_v4l2_codec_h264_enc_register (plugin, encoder, device,
++            GST_RANK_PRIMARY + 1);
++        break;
++      default:
++        GST_FIXME_OBJECT (encoder, "%" GST_FOURCC_FORMAT " is not supported.",
++            GST_FOURCC_ARGS (fmt));
++        break;
++    }
++  }
++
++  g_object_unref (encoder);
++}
++
+ static gboolean
+ plugin_init (GstPlugin * plugin)
+ {
+@@ -140,6 +172,9 @@ plugin_init (GstPlugin * plugin)
+ 
+     if (device->function == MEDIA_ENT_F_PROC_VIDEO_DECODER)
+       register_video_decoder (plugin, device);
++
++    if (device->function == MEDIA_ENT_F_PROC_VIDEO_ENCODER)
++      register_video_encoder (plugin, device);
+   }
+ 
+   gst_v4l2_codec_device_list_free (devices);
+-- 
+2.55.0
+

@@ -1,0 +1,529 @@
+From e982e55094a52d6ddc409fa72cd883e469f3bae3 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 06:30:15 +0000
+Subject: [PATCH] v4l2codecs: Add a stateless H.265 encoder
+
+Add v4l2slh265enc for encoders that implement the HEVC stateless encode
+uAPI (V4L2_CID_STATELESS_HEVC_ENCODE_PARAMS), such as the RK3588 VEPU580.
+
+The kernel writes the VPS, SPS, PPS and slice segment headers and keeps
+the reconstructed pictures, which are identified by the timestamp of the
+OUTPUT buffer they were encoded from. The element sets the SPS and PPS
+once (8x8 to 64x64 coding blocks, 4x4 to 32x32 transforms, SAO and TMVP
+as properties) and gives each picture its NAL unit type, picture order
+count and reference picture set: IDR_W_RADL pictures, then TRAIL_R P
+pictures that reference the previous picture. The average QP of each
+picture is read from V4L2_CID_STATELESS_HEVC_ENCODE_FEEDBACK for the vbr
+rate control.
+
+The output is Main profile; the kernel picks the lowest level that fits.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2codecs/gstv4l2codech265enc.c | 404 +++++++++++++++++++++++++++
+ sys/v4l2codecs/gstv4l2codech265enc.h |  34 +++
+ sys/v4l2codecs/meson.build           |   2 +
+ sys/v4l2codecs/plugin.c              |   7 +
+ 4 files changed, 447 insertions(+)
+ create mode 100644 sys/v4l2codecs/gstv4l2codech265enc.c
+ create mode 100644 sys/v4l2codecs/gstv4l2codech265enc.h
+
+diff --git a/sys/v4l2codecs/gstv4l2codech265enc.c b/sys/v4l2codecs/gstv4l2codech265enc.c
+new file mode 100644
+index 0000000..cd48538
+--- /dev/null
++++ b/sys/v4l2codecs/gstv4l2codech265enc.c
+@@ -0,0 +1,404 @@
++/* GStreamer
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++/**
++ * SECTION:element-v4l2slh265enc
++ * @title: v4l2slh265enc
++ *
++ * H.265 encoder for V4L2 stateless (request API) encoders that implement the
++ * HEVC stateless encode uAPI (V4L2_CID_STATELESS_HEVC_ENCODE_PARAMS). The
++ * kernel writes the VPS, SPS, PPS and slice segment headers and keeps the
++ * reconstructed pictures; the element sets the SPS and PPS and gives every
++ * picture its NAL unit type, picture order count and reference picture set.
++ * Outputs Main profile I and P pictures with one reference, as an Annex B
++ * byte-stream with the parameter sets before every IDR.
++ *
++ * ## Example launch line
++ * |[
++ * gst-launch-1.0 videotestsrc num-buffers=300 ! video/x-raw,width=1920,height=1080 ! \
++ *     v4l2slh265enc bitrate=6000 ! h265parse ! mp4mux ! filesink location=out.mp4
++ * ]|
++ */
++
++#ifdef HAVE_CONFIG_H
++#include <config.h>
++#endif
++
++#include "gstv4l2codech265enc.h"
++#include "linux/v4l2-controls.h"
++
++#include <string.h>
++
++GST_DEBUG_CATEGORY_STATIC (v4l2_h265enc_debug);
++#define GST_CAT_DEFAULT v4l2_h265enc_debug
++
++#define HEVC_NAL_TRAIL_R 1
++#define HEVC_NAL_IDR_W_RADL 19
++
++#define DEFAULT_SAO TRUE
++#define DEFAULT_TMVP FALSE
++
++enum
++{
++  PROP_0,
++  PROP_SAO,
++  PROP_TMVP,
++};
++
++#define GST_TYPE_V4L2_CODEC_H265_ENC (gst_v4l2_codec_h265_enc_get_type ())
++G_DECLARE_DERIVABLE_TYPE (GstV4l2CodecH265Enc, gst_v4l2_codec_h265_enc,
++    GST, V4L2_CODEC_H265_ENC, GstV4l2CodecBaseEnc);
++
++struct _GstV4l2CodecH265EncClass
++{
++  GstV4l2CodecBaseEncClass parent_class;
++};
++
++typedef struct
++{
++  gboolean prop_sao, prop_tmvp;
++  gboolean sao, tmvp;
++} GstV4l2CodecH265EncPrivate;
++
++G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (GstV4l2CodecH265Enc,
++    gst_v4l2_codec_h265_enc, GST_TYPE_V4L2_CODEC_BASE_ENC);
++
++#define parent_class gst_v4l2_codec_h265_enc_parent_class
++#define PRIV(self) ((GstV4l2CodecH265EncPrivate *) \
++    gst_v4l2_codec_h265_enc_get_instance_private (GST_V4L2_CODEC_H265_ENC (self)))
++
++static GstStaticPadTemplate sink_template =
++GST_STATIC_PAD_TEMPLATE (GST_VIDEO_ENCODER_SINK_NAME,
++    GST_PAD_SINK, GST_PAD_ALWAYS,
++    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE ("{ NV12, NV21, I420, YUY2, UYVY }")));
++
++static GstStaticPadTemplate src_template =
++GST_STATIC_PAD_TEMPLATE (GST_VIDEO_ENCODER_SRC_NAME,
++    GST_PAD_SRC, GST_PAD_ALWAYS,
++    GST_STATIC_CAPS ("video/x-h265, "
++        "framerate = (fraction) [0/1, MAX], "
++        "width = (int) [ 1, MAX ], height = (int) [ 1, MAX ], "
++        "stream-format = (string) byte-stream, alignment = (string) au, "
++        "profile = (string) main"));
++
++static gboolean
++gst_v4l2_codec_h265_enc_api_check (GstV4l2Encoder * encoder)
++{
++  /* *INDENT-OFF* */
++  static const struct
++  {
++    const gchar *name;
++    guint32 id;
++    guint32 size;
++  } controls[] = {
++    { "ENCODE_PARAMS", V4L2_CID_STATELESS_HEVC_ENCODE_PARAMS,
++      sizeof (struct v4l2_ctrl_hevc_encode_params) },
++    { "ENCODE_FEEDBACK", V4L2_CID_STATELESS_HEVC_ENCODE_FEEDBACK,
++      sizeof (struct v4l2_ctrl_hevc_encode_feedback) },
++    { "SPS", V4L2_CID_STATELESS_HEVC_SPS, sizeof (struct v4l2_ctrl_hevc_sps) },
++    { "PPS", V4L2_CID_STATELESS_HEVC_PPS, sizeof (struct v4l2_ctrl_hevc_pps) },
++  };
++  /* *INDENT-ON* */
++  struct v4l2_query_ext_ctrl q;
++  guint i;
++
++  for (i = 0; i < G_N_ELEMENTS (controls); i++) {
++    if (!gst_v4l2_encoder_query_control (encoder, controls[i].id, &q)) {
++      GST_WARNING ("Driver is missing the %s control", controls[i].name);
++      return FALSE;
++    }
++    if (q.elem_size != controls[i].size) {
++      GST_WARNING ("%s control size mismatch: got %u bytes, %u expected",
++          controls[i].name, q.elem_size, controls[i].size);
++      return FALSE;
++    }
++  }
++
++  return TRUE;
++}
++
++static GstCaps *
++gst_v4l2_codec_h265_enc_negotiate_codec (GstV4l2CodecBaseEnc * base,
++    GstVideoCodecState * state)
++{
++  GstV4l2CodecH265EncPrivate *priv = PRIV (base);
++
++  GST_OBJECT_LOCK (base);
++  priv->sao = priv->prop_sao;
++  priv->tmvp = priv->prop_tmvp;
++  GST_OBJECT_UNLOCK (base);
++
++  /* The kernel picks the lowest level that fits; h265parse reports it. */
++  return gst_caps_new_simple ("video/x-h265",
++      "stream-format", G_TYPE_STRING, "byte-stream",
++      "alignment", G_TYPE_STRING, "au",
++      "profile", G_TYPE_STRING, "main", NULL);
++}
++
++static gboolean
++gst_v4l2_codec_h265_enc_configure (GstV4l2CodecBaseEnc * base)
++{
++  GstV4l2CodecH265EncPrivate *priv = PRIV (base);
++  struct v4l2_ctrl_hevc_sps sps = { 0 };
++  struct v4l2_ctrl_hevc_pps pps = { 0 };
++  struct v4l2_ext_control c[3] = { {0} };
++  struct v4l2_query_ext_ctrl q;
++  guint n = 2;
++
++  sps.pic_width_in_luma_samples = GST_VIDEO_INFO_WIDTH (&base->in_info);
++  sps.pic_height_in_luma_samples = GST_VIDEO_INFO_HEIGHT (&base->in_info);
++  sps.chroma_format_idc = 1;
++  /* MaxPicOrderCntLsb 256; one reference picture plus the current one */
++  sps.log2_max_pic_order_cnt_lsb_minus4 = 4;
++  sps.sps_max_dec_pic_buffering_minus1 = 1;
++  /* 8x8 to 64x64 coding blocks, 4x4 to 32x32 transform blocks */
++  sps.log2_min_luma_coding_block_size_minus3 = 0;
++  sps.log2_diff_max_min_luma_coding_block_size = 3;
++  sps.log2_min_luma_transform_block_size_minus2 = 0;
++  sps.log2_diff_max_min_luma_transform_block_size = 3;
++  sps.max_transform_hierarchy_depth_inter = 0;
++  sps.max_transform_hierarchy_depth_intra = 0;
++  sps.flags = V4L2_HEVC_SPS_FLAG_STRONG_INTRA_SMOOTHING_ENABLED;
++  if (priv->sao)
++    sps.flags |= V4L2_HEVC_SPS_FLAG_SAMPLE_ADAPTIVE_OFFSET;
++  if (priv->tmvp)
++    sps.flags |= V4L2_HEVC_SPS_FLAG_SPS_TEMPORAL_MVP_ENABLED;
++
++  pps.flags = V4L2_HEVC_PPS_FLAG_PPS_LOOP_FILTER_ACROSS_SLICES_ENABLED |
++      V4L2_HEVC_PPS_FLAG_CU_QP_DELTA_ENABLED;
++
++  c[0].id = V4L2_CID_STATELESS_HEVC_SPS;
++  c[0].ptr = &sps;
++  c[0].size = sizeof (sps);
++  c[1].id = V4L2_CID_STATELESS_HEVC_PPS;
++  c[1].ptr = &pps;
++  c[1].size = sizeof (pps);
++  if (gst_v4l2_encoder_query_control (base->encoder,
++          V4L2_CID_MPEG_VIDEO_HEVC_PROFILE, &q)) {
++    c[2].id = V4L2_CID_MPEG_VIDEO_HEVC_PROFILE;
++    c[2].value = V4L2_MPEG_VIDEO_HEVC_PROFILE_MAIN;
++    n = 3;
++  }
++
++  if (!gst_v4l2_encoder_set_controls (base->encoder, NULL, c, n)) {
++    GST_ELEMENT_ERROR (base, RESOURCE, SETTINGS,
++        ("Driver did not accept the SPS and PPS."), (NULL));
++    return FALSE;
++  }
++
++  return TRUE;
++}
++
++static gboolean
++gst_v4l2_codec_h265_enc_prepare_frame (GstV4l2CodecBaseEnc * base,
++    GstV4l2CodecEncFrame * f)
++{
++  GstV4l2CodecH265EncPrivate *priv = PRIV (base);
++  struct v4l2_ctrl_hevc_encode_params ep;
++  struct v4l2_ext_control c = {
++    .id = V4L2_CID_STATELESS_HEVC_ENCODE_PARAMS,
++    .ptr = &ep,
++    .size = sizeof (ep),
++  };
++
++  memset (&ep, 0, sizeof (ep));
++  ep.nuh_temporal_id_plus1 = 1;
++  ep.pic_order_cnt_val = f->poc;
++  ep.five_minus_max_num_merge_cand = 3;
++  ep.flags = V4L2_HEVC_ENCODE_FLAG_REFERENCE;
++  if (priv->sao)
++    ep.flags |= V4L2_HEVC_ENCODE_FLAG_SLICE_SAO_LUMA |
++        V4L2_HEVC_ENCODE_FLAG_SLICE_SAO_CHROMA;
++
++  if (f->idr) {
++    ep.nal_unit_type = HEVC_NAL_IDR_W_RADL;
++    ep.slice_type = V4L2_HEVC_SLICE_TYPE_I;
++  } else {
++    /* The previous picture is the only reference. */
++    ep.nal_unit_type = HEVC_NAL_TRAIL_R;
++    ep.slice_type = V4L2_HEVC_SLICE_TYPE_P;
++    ep.num_refs = 1;
++    ep.refs[0].timestamp = GST_V4L2_ENCODER_FRAME_TS (f->prev_id);
++    ep.refs[0].flags = V4L2_HEVC_ENCODE_REF_FLAG_USED_BY_CURR_PIC;
++    if (priv->tmvp)
++      ep.flags |= V4L2_HEVC_ENCODE_FLAG_SLICE_TEMPORAL_MVP_ENABLED;
++  }
++
++  if (!gst_v4l2_encoder_set_controls (base->encoder, f->request, &c, 1)) {
++    GST_ELEMENT_ERROR (base, RESOURCE, WRITE,
++        ("Driver did not accept the encode parameters."), (NULL));
++    return FALSE;
++  }
++
++  return TRUE;
++}
++
++static void
++gst_v4l2_codec_h265_enc_frame_done (GstV4l2CodecBaseEnc * base,
++    GstV4l2CodecEncFrame * f)
++{
++  struct v4l2_ctrl_hevc_encode_feedback fb;
++  struct v4l2_ext_control c = {
++    .id = V4L2_CID_STATELESS_HEVC_ENCODE_FEEDBACK,
++    .ptr = &fb,
++    .size = sizeof (fb),
++  };
++
++  memset (&fb, 0, sizeof (fb));
++  if (!gst_v4l2_encoder_get_controls (base->encoder, f->request, &c, 1))
++    return;
++
++  if (fb.timestamp != GST_V4L2_ENCODER_FRAME_TS (f->id))
++    GST_WARNING_OBJECT (base, "Feedback of picture %" G_GUINT64_FORMAT
++        " has timestamp %" G_GUINT64_FORMAT, f->id, (guint64) fb.timestamp);
++
++  if ((fb.stats.flags & V4L2_STATELESS_ENCODE_STATS_FLAG_QP) &&
++      fb.stats.qp_count)
++    f->avg_qp = (fb.stats.qp_sum + fb.stats.qp_count / 2) / fb.stats.qp_count;
++  else
++    f->avg_qp = fb.slice_qp;
++}
++
++static void
++gst_v4l2_codec_h265_enc_set_property (GObject * object, guint prop_id,
++    const GValue * value, GParamSpec * pspec)
++{
++  GstV4l2CodecH265EncPrivate *priv = PRIV (object);
++
++  GST_OBJECT_LOCK (object);
++  switch (prop_id) {
++    case PROP_SAO:
++      priv->prop_sao = g_value_get_boolean (value);
++      break;
++    case PROP_TMVP:
++      priv->prop_tmvp = g_value_get_boolean (value);
++      break;
++    default:
++      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
++      break;
++  }
++  GST_OBJECT_UNLOCK (object);
++}
++
++static void
++gst_v4l2_codec_h265_enc_get_property (GObject * object, guint prop_id,
++    GValue * value, GParamSpec * pspec)
++{
++  GstV4l2CodecH265EncPrivate *priv = PRIV (object);
++
++  GST_OBJECT_LOCK (object);
++  switch (prop_id) {
++    case PROP_SAO:
++      g_value_set_boolean (value, priv->prop_sao);
++      break;
++    case PROP_TMVP:
++      g_value_set_boolean (value, priv->prop_tmvp);
++      break;
++    default:
++      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
++      break;
++  }
++  GST_OBJECT_UNLOCK (object);
++}
++
++static void
++gst_v4l2_codec_h265_enc_init (GstV4l2CodecH265Enc * self)
++{
++  PRIV (self)->prop_sao = DEFAULT_SAO;
++  PRIV (self)->prop_tmvp = DEFAULT_TMVP;
++}
++
++static void
++gst_v4l2_codec_h265_enc_class_init (GstV4l2CodecH265EncClass * klass)
++{
++  GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
++  GstV4l2CodecBaseEncClass *base_class = GST_V4L2_CODEC_BASE_ENC_CLASS (klass);
++  const GParamFlags flags = G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
++      GST_PARAM_MUTABLE_READY;
++
++  gobject_class->set_property = gst_v4l2_codec_h265_enc_set_property;
++  gobject_class->get_property = gst_v4l2_codec_h265_enc_get_property;
++
++  base_class->coded_fourcc = V4L2_PIX_FMT_HEVC_SLICE;
++  base_class->default_bpp = 0.05;
++  base_class->cid_i_qp = V4L2_CID_MPEG_VIDEO_HEVC_I_FRAME_QP;
++  base_class->cid_p_qp = V4L2_CID_MPEG_VIDEO_HEVC_P_FRAME_QP;
++  base_class->cid_min_qp = V4L2_CID_MPEG_VIDEO_HEVC_MIN_QP;
++  base_class->cid_max_qp = V4L2_CID_MPEG_VIDEO_HEVC_MAX_QP;
++  base_class->negotiate_codec = gst_v4l2_codec_h265_enc_negotiate_codec;
++  base_class->configure = gst_v4l2_codec_h265_enc_configure;
++  base_class->prepare_frame = gst_v4l2_codec_h265_enc_prepare_frame;
++  base_class->frame_done = gst_v4l2_codec_h265_enc_frame_done;
++
++  g_object_class_install_property (gobject_class, PROP_SAO,
++      g_param_spec_boolean ("sao", "SAO", "Sample adaptive offset filter",
++          DEFAULT_SAO, flags));
++  g_object_class_install_property (gobject_class, PROP_TMVP,
++      g_param_spec_boolean ("tmvp", "TMVP",
++          "Temporal motion vector prediction", DEFAULT_TMVP, flags));
++
++  gst_type_mark_as_plugin_api (GST_TYPE_V4L2_CODEC_H265_ENC, 0);
++}
++
++static void
++gst_v4l2_codec_h265_enc_subinit (GstV4l2CodecH265Enc * self,
++    GstV4l2CodecBaseEncClass * klass)
++{
++  gst_v4l2_codec_base_enc_init_device (GST_V4L2_CODEC_BASE_ENC (self),
++      klass->device);
++}
++
++static void
++gst_v4l2_codec_h265_enc_subclass_init (GstV4l2CodecBaseEncClass * klass,
++    GstV4l2CodecDevice * device)
++{
++  GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
++  GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
++
++  gst_element_class_set_metadata (element_class,
++      "V4L2 Stateless H.265 Video Encoder",
++      "Codec/Encoder/Video/Hardware",
++      "A V4L2 based H.265 video encoder",
++      "Arun Iyengar <aiyengar1990@gmail.com>");
++
++  gst_element_class_add_static_pad_template (element_class, &sink_template);
++  gst_element_class_add_static_pad_template (element_class, &src_template);
++
++  klass->device = device;
++  gst_v4l2_codec_base_enc_install_device_properties (gobject_class, device);
++}
++
++void
++gst_v4l2_codec_h265_enc_register (GstPlugin * plugin, GstV4l2Encoder * encoder,
++    GstV4l2CodecDevice * device, guint rank)
++{
++  GST_DEBUG_CATEGORY_INIT (v4l2_h265enc_debug, "v4l2codecs-h265enc", 0,
++      "V4L2 stateless H.265 encoder");
++
++  if (!gst_v4l2_codec_h265_enc_api_check (encoder)) {
++    GST_WARNING ("Not registering the H.265 encoder, it failed the API check");
++    return;
++  }
++
++  gst_v4l2_encoder_register (plugin, GST_TYPE_V4L2_CODEC_H265_ENC,
++      (GClassInitFunc) gst_v4l2_codec_h265_enc_subclass_init,
++      gst_mini_object_ref (GST_MINI_OBJECT (device)),
++      (GInstanceInitFunc) gst_v4l2_codec_h265_enc_subinit,
++      "v4l2sl%sh265enc", device, rank, NULL);
++}
+diff --git a/sys/v4l2codecs/gstv4l2codech265enc.h b/sys/v4l2codecs/gstv4l2codech265enc.h
+new file mode 100644
+index 0000000..89f3096
+--- /dev/null
++++ b/sys/v4l2codecs/gstv4l2codech265enc.h
+@@ -0,0 +1,34 @@
++/* GStreamer
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#ifndef __GST_V4L2_CODEC_H265_ENC_H__
++#define __GST_V4L2_CODEC_H265_ENC_H__
++
++#include "gstv4l2codecbaseenc.h"
++
++G_BEGIN_DECLS
++
++void gst_v4l2_codec_h265_enc_register (GstPlugin * plugin,
++                                       GstV4l2Encoder * encoder,
++                                       GstV4l2CodecDevice * device,
++                                       guint rank);
++
++G_END_DECLS
++
++#endif /* __GST_V4L2_CODEC_H265_ENC_H__ */
+diff --git a/sys/v4l2codecs/meson.build b/sys/v4l2codecs/meson.build
+index c9b4294..ab8c86b 100644
+--- a/sys/v4l2codecs/meson.build
++++ b/sys/v4l2codecs/meson.build
+@@ -15,6 +15,7 @@ v4l2codecs_sources = [
+   'gstv4l2encoder.c',
+   'gstv4l2codecbaseenc.c',
+   'gstv4l2codech264enc.c',
++  'gstv4l2codech265enc.c',
+ ]
+ 
+ v4l2codecs_headers = [
+@@ -33,6 +34,7 @@ v4l2codecs_headers = [
+   'gstv4l2encoder.h',
+   'gstv4l2codecbaseenc.h',
+   'gstv4l2codech264enc.h',
++  'gstv4l2codech265enc.h',
+ ]
+ 
+ doc_sources = []
+diff --git a/sys/v4l2codecs/plugin.c b/sys/v4l2codecs/plugin.c
+index 50a925b..27b8451 100644
+--- a/sys/v4l2codecs/plugin.c
++++ b/sys/v4l2codecs/plugin.c
+@@ -49,6 +49,7 @@
+ #include "gstv4l2codech264dec.h"
+ #include "gstv4l2codech264enc.h"
+ #include "gstv4l2codech265dec.h"
++#include "gstv4l2codech265enc.h"
+ #include "gstv4l2codecmpeg2dec.h"
+ #include "gstv4l2codecvp8dec.h"
+ #include "gstv4l2codecvp9dec.h"
+@@ -141,6 +142,12 @@ register_video_encoder (GstPlugin * plugin, GstV4l2CodecDevice * device)
+         gst_v4l2_codec_h264_enc_register (plugin, encoder, device,
+             GST_RANK_PRIMARY + 1);
+         break;
++      case V4L2_PIX_FMT_HEVC_SLICE:
++        GST_INFO_OBJECT (encoder, "Registering %s as H265 Encoder",
++            device->name);
++        gst_v4l2_codec_h265_enc_register (plugin, encoder, device,
++            GST_RANK_PRIMARY + 1);
++        break;
+       default:
+         GST_FIXME_OBJECT (encoder, "%" GST_FOURCC_FORMAT " is not supported.",
+             GST_FOURCC_ARGS (fmt));
+-- 
+2.55.0
+

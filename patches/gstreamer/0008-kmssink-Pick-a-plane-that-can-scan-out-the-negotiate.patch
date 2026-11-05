@@ -1,0 +1,371 @@
+From 5a22932c994863e0e96393cef9e0d0876449d143 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 30 Oct 2026 04:42:38 +0000
+Subject: [PATCH] kmssink: Pick a plane that can scan out the negotiated format
+
+Without plane-id, kmssink uses the first plane that can be used with the
+CRTC and builds its caps from that plane's formats and modifiers only.
+The planes of a CRTC often differ there. On RK3588 (VOP2), the first
+overlay plane found is a Cluster plane, which only scans out YUV with
+AFBC modifiers, while the Esmart planes scan out linear NV12. With a
+stateless decoder producing linear NV12, playbin's playsink then
+silently inserts a software conversion to a format the Cluster plane
+takes (YUY2): a 4K60 H.264 stream plays at under 1 fps, and the
+CPU-written frames on two Cluster planes also cause VOP2 POST_BUF_EMPTY
+underflows. The only way around it was to look up a suitable plane and
+set plane-id by hand.
+
+When the plane is selected automatically, keep every other non-primary,
+non-cursor plane of the CRTC as a candidate, advertise the union of the
+caps of all candidates, and in set_caps() switch to the first candidate
+that can scan out the negotiated caps if the current plane can't. The
+current plane wins when it supports the caps, so nothing changes for
+streams it can show. On a renegotiation the old plane is disabled after
+its last flip. The plane-dependent setup (plane type, vblank rule,
+atomic plane properties) is factored out of start() so that it can be
+redone for the new plane, and the selection is redone on every start.
+Primary planes of other CRTCs are not candidates, as frames on a
+primary plane are shown by page flipping the CRTC.
+
+Reproducer (RK3588, HDMI, no compositor):
+
+  gst-launch-1.0 playbin3 uri=file:///bbb_4k60.mp4 \
+    video-sink="kmssink connector-id=<HDMI>"
+
+Before: frames on Cluster2 in YUYV converted by videoconvert, 0.78 fps,
+POST_BUF_EMPTY errors. With plane-id=<Esmart0>: NV12, 60 fps.
+After: "plane 47 can't show video/x-raw(memory:DMABuf) ... using plane
+59", NV12 on Esmart0, 2185 frames in 36 s with 0 dropped (59.94 fps),
+no POST_BUF_EMPTY; with force-modesetting=true the primary (plane 35) is
+the first pick, the sink moves to plane 59 and sets the mode, 0 dropped.
+
+Assisted-by: Claude:claude-opus-5-5
+---
+ sys/kms/gstkmssink.c | 218 +++++++++++++++++++++++++++++++++++++------
+ sys/kms/gstkmssink.h |   2 +
+ 2 files changed, 192 insertions(+), 28 deletions(-)
+
+diff --git a/sys/kms/gstkmssink.c b/sys/kms/gstkmssink.c
+index e3b07b7..ca19dc8 100644
+--- a/sys/kms/gstkmssink.c
++++ b/sys/kms/gstkmssink.c
+@@ -1229,8 +1229,21 @@ create_raw_caps (GstKMSSink * self, guint32 fourcc, GArray * formats,
+   return caps;
+ }
+ 
+-static gboolean
+-ensure_allowed_caps (GstKMSSink * self, drmModeConnector * conn,
++typedef struct
++{
++  guint32 plane_id;
++  GstCaps *caps;
++} GstKMSPlaneCandidate;
++
++static void
++plane_candidate_clear (GstKMSPlaneCandidate * candidate)
++{
++  gst_clear_caps (&candidate->caps);
++}
++
++/* The caps of the formats and modifiers @plane can scan out, or NULL */
++static GstCaps *
++get_plane_caps (GstKMSSink * self, drmModeConnector * conn,
+     drmModePlane * plane, drmModeRes * res)
+ {
+   GstCaps *out_caps, *tmp_caps, *raw_caps, *dma_caps;
+@@ -1239,9 +1252,6 @@ ensure_allowed_caps (GstKMSSink * self, drmModeConnector * conn,
+   drmModeModeInfo *mode;
+   gint count_modes;
+ 
+-  if (self->allowed_caps)
+-    return TRUE;
+-
+   out_caps = gst_caps_new_empty ();
+   if (!out_caps)
+     return FALSE;
+@@ -1283,8 +1293,94 @@ ensure_allowed_caps (GstKMSSink * self, drmModeConnector * conn,
+   g_clear_pointer (&all_modifiers, g_array_unref);
+ 
+   if (gst_caps_is_empty (out_caps)) {
+-    GST_DEBUG_OBJECT (self, "allowed caps is empty");
++    GST_DEBUG_OBJECT (self, "plane %u: caps are empty", plane->plane_id);
+     gst_caps_unref (out_caps);
++    return NULL;
++  }
++
++  out_caps = gst_caps_simplify (out_caps);
++
++  GST_DEBUG_OBJECT (self, "plane %u: caps = %" GST_PTR_FORMAT,
++      plane->plane_id, out_caps);
++
++  return out_caps;
++}
++
++static void
++add_plane_candidate (GstKMSSink * self, guint32 plane_id, GstCaps * caps)
++{
++  GstKMSPlaneCandidate candidate = { plane_id, gst_caps_ref (caps) };
++
++  g_array_append_val (self->plane_candidates, candidate);
++}
++
++/* Build the allowed caps from @plane. When the plane was selected
++ * automatically, any other plane usable with the CRTC is a candidate too, as
++ * planes of a CRTC often support different formats and modifiers (e.g. linear
++ * YUV only on some of them): the allowed caps are then the union of the caps
++ * of all candidates, and set_caps() switches to a plane that can scan out the
++ * negotiated caps. Otherwise the stream would be converted (possibly in
++ * software) to a format of the first plane found. Cursor planes are left out,
++ * as they are size limited, and so are primary planes (of other CRTCs), as
++ * frames on a primary plane are shown by page flipping the CRTC. */
++static gboolean
++ensure_allowed_caps (GstKMSSink * self, drmModeConnector * conn,
++    drmModePlane * plane, drmModeRes * res, drmModePlaneRes * pres,
++    gint crtc_id, gboolean auto_plane)
++{
++  GstCaps *out_caps;
++  int i, pipe = -1;
++
++  if (self->allowed_caps)
++    return TRUE;
++
++  out_caps = get_plane_caps (self, conn, plane, res);
++
++  for (i = 0; i < res->count_crtcs; i++) {
++    if (res->crtcs[i] == crtc_id)
++      pipe = i;
++  }
++
++  if (auto_plane && pipe >= 0) {
++    g_clear_pointer (&self->plane_candidates, g_array_unref);
++    self->plane_candidates = g_array_new (FALSE, FALSE,
++        sizeof (GstKMSPlaneCandidate));
++    g_array_set_clear_func (self->plane_candidates,
++        (GDestroyNotify) plane_candidate_clear);
++
++    if (out_caps)
++      add_plane_candidate (self, plane->plane_id, out_caps);
++
++    for (i = 0; i < pres->count_planes; i++) {
++      drmModePlane *other;
++      GstCaps *caps;
++      gint type;
++
++      if (pres->planes[i] == plane->plane_id)
++        continue;
++
++      other = drmModeGetPlane (self->fd, pres->planes[i]);
++      if (!other)
++        continue;
++
++      type = get_plane_type (self->fd, other->plane_id);
++      if (!(other->possible_crtcs & (1 << pipe)) ||
++          type == DRM_PLANE_TYPE_CURSOR || type == DRM_PLANE_TYPE_PRIMARY) {
++        drmModeFreePlane (other);
++        continue;
++      }
++
++      caps = get_plane_caps (self, conn, other, res);
++      if (caps) {
++        add_plane_candidate (self, other->plane_id, caps);
++        out_caps = out_caps ? gst_caps_merge (out_caps, caps) : caps;
++      }
++      drmModeFreePlane (other);
++    }
++  }
++
++  if (!out_caps) {
++    GST_DEBUG_OBJECT (self, "allowed caps is empty");
+     return FALSE;
+   }
+ 
+@@ -1421,6 +1517,78 @@ gst_kms_sink_update_plane_properties (GstKMSSink * self)
+   gst_kms_sink_update_properties (&iter, self->plane_props);
+ }
+ 
++/* Set up everything that depends on the plane frames are shown on */
++static void
++gst_kms_sink_setup_plane (GstKMSSink * self)
++{
++  gint plane_type = get_plane_type (self->fd, self->plane_id);
++
++  /* If the type is unknown, keep showing frames on the primary plane when
++   * modesetting */
++  self->plane_is_primary = plane_type < 0 ||
++      plane_type == DRM_PLANE_TYPE_PRIMARY;
++
++  /* With atomic drivers, drmModeSetPlane() is a blocking atomic commit that
++   * only returns once the new framebuffer is scanned out, so an additional
++   * vblank wait would halve the frame rate. Legacy updates of the cursor
++   * plane are the exception, they don't wait for vblank. */
++  self->setplane_is_sync = self->is_atomic &&
++      plane_type != DRM_PLANE_TYPE_CURSOR;
++
++  /* Show frames with non-blocking atomic commits when possible */
++  self->use_atomic = self->is_atomic && get_atomic_plane_props (self);
++
++  GST_INFO_OBJECT (self, "plane %d: atomic (%s) / atomic commits (%s) / "
++      "drmModeSetPlane waits for vblank (%s)", self->plane_id,
++      self->is_atomic ? "✓" : "✗", self->use_atomic ? "✓" : "✗",
++      self->setplane_is_sync ? "✓" : "✗");
++}
++
++/* With an automatically selected plane, switch to the first candidate plane
++ * that can scan out @caps if the current one can't */
++static void
++gst_kms_sink_select_plane (GstKMSSink * self, GstCaps * caps)
++{
++  GstKMSPlaneCandidate *candidate = NULL;
++  gint old_plane_id = self->plane_id;
++  guint i;
++
++  if (!self->plane_candidates)
++    return;
++
++  for (i = 0; i < self->plane_candidates->len; i++) {
++    GstKMSPlaneCandidate *c = &g_array_index (self->plane_candidates,
++        GstKMSPlaneCandidate, i);
++
++    if (!gst_caps_can_intersect (c->caps, caps))
++      continue;
++    if (c->plane_id == self->plane_id)
++      return;
++    if (!candidate)
++      candidate = c;
++  }
++
++  if (!candidate) {
++    GST_WARNING_OBJECT (self, "no plane supports %" GST_PTR_FORMAT, caps);
++    return;
++  }
++
++  /* Renegotiation: take the previous frame off the old plane */
++  if (self->scanout_buffer || self->last_buffer) {
++    gst_kms_sink_wait_flip (self);
++    drmModeSetPlane (self->fd, old_plane_id, self->crtc_id, 0, 0, 0, 0, 0, 0,
++        0, 0, 0, 0);
++    gst_buffer_replace (&self->scanout_buffer, NULL);
++  }
++
++  self->plane_id = candidate->plane_id;
++  GST_INFO_OBJECT (self, "plane %d can't show %" GST_PTR_FORMAT
++      ", using plane %d", old_plane_id, caps, self->plane_id);
++
++  gst_kms_sink_setup_plane (self);
++  gst_kms_sink_update_plane_properties (self);
++}
++
+ static gboolean
+ gst_kms_sink_start (GstBaseSink * bsink)
+ {
+@@ -1432,7 +1600,6 @@ gst_kms_sink_start (GstBaseSink * bsink)
+   drmModePlane *plane;
+   gboolean universal_planes;
+   gboolean ret;
+-  gint plane_type;
+ 
+   self = GST_KMS_SINK (bsink);
+   universal_planes = FALSE;
+@@ -1499,7 +1666,8 @@ retry_find_plane:
+   if (!plane)
+     goto plane_failed;
+ 
+-  if (!ensure_allowed_caps (self, conn, plane, res))
++  if (!ensure_allowed_caps (self, conn, plane, res, pres, crtc->crtc_id,
++          self->plane_id == -1))
+     goto allowed_caps_failed;
+ 
+   self->conn_id = conn->connector_id;
+@@ -1509,34 +1677,15 @@ retry_find_plane:
+   GST_INFO_OBJECT (self, "connector id = %d / crtc id = %d / plane id = %d",
+       self->conn_id, self->crtc_id, self->plane_id);
+ 
+-  plane_type = get_plane_type (self->fd, self->plane_id);
+-
+-  /* If the type is unknown, keep showing frames on the primary plane when
+-   * modesetting */
+-  self->plane_is_primary = plane_type < 0 ||
+-      plane_type == DRM_PLANE_TYPE_PRIMARY;
+-
+   /* There is no capability telling whether the driver is atomic, so try to
+    * enable atomic on our own fd. As this also enables universal planes, it is
+    * done after the plane lookup, so that the selected plane doesn't change. */
+   self->is_atomic = self->is_internal_fd &&
+       drmSetClientCap (self->fd, DRM_CLIENT_CAP_ATOMIC, 1) == 0;
+ 
+-  /* With atomic drivers, drmModeSetPlane() is a blocking atomic commit that
+-   * only returns once the new framebuffer is scanned out, so an additional
+-   * vblank wait would halve the frame rate. Legacy updates of the cursor
+-   * plane are the exception, they don't wait for vblank. */
+-  self->setplane_is_sync = self->is_atomic &&
+-      plane_type != DRM_PLANE_TYPE_CURSOR;
+-
+-  /* Show frames with non-blocking atomic commits when possible */
+-  self->use_atomic = self->is_atomic && get_atomic_plane_props (self);
++  gst_kms_sink_setup_plane (self);
+   self->flip_pending = FALSE;
+ 
+-  GST_INFO_OBJECT (self, "atomic (%s) / atomic commits (%s) / "
+-      "drmModeSetPlane waits for vblank (%s)", self->is_atomic ? "✓" : "✗",
+-      self->use_atomic ? "✓" : "✗", self->setplane_is_sync ? "✓" : "✗");
+-
+   GST_OBJECT_LOCK (self);
+   self->hdisplay = crtc->mode.hdisplay;
+   self->vdisplay = crtc->mode.vdisplay;
+@@ -1678,6 +1827,12 @@ gst_kms_sink_stop (GstBaseSink * bsink)
+ 
+   gst_buffer_replace (&self->last_buffer, NULL);
+   gst_caps_replace (&self->allowed_caps, NULL);
++
++  /* Select the plane again on the next start */
++  if (self->plane_candidates) {
++    g_clear_pointer (&self->plane_candidates, g_array_unref);
++    self->plane_id = -1;
++  }
+   gst_object_replace ((GstObject **) & self->pool, NULL);
+   gst_object_replace ((GstObject **) & self->allocator, NULL);
+ 
+@@ -1936,6 +2091,8 @@ gst_kms_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
+ 
+   gst_kms_sink_set_hdr10_caps (self, caps);
+ 
++  gst_kms_sink_select_plane (self, caps);
++
+   /* discard dumb buffer pool */
+   if (self->pool) {
+     gst_buffer_pool_set_active (self->pool, FALSE);
+@@ -2881,6 +3038,7 @@ gst_kms_sink_finalize (GObject * object)
+   gst_poll_free (sink->poll);
+   g_clear_pointer (&sink->connector_props, gst_structure_free);
+   g_clear_pointer (&sink->plane_props, gst_structure_free);
++  g_clear_pointer (&sink->plane_candidates, g_array_unref);
+   g_clear_pointer (&sink->tmp_kmsmem, gst_memory_unref);
+ 
+   G_OBJECT_CLASS (parent_class)->finalize (object);
+@@ -2984,6 +3142,10 @@ gst_kms_sink_class_init (GstKMSSinkClass * klass)
+    * There could be several planes associated with a CRTC.
+    * By default the first plane that's possible to use with a given
+    * CRTC is tried.
++   *
++   * Since 1.30, if that plane can't scan out the negotiated format and
++   * modifier, another (non-primary, non-cursor) plane of the CRTC that can is
++   * used instead, and the sink accepts the formats of all of them.
+    */
+   g_properties[PROP_PLANE_ID] = g_param_spec_int ("plane-id",
+       "Plane ID", "DRM plane id", -1, G_MAXINT32, -1,
+diff --git a/sys/kms/gstkmssink.h b/sys/kms/gstkmssink.h
+index 1ced29c..8ad3be7 100644
+--- a/sys/kms/gstkmssink.h
++++ b/sys/kms/gstkmssink.h
+@@ -78,6 +78,8 @@ struct _GstKMSSink {
+ 
+   gboolean modesetting_enabled;
+   gboolean plane_is_primary;
++  /* planes the automatic plane selection can pick from */
++  GArray *plane_candidates;
+   gboolean restore_crtc;
+   GstStructure *connector_props;
+   GstStructure *plane_props;
+-- 
+2.55.0
+

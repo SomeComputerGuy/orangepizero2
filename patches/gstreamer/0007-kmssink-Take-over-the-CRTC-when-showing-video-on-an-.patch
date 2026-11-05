@@ -1,0 +1,169 @@
+From e5240221a0c26a34eb365e55fbb8b9279bc3856e Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 30 Oct 2026 03:50:10 +0000
+Subject: [PATCH 7/7] kmssink: Take over the CRTC when showing video on an
+ overlay plane
+
+Without modesetting, kmssink shows the video on the selected plane and
+leaves the CRTC's primary plane as it is. From a text console, that is
+the fbcon framebuffer: the console stays visible around (and, with
+alpha, under) the video, and every update of the console framebuffer is
+flushed to the display. The DRM fbdev emulation does that with
+drm_atomic_helper_dirtyfb(), a blocking atomic commit on every plane
+that shows the framebuffer, so the fbcon cursor blink alone commits on
+the video's CRTC every 200 ms. Each of those commits occupies the CRTC
+for a refresh cycle, the video frame that is due in that cycle is shown
+a cycle late (or the non-blocking commit gets EBUSY), and a 60 fps video
+on a 60 Hz display drops about two frames per second. The only way
+around it was to hide the console cursor while playing.
+
+Do what a modeset in kmssink already does and take the CRTC over: when
+the video goes to a non-primary plane, the sink opened the DRM device
+itself and modesetting is not used, show a black XRGB8888 buffer on the
+primary plane in the current mode with drmModeSetCrtc(). The mode is
+unchanged, so atomic drivers don't do a full modeset (no blanking or
+link retraining). The console framebuffer is then no longer on the CRTC,
+its updates don't commit there anymore, and it is restored when the sink
+stops (restore-crtc, enabled by default), as after a modeset; the kernel
+also restores fbcon when the DRM master closes the device. When the sink
+is not DRM master (another client owns the display), drmModeSetCrtc()
+fails and the CRTC is left alone as before.
+
+Reproducer (RK3588, fbcon on HDMI at 3840x2160@60 with the cursor
+blinking, video on an Esmart overlay plane, 4K60 H.264 on rkvdec):
+playbin3 with video-sink = fpsdisplaysink, whose video-sink is
+"kmssink connector-id=<HDMI> plane-id=<Esmart0>", for 36 s.
+
+Before: 72 frames dropped in 36 s (54.8 fps) with the console cursor
+blinking. After: 0 dropped, 59.95 fps, the screen around the video is
+black, and the console comes back when the pipeline stops.
+
+Assisted-by: Claude:claude-opus-5-5
+---
+ sys/kms/gstkmssink.c | 88 +++++++++++++++++++++++++++++++++++++-------
+ 1 file changed, 75 insertions(+), 13 deletions(-)
+
+diff --git a/sys/kms/gstkmssink.c b/sys/kms/gstkmssink.c
+index 1aed7fa..e3b07b7 100644
+--- a/sys/kms/gstkmssink.c
++++ b/sys/kms/gstkmssink.c
+@@ -859,6 +859,69 @@ find_mode_for_video (GstKMSSink * self, drmModeConnector * conn,
+   return first;
+ }
+ 
++/* A black buffer in a format every primary plane supports */
++static GstKMSMemory *
++alloc_black_primary_buffer (GstKMSSink * self, gint width, gint height)
++{
++  GstVideoInfo fb_vinfo;
++  GstKMSMemory *kmsmem;
++  GstMapInfo map;
++
++  ensure_kms_allocator (self);
++
++  gst_video_info_set_format (&fb_vinfo, GST_VIDEO_FORMAT_BGRx, width, height);
++  kmsmem = (GstKMSMemory *) gst_kms_allocator_bo_alloc (self->allocator,
++      &fb_vinfo);
++  if (kmsmem && gst_memory_map (GST_MEMORY_CAST (kmsmem), &map,
++          GST_MAP_WRITE)) {
++    memset (map.data, 0, map.size);
++    gst_memory_unmap (GST_MEMORY_CAST (kmsmem), &map);
++  }
++
++  return kmsmem;
++}
++
++/* When the video is shown on an overlay plane without modesetting, the
++ * primary plane of the CRTC keeps scanning out whatever was there before,
++ * typically the fbcon framebuffer. Besides showing the console around and
++ * under the video, every update of that framebuffer (the cursor blinks every
++ * 200 ms) is flushed with a blocking atomic commit on the same CRTC
++ * (drm_atomic_helper_dirtyfb()), which delays the next video frame by a
++ * refresh cycle. Like a modeset does, take the CRTC over by showing a black
++ * buffer on the primary plane in the current mode. As the mode doesn't change,
++ * this is not a full modeset. It needs DRM master, so if somebody else owns
++ * the display, the CRTC is left alone. */
++static void
++gst_kms_sink_take_over_crtc (GstKMSSink * self, drmModeCrtc * crtc)
++{
++  GstKMSMemory *kmsmem;
++  int err;
++
++  kmsmem = alloc_black_primary_buffer (self, crtc->mode.hdisplay,
++      crtc->mode.vdisplay);
++  if (!kmsmem) {
++    GST_WARNING_OBJECT (self, "failed to allocate a primary plane buffer");
++    return;
++  }
++
++  err = drmModeSetCrtc (self->fd, crtc->crtc_id, kmsmem->fb_id, 0, 0,
++      (uint32_t *) & self->conn_id, 1, &crtc->mode);
++  if (err) {
++    GST_INFO_OBJECT (self, "not taking over the CRTC: %s", g_strerror (errno));
++    gst_memory_unref (GST_MEMORY_CAST (kmsmem));
++    return;
++  }
++
++  GST_INFO_OBJECT (self, "showing a black buffer on the primary plane");
++
++  g_clear_pointer (&self->tmp_kmsmem, gst_memory_unref);
++  self->tmp_kmsmem = (GstMemory *) kmsmem;
++  self->buffer_id = kmsmem->fb_id;
++
++  if (self->restore_crtc)
++    self->saved_crtc = (drmModeCrtc *) crtc;
++}
++
+ static gboolean
+ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
+ {
+@@ -885,20 +948,10 @@ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
+     kmsmem = (GstKMSMemory *) gst_kms_allocator_bo_alloc (self->allocator,
+         vinfo);
+   } else {
+-    GstVideoInfo fb_vinfo;
+-    GstMapInfo map;
+-
+     /* The video goes to another plane, so set the mode with a black buffer
+-     * in a format every primary plane supports */
+-    gst_video_info_set_format (&fb_vinfo, GST_VIDEO_FORMAT_BGRx,
+-        GST_VIDEO_INFO_WIDTH (vinfo), GST_VIDEO_INFO_HEIGHT (vinfo));
+-    kmsmem = (GstKMSMemory *) gst_kms_allocator_bo_alloc (self->allocator,
+-        &fb_vinfo);
+-    if (kmsmem && gst_memory_map (GST_MEMORY_CAST (kmsmem), &map,
+-            GST_MAP_WRITE)) {
+-      memset (map.data, 0, map.size);
+-      gst_memory_unmap (GST_MEMORY_CAST (kmsmem), &map);
+-    }
++     * on the primary plane */
++    kmsmem = alloc_black_primary_buffer (self, GST_VIDEO_INFO_WIDTH (vinfo),
++        GST_VIDEO_INFO_HEIGHT (vinfo));
+   }
+   if (!kmsmem)
+     goto bo_failed;
+@@ -1500,6 +1553,10 @@ retry_find_plane:
+ 
+   self->buffer_id = crtc->buffer_id;
+ 
++  if (!self->modesetting_enabled && !self->plane_is_primary &&
++      self->is_internal_fd)
++    gst_kms_sink_take_over_crtc (self, crtc);
++
+   self->mm_width = conn->mmWidth;
+   self->mm_height = conn->mmHeight;
+ 
+@@ -2950,6 +3007,11 @@ gst_kms_sink_class_init (GstKMSSinkClass * klass)
+    * Restore previous CRTC setting if new CRTC mode was set forcefully.
+    * By default this is enabled if user set CRTC with a new mode on an already
+    * active CRTC wich was having a valid mode.
++   *
++   * Since 1.30, this also restores the primary plane when the video is shown
++   * on another plane without modesetting: the sink then shows a black buffer
++   * on the primary plane in the current mode, so that the previous content
++   * (e.g. the console) is neither visible nor updated on the video's CRTC.
+    */
+   g_properties[PROP_RESTORE_CRTC] =
+       g_param_spec_boolean ("restore-crtc", "Restore CRTC mode",
+-- 
+2.55.0
+

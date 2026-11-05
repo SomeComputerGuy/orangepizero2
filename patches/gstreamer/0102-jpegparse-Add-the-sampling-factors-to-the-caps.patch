@@ -1,0 +1,87 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 18:04:32 +0000
+Subject: [PATCH 102/103] jpegparse: Add the sampling factors to the caps
+
+The sampling caps field names the chroma subsampling ratio, but several
+sampling factor layouts share one ratio: FFmpeg writes 4:2:2 as Y 2x2,
+Cb/Cr 1x2 rather than Y 2x1, Cb/Cr 1x1, and 4:4:4 as 1x2 for every
+component. Hardware decoders often support only some layouts, and a
+decoder that can only check the layout on the first image cannot make
+decodebin fall back to another decoder.
+
+Add a "sampling-factors" string field with the HxV factors of each
+component in frame header order, e.g. "2x2:1x1:1x1", so that decoders
+can restrict their sink caps to the layouts they support. A change of
+the factors renegotiates like a change of the sampling.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ gst/jpegformat/gstjpegparse.c | 20 +++++++++++++++++++-
+ gst/jpegformat/gstjpegparse.h |  2 ++
+ 2 files changed, 21 insertions(+), 1 deletion(-)
+
+diff --git a/gst/jpegformat/gstjpegparse.c b/gst/jpegformat/gstjpegparse.c
+index c7a711c..11aa758 100644
+--- a/gst/jpegformat/gstjpegparse.c
++++ b/gst/jpegformat/gstjpegparse.c
+@@ -328,6 +328,8 @@ gst_jpeg_parse_sof (GstJpegParse * parse, GstJpegSegment * seg)
+   GstJpegFrameHdr hdr = { 0, };
+   guint colorspace;
+   guint sampling;
++  gchar factors[16];
++  guint i;
+ 
+   if (!gst_jpeg_segment_parse_frame_header (seg, &hdr)) {
+     return FALSE;
+@@ -405,12 +407,24 @@ gst_jpeg_parse_sof (GstJpegParse * parse, GstJpegSegment * seg)
+       break;
+   }
+ 
++  factors[0] = '\0';
++  for (i = 0; i < hdr.num_components && i < 4; i++) {
++    gsize len = strlen (factors);
++
++    g_snprintf (factors + len, sizeof (factors) - len, "%s%ux%u",
++        i ? ":" : "", hdr.components[i].horizontal_factor,
++        hdr.components[i].vertical_factor);
++  }
++
+   if (hdr.width != parse->width || hdr.height != parse->height
+-      || colorspace != parse->colorspace || sampling != parse->sampling) {
++      || colorspace != parse->colorspace || sampling != parse->sampling
++      || strcmp (factors, parse->sampling_factors) != 0) {
+     parse->width = hdr.width;
+     parse->height = hdr.height;
+     parse->colorspace = colorspace;
+     parse->sampling = sampling;
++    g_strlcpy (parse->sampling_factors, factors,
++        sizeof (parse->sampling_factors));
+ 
+     if (parse->first_picture && !parse->multiscope) {
+       if (parse->orig_height > 0
+@@ -1048,6 +1062,10 @@ gst_jpeg_parse_set_new_caps (GstJpegParse * parse)
+     gst_caps_set_simple (caps, "sampling", G_TYPE_STRING,
+         sampling_to_string (parse->sampling), NULL);
+   }
++  if (parse->sampling_factors[0] != '\0') {
++    gst_caps_set_simple (caps, "sampling-factors", G_TYPE_STRING,
++        parse->sampling_factors, NULL);
++  }
+ 
+   if (parse->colorimetry) {
+     gst_caps_set_simple (caps, "colorimetry", G_TYPE_STRING, parse->colorimetry,
+diff --git a/gst/jpegformat/gstjpegparse.h b/gst/jpegformat/gstjpegparse.h
+index e2efb30..9e889bd 100644
+--- a/gst/jpegformat/gstjpegparse.h
++++ b/gst/jpegformat/gstjpegparse.h
+@@ -80,6 +80,8 @@ struct _GstJpegParse {
+   /* format color space */
+   guint colorspace;
+   guint sampling;
++  /* per component HxV sampling factors, e.g. "2x2:1x1:1x1" */
++  gchar sampling_factors[16];
+   gint par_num;
+   gint par_den;
+   GstCaps *prev_caps;

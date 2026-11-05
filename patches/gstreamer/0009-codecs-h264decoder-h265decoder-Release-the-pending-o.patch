@@ -1,0 +1,62 @@
+From 4916ab02e609b33d212008a2d676b39e32f6f1ea Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 30 Oct 2026 10:26:36 +0000
+Subject: [PATCH] codecs: h264decoder, h265decoder: Release the pending output
+ frames on stop
+
+The H.264 and H.265 base classes keep decoded frames in an output queue
+until the reordering/output delay lets them out. stop() frees the DPB
+but leaves that queue alone, so a decoder stopped mid-stream (PAUSED to
+READY) keeps the queued frames, their pictures and, through the
+subclass' picture user data, its output buffers until the element is
+finalized. When the element is started again the stale frames are still
+queued and can be output into the new session.
+
+With v4l2codecs this keeps the whole CAPTURE allocator alive: on RK3588
+each 4K H.264 decoder stopped mid-stream with a frame queued kept 10
+exported dma-buf fds (about 124 MB) open, and after a dozen stop/start
+cycles in one process VIDIOC_CREATE_BUFS failed with ENOMEM ("Not enough
+memory to allocate source buffers"). Decoders that reach EOS, or whose
+process exits, don't show it, since the queue is drained or freed then.
+
+Clear the output queue in stop(), as the VP8, VP9, AV1 and MPEG-2 base
+classes already do.
+
+Assisted-by: Claude:claude-opus-5-5
+---
+ gst-libs/gst/codecs/gsth264decoder.c | 3 +++
+ gst-libs/gst/codecs/gsth265decoder.c | 4 ++++
+ 2 files changed, 7 insertions(+)
+
+diff --git a/gst-libs/gst/codecs/gsth264decoder.c b/gst-libs/gst/codecs/gsth264decoder.c
+index 9753519..81ae9f9 100644
+--- a/gst-libs/gst/codecs/gsth264decoder.c
++++ b/gst-libs/gst/codecs/gsth264decoder.c
+@@ -468,6 +468,9 @@ gst_h264_decoder_stop (GstVideoDecoder * decoder)
+ {
+   GstH264Decoder *self = GST_H264_DECODER (decoder);
+ 
++  /* The frames still waiting for output hold their pictures, and with them
++   * the subclass' output buffers: release them now, not at finalize. */
++  gst_vec_deque_clear (self->priv->output_queue);
+   gst_h264_decoder_reset (self);
+ 
+   return TRUE;
+diff --git a/gst-libs/gst/codecs/gsth265decoder.c b/gst-libs/gst/codecs/gsth265decoder.c
+index 8bac0a2..651ed3d 100644
+--- a/gst-libs/gst/codecs/gsth265decoder.c
++++ b/gst-libs/gst/codecs/gsth265decoder.c
+@@ -305,6 +305,10 @@ gst_h265_decoder_stop (GstVideoDecoder * decoder)
+     priv->preproc_parser = NULL;
+   }
+ 
++  /* The frames still waiting for output hold their pictures, and with them
++   * the subclass' output buffers: release them now, not at finalize. */
++  gst_vec_deque_clear (priv->output_queue);
++
+   if (priv->dpb) {
+     gst_h265_dpb_free (priv->dpb);
+     priv->dpb = NULL;
+-- 
+2.55.0
+

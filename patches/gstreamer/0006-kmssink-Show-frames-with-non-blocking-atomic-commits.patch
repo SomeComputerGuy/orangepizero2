@@ -1,0 +1,294 @@
+From 74c1c8025e4b4a81e7b5e62997632be00b9ac5a4 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 29 Oct 2026 23:33:27 +0000
+Subject: [PATCH 6/7] kmssink: Show frames with non-blocking atomic commits
+
+On atomic drivers, drmModeSetPlane() is a blocking atomic commit that
+only returns once the new framebuffer is scanned out. The streaming
+thread is then blocked for up to a refresh cycle on every frame, and the
+next frame can only be prepared after that. At high refresh rates this
+caps the frame rate well below the display rate; for example 3840x2160
+at 120 Hz on RK3588 only reaches about 63 fps.
+
+When the sink enabled atomic on its own fd and the plane exposes the
+standard plane properties, show the frames with an atomic commit that
+sets FB_ID, CRTC_ID, SRC_* and CRTC_* on the plane, using
+DRM_MODE_ATOMIC_NONBLOCK and DRM_MODE_PAGE_FLIP_EVENT. Before the next
+commit, wait for the page flip event of the previous one, since the
+kernel rejects a non-blocking commit while the previous one is pending
+(and retry with a blocking commit if it still returns EBUSY). Frames are
+still paced by the clock, but the next buffer can be rendered while the
+previous one is waiting for vblank.
+
+A buffer must stay alive until the commit replacing it is done, so the
+buffer of the pending commit and the scanned out one are kept until the
+next page flip event. The drain waits for the flip so that the upstream
+buffer is really released, and stop() waits for the last one.
+
+drmModeSetPlane() stays as the fallback when atomic is not available,
+the fd comes from the application, the plane lacks one of the
+properties, or an atomic commit fails. The primary plane page flip used
+for modesetting is unchanged.
+
+Assisted-by: Claude:claude-opus-5-5
+---
+ sys/kms/gstkmssink.c | 166 +++++++++++++++++++++++++++++++++++++++++--
+ sys/kms/gstkmssink.h |   9 +++
+ 2 files changed, 170 insertions(+), 5 deletions(-)
+
+diff --git a/sys/kms/gstkmssink.c b/sys/kms/gstkmssink.c
+index 8b07677..1aed7fa 100644
+--- a/sys/kms/gstkmssink.c
++++ b/sys/kms/gstkmssink.c
+@@ -76,6 +76,7 @@ static GstFlowReturn gst_kms_sink_show_frame (GstVideoSink * vsink,
+     GstBuffer * buf);
+ static void gst_kms_sink_video_overlay_init (GstVideoOverlayInterface * iface);
+ static void gst_kms_sink_drain (GstKMSSink * self);
++static gboolean gst_kms_sink_wait_flip (GstKMSSink * self);
+ 
+ #define parent_class gst_kms_sink_parent_class
+ G_DEFINE_TYPE_WITH_CODE (GstKMSSink, gst_kms_sink, GST_TYPE_VIDEO_SINK,
+@@ -742,6 +743,48 @@ get_plane_type (gint fd, guint32 plane_id)
+   return type;
+ }
+ 
++/* Must match GST_KMS_ATOMIC_N_PROPS and the order used in
++ * gst_kms_sink_atomic_commit() */
++static const gchar *atomic_plane_props[GST_KMS_ATOMIC_N_PROPS] = {
++  "FB_ID", "CRTC_ID", "SRC_X", "SRC_Y", "SRC_W", "SRC_H",
++  "CRTC_X", "CRTC_Y", "CRTC_W", "CRTC_H",
++};
++
++static gboolean
++get_atomic_plane_props (GstKMSSink * self)
++{
++  drmModeObjectProperties *props;
++  guint i, j;
++
++  memset (self->atomic_props, 0, sizeof (self->atomic_props));
++
++  props = drmModeObjectGetProperties (self->fd, self->plane_id,
++      DRM_MODE_OBJECT_PLANE);
++  if (!props)
++    return FALSE;
++
++  for (i = 0; i < props->count_props; i++) {
++    drmModePropertyRes *prop = drmModeGetProperty (self->fd, props->props[i]);
++
++    for (j = 0; prop && j < GST_KMS_ATOMIC_N_PROPS; j++) {
++      if (!g_strcmp0 (prop->name, atomic_plane_props[j]))
++        self->atomic_props[j] = prop->prop_id;
++    }
++    drmModeFreeProperty (prop);
++  }
++
++  drmModeFreeObjectProperties (props);
++
++  for (j = 0; j < GST_KMS_ATOMIC_N_PROPS; j++) {
++    if (!self->atomic_props[j]) {
++      GST_INFO_OBJECT (self, "plane has no %s property", atomic_plane_props[j]);
++      return FALSE;
++    }
++  }
++
++  return TRUE;
++}
++
+ static void
+ ensure_kms_allocator (GstKMSSink * self)
+ {
+@@ -1433,8 +1476,13 @@ retry_find_plane:
+   self->setplane_is_sync = self->is_atomic &&
+       plane_type != DRM_PLANE_TYPE_CURSOR;
+ 
+-  GST_INFO_OBJECT (self, "atomic (%s) / drmModeSetPlane waits for vblank (%s)",
+-      self->is_atomic ? "✓" : "✗", self->setplane_is_sync ? "✓" : "✗");
++  /* Show frames with non-blocking atomic commits when possible */
++  self->use_atomic = self->is_atomic && get_atomic_plane_props (self);
++  self->flip_pending = FALSE;
++
++  GST_INFO_OBJECT (self, "atomic (%s) / atomic commits (%s) / "
++      "drmModeSetPlane waits for vblank (%s)", self->is_atomic ? "✓" : "✗",
++      self->use_atomic ? "✓" : "✗", self->setplane_is_sync ? "✓" : "✗");
+ 
+   GST_OBJECT_LOCK (self);
+   self->hdisplay = crtc->mode.hdisplay;
+@@ -1565,6 +1613,9 @@ gst_kms_sink_stop (GstBaseSink * bsink)
+ 
+   self = GST_KMS_SINK (bsink);
+ 
++  gst_kms_sink_wait_flip (self);
++  gst_buffer_replace (&self->scanout_buffer, NULL);
++
+   if (self->allocator)
+     gst_kms_allocator_clear_cache (self->allocator);
+ 
+@@ -2037,6 +2088,86 @@ event_failed:
+   }
+ }
+ 
++/* Wait for the page flip event of the last atomic commit. Once it arrived,
++ * the buffer of that commit is scanned out, and the buffer it replaced can be
++ * released. */
++static gboolean
++gst_kms_sink_wait_flip (GstKMSSink * self)
++{
++  drmEventContext evctxt = {
++    .version = DRM_EVENT_CONTEXT_VERSION,
++    .page_flip_handler = sync_handler,
++  };
++  gint ret;
++
++  while (self->flip_pending) {
++    do {
++      ret = gst_poll_wait (self->poll, 3 * GST_SECOND);
++    } while (ret == -1 && (errno == EAGAIN || errno == EINTR));
++
++    if (ret <= 0) {
++      GST_WARNING_OBJECT (self, "no page flip event: %s",
++          ret == 0 ? "timeout" : g_strerror (errno));
++      self->flip_pending = FALSE;
++      break;
++    }
++
++    if (drmHandleEvent (self->fd, &evctxt)) {
++      GST_ERROR_OBJECT (self, "drmHandleEvent failed: %s (%d)",
++          g_strerror (errno), errno);
++      self->flip_pending = FALSE;
++      return FALSE;
++    }
++  }
++
++  if (self->flip_buffer) {
++    gst_buffer_replace (&self->scanout_buffer, self->flip_buffer);
++    gst_clear_buffer (&self->flip_buffer);
++  }
++
++  return TRUE;
++}
++
++static gint
++gst_kms_sink_atomic_commit (GstKMSSink * self, guint32 fb_id,
++    GstVideoRectangle * dst, GstVideoRectangle * src)
++{
++  drmModeAtomicReq *req;
++  guint64 values[GST_KMS_ATOMIC_N_PROPS] = {
++    fb_id, self->crtc_id,
++    /* source coordinates are given in Q16 */
++    (guint64) src->x << 16, (guint64) src->y << 16,
++    (guint64) src->w << 16, (guint64) src->h << 16,
++    (guint64) dst->x, (guint64) dst->y, (guint64) dst->w, (guint64) dst->h,
++  };
++  gint i, ret;
++
++  req = drmModeAtomicAlloc ();
++  if (!req)
++    return -ENOMEM;
++
++  for (i = 0; i < GST_KMS_ATOMIC_N_PROPS; i++) {
++    ret = drmModeAtomicAddProperty (req, self->plane_id, self->atomic_props[i],
++        values[i]);
++    if (ret < 0)
++      goto done;
++  }
++
++  self->flip_pending = TRUE;
++  ret = drmModeAtomicCommit (self->fd, req,
++      DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, &self->flip_pending);
++  /* Another commit on this CRTC is still pending, wait for it */
++  if (ret && errno == EBUSY)
++    ret = drmModeAtomicCommit (self->fd, req, DRM_MODE_PAGE_FLIP_EVENT,
++        &self->flip_pending);
++  if (ret)
++    self->flip_pending = FALSE;
++
++done:
++  drmModeAtomicFree (req);
++  return ret;
++}
++
+ static gboolean
+ gst_kms_sink_import_dmabuf (GstKMSSink * self, GstBuffer * inbuf,
+     GstBuffer ** outbuf)
+@@ -2364,6 +2495,28 @@ retry_set_plane:
+   /* Send the HDR infoframes if appropriate */
+   gst_kms_push_hdr_infoframe (self, FALSE);
+ 
++  if (self->use_atomic) {
++    GST_TRACE_OBJECT (self,
++        "atomic commit at (%i,%i) %ix%i sourcing at (%i,%i) %ix%i",
++        result.x, result.y, result.w, result.h, src.x, src.y, src.w, src.h);
++
++    /* Only one commit can be pending, and the buffer it replaces must stay
++     * alive until it is done */
++    if (!gst_kms_sink_wait_flip (self)) {
++      GST_OBJECT_UNLOCK (self);
++      goto bail;
++    }
++
++    if (gst_kms_sink_atomic_commit (self, fb_id, &result, &src) == 0) {
++      gst_buffer_replace (&self->flip_buffer, buffer);
++      goto sync_frame;
++    }
++
++    GST_WARNING_OBJECT (self, "atomic commit failed: %s, falling back to "
++        "drmModeSetPlane", g_strerror (errno));
++    self->use_atomic = FALSE;
++  }
++
+   GST_TRACE_OBJECT (self,
+       "drmModeSetPlane at (%i,%i) %ix%i sourcing at (%i,%i) %ix%i",
+       result.x, result.y, result.w, result.h, src.x, src.y, src.w, src.h);
+@@ -2382,9 +2535,9 @@ retry_set_plane:
+ 
+ sync_frame:
+   /* Wait for the previous frame to complete redraw, unless the plane update
+-   * already did */
+-  if (!self->skip_vsync &&
+-      (gst_kms_sink_flips_primary (self) || !self->setplane_is_sync) &&
++   * already did, or an atomic commit is waited for before the next one */
++  if (!self->skip_vsync && (gst_kms_sink_flips_primary (self) ||
++          (!self->use_atomic && !self->setplane_is_sync)) &&
+       !gst_kms_sink_sync (self)) {
+     GST_OBJECT_UNLOCK (self);
+     goto bail;
+@@ -2464,6 +2617,9 @@ gst_kms_sink_drain (GstKMSSink * self)
+ 
+     gst_kms_allocator_clear_cache (self->allocator);
+     gst_kms_sink_show_frame (GST_VIDEO_SINK (self), NULL);
++    GST_OBJECT_LOCK (self);
++    gst_kms_sink_wait_flip (self);
++    GST_OBJECT_UNLOCK (self);
+     gst_buffer_unref (last_buf);
+   }
+ }
+diff --git a/sys/kms/gstkmssink.h b/sys/kms/gstkmssink.h
+index 428ecea..1ced29c 100644
+--- a/sys/kms/gstkmssink.h
++++ b/sys/kms/gstkmssink.h
+@@ -42,6 +42,8 @@ G_BEGIN_DECLS
+ #define GST_IS_KMS_SINK_CLASS(klass) \
+   (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_KMS_SINK))
+ 
++#define GST_KMS_ATOMIC_N_PROPS 10
++
+ typedef struct _GstKMSSink GstKMSSink;
+ typedef struct _GstKMSSinkClass GstKMSSinkClass;
+ 
+@@ -65,6 +67,13 @@ struct _GstKMSSink {
+   gboolean has_async_page_flip;
+   gboolean is_atomic;
+   gboolean setplane_is_sync;
++
++  /* non-blocking atomic commits */
++  gboolean use_atomic;
++  guint32 atomic_props[GST_KMS_ATOMIC_N_PROPS];
++  gboolean flip_pending;
++  GstBuffer *flip_buffer;
++  GstBuffer *scanout_buffer;
+   gboolean can_scale;
+ 
+   gboolean modesetting_enabled;
+-- 
+2.55.0
+

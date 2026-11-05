@@ -1,0 +1,552 @@
+From 4b95bc7aa9398f6ff91cd26befd513bfc527e63c Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 30 Oct 2026 04:14:43 +0000
+Subject: [PATCH 2/7] v4l2codecs: Restrict sink template caps to the device
+ frame sizes
+
+The sink pad templates were static and carried no size limits, while
+every per-device element is registered with the same rank. On SoCs that
+expose more than one stateless decoder for the same codec with different
+size limits, autopluggers could pick a decoder that cannot handle the
+stream resolution. On RK3588, for example, both the Hantro based
+VPU121 (up to 1920x1088) and rkvdec (VDPU381) decode H.264. Whichever
+is enumerated first gets the v4l2slh264dec name, and selecting the
+Hantro core for a 4K stream fails in gst_v4l2_decoder_set_sink_fmt() with a
+negotiation error instead of falling back to the rkvdec element.
+
+Query VIDIOC_ENUM_FRAMESIZES on the coded format at registration and use
+the result as width and height ranges in the per-device sink pad
+template, the same way the src template is already built per device.
+Factory caps then exclude decoders that are too small for the stream,
+and the accept-caps query rejects out of range sizes before the format
+is set. If the driver does not implement frame size enumeration, the
+unrestricted caps are kept.
+
+Assisted-by: Claude:claude-opus-5-5
+---
+ sys/v4l2codecs/gstv4l2codecav1dec.c   | 18 ++++--
+ sys/v4l2codecs/gstv4l2codech264dec.c  | 22 ++++---
+ sys/v4l2codecs/gstv4l2codech265dec.c  | 22 ++++---
+ sys/v4l2codecs/gstv4l2codecmpeg2dec.c | 21 +++---
+ sys/v4l2codecs/gstv4l2codecvp8dec.c   | 18 +++---
+ sys/v4l2codecs/gstv4l2codecvp9dec.c   | 19 +++---
+ sys/v4l2codecs/gstv4l2decoder.c       | 92 ++++++++++++++++++++++++++-
+ sys/v4l2codecs/gstv4l2decoder.h       |  7 ++
+ 8 files changed, 166 insertions(+), 53 deletions(-)
+
+diff --git a/sys/v4l2codecs/gstv4l2codecav1dec.c b/sys/v4l2codecs/gstv4l2codecav1dec.c
+index f14b3dc..e19d3e6 100644
+--- a/sys/v4l2codecs/gstv4l2codecav1dec.c
++++ b/sys/v4l2codecs/gstv4l2codecav1dec.c
+@@ -67,10 +67,8 @@ enum
+   PROP_LAST = PROP_0
+ };
+ 
+-static GstStaticPadTemplate sink_template =
+-GST_STATIC_PAD_TEMPLATE (GST_VIDEO_DECODER_SINK_NAME,
+-    GST_PAD_SINK, GST_PAD_ALWAYS,
+-    GST_STATIC_CAPS ("video/x-av1, alignment=frame"));
++static GstStaticCaps static_sink_caps =
++GST_STATIC_CAPS ("video/x-av1, alignment=frame");
+ 
+ #define SRC_CAPS \
+     GST_VIDEO_DMA_DRM_CAPS_MAKE " ; " \
+@@ -1571,7 +1569,9 @@ gst_v4l2_codec_av1_dec_class_init (GstV4l2CodecAV1DecClass * klass,
+ 
+   parent_class = g_type_class_peek_parent (klass);
+ 
+-  gst_element_class_add_static_pad_template (element_class, &sink_template);
++  gst_element_class_add_pad_template (element_class,
++      gst_pad_template_new (GST_VIDEO_DECODER_SINK_NAME, GST_PAD_SINK,
++          GST_PAD_ALWAYS, cdata->sink_caps));
+   gst_element_class_add_pad_template (element_class,
+       gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
+           cdata->src_caps));
+@@ -1632,7 +1632,7 @@ gst_v4l2_codec_av1_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+     .instance_size = sizeof (GstV4l2CodecAV1Dec),
+     .instance_init = (GInstanceInitFunc) gst_v4l2_codec_av1_dec_init,
+   };
+-  GstCaps *tmpl_src_caps = NULL, *src_caps = NULL;
++  GstCaps *tmpl_src_caps = NULL, *sink_caps = NULL, *src_caps = NULL;
+   guint version;
+ 
+   GST_DEBUG_CATEGORY_INIT (v4l2_av1dec_debug, "v4l2codecs-av1dec", 0,
+@@ -1672,13 +1672,17 @@ gst_v4l2_codec_av1_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+   }
+ 
+ register_element:
++  sink_caps = gst_v4l2_decoder_probe_sink_caps (decoder,
++      V4L2_PIX_FMT_AV1_FRAME, &static_sink_caps);
++
+   type_info.class_data = gst_v4l2_decoder_class_data_new (device,
+-      tmpl_src_caps);
++      sink_caps, tmpl_src_caps);
+   gst_v4l2_decoder_register (plugin, GST_TYPE_AV1_DECODER, &type_info,
+       "v4l2sl%sav1dec", device, rank, NULL);
+ 
+ done:
+   gst_clear_caps (&tmpl_src_caps);
++  gst_clear_caps (&sink_caps);
+   if (src_caps)
+     gst_caps_unref (src_caps);
+ }
+diff --git a/sys/v4l2codecs/gstv4l2codech264dec.c b/sys/v4l2codecs/gstv4l2codech264dec.c
+index baa12c3..f868c32 100644
+--- a/sys/v4l2codecs/gstv4l2codech264dec.c
++++ b/sys/v4l2codecs/gstv4l2codech264dec.c
+@@ -63,13 +63,9 @@ enum
+   PROP_LAST = PROP_0
+ };
+ 
+-static GstStaticPadTemplate sink_template =
+-GST_STATIC_PAD_TEMPLATE (GST_VIDEO_DECODER_SINK_NAME,
+-    GST_PAD_SINK, GST_PAD_ALWAYS,
+-    GST_STATIC_CAPS ("video/x-h264, "
+-        "stream-format=(string) { avc, avc3, byte-stream }, "
+-        "alignment=(string) au")
+-    );
++static GstStaticCaps static_sink_caps = GST_STATIC_CAPS ("video/x-h264, "
++    "stream-format=(string) { avc, avc3, byte-stream }, "
++    "alignment=(string) au");
+ 
+ #define SRC_CAPS \
+     GST_VIDEO_DMA_DRM_CAPS_MAKE " ; " \
+@@ -1576,7 +1572,9 @@ gst_v4l2_codec_h264_dec_class_init (GstV4l2CodecH264DecClass * klass,
+ 
+   parent_class = g_type_class_peek_parent (klass);
+ 
+-  gst_element_class_add_static_pad_template (element_class, &sink_template);
++  gst_element_class_add_pad_template (element_class,
++      gst_pad_template_new (GST_VIDEO_DECODER_SINK_NAME, GST_PAD_SINK,
++          GST_PAD_ALWAYS, cdata->sink_caps));
+   gst_element_class_add_pad_template (element_class,
+       gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
+           cdata->src_caps));
+@@ -1624,7 +1622,7 @@ gst_v4l2_codec_h264_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+     .instance_size = sizeof (GstV4l2CodecH264Dec),
+     .instance_init = (GInstanceInitFunc) gst_v4l2_codec_h264_dec_init,
+   };
+-  GstCaps *tmpl_src_caps = NULL, *src_caps = NULL;
++  GstCaps *tmpl_src_caps = NULL, *sink_caps = NULL, *src_caps = NULL;
+   guint version;
+ 
+   GST_DEBUG_CATEGORY_INIT (v4l2_h264dec_debug, "v4l2codecs-h264dec", 0,
+@@ -1664,13 +1662,17 @@ gst_v4l2_codec_h264_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+   }
+ 
+ register_element:
++  sink_caps = gst_v4l2_decoder_probe_sink_caps (decoder,
++      V4L2_PIX_FMT_H264_SLICE, &static_sink_caps);
++
+   type_info.class_data = gst_v4l2_decoder_class_data_new (device,
+-      tmpl_src_caps);
++      sink_caps, tmpl_src_caps);
+   gst_v4l2_decoder_register (plugin, GST_TYPE_H264_DECODER, &type_info,
+       "v4l2sl%sh264dec", device, rank, NULL);
+ 
+ done:
+   gst_clear_caps (&tmpl_src_caps);
++  gst_clear_caps (&sink_caps);
+   if (src_caps)
+     gst_caps_unref (src_caps);
+ }
+diff --git a/sys/v4l2codecs/gstv4l2codech265dec.c b/sys/v4l2codecs/gstv4l2codech265dec.c
+index 733322e..595f67e 100644
+--- a/sys/v4l2codecs/gstv4l2codech265dec.c
++++ b/sys/v4l2codecs/gstv4l2codech265dec.c
+@@ -63,13 +63,9 @@ enum
+   PROP_LAST = PROP_0
+ };
+ 
+-static GstStaticPadTemplate sink_template =
+-GST_STATIC_PAD_TEMPLATE (GST_VIDEO_DECODER_SINK_NAME,
+-    GST_PAD_SINK, GST_PAD_ALWAYS,
+-    GST_STATIC_CAPS ("video/x-h265, "
+-        "stream-format=(string) { hvc1, hev1, byte-stream }, "
+-        "alignment=(string) au")
+-    );
++static GstStaticCaps static_sink_caps = GST_STATIC_CAPS ("video/x-h265, "
++    "stream-format=(string) { hvc1, hev1, byte-stream }, "
++    "alignment=(string) au");
+ 
+ #define SRC_CAPS \
+     GST_VIDEO_DMA_DRM_CAPS_MAKE " ; " \
+@@ -1827,7 +1823,9 @@ gst_v4l2_codec_h265_dec_class_init (GstV4l2CodecH265DecClass * klass,
+ 
+   parent_class = g_type_class_peek_parent (klass);
+ 
+-  gst_element_class_add_static_pad_template (element_class, &sink_template);
++  gst_element_class_add_pad_template (element_class,
++      gst_pad_template_new (GST_VIDEO_DECODER_SINK_NAME, GST_PAD_SINK,
++          GST_PAD_ALWAYS, cdata->sink_caps));
+   gst_element_class_add_pad_template (element_class,
+       gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
+           cdata->src_caps));
+@@ -1873,7 +1871,7 @@ gst_v4l2_codec_h265_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+     .instance_size = sizeof (GstV4l2CodecH265Dec),
+     .instance_init = (GInstanceInitFunc) gst_v4l2_codec_h265_dec_init,
+   };
+-  GstCaps *tmpl_src_caps = NULL, *src_caps = NULL;
++  GstCaps *tmpl_src_caps = NULL, *sink_caps = NULL, *src_caps = NULL;
+   guint version;
+ 
+   GST_DEBUG_CATEGORY_INIT (v4l2_h265dec_debug, "v4l2codecs-h265dec", 0,
+@@ -1913,13 +1911,17 @@ gst_v4l2_codec_h265_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+   }
+ 
+ register_element:
++  sink_caps = gst_v4l2_decoder_probe_sink_caps (decoder,
++      V4L2_PIX_FMT_HEVC_SLICE, &static_sink_caps);
++
+   type_info.class_data = gst_v4l2_decoder_class_data_new (device,
+-      tmpl_src_caps);
++      sink_caps, tmpl_src_caps);
+   gst_v4l2_decoder_register (plugin, GST_TYPE_H265_DECODER, &type_info,
+       "v4l2sl%sh265dec", device, rank, NULL);
+ 
+ done:
+   gst_clear_caps (&tmpl_src_caps);
++  gst_clear_caps (&sink_caps);
+   if (src_caps)
+     gst_caps_unref (src_caps);
+ }
+diff --git a/sys/v4l2codecs/gstv4l2codecmpeg2dec.c b/sys/v4l2codecs/gstv4l2codecmpeg2dec.c
+index 7c2b75d..dd4ae26 100644
+--- a/sys/v4l2codecs/gstv4l2codecmpeg2dec.c
++++ b/sys/v4l2codecs/gstv4l2codecmpeg2dec.c
+@@ -66,12 +66,9 @@ enum
+   PROP_LAST = PROP_0
+ };
+ 
+-static GstStaticPadTemplate sink_template =
+-GST_STATIC_PAD_TEMPLATE (GST_VIDEO_DECODER_SINK_NAME,
+-    GST_PAD_SINK, GST_PAD_ALWAYS,
+-    GST_STATIC_CAPS ("video/mpeg, "
+-        "systemstream=(boolean) false, "
+-        "mpegversion=(int) 2, " "profile=(string) {main, simple} "));
++static GstStaticCaps static_sink_caps = GST_STATIC_CAPS ("video/mpeg, "
++    "systemstream=(boolean) false, "
++    "mpegversion=(int) 2, " "profile=(string) {main, simple} ");
+ 
+ #define SRC_CAPS \
+     GST_VIDEO_DMA_DRM_CAPS_MAKE " ; " \
+@@ -1096,7 +1093,9 @@ gst_v4l2_codec_mpeg2_dec_class_init (GstV4l2CodecMpeg2DecClass * klass,
+ 
+   parent_class = g_type_class_peek_parent (klass);
+ 
+-  gst_element_class_add_static_pad_template (element_class, &sink_template);
++  gst_element_class_add_pad_template (element_class,
++      gst_pad_template_new (GST_VIDEO_DECODER_SINK_NAME, GST_PAD_SINK,
++          GST_PAD_ALWAYS, cdata->sink_caps));
+   gst_element_class_add_pad_template (element_class,
+       gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
+           cdata->src_caps));
+@@ -1142,7 +1141,7 @@ gst_v4l2_codec_mpeg2_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+     .instance_size = sizeof (GstV4l2CodecMpeg2Dec),
+     .instance_init = (GInstanceInitFunc) gst_v4l2_codec_mpeg2_dec_init,
+   };
+-  GstCaps *tmpl_src_caps = NULL, *src_caps = NULL;
++  GstCaps *tmpl_src_caps = NULL, *sink_caps = NULL, *src_caps = NULL;
+ 
+   GST_DEBUG_CATEGORY_INIT (v4l2_mpeg2dec_debug, "v4l2codecs-mpeg2dec", 0,
+       "V4L2 stateless mpeg2 decoder");
+@@ -1170,13 +1169,17 @@ gst_v4l2_codec_mpeg2_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+       gst_v4l2_decoder_enum_all_src_formats (decoder, &static_src_caps);
+ 
+ register_element:
++  sink_caps = gst_v4l2_decoder_probe_sink_caps (decoder,
++      V4L2_PIX_FMT_MPEG2_SLICE, &static_sink_caps);
++
+   type_info.class_data = gst_v4l2_decoder_class_data_new (device,
+-      tmpl_src_caps);
++      sink_caps, tmpl_src_caps);
+   gst_v4l2_decoder_register (plugin, GST_TYPE_MPEG2_DECODER, &type_info,
+       "v4l2sl%smpeg2dec", device, rank, NULL);
+ 
+ done:
+   gst_clear_caps (&tmpl_src_caps);
++  gst_clear_caps (&sink_caps);
+   if (src_caps)
+     gst_caps_unref (src_caps);
+ }
+diff --git a/sys/v4l2codecs/gstv4l2codecvp8dec.c b/sys/v4l2codecs/gstv4l2codecvp8dec.c
+index 405aa06..97b148f 100644
+--- a/sys/v4l2codecs/gstv4l2codecvp8dec.c
++++ b/sys/v4l2codecs/gstv4l2codecvp8dec.c
+@@ -79,11 +79,7 @@ enum
+   PROP_LAST = PROP_0
+ };
+ 
+-static GstStaticPadTemplate sink_template =
+-GST_STATIC_PAD_TEMPLATE (GST_VIDEO_DECODER_SINK_NAME,
+-    GST_PAD_SINK, GST_PAD_ALWAYS,
+-    GST_STATIC_CAPS ("video/x-vp8")
+-    );
++static GstStaticCaps static_sink_caps = GST_STATIC_CAPS ("video/x-vp8");
+ 
+ static GstStaticPadTemplate alpha_template =
+ GST_STATIC_PAD_TEMPLATE (GST_VIDEO_DECODER_SINK_NAME,
+@@ -974,7 +970,9 @@ gst_v4l2_codec_vp8_dec_class_init (GstV4l2CodecVp8DecClass * klass,
+ 
+   parent_class = g_type_class_peek_parent (klass);
+ 
+-  gst_element_class_add_static_pad_template (element_class, &sink_template);
++  gst_element_class_add_pad_template (element_class,
++      gst_pad_template_new (GST_VIDEO_DECODER_SINK_NAME, GST_PAD_SINK,
++          GST_PAD_ALWAYS, cdata->sink_caps));
+   gst_element_class_add_pad_template (element_class,
+       gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
+           cdata->src_caps));
+@@ -1037,7 +1035,7 @@ gst_v4l2_codec_vp8_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+     .instance_init = (GInstanceInitFunc) gst_v4l2_codec_vp8_dec_init,
+   };
+   gchar *element_name;
+-  GstCaps *tmpl_src_caps = NULL, *src_caps = NULL, *alpha_caps;
++  GstCaps *tmpl_src_caps = NULL, *sink_caps = NULL, *src_caps = NULL, *alpha_caps;
+ 
+   GST_DEBUG_CATEGORY_INIT (v4l2_vp8dec_debug, "v4l2codecs-vp8dec", 0,
+       "V4L2 stateless VP8 decoder");
+@@ -1065,8 +1063,11 @@ gst_v4l2_codec_vp8_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+       gst_v4l2_decoder_enum_all_src_formats (decoder, &static_src_caps);
+ 
+ register_element:
++  sink_caps = gst_v4l2_decoder_probe_sink_caps (decoder,
++      V4L2_PIX_FMT_VP8_FRAME, &static_sink_caps);
++
+   type_info.class_data = gst_v4l2_decoder_class_data_new (device,
+-      tmpl_src_caps);
++      sink_caps, tmpl_src_caps);
+   gst_v4l2_decoder_register (plugin, GST_TYPE_VP8_DECODER, &type_info,
+       "v4l2sl%svp8dec", device, rank, &element_name);
+ 
+@@ -1085,6 +1086,7 @@ register_element:
+ 
+ done:
+   gst_clear_caps (&tmpl_src_caps);
++  gst_clear_caps (&sink_caps);
+   if (src_caps)
+     gst_caps_unref (src_caps);
+ }
+diff --git a/sys/v4l2codecs/gstv4l2codecvp9dec.c b/sys/v4l2codecs/gstv4l2codecvp9dec.c
+index c4bd64f..fb3c260 100644
+--- a/sys/v4l2codecs/gstv4l2codecvp9dec.c
++++ b/sys/v4l2codecs/gstv4l2codecvp9dec.c
+@@ -78,11 +78,8 @@ enum
+   PROP_LAST = PROP_0
+ };
+ 
+-static GstStaticPadTemplate sink_template =
+-GST_STATIC_PAD_TEMPLATE (GST_VIDEO_DECODER_SINK_NAME,
+-    GST_PAD_SINK, GST_PAD_ALWAYS,
+-    GST_STATIC_CAPS ("video/x-vp9, " "alignment=(string) frame")
+-    );
++static GstStaticCaps static_sink_caps =
++GST_STATIC_CAPS ("video/x-vp9, " "alignment=(string) frame");
+ 
+ static GstStaticPadTemplate alpha_template =
+ GST_STATIC_PAD_TEMPLATE (GST_VIDEO_DECODER_SINK_NAME,
+@@ -1247,7 +1244,9 @@ gst_v4l2_codec_vp9_dec_class_init (GstV4l2CodecVp9DecClass * klass,
+ 
+   parent_class = g_type_class_peek_parent (klass);
+ 
+-  gst_element_class_add_static_pad_template (element_class, &sink_template);
++  gst_element_class_add_pad_template (element_class,
++      gst_pad_template_new (GST_VIDEO_DECODER_SINK_NAME, GST_PAD_SINK,
++          GST_PAD_ALWAYS, cdata->sink_caps));
+   gst_element_class_add_pad_template (element_class,
+       gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
+           cdata->src_caps));
+@@ -1314,7 +1313,7 @@ gst_v4l2_codec_vp9_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+     .instance_init = (GInstanceInitFunc) gst_v4l2_codec_vp9_dec_init,
+   };
+   gchar *element_name;
+-  GstCaps *tmpl_src_caps = NULL, *src_caps = NULL, *alpha_caps;
++  GstCaps *tmpl_src_caps = NULL, *sink_caps = NULL, *src_caps = NULL, *alpha_caps;
+ 
+   GST_DEBUG_CATEGORY_INIT (v4l2_vp9dec_debug, "v4l2codecs-vp9dec", 0,
+       "V4L2 stateless VP9 decoder");
+@@ -1342,8 +1341,11 @@ gst_v4l2_codec_vp9_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+       gst_v4l2_decoder_enum_all_src_formats (decoder, &static_src_caps);
+ 
+ register_element:
++  sink_caps = gst_v4l2_decoder_probe_sink_caps (decoder,
++      V4L2_PIX_FMT_VP9_FRAME, &static_sink_caps);
++
+   type_info.class_data = gst_v4l2_decoder_class_data_new (device,
+-      tmpl_src_caps);
++      sink_caps, tmpl_src_caps);
+   gst_v4l2_decoder_register (plugin, GST_TYPE_VP9_DECODER, &type_info,
+       "v4l2sl%svp9dec", device, rank, &element_name);
+ 
+@@ -1362,6 +1364,7 @@ register_element:
+ 
+ done:
+   gst_clear_caps (&tmpl_src_caps);
++  gst_clear_caps (&sink_caps);
+   if (src_caps)
+     gst_caps_unref (src_caps);
+ }
+diff --git a/sys/v4l2codecs/gstv4l2decoder.c b/sys/v4l2codecs/gstv4l2decoder.c
+index e8500c1..3b6b708 100644
+--- a/sys/v4l2codecs/gstv4l2decoder.c
++++ b/sys/v4l2codecs/gstv4l2decoder.c
+@@ -407,6 +407,92 @@ gst_v4l2_decoder_set_sink_fmt (GstV4l2Decoder * self, guint32 pix_fmt,
+   return TRUE;
+ }
+ 
++static void
++gst_v4l2_decoder_set_size_range (GstCaps * caps, const gchar * field,
++    guint32 min, guint32 max)
++{
++  min = CLAMP (min, 1, (guint32) G_MAXINT);
++  max = CLAMP (max, min, (guint32) G_MAXINT);
++
++  if (min == max)
++    gst_caps_set_simple (caps, field, G_TYPE_INT, (gint) min, NULL);
++  else
++    gst_caps_set_simple (caps, field, GST_TYPE_INT_RANGE, (gint) min,
++        (gint) max, NULL);
++}
++
++/*
++ * gst_v4l2_decoder_probe_sink_caps:
++ * @self: a #GstV4l2Decoder pointer
++ * @pix_fmt: the coded (OUTPUT queue) pixel format
++ * @static_caps: the unrestricted sink caps for this codec
++ *
++ * Restrict @static_caps to the coded frame sizes the driver reports for
++ * @pix_fmt through VIDIOC_ENUM_FRAMESIZES. This is meant to be used for the
++ * sink pad template, so that autopluggers can skip a decoder that cannot
++ * handle the stream resolution, which matters when a SoC exposes multiple
++ * decoders for the same codec. If the driver does not implement frame size
++ * enumeration, the unrestricted caps are returned.
++ *
++ * Returns: (transfer full): the sink caps
++ */
++GstCaps *
++gst_v4l2_decoder_probe_sink_caps (GstV4l2Decoder * self, guint32 pix_fmt,
++    GstStaticCaps * static_caps)
++{
++  struct v4l2_frmsizeenum size = {
++    .index = 0,
++    .pixel_format = pix_fmt,
++  };
++  GstCaps *caps = gst_static_caps_get (static_caps);
++  gint ret;
++
++  if (self->doc_mode)
++    return caps;
++
++  g_return_val_if_fail (self->opened, caps);
++
++  ret = ioctl (self->video_fd, VIDIOC_ENUM_FRAMESIZES, &size);
++  if (ret < 0) {
++    GST_DEBUG_OBJECT (self, "Could not enumerate frame sizes for %"
++        GST_FOURCC_FORMAT ": %s", GST_FOURCC_ARGS (pix_fmt),
++        g_strerror (errno));
++    return caps;
++  }
++
++  if (size.type == V4L2_FRMSIZE_TYPE_DISCRETE) {
++    GstCaps *sized_caps = gst_caps_new_empty ();
++
++    do {
++      GstCaps *tmp = gst_caps_copy (caps);
++
++      gst_v4l2_decoder_set_size_range (tmp, "width", size.discrete.width,
++          size.discrete.width);
++      gst_v4l2_decoder_set_size_range (tmp, "height", size.discrete.height,
++          size.discrete.height);
++      sized_caps = gst_caps_merge (sized_caps, tmp);
++
++      size.index++;
++      ret = ioctl (self->video_fd, VIDIOC_ENUM_FRAMESIZES, &size);
++    } while (ret >= 0 && size.type == V4L2_FRMSIZE_TYPE_DISCRETE);
++
++    gst_caps_unref (caps);
++    caps = sized_caps;
++  } else {
++    /* For STEPWISE, the step is not expressed in the caps, since the caps
++     * carry the display size, which may not be aligned to the step */
++    caps = gst_caps_make_writable (caps);
++    gst_v4l2_decoder_set_size_range (caps, "width", size.stepwise.min_width,
++        size.stepwise.max_width);
++    gst_v4l2_decoder_set_size_range (caps, "height",
++        size.stepwise.min_height, size.stepwise.max_height);
++  }
++
++  GST_DEBUG_OBJECT (self, "Probed sink caps: %" GST_PTR_FORMAT, caps);
++
++  return caps;
++}
++
+ static GstCaps *
+ gst_v4l2_decoder_enum_size_for_format (GstV4l2Decoder * self,
+     guint32 pixelformat, gint index, gint unscaled_width, gint unscaled_height)
+@@ -1170,6 +1256,7 @@ gst_v4l2_decoder_get_property (GObject * object, guint prop_id,
+ /*
+  * gst_v4l2_decoder_class_data_new:
+  * @device: a #GstV4l2CodecDevice
++ * @sink_caps: (transfer none): the sink pad template caps
+  * @src_caps: (transfer none): the src pad template caps
+  *
+  * Creates the class data of a decoder element type. The class of a
+@@ -1183,15 +1270,18 @@ gst_v4l2_decoder_get_property (GObject * object, guint prop_id,
+  */
+ GstV4l2DecoderClassData *
+ gst_v4l2_decoder_class_data_new (GstV4l2CodecDevice * device,
+-    GstCaps * src_caps)
++    GstCaps * sink_caps, GstCaps * src_caps)
+ {
+   GstV4l2DecoderClassData *cdata = g_new0 (GstV4l2DecoderClassData, 1);
+ 
+   cdata->device = (GstV4l2CodecDevice *)
+       gst_mini_object_ref (GST_MINI_OBJECT (device));
++  cdata->sink_caps = gst_caps_ref (sink_caps);
+   cdata->src_caps = gst_caps_ref (src_caps);
+ 
+   GST_MINI_OBJECT_FLAG_SET (cdata->device, GST_MINI_OBJECT_FLAG_MAY_BE_LEAKED);
++  GST_MINI_OBJECT_FLAG_SET (cdata->sink_caps,
++      GST_MINI_OBJECT_FLAG_MAY_BE_LEAKED);
+   GST_MINI_OBJECT_FLAG_SET (cdata->src_caps,
+       GST_MINI_OBJECT_FLAG_MAY_BE_LEAKED);
+ 
+diff --git a/sys/v4l2codecs/gstv4l2decoder.h b/sys/v4l2codecs/gstv4l2decoder.h
+index a6404a8..c1efc6e 100644
+--- a/sys/v4l2codecs/gstv4l2decoder.h
++++ b/sys/v4l2codecs/gstv4l2decoder.h
+@@ -46,6 +46,7 @@ typedef struct _GstV4l2Request GstV4l2Request;
+ /**
+  * GstV4l2DecoderClassData:
+  * @device: the device the element type was registered for
++ * @sink_caps: the sink pad template caps
+  * @src_caps: the src pad template caps
+  *
+  * The class data of each registered decoder element type. The template caps
+@@ -55,10 +56,12 @@ typedef struct _GstV4l2Request GstV4l2Request;
+ typedef struct
+ {
+   GstV4l2CodecDevice *device;
++  GstCaps *sink_caps;
+   GstCaps *src_caps;
+ } GstV4l2DecoderClassData;
+ 
+ GstV4l2DecoderClassData * gst_v4l2_decoder_class_data_new (GstV4l2CodecDevice * device,
++                                                           GstCaps * sink_caps,
+                                                            GstCaps * src_caps);
+ 
+ GstV4l2Decoder *  gst_v4l2_decoder_new (GstV4l2CodecDevice * device);
+@@ -84,6 +87,10 @@ gboolean          gst_v4l2_decoder_set_sink_fmt (GstV4l2Decoder * self, guint32
+                                                  gint width, gint height,
+                                                  gint pixel_bitdepth);
+ 
++GstCaps *         gst_v4l2_decoder_probe_sink_caps (GstV4l2Decoder * self,
++                                                    guint32 pix_fmt,
++                                                    GstStaticCaps * static_caps);
++
+ GstCaps *         gst_v4l2_decoder_enum_src_formats (GstV4l2Decoder * self,
+                                                      GstStaticCaps * static_filter);
+ 
+-- 
+2.55.0
+

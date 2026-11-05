@@ -1,0 +1,203 @@
+From ef406a60d4479d14607f264738420ad4956c52b4 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 29 Oct 2026 23:10:52 +0000
+Subject: [PATCH 4/7] kmssink: Support modesetting when the video plane is not
+ the primary
+
+In modesetting mode, configure_mode_setting() allocates a buffer in the
+video format and sets the mode with drmModeSetCrtc(), which places that
+buffer on the CRTC's primary plane, and show_frame() then page flips the
+video buffers on the primary plane. This ignores the plane that was
+selected, possibly with plane-id, and whose formats were used to build
+the caps. If the primary plane cannot scan out the video format, for
+example NV12 on the RK3588 VOP2 Cluster planes, setting the mode fails
+with "failed to configure video mode".
+
+When the selected plane is not a primary plane, set the mode with a
+black XRGB8888 dumb buffer of the mode size instead, keep it as long as
+the mode is in use, and show the frames on the selected plane with
+drmModeSetPlane() as without modesetting. The display size and a full
+screen render rectangle are updated to the new mode. The current
+behaviour is kept when the selected plane is the primary plane, or when
+the plane type is unknown.
+
+In that case the vblank wait also follows the drmModeSetPlane() rules,
+so it is skipped on atomic drivers like without modesetting.
+
+Assisted-by: Claude:claude-opus-5-5
+---
+ sys/kms/gstkmssink.c | 71 ++++++++++++++++++++++++++++++++++++++++----
+ sys/kms/gstkmssink.h |  1 +
+ 2 files changed, 66 insertions(+), 6 deletions(-)
+
+diff --git a/sys/kms/gstkmssink.c b/sys/kms/gstkmssink.c
+index 6ce24a7..7da9e72 100644
+--- a/sys/kms/gstkmssink.c
++++ b/sys/kms/gstkmssink.c
+@@ -750,6 +750,14 @@ ensure_kms_allocator (GstKMSSink * self)
+   self->allocator = gst_kms_allocator_new (self->fd);
+ }
+ 
++/* Whether frames are shown by page flipping the CRTC's primary plane, as
++ * opposed to drmModeSetPlane() */
++static inline gboolean
++gst_kms_sink_flips_primary (GstKMSSink * self)
++{
++  return self->modesetting_enabled && self->plane_is_primary;
++}
++
+ static gboolean
+ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
+ {
+@@ -772,7 +780,26 @@ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
+   GST_INFO_OBJECT (self, "configuring mode setting");
+ 
+   ensure_kms_allocator (self);
+-  kmsmem = (GstKMSMemory *) gst_kms_allocator_bo_alloc (self->allocator, vinfo);
++
++  if (self->plane_is_primary) {
++    kmsmem = (GstKMSMemory *) gst_kms_allocator_bo_alloc (self->allocator,
++        vinfo);
++  } else {
++    GstVideoInfo fb_vinfo;
++    GstMapInfo map;
++
++    /* The video goes to another plane, so set the mode with a black buffer
++     * in a format every primary plane supports */
++    gst_video_info_set_format (&fb_vinfo, GST_VIDEO_FORMAT_BGRx,
++        GST_VIDEO_INFO_WIDTH (vinfo), GST_VIDEO_INFO_HEIGHT (vinfo));
++    kmsmem = (GstKMSMemory *) gst_kms_allocator_bo_alloc (self->allocator,
++        &fb_vinfo);
++    if (kmsmem && gst_memory_map (GST_MEMORY_CAST (kmsmem), &map,
++            GST_MAP_WRITE)) {
++      memset (map.data, 0, map.size);
++      gst_memory_unmap (GST_MEMORY_CAST (kmsmem), &map);
++    }
++  }
+   if (!kmsmem)
+     goto bo_failed;
+   fb_id = kmsmem->fb_id;
+@@ -798,10 +825,29 @@ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
+ 
+   g_clear_pointer (&self->tmp_kmsmem, gst_memory_unref);
+   self->tmp_kmsmem = (GstMemory *) kmsmem;
++  kmsmem = NULL;
++
++  GST_OBJECT_LOCK (self);
++  if (!self->plane_is_primary)
++    self->buffer_id = fb_id;
++
++  /* Keep a full screen render rectangle full screen in the new mode */
++  if (self->render_rect.x == 0 && self->render_rect.y == 0 &&
++      self->render_rect.w == self->hdisplay &&
++      self->render_rect.h == self->vdisplay) {
++    self->render_rect.w = mode->hdisplay;
++    self->render_rect.h = mode->vdisplay;
++    self->pending_rect = self->render_rect;
++  }
++  self->hdisplay = mode->hdisplay;
++  self->vdisplay = mode->vdisplay;
++  GST_OBJECT_UNLOCK (self);
+ 
+   ret = TRUE;
+ 
+ bail:
++  if (kmsmem)
++    gst_memory_unref (GST_MEMORY_CAST (kmsmem));
+   if (conn)
+     drmModeFreeConnector (conn);
+ 
+@@ -1236,6 +1282,7 @@ gst_kms_sink_start (GstBaseSink * bsink)
+   drmModePlane *plane;
+   gboolean universal_planes;
+   gboolean ret;
++  gint plane_type;
+ 
+   self = GST_KMS_SINK (bsink);
+   universal_planes = FALSE;
+@@ -1312,6 +1359,13 @@ retry_find_plane:
+   GST_INFO_OBJECT (self, "connector id = %d / crtc id = %d / plane id = %d",
+       self->conn_id, self->crtc_id, self->plane_id);
+ 
++  plane_type = get_plane_type (self->fd, self->plane_id);
++
++  /* If the type is unknown, keep showing frames on the primary plane when
++   * modesetting */
++  self->plane_is_primary = plane_type < 0 ||
++      plane_type == DRM_PLANE_TYPE_PRIMARY;
++
+   /* There is no capability telling whether the driver is atomic, so try to
+    * enable atomic on our own fd. As this also enables universal planes, it is
+    * done after the plane lookup, so that the selected plane doesn't change. */
+@@ -1323,7 +1377,7 @@ retry_find_plane:
+    * vblank wait would halve the frame rate. Legacy updates of the cursor
+    * plane are the exception, they don't wait for vblank. */
+   self->setplane_is_sync = self->is_atomic &&
+-      get_plane_type (self->fd, self->plane_id) != DRM_PLANE_TYPE_CURSOR;
++      plane_type != DRM_PLANE_TYPE_CURSOR;
+ 
+   GST_INFO_OBJECT (self, "atomic (%s) / drmModeSetPlane waits for vblank (%s)",
+       self->is_atomic ? "✓" : "✗", self->setplane_is_sync ? "✓" : "✗");
+@@ -1482,6 +1536,8 @@ gst_kms_sink_stop (GstBaseSink * bsink)
+     self->saved_crtc = NULL;
+   }
+ 
++  g_clear_pointer (&self->tmp_kmsmem, gst_memory_unref);
++
+   if (self->fd >= 0) {
+     if (self->is_internal_fd)
+       drmClose (self->fd);
+@@ -1883,7 +1939,7 @@ gst_kms_sink_sync (GstKMSSink * self)
+     vbl.request.type |= self->pipe << DRM_VBLANK_HIGH_CRTC_SHIFT;
+ 
+   waiting = TRUE;
+-  if (!self->has_async_page_flip && !self->modesetting_enabled) {
++  if (!self->has_async_page_flip && !gst_kms_sink_flips_primary (self)) {
+     ret = drmWaitVBlank (self->fd, &vbl);
+     if (ret)
+       goto vblank_failed;
+@@ -2198,7 +2254,7 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
+   GST_TRACE_OBJECT (self, "displaying fb %d", fb_id);
+ 
+   GST_OBJECT_LOCK (self);
+-  if (self->modesetting_enabled) {
++  if (gst_kms_sink_flips_primary (self)) {
+     self->buffer_id = fb_id;
+     goto sync_frame;
+   }
+@@ -2274,7 +2330,7 @@ sync_frame:
+   /* Wait for the previous frame to complete redraw, unless the plane update
+    * already did */
+   if (!self->skip_vsync &&
+-      (self->modesetting_enabled || !self->setplane_is_sync) &&
++      (gst_kms_sink_flips_primary (self) || !self->setplane_is_sync) &&
+       !gst_kms_sink_sync (self)) {
+     GST_OBJECT_UNLOCK (self);
+     goto bail;
+@@ -2287,7 +2343,10 @@ sync_frame:
+     self->last_height = GST_VIDEO_SINK_HEIGHT (self);
+     self->last_vinfo = self->vinfo;
+   }
+-  g_clear_pointer (&self->tmp_kmsmem, gst_memory_unref);
++
++  /* The primary plane now scans out the video buffer */
++  if (gst_kms_sink_flips_primary (self))
++    g_clear_pointer (&self->tmp_kmsmem, gst_memory_unref);
+ 
+   GST_OBJECT_UNLOCK (self);
+   res = GST_FLOW_OK;
+diff --git a/sys/kms/gstkmssink.h b/sys/kms/gstkmssink.h
+index 01f4b0b..428ecea 100644
+--- a/sys/kms/gstkmssink.h
++++ b/sys/kms/gstkmssink.h
+@@ -68,6 +68,7 @@ struct _GstKMSSink {
+   gboolean can_scale;
+ 
+   gboolean modesetting_enabled;
++  gboolean plane_is_primary;
+   gboolean restore_crtc;
+   GstStructure *connector_props;
+   GstStructure *plane_props;
+-- 
+2.55.0
+

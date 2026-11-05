@@ -1,0 +1,539 @@
+From 5163262992b60abf5199de9bf4a9000132b622b0 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 30 Oct 2026 04:14:19 +0000
+Subject: [PATCH 1/7] v4l2codecs: Keep the src template caps per registered
+ decoder
+
+Each codec's register function probes the CAPTURE formats for that
+codec and stores them in device->src_caps, and the class_init function
+builds the src pad template from device->src_caps. But a
+GstV4l2CodecDevice is shared by all the codecs of a device, and
+class_init does not run at registration: when the plugin is loaded
+from the registry cache, gst_element_register() only attaches the type
+to the cached factory, and the class is initialized when the element is
+first created. By then, every element of a multi-codec device (e.g.
+rkvdec on RK3588: H.264, HEVC and VP9) reads the caps that the last
+probed codec stored, and the caps of the earlier codecs are leaked.
+
+Pass per-registration class data instead, holding the device and the
+template caps of that element type, and drop the caps from
+GstV4l2CodecDevice.
+
+Assisted-by: Claude:claude-opus-5-5
+---
+ sys/v4l2codecs/gstv4l2codecav1dec.c   | 15 +++++++------
+ sys/v4l2codecs/gstv4l2codecdevice.h   |  1 -
+ sys/v4l2codecs/gstv4l2codech264dec.c  | 15 +++++++------
+ sys/v4l2codecs/gstv4l2codech265dec.c  | 15 +++++++------
+ sys/v4l2codecs/gstv4l2codecmpeg2dec.c | 15 +++++++------
+ sys/v4l2codecs/gstv4l2codecvp8dec.c   | 17 +++++++++------
+ sys/v4l2codecs/gstv4l2codecvp9dec.c   | 17 +++++++++------
+ sys/v4l2codecs/gstv4l2decoder.c       | 31 +++++++++++++++++++++++++++
+ sys/v4l2codecs/gstv4l2decoder.h       | 18 ++++++++++++++++
+ 9 files changed, 105 insertions(+), 39 deletions(-)
+
+diff --git a/sys/v4l2codecs/gstv4l2codecav1dec.c b/sys/v4l2codecs/gstv4l2codecav1dec.c
+index c5ad26f..f14b3dc 100644
+--- a/sys/v4l2codecs/gstv4l2codecav1dec.c
++++ b/sys/v4l2codecs/gstv4l2codecav1dec.c
+@@ -1551,8 +1551,9 @@ gst_v4l2_codec_av1_dec_dispose (GObject * object)
+ 
+ static void
+ gst_v4l2_codec_av1_dec_class_init (GstV4l2CodecAV1DecClass * klass,
+-    GstV4l2CodecDevice * device)
++    GstV4l2DecoderClassData * cdata)
+ {
++  GstV4l2CodecDevice *device = cdata->device;
+   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
+   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
+   GstVideoDecoderClass *decoder_class = GST_VIDEO_DECODER_CLASS (klass);
+@@ -1573,7 +1574,7 @@ gst_v4l2_codec_av1_dec_class_init (GstV4l2CodecAV1DecClass * klass,
+   gst_element_class_add_static_pad_template (element_class, &sink_template);
+   gst_element_class_add_pad_template (element_class,
+       gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
+-          device->src_caps));
++          cdata->src_caps));
+ 
+   element_class->change_state =
+       GST_DEBUG_FUNCPTR (gst_v4l2_codec_av1_dec_change_state);
+@@ -1628,18 +1629,17 @@ gst_v4l2_codec_av1_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+   GTypeInfo type_info = {
+     .class_size = sizeof (GstV4l2CodecAV1DecClass),
+     .class_init = (GClassInitFunc) gst_v4l2_codec_av1_dec_class_init,
+-    .class_data = gst_mini_object_ref (GST_MINI_OBJECT (device)),
+     .instance_size = sizeof (GstV4l2CodecAV1Dec),
+     .instance_init = (GInstanceInitFunc) gst_v4l2_codec_av1_dec_init,
+   };
+-  GstCaps *src_caps = NULL;
++  GstCaps *tmpl_src_caps = NULL, *src_caps = NULL;
+   guint version;
+ 
+   GST_DEBUG_CATEGORY_INIT (v4l2_av1dec_debug, "v4l2codecs-av1dec", 0,
+       "V4L2 stateless AV1 decoder");
+ 
+   if (gst_v4l2_decoder_in_doc_mode (decoder)) {
+-    device->src_caps = gst_static_caps_get (&static_src_caps);
++    tmpl_src_caps = gst_static_caps_get (&static_src_caps);
+     goto register_element;
+   }
+ 
+@@ -1657,7 +1657,7 @@ gst_v4l2_codec_av1_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+   }
+ 
+   /* Get all supported pixel formats for AV1 */
+-  device->src_caps =
++  tmpl_src_caps =
+       gst_v4l2_decoder_enum_all_src_formats (decoder, &static_src_caps);
+ 
+   version = gst_v4l2_decoder_get_version (decoder);
+@@ -1672,10 +1672,13 @@ gst_v4l2_codec_av1_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+   }
+ 
+ register_element:
++  type_info.class_data = gst_v4l2_decoder_class_data_new (device,
++      tmpl_src_caps);
+   gst_v4l2_decoder_register (plugin, GST_TYPE_AV1_DECODER, &type_info,
+       "v4l2sl%sav1dec", device, rank, NULL);
+ 
+ done:
++  gst_clear_caps (&tmpl_src_caps);
+   if (src_caps)
+     gst_caps_unref (src_caps);
+ }
+diff --git a/sys/v4l2codecs/gstv4l2codecdevice.h b/sys/v4l2codecs/gstv4l2codecdevice.h
+index 7a978e1..8294d06 100644
+--- a/sys/v4l2codecs/gstv4l2codecdevice.h
++++ b/sys/v4l2codecs/gstv4l2codecdevice.h
+@@ -33,7 +33,6 @@ typedef struct {
+   guint32 function;
+   gchar *media_device_path;
+   gchar *video_device_path;
+-  GstCaps *src_caps;
+ } GstV4l2CodecDevice;
+ 
+ GType  gst_v4l2_codec_device_get_type (void);
+diff --git a/sys/v4l2codecs/gstv4l2codech264dec.c b/sys/v4l2codecs/gstv4l2codech264dec.c
+index 8374066..baa12c3 100644
+--- a/sys/v4l2codecs/gstv4l2codech264dec.c
++++ b/sys/v4l2codecs/gstv4l2codech264dec.c
+@@ -1556,8 +1556,9 @@ gst_v4l2_codec_h264_dec_dispose (GObject * object)
+ 
+ static void
+ gst_v4l2_codec_h264_dec_class_init (GstV4l2CodecH264DecClass * klass,
+-    GstV4l2CodecDevice * device)
++    GstV4l2DecoderClassData * cdata)
+ {
++  GstV4l2CodecDevice *device = cdata->device;
+   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
+   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
+   GstVideoDecoderClass *decoder_class = GST_VIDEO_DECODER_CLASS (klass);
+@@ -1578,7 +1579,7 @@ gst_v4l2_codec_h264_dec_class_init (GstV4l2CodecH264DecClass * klass,
+   gst_element_class_add_static_pad_template (element_class, &sink_template);
+   gst_element_class_add_pad_template (element_class,
+       gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
+-          device->src_caps));
++          cdata->src_caps));
+ 
+   element_class->change_state =
+       GST_DEBUG_FUNCPTR (gst_v4l2_codec_h264_dec_change_state);
+@@ -1620,18 +1621,17 @@ gst_v4l2_codec_h264_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+   GTypeInfo type_info = {
+     .class_size = sizeof (GstV4l2CodecH264DecClass),
+     .class_init = (GClassInitFunc) gst_v4l2_codec_h264_dec_class_init,
+-    .class_data = gst_mini_object_ref (GST_MINI_OBJECT (device)),
+     .instance_size = sizeof (GstV4l2CodecH264Dec),
+     .instance_init = (GInstanceInitFunc) gst_v4l2_codec_h264_dec_init,
+   };
+-  GstCaps *src_caps = NULL;
++  GstCaps *tmpl_src_caps = NULL, *src_caps = NULL;
+   guint version;
+ 
+   GST_DEBUG_CATEGORY_INIT (v4l2_h264dec_debug, "v4l2codecs-h264dec", 0,
+       "V4L2 stateless h264 decoder");
+ 
+   if (gst_v4l2_decoder_in_doc_mode (decoder)) {
+-    device->src_caps = gst_static_caps_get (&static_src_caps);
++    tmpl_src_caps = gst_static_caps_get (&static_src_caps);
+     goto register_element;
+   }
+ 
+@@ -1649,7 +1649,7 @@ gst_v4l2_codec_h264_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+   }
+ 
+   /* Get all supported pixel formats for H264 */
+-  device->src_caps =
++  tmpl_src_caps =
+       gst_v4l2_decoder_enum_all_src_formats (decoder, &static_src_caps);
+ 
+   version = gst_v4l2_decoder_get_version (decoder);
+@@ -1664,10 +1664,13 @@ gst_v4l2_codec_h264_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+   }
+ 
+ register_element:
++  type_info.class_data = gst_v4l2_decoder_class_data_new (device,
++      tmpl_src_caps);
+   gst_v4l2_decoder_register (plugin, GST_TYPE_H264_DECODER, &type_info,
+       "v4l2sl%sh264dec", device, rank, NULL);
+ 
+ done:
++  gst_clear_caps (&tmpl_src_caps);
+   if (src_caps)
+     gst_caps_unref (src_caps);
+ }
+diff --git a/sys/v4l2codecs/gstv4l2codech265dec.c b/sys/v4l2codecs/gstv4l2codech265dec.c
+index 43cf9bb..733322e 100644
+--- a/sys/v4l2codecs/gstv4l2codech265dec.c
++++ b/sys/v4l2codecs/gstv4l2codech265dec.c
+@@ -1807,8 +1807,9 @@ gst_v4l2_codec_h265_dec_dispose (GObject * object)
+ 
+ static void
+ gst_v4l2_codec_h265_dec_class_init (GstV4l2CodecH265DecClass * klass,
+-    GstV4l2CodecDevice * device)
++    GstV4l2DecoderClassData * cdata)
+ {
++  GstV4l2CodecDevice *device = cdata->device;
+   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
+   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
+   GstVideoDecoderClass *decoder_class = GST_VIDEO_DECODER_CLASS (klass);
+@@ -1829,7 +1830,7 @@ gst_v4l2_codec_h265_dec_class_init (GstV4l2CodecH265DecClass * klass,
+   gst_element_class_add_static_pad_template (element_class, &sink_template);
+   gst_element_class_add_pad_template (element_class,
+       gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
+-          device->src_caps));
++          cdata->src_caps));
+ 
+   element_class->change_state =
+       GST_DEBUG_FUNCPTR (gst_v4l2_codec_h265_dec_change_state);
+@@ -1869,18 +1870,17 @@ gst_v4l2_codec_h265_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+   GTypeInfo type_info = {
+     .class_size = sizeof (GstV4l2CodecH265DecClass),
+     .class_init = (GClassInitFunc) gst_v4l2_codec_h265_dec_class_init,
+-    .class_data = gst_mini_object_ref (GST_MINI_OBJECT (device)),
+     .instance_size = sizeof (GstV4l2CodecH265Dec),
+     .instance_init = (GInstanceInitFunc) gst_v4l2_codec_h265_dec_init,
+   };
+-  GstCaps *src_caps = NULL;
++  GstCaps *tmpl_src_caps = NULL, *src_caps = NULL;
+   guint version;
+ 
+   GST_DEBUG_CATEGORY_INIT (v4l2_h265dec_debug, "v4l2codecs-h265dec", 0,
+       "V4L2 stateless h265 decoder");
+ 
+   if (gst_v4l2_decoder_in_doc_mode (decoder)) {
+-    device->src_caps = gst_static_caps_get (&static_src_caps);
++    tmpl_src_caps = gst_static_caps_get (&static_src_caps);
+     goto register_element;
+   }
+ 
+@@ -1898,7 +1898,7 @@ gst_v4l2_codec_h265_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+   }
+ 
+   /* Get all supported pixel formats for H265 */
+-  device->src_caps =
++  tmpl_src_caps =
+       gst_v4l2_decoder_enum_all_src_formats (decoder, &static_src_caps);
+ 
+   version = gst_v4l2_decoder_get_version (decoder);
+@@ -1913,10 +1913,13 @@ gst_v4l2_codec_h265_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+   }
+ 
+ register_element:
++  type_info.class_data = gst_v4l2_decoder_class_data_new (device,
++      tmpl_src_caps);
+   gst_v4l2_decoder_register (plugin, GST_TYPE_H265_DECODER, &type_info,
+       "v4l2sl%sh265dec", device, rank, NULL);
+ 
+ done:
++  gst_clear_caps (&tmpl_src_caps);
+   if (src_caps)
+     gst_caps_unref (src_caps);
+ }
+diff --git a/sys/v4l2codecs/gstv4l2codecmpeg2dec.c b/sys/v4l2codecs/gstv4l2codecmpeg2dec.c
+index 0247be3..7c2b75d 100644
+--- a/sys/v4l2codecs/gstv4l2codecmpeg2dec.c
++++ b/sys/v4l2codecs/gstv4l2codecmpeg2dec.c
+@@ -1076,8 +1076,9 @@ gst_v4l2_codec_mpeg2_dec_dispose (GObject * object)
+ 
+ static void
+ gst_v4l2_codec_mpeg2_dec_class_init (GstV4l2CodecMpeg2DecClass * klass,
+-    GstV4l2CodecDevice * device)
++    GstV4l2DecoderClassData * cdata)
+ {
++  GstV4l2CodecDevice *device = cdata->device;
+   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
+   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
+   GstVideoDecoderClass *decoder_class = GST_VIDEO_DECODER_CLASS (klass);
+@@ -1098,7 +1099,7 @@ gst_v4l2_codec_mpeg2_dec_class_init (GstV4l2CodecMpeg2DecClass * klass,
+   gst_element_class_add_static_pad_template (element_class, &sink_template);
+   gst_element_class_add_pad_template (element_class,
+       gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
+-          device->src_caps));
++          cdata->src_caps));
+ 
+   element_class->change_state =
+       GST_DEBUG_FUNCPTR (gst_v4l2_codec_mpeg2_dec_change_state);
+@@ -1138,17 +1139,16 @@ gst_v4l2_codec_mpeg2_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+   GTypeInfo type_info = {
+     .class_size = sizeof (GstV4l2CodecMpeg2DecClass),
+     .class_init = (GClassInitFunc) gst_v4l2_codec_mpeg2_dec_class_init,
+-    .class_data = gst_mini_object_ref (GST_MINI_OBJECT (device)),
+     .instance_size = sizeof (GstV4l2CodecMpeg2Dec),
+     .instance_init = (GInstanceInitFunc) gst_v4l2_codec_mpeg2_dec_init,
+   };
+-  GstCaps *src_caps = NULL;
++  GstCaps *tmpl_src_caps = NULL, *src_caps = NULL;
+ 
+   GST_DEBUG_CATEGORY_INIT (v4l2_mpeg2dec_debug, "v4l2codecs-mpeg2dec", 0,
+       "V4L2 stateless mpeg2 decoder");
+ 
+   if (gst_v4l2_decoder_in_doc_mode (decoder)) {
+-    device->src_caps = gst_static_caps_get (&static_src_caps);
++    tmpl_src_caps = gst_static_caps_get (&static_src_caps);
+     goto register_element;
+   }
+ 
+@@ -1166,14 +1166,17 @@ gst_v4l2_codec_mpeg2_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+   }
+ 
+   /* Get all supported pixel formats for MPEG2 */
+-  device->src_caps =
++  tmpl_src_caps =
+       gst_v4l2_decoder_enum_all_src_formats (decoder, &static_src_caps);
+ 
+ register_element:
++  type_info.class_data = gst_v4l2_decoder_class_data_new (device,
++      tmpl_src_caps);
+   gst_v4l2_decoder_register (plugin, GST_TYPE_MPEG2_DECODER, &type_info,
+       "v4l2sl%smpeg2dec", device, rank, NULL);
+ 
+ done:
++  gst_clear_caps (&tmpl_src_caps);
+   if (src_caps)
+     gst_caps_unref (src_caps);
+ }
+diff --git a/sys/v4l2codecs/gstv4l2codecvp8dec.c b/sys/v4l2codecs/gstv4l2codecvp8dec.c
+index 38c77be..405aa06 100644
+--- a/sys/v4l2codecs/gstv4l2codecvp8dec.c
++++ b/sys/v4l2codecs/gstv4l2codecvp8dec.c
+@@ -954,8 +954,9 @@ gst_v4l2_codec_vp8_dec_dispose (GObject * object)
+ 
+ static void
+ gst_v4l2_codec_vp8_dec_class_init (GstV4l2CodecVp8DecClass * klass,
+-    GstV4l2CodecDevice * device)
++    GstV4l2DecoderClassData * cdata)
+ {
++  GstV4l2CodecDevice *device = cdata->device;
+   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
+   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
+   GstVideoDecoderClass *decoder_class = GST_VIDEO_DECODER_CLASS (klass);
+@@ -976,7 +977,7 @@ gst_v4l2_codec_vp8_dec_class_init (GstV4l2CodecVp8DecClass * klass,
+   gst_element_class_add_static_pad_template (element_class, &sink_template);
+   gst_element_class_add_pad_template (element_class,
+       gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
+-          device->src_caps));
++          cdata->src_caps));
+ 
+   element_class->change_state =
+       GST_DEBUG_FUNCPTR (gst_v4l2_codec_vp8_dec_change_state);
+@@ -1032,18 +1033,17 @@ gst_v4l2_codec_vp8_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+   GTypeInfo type_info = {
+     .class_size = sizeof (GstV4l2CodecVp8DecClass),
+     .class_init = (GClassInitFunc) gst_v4l2_codec_vp8_dec_class_init,
+-    .class_data = gst_mini_object_ref (GST_MINI_OBJECT (device)),
+     .instance_size = sizeof (GstV4l2CodecVp8Dec),
+     .instance_init = (GInstanceInitFunc) gst_v4l2_codec_vp8_dec_init,
+   };
+   gchar *element_name;
+-  GstCaps *src_caps = NULL, *alpha_caps;
++  GstCaps *tmpl_src_caps = NULL, *src_caps = NULL, *alpha_caps;
+ 
+   GST_DEBUG_CATEGORY_INIT (v4l2_vp8dec_debug, "v4l2codecs-vp8dec", 0,
+       "V4L2 stateless VP8 decoder");
+ 
+   if (gst_v4l2_decoder_in_doc_mode (decoder)) {
+-    device->src_caps = gst_static_caps_get (&static_src_caps);
++    tmpl_src_caps = gst_static_caps_get (&static_src_caps);
+     goto register_element;
+   }
+ 
+@@ -1061,10 +1061,12 @@ gst_v4l2_codec_vp8_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+   }
+ 
+   /* Get all supported pixel formats for VP8 */
+-  device->src_caps =
++  tmpl_src_caps =
+       gst_v4l2_decoder_enum_all_src_formats (decoder, &static_src_caps);
+ 
+ register_element:
++  type_info.class_data = gst_v4l2_decoder_class_data_new (device,
++      tmpl_src_caps);
+   gst_v4l2_decoder_register (plugin, GST_TYPE_VP8_DECODER, &type_info,
+       "v4l2sl%svp8dec", device, rank, &element_name);
+ 
+@@ -1074,7 +1076,7 @@ register_element:
+   alpha_caps = gst_caps_from_string ("video/x-raw,format={I420, NV12}");
+ 
+   if (gst_v4l2_decoder_in_doc_mode (decoder) ||
+-      gst_caps_can_intersect (device->src_caps, alpha_caps))
++      gst_caps_can_intersect (tmpl_src_caps, alpha_caps))
+     gst_v4l2_codec_alpha_decode_bin_register (plugin,
+         (GClassInitFunc) gst_v4l2_codec_vp8_alpha_decode_bin_subclass_init,
+         element_name, "v4l2slvp8%salphadecodebin", device, rank);
+@@ -1082,6 +1084,7 @@ register_element:
+   gst_caps_unref (alpha_caps);
+ 
+ done:
++  gst_clear_caps (&tmpl_src_caps);
+   if (src_caps)
+     gst_caps_unref (src_caps);
+ }
+diff --git a/sys/v4l2codecs/gstv4l2codecvp9dec.c b/sys/v4l2codecs/gstv4l2codecvp9dec.c
+index 8fc949d..c4bd64f 100644
+--- a/sys/v4l2codecs/gstv4l2codecvp9dec.c
++++ b/sys/v4l2codecs/gstv4l2codecvp9dec.c
+@@ -1227,8 +1227,9 @@ gst_v4l2_codec_vp9_dec_dispose (GObject * object)
+ 
+ static void
+ gst_v4l2_codec_vp9_dec_class_init (GstV4l2CodecVp9DecClass * klass,
+-    GstV4l2CodecDevice * device)
++    GstV4l2DecoderClassData * cdata)
+ {
++  GstV4l2CodecDevice *device = cdata->device;
+   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
+   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
+   GstVideoDecoderClass *decoder_class = GST_VIDEO_DECODER_CLASS (klass);
+@@ -1249,7 +1250,7 @@ gst_v4l2_codec_vp9_dec_class_init (GstV4l2CodecVp9DecClass * klass,
+   gst_element_class_add_static_pad_template (element_class, &sink_template);
+   gst_element_class_add_pad_template (element_class,
+       gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
+-          device->src_caps));
++          cdata->src_caps));
+ 
+   element_class->change_state =
+       GST_DEBUG_FUNCPTR (gst_v4l2_codec_vp9_dec_change_state);
+@@ -1309,18 +1310,17 @@ gst_v4l2_codec_vp9_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+   GTypeInfo type_info = {
+     .class_size = sizeof (GstV4l2CodecVp9DecClass),
+     .class_init = (GClassInitFunc) gst_v4l2_codec_vp9_dec_class_init,
+-    .class_data = gst_mini_object_ref (GST_MINI_OBJECT (device)),
+     .instance_size = sizeof (GstV4l2CodecVp9Dec),
+     .instance_init = (GInstanceInitFunc) gst_v4l2_codec_vp9_dec_init,
+   };
+   gchar *element_name;
+-  GstCaps *src_caps = NULL, *alpha_caps;
++  GstCaps *tmpl_src_caps = NULL, *src_caps = NULL, *alpha_caps;
+ 
+   GST_DEBUG_CATEGORY_INIT (v4l2_vp9dec_debug, "v4l2codecs-vp9dec", 0,
+       "V4L2 stateless VP9 decoder");
+ 
+   if (gst_v4l2_decoder_in_doc_mode (decoder)) {
+-    device->src_caps = gst_static_caps_get (&static_src_caps);
++    tmpl_src_caps = gst_static_caps_get (&static_src_caps);
+     goto register_element;
+   }
+ 
+@@ -1338,10 +1338,12 @@ gst_v4l2_codec_vp9_dec_register (GstPlugin * plugin, GstV4l2Decoder * decoder,
+   }
+ 
+   /* Get all supported pixel formats for VP9 */
+-  device->src_caps =
++  tmpl_src_caps =
+       gst_v4l2_decoder_enum_all_src_formats (decoder, &static_src_caps);
+ 
+ register_element:
++  type_info.class_data = gst_v4l2_decoder_class_data_new (device,
++      tmpl_src_caps);
+   gst_v4l2_decoder_register (plugin, GST_TYPE_VP9_DECODER, &type_info,
+       "v4l2sl%svp9dec", device, rank, &element_name);
+ 
+@@ -1351,7 +1353,7 @@ register_element:
+   alpha_caps = gst_caps_from_string ("video/x-raw,format={I420, NV12}");
+ 
+   if (gst_v4l2_decoder_in_doc_mode (decoder) ||
+-      gst_caps_can_intersect (device->src_caps, alpha_caps))
++      gst_caps_can_intersect (tmpl_src_caps, alpha_caps))
+     gst_v4l2_codec_alpha_decode_bin_register (plugin,
+         (GClassInitFunc) gst_v4l2_codec_vp9_alpha_decode_bin_subclass_init,
+         element_name, "v4l2slvp9%salphadecodebin", device, rank);
+@@ -1359,6 +1361,7 @@ register_element:
+   gst_caps_unref (alpha_caps);
+ 
+ done:
++  gst_clear_caps (&tmpl_src_caps);
+   if (src_caps)
+     gst_caps_unref (src_caps);
+ }
+diff --git a/sys/v4l2codecs/gstv4l2decoder.c b/sys/v4l2codecs/gstv4l2decoder.c
+index b8b9aec..e8500c1 100644
+--- a/sys/v4l2codecs/gstv4l2decoder.c
++++ b/sys/v4l2codecs/gstv4l2decoder.c
+@@ -1167,6 +1167,37 @@ gst_v4l2_decoder_get_property (GObject * object, guint prop_id,
+   }
+ }
+ 
++/*
++ * gst_v4l2_decoder_class_data_new:
++ * @device: a #GstV4l2CodecDevice
++ * @src_caps: (transfer none): the src pad template caps
++ *
++ * Creates the class data of a decoder element type. The class of a
++ * registered element type is only initialized when the type is first used,
++ * which is after all the codecs of all devices have been probed when the
++ * plugin is loaded from the registry cache, so everything the class_init
++ * function needs must be kept per element type. The class data lives as long
++ * as the type, i.e. until the process exits.
++ *
++ * Returns: (transfer full): the class data
++ */
++GstV4l2DecoderClassData *
++gst_v4l2_decoder_class_data_new (GstV4l2CodecDevice * device,
++    GstCaps * src_caps)
++{
++  GstV4l2DecoderClassData *cdata = g_new0 (GstV4l2DecoderClassData, 1);
++
++  cdata->device = (GstV4l2CodecDevice *)
++      gst_mini_object_ref (GST_MINI_OBJECT (device));
++  cdata->src_caps = gst_caps_ref (src_caps);
++
++  GST_MINI_OBJECT_FLAG_SET (cdata->device, GST_MINI_OBJECT_FLAG_MAY_BE_LEAKED);
++  GST_MINI_OBJECT_FLAG_SET (cdata->src_caps,
++      GST_MINI_OBJECT_FLAG_MAY_BE_LEAKED);
++
++  return cdata;
++}
++
+ /**
+  * gst_v4l2_decoder_register:
+  * @plugin: a #GstPlugin
+diff --git a/sys/v4l2codecs/gstv4l2decoder.h b/sys/v4l2codecs/gstv4l2decoder.h
+index ec410fe..a6404a8 100644
+--- a/sys/v4l2codecs/gstv4l2decoder.h
++++ b/sys/v4l2codecs/gstv4l2decoder.h
+@@ -43,6 +43,24 @@ G_DECLARE_FINAL_TYPE (GstV4l2Decoder, gst_v4l2_decoder, GST, V4L2_DECODER, GstOb
+ 
+ typedef struct _GstV4l2Request GstV4l2Request;
+ 
++/**
++ * GstV4l2DecoderClassData:
++ * @device: the device the element type was registered for
++ * @src_caps: the src pad template caps
++ *
++ * The class data of each registered decoder element type. The template caps
++ * are probed per codec, so they can't be stored in the #GstV4l2CodecDevice,
++ * which is shared by all codecs of a device.
++ */
++typedef struct
++{
++  GstV4l2CodecDevice *device;
++  GstCaps *src_caps;
++} GstV4l2DecoderClassData;
++
++GstV4l2DecoderClassData * gst_v4l2_decoder_class_data_new (GstV4l2CodecDevice * device,
++                                                           GstCaps * src_caps);
++
+ GstV4l2Decoder *  gst_v4l2_decoder_new (GstV4l2CodecDevice * device);
+ 
+ guint             gst_v4l2_decoder_get_version (GstV4l2Decoder * self);
+-- 
+2.55.0
+

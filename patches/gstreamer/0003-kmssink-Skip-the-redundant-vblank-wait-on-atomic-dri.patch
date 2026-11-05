@@ -1,0 +1,137 @@
+From 9f113ecfff54e151526660ed460c624cb741a898 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 29 Oct 2026 23:30:40 +0000
+Subject: [PATCH 3/7] kmssink: Skip the redundant vblank wait on atomic drivers
+
+After drmModeSetPlane(), show_frame() waits for the next vblank with
+drmWaitVBlank(). On drivers that support atomic modesetting, the legacy
+SetPlane ioctl is implemented with a blocking atomic commit:
+drm_atomic_helper_update_plane() calls drm_atomic_commit(), and
+drm_atomic_helper_commit() runs commit_tail() synchronously, which waits
+in drm_atomic_helper_wait_for_vblanks() (or
+drm_atomic_helper_wait_for_flip_done()) until the new framebuffer is
+scanned out. The extra wait then makes every frame last at least two
+refresh cycles, which halves the frame rate of a video matching the
+display refresh rate and causes late buffers to be dropped. The
+skip-vsync property works around this, but is disabled by default.
+
+Detect atomic drivers by enabling DRM_CLIENT_CAP_ATOMIC on the sink's
+own file descriptor, and skip the vblank wait in that case. The cap is
+enabled once the plane has been selected, since it also enables
+universal planes, which would change the automatic plane selection.
+Cursor planes are excluded, as legacy cursor updates don't wait for
+vblank. The wait is kept when the fd comes from the application, and in
+modesetting mode, where the vsync is the page flip itself.
+
+Assisted-by: Claude:claude-opus-5-5
+---
+ sys/kms/gstkmssink.c | 57 ++++++++++++++++++++++++++++++++++++++++----
+ sys/kms/gstkmssink.h |  2 ++
+ 2 files changed, 54 insertions(+), 5 deletions(-)
+
+diff --git a/sys/kms/gstkmssink.c b/sys/kms/gstkmssink.c
+index 59ed881..6ce24a7 100644
+--- a/sys/kms/gstkmssink.c
++++ b/sys/kms/gstkmssink.c
+@@ -718,6 +718,30 @@ get_drm_caps (GstKMSSink * self)
+   return TRUE;
+ }
+ 
++static gint
++get_plane_type (gint fd, guint32 plane_id)
++{
++  drmModeObjectProperties *props;
++  gint type = -1;
++  guint i;
++
++  props = drmModeObjectGetProperties (fd, plane_id, DRM_MODE_OBJECT_PLANE);
++  if (!props)
++    return -1;
++
++  for (i = 0; i < props->count_props && type < 0; i++) {
++    drmModePropertyRes *prop = drmModeGetProperty (fd, props->props[i]);
++
++    if (prop && !g_strcmp0 (prop->name, "type"))
++      type = props->prop_values[i];
++    drmModeFreeProperty (prop);
++  }
++
++  drmModeFreeObjectProperties (props);
++
++  return type;
++}
++
+ static void
+ ensure_kms_allocator (GstKMSSink * self)
+ {
+@@ -1288,6 +1312,22 @@ retry_find_plane:
+   GST_INFO_OBJECT (self, "connector id = %d / crtc id = %d / plane id = %d",
+       self->conn_id, self->crtc_id, self->plane_id);
+ 
++  /* There is no capability telling whether the driver is atomic, so try to
++   * enable atomic on our own fd. As this also enables universal planes, it is
++   * done after the plane lookup, so that the selected plane doesn't change. */
++  self->is_atomic = self->is_internal_fd &&
++      drmSetClientCap (self->fd, DRM_CLIENT_CAP_ATOMIC, 1) == 0;
++
++  /* With atomic drivers, drmModeSetPlane() is a blocking atomic commit that
++   * only returns once the new framebuffer is scanned out, so an additional
++   * vblank wait would halve the frame rate. Legacy updates of the cursor
++   * plane are the exception, they don't wait for vblank. */
++  self->setplane_is_sync = self->is_atomic &&
++      get_plane_type (self->fd, self->plane_id) != DRM_PLANE_TYPE_CURSOR;
++
++  GST_INFO_OBJECT (self, "atomic (%s) / drmModeSetPlane waits for vblank (%s)",
++      self->is_atomic ? "✓" : "✗", self->setplane_is_sync ? "✓" : "✗");
++
+   GST_OBJECT_LOCK (self);
+   self->hdisplay = crtc->mode.hdisplay;
+   self->vdisplay = crtc->mode.vdisplay;
+@@ -2231,8 +2271,11 @@ retry_set_plane:
+   }
+ 
+ sync_frame:
+-  /* Wait for the previous frame to complete redraw */
+-  if (!self->skip_vsync && !gst_kms_sink_sync (self)) {
++  /* Wait for the previous frame to complete redraw, unless the plane update
++   * already did */
++  if (!self->skip_vsync &&
++      (self->modesetting_enabled || !self->setplane_is_sync) &&
++      !gst_kms_sink_sync (self)) {
+     GST_OBJECT_UNLOCK (self);
+     goto bail;
+   }
+@@ -2721,10 +2764,14 @@ gst_kms_sink_class_init (GstKMSSinkClass * klass)
+   /**
+    * kmssink:skip-vsync:
+    *
+-   *  For some cases, to suppress internal vsync, which can drop framerate
+-   *  in half, set this to 1.
++   * For some cases, to suppress internal vsync, which can drop framerate
++   * in half, set this to %TRUE.
++   *
++   * Since 1.30, the internal vsync is skipped automatically when the sink
++   * opened the DRM device itself, the driver supports atomic modesetting and
++   * frames are shown with drmModeSetPlane() on a non-cursor plane.
+    *
+-   *  Since: 1.22
++   * Since: 1.22
+    */
+   g_properties[PROP_SKIP_VSYNC] =
+       g_param_spec_boolean ("skip-vsync", "Skip Internal VSync",
+diff --git a/sys/kms/gstkmssink.h b/sys/kms/gstkmssink.h
+index 95a1ffe..01f4b0b 100644
+--- a/sys/kms/gstkmssink.h
++++ b/sys/kms/gstkmssink.h
+@@ -63,6 +63,8 @@ struct _GstKMSSink {
+   gboolean has_prime_import;
+   gboolean has_prime_export;
+   gboolean has_async_page_flip;
++  gboolean is_atomic;
++  gboolean setplane_is_sync;
+   gboolean can_scale;
+ 
+   gboolean modesetting_enabled;
+-- 
+2.55.0
+

@@ -1,0 +1,123 @@
+From b901b4595cd34581fe574ec336e29f4fff0727a3 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 29 Oct 2026 23:11:11 +0000
+Subject: [PATCH 5/7] kmssink: Prefer a mode matching the frame rate when
+ modesetting
+
+configure_mode_setting() uses the first connector mode of the video
+size. When the display offers several refresh rates for that size, for
+example 3840x2160 at 30 Hz and 60 Hz, this can pick a refresh rate that
+is not a multiple of the video frame rate, so frames are repeated
+unevenly or the video can't be shown at its frame rate.
+
+Prefer the first mode of the video size whose refresh rate is an
+integer multiple of the frame rate, within 0.05% so that 59.94 Hz and
+60 Hz are told apart. Otherwise, or if the frame rate is unknown, keep
+using the first mode of the video size. The connector mode list is
+sorted with the preferred and highest refresh modes first.
+
+Assisted-by: Claude:claude-opus-5-5
+---
+ sys/kms/gstkmssink.c | 70 +++++++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 62 insertions(+), 8 deletions(-)
+
+diff --git a/sys/kms/gstkmssink.c b/sys/kms/gstkmssink.c
+index 7da9e72..8b07677 100644
+--- a/sys/kms/gstkmssink.c
++++ b/sys/kms/gstkmssink.c
+@@ -758,13 +758,70 @@ gst_kms_sink_flips_primary (GstKMSSink * self)
+   return self->modesetting_enabled && self->plane_is_primary;
+ }
+ 
++static gdouble
++mode_refresh_rate (const drmModeModeInfo * mode)
++{
++  gdouble num, den;
++
++  num = mode->clock * 1000.0;
++  den = (gdouble) mode->htotal * mode->vtotal;
++
++  if (mode->flags & DRM_MODE_FLAG_INTERLACE)
++    num *= 2;
++  if (mode->flags & DRM_MODE_FLAG_DBLSCAN)
++    den *= 2;
++  if (mode->vscan > 1)
++    den *= mode->vscan;
++
++  return den > 0 ? num / den : 0;
++}
++
++/* Pick the first mode of the video size, preferring one whose refresh rate is
++ * an integer multiple of the video frame rate */
++static drmModeModeInfo *
++find_mode_for_video (GstKMSSink * self, drmModeConnector * conn,
++    GstVideoInfo * vinfo)
++{
++  drmModeModeInfo *first = NULL;
++  gdouble fps = 0;
++  gint i;
++
++  if (GST_VIDEO_INFO_FPS_N (vinfo) > 0 && GST_VIDEO_INFO_FPS_D (vinfo) > 0)
++    gst_util_fraction_to_double (GST_VIDEO_INFO_FPS_N (vinfo),
++        GST_VIDEO_INFO_FPS_D (vinfo), &fps);
++
++  for (i = 0; i < conn->count_modes; i++) {
++    drmModeModeInfo *mode = &conn->modes[i];
++    gdouble refresh, multiple;
++
++    if (mode->hdisplay != GST_VIDEO_INFO_WIDTH (vinfo) ||
++        mode->vdisplay != GST_VIDEO_INFO_HEIGHT (vinfo))
++      continue;
++
++    if (!first)
++      first = mode;
++
++    if (fps <= 0)
++      break;
++
++    refresh = mode_refresh_rate (mode);
++    multiple = round (refresh / fps);
++    if (multiple >= 1 && fabs (refresh - multiple * fps) < refresh * 0.0005) {
++      GST_DEBUG_OBJECT (self, "mode %s@%.3f matches the frame rate %.3f",
++          mode->name, refresh, fps);
++      return mode;
++    }
++  }
++
++  return first;
++}
++
+ static gboolean
+ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
+ {
+   gboolean ret;
+   drmModeConnector *conn;
+   int err;
+-  gint i;
+   drmModeModeInfo *mode;
+   guint32 fb_id;
+   GstKMSMemory *kmsmem;
+@@ -808,16 +865,13 @@ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
+   if (!conn)
+     goto connector_failed;
+ 
+-  for (i = 0; i < conn->count_modes; i++) {
+-    if (conn->modes[i].vdisplay == GST_VIDEO_INFO_HEIGHT (vinfo) &&
+-        conn->modes[i].hdisplay == GST_VIDEO_INFO_WIDTH (vinfo)) {
+-      mode = &conn->modes[i];
+-      break;
+-    }
+-  }
++  mode = find_mode_for_video (self, conn, vinfo);
+   if (!mode)
+     goto mode_failed;
+ 
++  GST_INFO_OBJECT (self, "setting mode %s@%.3f", mode->name,
++      mode_refresh_rate (mode));
++
+   err = drmModeSetCrtc (self->fd, self->crtc_id, fb_id, 0, 0,
+       (uint32_t *) & self->conn_id, 1, mode);
+   if (err)
+-- 
+2.55.0
+

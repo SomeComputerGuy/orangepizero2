@@ -1,0 +1,93 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 18:04:32 +0000
+Subject: [PATCH 101/103] v4l2codecs: decoder: Report the error flag of
+ returned picture buffers
+
+A driver returns a picture buffer with V4L2_BUF_FLAG_ERROR when it could
+not decode into it, e.g. when it refuses the bitstream at run time. The
+dequeue ignored the flag, so the caller could not tell such a buffer from
+a decoded one. Keep the flag per request and add
+gst_v4l2_request_has_buf_error() for decoders that want to act on it.
+Existing decoders are unchanged.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2codecs/gstv4l2decoder.c | 21 +++++++++++++++++++--
+ sys/v4l2codecs/gstv4l2decoder.h |  2 ++
+ 2 files changed, 21 insertions(+), 2 deletions(-)
+
+diff --git a/sys/v4l2codecs/gstv4l2decoder.c b/sys/v4l2codecs/gstv4l2decoder.c
+index 3b6b708..a634530 100644
+--- a/sys/v4l2codecs/gstv4l2decoder.c
++++ b/sys/v4l2codecs/gstv4l2decoder.c
+@@ -71,6 +71,7 @@ struct _GstV4l2Request
+   /* request state */
+   gboolean pending;
+   gboolean failed;
++  gboolean buf_error;
+   gboolean hold_pic_buf;
+   gboolean sub_request;
+ };
+@@ -1094,7 +1095,8 @@ gst_v4l2_decoder_dequeue_sink (GstV4l2Decoder * self)
+ }
+ 
+ static gboolean
+-gst_v4l2_decoder_dequeue_src (GstV4l2Decoder * self, guint32 * out_frame_num)
++gst_v4l2_decoder_dequeue_src (GstV4l2Decoder * self, guint32 * out_frame_num,
++    gboolean * out_buf_error)
+ {
+   gint ret;
+   struct v4l2_plane planes[GST_VIDEO_MAX_PLANES] = { {0} };
+@@ -1115,6 +1117,7 @@ gst_v4l2_decoder_dequeue_src (GstV4l2Decoder * self, guint32 * out_frame_num)
+   }
+ 
+   *out_frame_num = buf.timestamp.tv_usec + buf.timestamp.tv_sec * 1000000;
++  *out_buf_error = (buf.flags & V4L2_BUF_FLAG_ERROR) != 0;
+ 
+   GST_TRACE_OBJECT (self, "Dequeued picture buffer %i", buf.index);
+ 
+@@ -1648,7 +1651,8 @@ gst_v4l2_request_set_done (GstV4l2Request * request)
+     if (!pending_req->hold_pic_buf) {
+       guint32 frame_num = G_MAXUINT32;
+ 
+-      if (!gst_v4l2_decoder_dequeue_src (decoder, &frame_num)) {
++      if (!gst_v4l2_decoder_dequeue_src (decoder, &frame_num,
++              &pending_req->buf_error)) {
+         pending_req->failed = TRUE;
+       } else if (frame_num != pending_req->frame_num) {
+         GST_WARNING_OBJECT (decoder,
+@@ -1677,6 +1681,19 @@ gst_v4l2_request_failed (GstV4l2Request * request)
+   return request->failed;
+ }
+ 
++/**
++ * gst_v4l2_request_has_buf_error:
++ * @request: a completed #GstV4l2Request
++ *
++ * Returns: %TRUE if the driver returned the picture buffer of @request with
++ * V4L2_BUF_FLAG_ERROR set, i.e. the picture was not (fully) decoded.
++ */
++gboolean
++gst_v4l2_request_has_buf_error (GstV4l2Request * request)
++{
++  return request->buf_error;
++}
++
+ GstBuffer *
+ gst_v4l2_request_dup_pic_buf (GstV4l2Request * request)
+ {
+diff --git a/sys/v4l2codecs/gstv4l2decoder.h b/sys/v4l2codecs/gstv4l2decoder.h
+index c1efc6e..3d666c7 100644
+--- a/sys/v4l2codecs/gstv4l2decoder.h
++++ b/sys/v4l2codecs/gstv4l2decoder.h
+@@ -191,6 +191,8 @@ gint              gst_v4l2_request_set_done (GstV4l2Request * request);
+ 
+ gboolean          gst_v4l2_request_failed (GstV4l2Request * request);
+ 
++gboolean          gst_v4l2_request_has_buf_error (GstV4l2Request * request);
++
+ GstBuffer *       gst_v4l2_request_dup_pic_buf (GstV4l2Request * request);
+ 
+ gint              gst_v4l2_request_get_fd (GstV4l2Request * request);

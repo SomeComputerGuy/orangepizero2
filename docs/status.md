@@ -23,7 +23,7 @@ known gap · **GAP** no driver anywhere.
 | VDD-SYS (vdd-gpu-sys) | OK | Floor 900 mV: at 810 mV (GPU devfreq idle) 4K VE decode corrupted 6/13 runs; 0/6 at ≥ 890 mV. |
 | Ethernet 1 GbE (RTL8211F) | PARTIAL | Dead-RX boots fixed with `rgmii-rxid` (10/10 cold boots RX OK). **Open:** on the current debug kernels, bulk host→board TCP over end0 (scp, `ssh cat`) stalls at exactly 512 KiB while the same file passes over WiFi; 8000-byte pings lose ~33 % after ~1 h uptime. Small packets and ssh fine; RX/TX error counters 0, 6 TX drops. Neither retested on the image kernel. Forced 10/100 + iperf3 not tested. |
 | WiFi UWE5622 (SDIO) | PARTIAL | Scan 2.4 + 5 GHz OK. 5 GHz SoftAP fixed (driver never passed the channel): hostapd ch36 → VHT80 MCS9, iperf3 128 Mbit/s host→board, 96.5 board→host; 2.4 GHz AP 31.5 / 41.4 Mbit/s; wpa_supplicant AP works on both bands. Regdomain from cfg80211 (all countries); image sets it with `OPIZ2_WIFI_REGDOM` (2c5dd06). Firmware always picks the widest 20/40/80 MHz block. STA association + iperf as station to test. |
-| Bluetooth (UWE5622, UART) | PARTIAL | Blob-free: in-kernel vendor init + stock `btattach`; hci0 up, BR/EDR + LE scan OK. Pairing and LE 5.0 features to test. Blob kept as fallback (`vendor_init=0`). |
+| Bluetooth (UWE5622, UART) | PARTIAL | Blob-free: in-kernel vendor init + stock `btattach`. Board <-> host (BlueZ 5.87, 2026-11-05): discovery both ways, SSP pairing + bond, bond and BD address EA:97:B0:2B:A9:EE kept over a reboot, reconnect OK; L2CAP 4 MB host->board 190 kB/s, board->host 165 kB/s; RFCOMM 4 MB host->board 180 kB/s, 0 loss; LE advertising + LE scan both ways. **Open:** LE connection/GATT (host uses LL privacy; test with a phone). Blob kept as fallback (`vendor_init=0`). |
 | USB host (3× EHCI/OHCI) | OK\* | Controllers up; no device plugged in yet. |
 | USB-C | PARTIAL | Gadget mode untested (power-only cable). Host mode via overlay `sun50i-h616-usb-otg-host` (needs board powered from the header). |
 | HDMI video | OK\* | Pipeline bound; no display yet. Blend-mode warnings fixed (0). |
@@ -79,8 +79,8 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
 ### A. Now (board only, low credits)
 1. GPU conformance rerun on the server image (`harness/analysis/gpu/gpu-rerun.sh`, tag 8546e5fc1-server): running.
    Then commit the result summary.
-2. Bluetooth board <-> host (host now has bluez): discovery both ways, pair/bond + reconnect after a reboot, RFCOMM
-   throughput, BLE.
+2. Done 2026-11-05: GPU rerun (impl-gpu-spec.md 4b) and Bluetooth board <-> host (status table). Next on the board:
+   flash the scan-enabled rebuild once the user has built it, then rerun verify-board.sh (new scan-stack check).
 
 ### B. When tokens are back, in this order
 3. **Priority (user 2026-11-04: do these before the rest):**
@@ -119,6 +119,10 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
      all 8000-byte pings in 11 of 19 rounds.
    - JPEG greyscale decode (probe run 11-03; result to fold in).
    - Display tearing.
+   - panfrost: `WARN panfrost_mmu_map+0xcc` (panfrost_mmu.c:478) 5x when the 2 gles31 OOM cases hit the memcg limit;
+     the map failure should return an error, not WARN. Kernel fix on a fix/* branch.
+   - panfrost: KHR-GLES31 blend_equation_advanced mixedSequence fails 5/5 (coherent blend), with item 3.
+   - Bluetooth LE connection + GATT, with a phone (host's LL privacy blocks a host test).
    - MPEG-4 ASP 3840x2160 decode acceptance test (datasheet-checklist).
    - Datasheet W-items in docs/datasheet-checklist.md (W1-W34: CONFIG_COMPAT, hstimer, CE PRNG, SPI dual/quad,
      deinterlacer, DE33 10-bit/HDR, I2S/SPDIF overlays, ...).

@@ -25,7 +25,7 @@ patch `patches.armbian/drm-panfrost-resume-a-still-active-job-after-a-timeout-in
 job watchdog, a slot that still reports ACTIVE is soft-stopped and resumed without the GPU reset (see "Root cause:
 panfrost job timeout" below). Tags `Assisted-by: LLM` + Signed-off-by; checkpatch clean (one quoted dmesg line > 75
 chars); panfrost_job.o built with W=1 in kernel-check/work-cumul (STAGE=patch: 834 patches applied, 0 failed). Not yet in
-test-cumulative: the coordinator merges it; runner job 04-opencl-timeout-fix validates it.
+test-cumulative: the coordinator merges it; runner job 06-opencl-timeout-fix validates it.
 
 **Kernel** `fix/sunxi-panfrost-mmu-map-warn` (armbian-build fork, worktree `wt-panfrost-mmu`), commit da59f9208
 "sunxi-7.3: drm/panfrost: don't WARN when a GEM mapping cannot get its pages": `WARN_ON(IS_ERR(sgt))` ->
@@ -159,7 +159,7 @@ raw logs in `mesa-work/oclfix/b*/`.
 - Fix: branch `fix/sunxi-panfrost-softstop-resume` (above). On timeout with JS_STATUS == ACTIVE: soft-stop (100 ms
   drain instead of 10), no karma, no core dump, no GPU reset; resubmission resumes the job from JS_TAIL as before. Faults,
   soft-stop failure and the MMU-fault reset path still reset. Upstream still has the 500 ms reset (checked linux-7.3.1).
-- Board validation: runner job `harness/runner-queue/04-opencl-timeout-fix.md` (package
+- Board validation: runner job `harness/runner-queue/06-opencl-timeout-fix.md` (package
   `harness/research/opencl-fixes/runner/`): Integer Ops, Thread Dimensions, Math in two halves (default multi-threaded),
   a regression subset of 19 passing suites, Images (Kernel 3D int), dmesg must stay free of timeouts/faults. Needs the
   next cumulative kernel to contain the branch (the script blocks otherwise).

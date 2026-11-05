@@ -1,4 +1,4 @@
-# Job 04-opencl-timeout-fix
+# Job 06-opencl-timeout-fix
 Package: harness/research/opencl-fixes/runner/ (script ocl-job.sh, HANDOFF.md, checks 1-8 there).
 Command: `bash harness/research/opencl-fixes/runner/ocl-job.sh timeout-fix`
 Kernel: newest cumulative kernel, which must contain fix/sunxi-panfrost-softstop-resume (wt-panfrost-softstop

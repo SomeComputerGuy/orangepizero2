@@ -1,0 +1,65 @@
+acquired by vdec-soak
+7.3.1
+vmlinuz-7.3.1-vdec-c7
+c7 already booted (Image md5 58e11a0059c837bea4f573bab872da07), skipping the install
+7.3.1 #10 SMP PREEMPT Thu Nov  5 14:19:53 UTC 2026
+/dev/video0
+curl: (23) client returned ERROR on write of 7240 bytes
+chmod: cannot access '/root/avs2/avs2dec-q': No such file or directory
+kernel 7.3.1 #10 SMP PREEMPT Thu Nov  5 14:19:53 UTC 2026 clk 624000000 gpu powersave 306000000 vdd-gpu-sys 900000 temp 59759 59516 61946 58625  timeouts 0 uptime 387.70
+[FAIL avs2-8bit] directory 14:45:43 temp 62351 61946 66077 61622 
+[FAIL avs2-10bit] directory 14:45:43 temp 62675 61946 66077 61622 
+[FAIL avs2-10bit-afbc] rc=0 14:45:52
+[t+310s] it=1 ok=3 bad=3 vdd-gpu-sys 900000 gpu 306000000 temp 61541 62594 63404 63890  timeouts 0
+[FAIL avs2-8bit] directory 14:50:44 temp 63971 62513 63728 62513 
+[FAIL avs2-10bit] directory 14:50:44 temp 63971 62513 63728 62513 
+[FAIL avs2-10bit-afbc] rc=0 14:50:53
+[t+611s] it=2 ok=6 bad=6 vdd-gpu-sys 900000 gpu 306000000 temp 65672 64619 68021 64781  timeouts 0
+[FAIL avs2-8bit] directory 14:55:44 temp 63242 62594 65996 62918 
+[FAIL avs2-10bit] directory 14:55:44 temp 63242 62513 65996 62918 
+[FAIL avs2-10bit-afbc] rc=0 14:55:53
+[t+911s] it=3 ok=9 bad=9 vdd-gpu-sys 900000 gpu 306000000 temp 65348 64052 69398 65024  timeouts 0
+[FAIL avs2-8bit] directory 15:00:42 temp 64052 62999 65186 63080 
+[FAIL avs2-10bit] directory 15:00:42 temp 62918 62999 65186 63080 
+[FAIL avs2-10bit-afbc] rc=0 15:00:52
+[FAIL avs2-8bit] directory 15:05:39 temp 63566 62594 64943 62108 
+[FAIL avs2-10bit] directory 15:05:39 temp 63485 62594 64943 62108 
+[FAIL avs2-10bit-afbc] rc=0 15:05:48
+[t+1506s] it=5 ok=15 bad=15 vdd-gpu-sys 900000 gpu 306000000 temp 64133 63566 65429 64538  timeouts 0
+[FAIL avs2-8bit] directory 15:10:34 temp 63971 64376 66401 61865 
+[FAIL avs2-10bit] directory 15:10:34 temp 63971 64376 66401 61865 
+[FAIL avs2-10bit-afbc] rc=0 15:10:43
+[FAIL avs2-8bit] directory 15:15:29 temp 63890 62432 65105 63566 
+[FAIL avs2-10bit] directory 15:15:29 temp 63890 62432 65105 63566 
+[FAIL avs2-10bit-afbc] rc=0 15:15:38
+[t+2096s] it=7 ok=21 bad=21 vdd-gpu-sys 900000 gpu 306000000 temp 63485 63728 65105 62999  timeouts 0
+[FAIL avs2-8bit] directory 15:20:33 temp 63242 62837 67373 62513 
+[FAIL avs2-10bit] directory 15:20:33 temp 63242 63080 67373 62513 
+[FAIL avs2-10bit-afbc] rc=0 15:20:42
+[t+2400s] it=8 ok=24 bad=24 vdd-gpu-sys 900000 gpu 306000000 temp 65429 65591 66725 64781  timeouts 0
+[FAIL avs2-8bit] directory 15:25:30 temp 64862 62999 66320 62108 
+[FAIL avs2-10bit] directory 15:25:31 temp 64862 62999 66320 62108 
+[FAIL avs2-10bit-afbc] rc=0 15:25:40
+[FAIL avs2-8bit] directory 15:30:30 temp 65348 62837 65267 62918 
+[FAIL avs2-10bit] directory 15:30:30 temp 65348 62837 65267 63080 
+[FAIL avs2-10bit-afbc] rc=0 15:30:39
+[t+2997s] it=10 ok=30 bad=30 vdd-gpu-sys 900000 gpu 306000000 temp 65348 65267 65024 65348  timeouts 0
+[FAIL avs2-8bit] directory 15:35:21 temp 64052 64295 65753 62513 
+[FAIL avs2-10bit] directory 15:35:21 temp 64052 63971 65753 62513 
+[FAIL avs2-10bit-afbc] rc=0 15:35:30
+[FAIL avs2-8bit] directory 15:40:13 temp 63728 62999 66644 63566 
+[FAIL avs2-10bit] directory 15:40:13 temp 63485 62999 66644 63566 
+[FAIL avs2-10bit-afbc] rc=0 15:40:22
+[t+3580s] it=12 ok=36 bad=36 vdd-gpu-sys 900000 gpu 306000000 temp 65267 65591 69560 66077  timeouts 0
+[FAIL avs2-8bit] directory 15:45:12 temp 64700 63080 66077 63323 
+[FAIL avs2-10bit] directory 15:45:13 temp 64700 63080 66077 63323 
+[FAIL avs2-10bit-afbc] rc=0 15:45:22
+[t+3880s] it=13 ok=39 bad=39 vdd-gpu-sys 900000 gpu 306000000 temp 64781 63080 66806 63809  timeouts 0
+[FAIL avs2-8bit] directory 15:50:07 temp 64457 62918 66239 62999 
+[FAIL avs2-10bit] directory 15:50:07 temp 64457 62918 66239 62999 
+[FAIL avs2-10bit-afbc] rc=0 15:50:16
+[soak] 4174s iterations=14 runs ok=42 fail=42 max-temp 70532 vdd-gpu-sys 900000 timeouts 0
+gpu governor restored simple_ondemand
+ROUND-DONE
+restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64
+released by vdec-soak

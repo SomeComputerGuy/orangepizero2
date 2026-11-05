@@ -1,0 +1,66 @@
+acquired by afbc-check2
+2026-11-05 18:39:03 start
+7.3.1-edge-sunxi64
+vmlinuz-7.3.1-edge-sunxi64
+shipped /root/stage/modules-c9.tgz 9aec9875cfd7a2eb966fb20a21c973712a9d01aa8fe0c046070f63e6cb61e023
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+7.3.1 #12 SMP PREEMPT Thu Nov  5 17:30:51 UTC 2026
+/dev/dri/renderD128
+/dev/video0
+kernel 7.3.1 #12 SMP PREEMPT Thu Nov  5 17:30:51 UTC 2026 ve-clk 624000000 mesa  uptime 38.11
+[df] tmpfs           484M   25M  460M   5% /tmp
+[df] /dev/mmcblk0p1   29G  8.4G   21G  30% /
+[mem] Mem:             967         230         397          26         382         737
+== GL smoke test
+[gl] EGL 1.5 1.5
+[gl] GL_RENDERER Mali-G31 MC1 (Panfrost), OpenGL ES 3.1 Mesa 26.2.4-1ubuntu1
+[gl] done: 0 frames, 0 compared, 0 matched, first mismatch none, 3.9 s (gpu 0.00 s, cpu 0.00 s)
+== quick validation: H.265 8-bit AS12 vs NV12 reference, 60 frames
+[hevc8q] dec rc 0 check rc 2 2 s |  | input: 3840x2160 YU08 modifier 0x0800000000000061 size 13057056, 8-bit, layout nv12, 600 reference md5s import with pitch 5760 failed: EGL 0x3009 import with pitch 7680 failed: EGL 0x3009 import with pitch 5760 failed: EGL 0x3009 import with pitch 3840 failed: EGL 0x3009 import with pitch 15360 failed: EGL 0x3009 
+[hevc8q] afbc-gpu-check: dma-buf import failed for every pitch
+[hevc8q] hdr frame 0: 240x135 superblocks, solid 621, uncompressed 23761, compressed 8018, body offsets 0x1017aa80..0xf0ac2a80, end 0xf0ac2cf1, buffer 0xc73c20, out-of-range 31779
+quick: ok=0 per-frame 166650 ms
+== quick validation failed: diagnostics (3 frames each)
+[diag-split] dec rc 0 check rc 2 1 s |  | input: 3840x2160 YU08 modifier 0x0800000000000061 size 13057056, 8-bit, layout nv12, 600 reference md5s import with pitch 5760 failed: EGL 0x3009 import with pitch 7680 failed: EGL 0x3009 import with pitch 5760 failed: EGL 0x3009 import with pitch 3840 failed: EGL 0x3009 import with pitch 15360 failed: EGL 0x3009 
+[diag-split] EGL_ANDROID_blob_cache EGL_ANDROID_native_fence_sync EGL_EXT_config_select_group EGL_EXT_image_dma_buf_import EGL_EXT_image_dma_buf_import_modifiers EGL_EXT_surface_compression EGL_IMG_context_priority EGL_KHR_cl_event2 EGL_KHR_config_attribs EGL_KHR_context_flush_control EGL_KHR_create_context EGL_KHR_create_context_no_error EGL_KHR_fence_sync EGL_KHR_get_all_proc_addresses EGL_KHR_gl_colorspace EGL_KHR_gl_renderbuffer_image EGL_KHR_gl_texture_2D_image EGL_KHR_gl_texture_3D_image EGL_KHR_gl_texture_cubemap_image EGL_KHR_image_base EGL_KHR_no_config_context EGL_KHR_partial_update EGL_KHR_reusable_sync EGL_KHR_surfaceless_context EGL_EXT_pixel_format_float EGL_KHR_wait_sync EGL_MESA_configless_context EGL_MESA_gl_interop EGL_MESA_image_dma_buf_export EGL_MESA_query_driver EGL_MESA_x11_native_visual_id 
+[diag-split] afbc-gpu-check: dma-buf import failed for every pitch
+[diag-split] hdr frame 0: 240x135 superblocks, solid 621, uncompressed 23761, compressed 8018, body offsets 0x1017aa80..0xf0ac2a80, end 0xf0ac2cf1, buffer 0xc73c20, out-of-range 31779
+[diag-nosplit] dec rc 0 check rc 2 1 s |  | input: 3840x2160 YU08 modifier 0x0800000000000401 size 13057056, 8-bit, layout nv12, 600 reference md5s import with pitch 5760 failed: EGL 0x3009 import with pitch 7680 failed: EGL 0x3009 import with pitch 5760 failed: EGL 0x3009 import with pitch 3840 failed: EGL 0x3009 import with pitch 15360 failed: EGL 0x3009 
+[diag-nosplit] afbc-gpu-check: dma-buf import failed for every pitch
+[diag-nosplit] hdr frame 0: 240x135 superblocks, solid 621, uncompressed 23761, compressed 8018, body offsets 0x1017aa80..0xf0ac2a80, end 0xf0ac2cf1, buffer 0xc73c20, out-of-range 31779
+[diag-ext] dec rc 0 check rc 2 1 s |  | input: 3840x2160 YU08 modifier 0x0800000000000061 size 13057056, 8-bit, layout nv12, 600 reference md5s import with pitch 5760 failed: EGL 0x3009 import with pitch 7680 failed: EGL 0x3009 import with pitch 5760 failed: EGL 0x3009 import with pitch 3840 failed: EGL 0x3009 import with pitch 15360 failed: EGL 0x3009 
+[diag-ext] afbc-gpu-check: dma-buf import failed for every pitch
+[diag-ext] hdr frame 0: 240x135 superblocks, solid 621, uncompressed 23761, compressed 8018, body offsets 0x1017aa80..0xf0ac2a80, end 0xf0ac2cf1, buffer 0xc73c20, out-of-range 31779
+[diag-i420] dec rc 0 check rc 2 1 s |  | input: 3840x2160 YU08 modifier 0x0800000000000061 size 13057056, 8-bit, layout i420, 600 reference md5s import with pitch 5760 failed: EGL 0x3009 import with pitch 7680 failed: EGL 0x3009 import with pitch 5760 failed: EGL 0x3009 import with pitch 3840 failed: EGL 0x3009 import with pitch 15360 failed: EGL 0x3009 
+[diag-i420] afbc-gpu-check: dma-buf import failed for every pitch
+[diag-i420] hdr frame 0: 240x135 superblocks, solid 621, uncompressed 23761, compressed 8018, body offsets 0x1017aa80..0xf0ac2a80, end 0xf0ac2cf1, buffer 0xc73c20, out-of-range 31779
+== 10-bit AFBC (AS01) vs P010 references, max frames 60 (0 = all)
+[vp9p2] dec rc 0 check rc 2 3 s |  | input: 3840x2160 YU10 modifier 0x0800000000000061 size 17234976, 10-bit, layout p010le, 600 reference md5s import with pitch 7200 failed: EGL 0x3009 import with pitch 7680 failed: EGL 0x3009 import with pitch 5760 failed: EGL 0x3009 import with pitch 3840 failed: EGL 0x3009 import with pitch 15360 failed: EGL 0x3009 
+[vp9p2] afbc-gpu-check: dma-buf import failed for every pitch
+[hevc10] dec rc 0 check rc 2 2 s |  | input: 3840x2160 YU10 modifier 0x0800000000000061 size 17234976, 10-bit, layout p010le, 600 reference md5s import with pitch 7200 failed: EGL 0x3009 import with pitch 7680 failed: EGL 0x3009 import with pitch 5760 failed: EGL 0x3009 import with pitch 3840 failed: EGL 0x3009 import with pitch 15360 failed: EGL 0x3009 
+[hevc10] afbc-gpu-check: dma-buf import failed for every pitch
+[avs2] dec rc 141 check rc 2 1 s |  | input: 3840x2160 YU10 modifier 0x0800000000000441 size 17234976, 10-bit, layout yuv420p10le, 293 reference md5s import with pitch 7200 failed: EGL 0x3009 import with pitch 7680 failed: EGL 0x3009 import with pitch 5760 failed: EGL 0x3009 import with pitch 3840 failed: EGL 0x3009 import with pitch 15360 failed: EGL 0x3009 
+[avs2] afbc-gpu-check: dma-buf import failed for every pitch
+[avs2 dec] picture before any sequence header, skipped
+[avs2 dec] picture before any sequence header, skipped
+[avs2 dec] picture before any sequence header, skipped
+== 8-bit AFBC (AS12) vs NV12 references, max frames 60
+[hevc8] dec rc 0 check rc 2 2 s |  | input: 3840x2160 YU08 modifier 0x0800000000000061 size 13057056, 8-bit, layout nv12, 600 reference md5s import with pitch 5760 failed: EGL 0x3009 import with pitch 7680 failed: EGL 0x3009 import with pitch 5760 failed: EGL 0x3009 import with pitch 3840 failed: EGL 0x3009 import with pitch 15360 failed: EGL 0x3009 
+[hevc8] afbc-gpu-check: dma-buf import failed for every pitch
+[vp9p0] dec rc 0 check rc 2 2 s |  | input: 3840x2160 YU08 modifier 0x0800000000000061 size 13057056, 8-bit, layout nv12, 600 reference md5s import with pitch 5760 failed: EGL 0x3009 import with pitch 7680 failed: EGL 0x3009 import with pitch 5760 failed: EGL 0x3009 import with pitch 3840 failed: EGL 0x3009 import with pitch 15360 failed: EGL 0x3009 
+[vp9p0] afbc-gpu-check: dma-buf import failed for every pitch
+[dump] total 8
+[dump] drwxr-xr-x 2 root root 4096 Nov  5 18:41 .
+[dump] drwxr-xr-x 3 root root 4096 Nov  5 18:41 ..
+[dmesg] [   11.778336] panfrost 1800000.gpu: bus_clock rate = 200000000
+[dmesg] [   11.780521] panfrost 1800000.gpu: mali-g31 id 0x7093 major 0x0 minor 0x0 status 0x0
+[dmesg] [   11.780550] panfrost 1800000.gpu: features: 00000000,000027f7, issues: 00000000,00000400
+[dmesg] [   11.780559] panfrost 1800000.gpu: Features: L2:0x07100206 Shader:0x00000000 Tiler:0x00000209 Mem:0x1 MMU:0x00002821 AS:0xff JS:0x7
+[dmesg] [   11.780568] panfrost 1800000.gpu: shader_present=0x1 l2_present=0x1
+[dmesg] [   11.798128] [drm] Initialized panfrost 1.6.0 for 1800000.gpu on minor 1
+uptime 60.86 cedrus-timeouts 0
+ROUND-DONE
+restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64
+2026-11-05 18:42:39 end
+released by afbc-check2

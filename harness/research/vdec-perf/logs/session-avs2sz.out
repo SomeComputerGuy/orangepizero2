@@ -1,0 +1,18 @@
+acquired by vdec-avs2sz
+7.3.1-edge-sunxi64
+vmlinuz-7.3.1-edge-sunxi64
+shipped /root/stage/modules-c8.tgz b6f881cde28f75f15c0e9b51d1d19ddebf06dc9b8d203abd83ea47ef183f5440
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+7.3.1 #11 SMP PREEMPT Thu Nov  5 14:38:34 UTC 2026
+/dev/video0
+kernel 7.3.1 #11 SMP PREEMPT Thu Nov  5 14:38:34 UTC 2026 timeouts-at-start 0
+[test1.avs2] FAIL 0acb89b2df47f3ccf26123b919babff8 rc=0 37.3s new-timeouts 0 errors 0 | 2096 pictures decoded, 2096 output, md5 0acb89b2df47f3ccf26123b919babff8
+[main-2160p-ra.avs2] PASS 3a3d5d7eb9a6f548042e160d9e461388 rc=0 7.5s new-timeouts 0 errors 0 | 20 pictures decoded, 20 output, md5 3a3d5d7eb9a6f548042e160d9e461388
+[cctv4k-10bit.avs2] PASS be9985dea38abffc850d73024165c990 rc=0 221.6s new-timeouts 0 errors 0 | 292 pictures decoded, 292 output, md5 be9985dea38abffc850d73024165c990
+[main-1080p-ra.avs2] PASS 13dbb783682495dd423b05f6decee8b2 rc=0 2.8s new-timeouts 0 errors 0 | 30 pictures decoded, 30 output, md5 13dbb783682495dd423b05f6decee8b2
+[BQSquare_416x240_60_ra.avs2] PASS cf9babd3440b696c998179071a608b85 rc=0 0.5s new-timeouts 0 errors 0 | 100 pictures decoded, 100 output, md5 cf9babd3440b696c998179071a608b85
+timeouts-at-end 0
+ROUND-DONE
+restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64
+released by vdec-avs2sz

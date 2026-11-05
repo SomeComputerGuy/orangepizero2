@@ -14,13 +14,16 @@ chmod +x $A/ffmpeg-afbc $A/avs2dec-afbc $A/afbc-gpu-check
 for f in hevc-main-2160p60.mkv vp9-p0-2160p60.webm vp9-p2-2160p60.webm hevc-main10-2160p60.mkv; do
   [ -s $f ] || curl -sS -m 900 -o $f $U/$f; done
 curl -sS -m 300 -o /tmp/cc.avs2 $U/cctv4k-10bit.avs2
-[ -f /root/opiz2-mesa/main/env.sh ] && . /root/opiz2-mesa/main/env.sh
+[ -f /root/opiz2-mesa/main/env.sh ] || { echo "[env] BLOCKED: Mesa fork missing (/root/opiz2-mesa/main/env.sh); system Mesa cannot import AFBC YUV"; exit 3; }
+. /root/opiz2-mesa/main/env.sh
 echo "kernel $(uname -rv) ve-clk $(cat /sys/kernel/debug/clk/ve/clk_rate 2>/dev/null) mesa $(ls /root/opiz2-mesa/main/lib/libgallium* 2>/dev/null | head -1) uptime $(cut -d" " -f1 /proc/uptime)"
 df -h /tmp /root | tail -2 | sed 's/^/[df] /'; free -m | head -2 | tail -1 | sed 's/^/[mem] /'
 echo "== GL smoke test"; $A/afbc-gpu-check -v /dev/null 2>&1 | grep -E 'GL_RENDERER|^EGL |^done|afbc-gpu-check:' | sed 's/^/[gl] /'
 # run <name> <ref> <layout> <max-frames|0> <decoder command...>  (the decoder writes the dump to $FIFO)
 run() {
   local n=$1 ref=$2 lay=$3 max=$4 t0 ck rc crc; shift 4
+  # CASES="<names>": run only these (the hevc8q validation and its diagnostics always run)
+  if [ -n "${CASES:-}" ]; then case $n in hevc8q|diag-*) ;; *) [[ " $CASES " == *" $n "* ]] || return 0;; esac; fi
   rm -f $FIFO; mkfifo $FIFO; t0=$(date +%s)
   timeout 2700 $A/afbc-gpu-check -r $A/$ref -l $lay -m $max -D $D "${CKOPT[@]}" $FIFO > $A/$n.check.txt 2>&1 & ck=$!
   V4L2REQUEST_DUMP=$FIFO V4L2REQUEST_DUMP_MAX=$max timeout 2700 "$@" > $A/$n.dec.txt 2>&1; rc=$?
@@ -47,7 +50,7 @@ if [ "$ok" != 1 ]; then
   MAX=60
 else
   # budget ~40 min for the five full runs: 600 frames each when the GPU check keeps up, fewer otherwise
-  MAX=$(( 480000 / (per > 0 ? per : 1) )); [ $MAX -ge 600 ] && MAX=0; [ $MAX -gt 0 ] && [ $MAX -lt 60 ] && MAX=60
+  MAX=$(( ${AFBC_BUDGET_MS:-480000} / (per > 0 ? per : 1) )); [ $MAX -ge 600 ] && MAX=0; [ $MAX -gt 0 ] && [ $MAX -lt 60 ] && MAX=60
 fi
 CKOPT=()
 echo "== 10-bit AFBC (AS01) vs P010 references, max frames ${MAX} (0 = all)"

@@ -5,8 +5,9 @@
 MACAddress=68:da:73:af:62:79
 
 [Link]
-# Jumbo frames for the board MTU test (board stmmac max 3712; r8152 max 16362).
-MTUBytes=9000
+# Jumbo frames, capped at the board maximum (dwmac-sun8i max_mtu 2018 with fix/sunxi-h616-emac-jumbo). A bigger host
+# MTU makes the host send frames the board must drop (the 11-03 "lost 8000-byte pings" were exactly that).
+MTUBytes=2018
 
 [Network]
 Address=10.56.0.1/24

@@ -146,6 +146,17 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
      v4l2-request (PR 20847) + Jernej's work + our hwaccels, shared with OPi5 (decided). AVS2 v6 as one joint RFC with
      rkvdec. Findings sent to the OPi5 session 2026-11-05. Open: AI trailer form (coding-assistants.rst).
 
+### Code queue (next fresh agent when a slot frees, in order)
+- MPEG-1 MG1S coded format (OPi5 final: ~/orangepi5/work/_out/mpeg1-rk3588/UAPI-MPEG1-FOURCC.md, copy byte-for-byte; 0x5331474d,
+  after MPEG2_SLICE; flag iff MG1S, reject the flags with MG2S). Cedrus series + shared FFmpeg 0304. Notes from the paused desktop
+  agent: cedrus_video.c format table and switches, cedrus_dec.c:52, cedrus_hw.c:51, cedrus_mpeg2.c:79, v4l2-ioctl.c:1511.
+  Plus the shared gap: advertise MPEG-1 D-picture support (cedrus decodes them; hantro doesn't), so FFmpeg 0309 falls back.
+- IOMMU faults at 0xfff00000 (master -1, c9, ~17:58, unidentified session): project-vdec.md.
+- AVS2 FFmpeg depth-2 queueing patch (aq1: gaps 151 -> 1, md5 PASS) into patches/ffmpeg + the shared OPi5 set.
+- VP9 inter-frame upsize (svc_1280x720_3): REMOVE_BUFS + S_FMT while streaming (harness/vp9-vectors/RESULTS.md §5).
+- Vulkan subgroupelect hang: recheck on c13 (panfrost timeout fix), then root-cause.
+- GLES blend_equation_advanced mixedSequence (coherent); kbase insmod on c13+ (session2.sh) then GLES 3.2 traces.
+
 ### C. Needs hardware from the user
 10. HDMI display (HDMI 4K60, HDMI audio, CEC, AFBC 4K60 output), TV (CVBS), 13-pin expansion board (IR, line-out,
     2 extra USB ports), USB stick (USB host + USB boot), USB-C data cable (gadget mode, FEL), the HP M277dw (end-to-end

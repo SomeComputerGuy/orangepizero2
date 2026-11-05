@@ -342,7 +342,9 @@ with 1 tile column (`tc0`) and 4 (`tc2`). IOMMU PMU per master: m2 = VE1 (refere
   - The 42 MB 4K 10-bit buffers then come from CMA at run time. They failed with -EBUSY (`cma: ... alloc failed,
     req-size: 10283 pages, ret: -16`) at cma=480M and cma=640M, which broke the AVS2 10-bit and H.265 md5 runs.
   - Logs: `vdec-perf/logs/queue-untr/`. The work stopped there.
-- **IOMMU-on ideas for the micro-TLB miss rate (listed only; none built without asking):**
+- **Deferred (performance, revisit later).** User decision 2026-11-05: VP9 P2 P010 stays at 59 fps for now, function
+  first. The analysis and the ideas below are recorded for later; none is built or measured.
+  IOMMU-on ideas for the micro-TLB miss rate:
   - *Why the buffer layout alone cannot fix it [I].*
     - Every 4K P010 line is 7680 bytes, more than a 4 KiB page. So a 64×64 superblock touches one page per row: 64 luma
       plus 32 chroma = 96 pages, whatever the stride padding, plane placement or plane order.

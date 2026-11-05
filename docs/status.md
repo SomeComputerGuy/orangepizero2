@@ -87,8 +87,10 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
    - OpenCL fixes in the Mesa fork (mesa-work/mesa); same compiler work that GLES 3.2 (item 8) needs.
    - VP9 / 4K60 (2026-11-05, cumulative kernel c2, VE at the vendor 624 MHz): H.265 Main10 P010 62.8 fps, AVS2
      10-bit P010 61.3 / AFBC 87.8 fps (AVS2 10-bit = davs2 on 291/292 frames; the last frame is damaged in the stream).
-     **Open: VP9 Profile 2 P010 59.0 fps** (VE >97 % busy, not the queue; suspect output write order). Also open: md5
-     of AFBC captures (needs an AFBC-to-linear check), a 60 min soak at 624 MHz, FFmpeg AVS2 request queueing.
+     **Deferred (performance, user 2026-11-05): VP9 Profile 2 P010 stays at 59.0 fps.** The cause is the IOMMU micro-TLB
+     (96 pages per 64x64 superblock, more than 64 entries). The IOMMU stays on for every master. The 4K60 row is met via
+     AFBC. Ideas are in impl-vdec-main10-perf.md §9.8. Open: test1.avs2 (854x480) md5 mismatch (timeouts fixed in
+     c7), md5 of AFBC captures, the 60 min soak (soak3 on c9), FFmpeg AVS2 request queueing.
    - AVS2 uAPI v6 (doc-only, agreed with OPi5 rkvdec, 17/17 bit-exact there): merged in test-cumulative; held.
 4. OPi5 / RK3588S cross-check. One agent (fable if available, else Opus), read-only on both trees: ~/orangepi5
    (never modify it or its memory) and its GitHub repos, against every patch / branch we carry (armbian-build fork

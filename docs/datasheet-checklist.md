@@ -26,7 +26,7 @@ with a known gap · **GAP** = no driver/DT/config in our tree, or a test shows i
 |---|---|---|---|---|---|
 | 4× Cortex-A53 | quad-core | mainline DT, PSCI, cpufreq-nvmem | yes: 4 CPUs, DVFS 480–1512 MHz | OK | tracked (spec-checklist CPU row) |
 | ARMv8, 64-bit execution | AArch64 | arm64 kernel | yes | OK | — |
-| **32-bit execution state** | "64 and 32bit execution states" | **`# CONFIG_COMPAT is not set`** in `linux-sunxi64-edge.config`, so AArch32 EL0 binaries cannot run | no | **GAP** | **W6**: set `CONFIG_COMPAT=y` (+ `COMPAT_VDSO` needs an arm32 cross compiler); test a static armhf binary |
+| 32-bit execution state | "64 and 32bit execution states" | `CONFIG_COMPAT=y` (+ KUSER_HELPERS, ARMV8_DEPRECATED) since fix/sunxi-h616-small-gaps (merged, impl-small-gaps item 1). COMPAT_VDSO off (no arm32 cross compiler) | no (static armhf binary test pending) | OK\* | W6: run a static armhf busybox (`uname -m` → armv8l) |
 | TrustZone | supported | TF-A lts-v2.14.11 BL31 runs in the secure world (PSCI, suspend) | yes (PSCI, SYSTEM_SUSPEND) | OK | — |
 | NEON / Advanced SIMD | supported | `asimd` in `/proc/cpuinfo` Features | yes | OK | — |
 | LPAE | supported | AArch32 feature. arm64 uses 48-bit PA (`CONFIG_ARM64_PA_BITS=48`) | n/a | N/A (arm64 kernel; only relevant to a 32-bit kernel) | — |
@@ -74,7 +74,7 @@ with a known gap · **GAP** = no driver/DT/config in our tree, or a test shows i
 |---|---|---|---|---|---|
 | SMHC0 SD 3.0, 4-bit, SDR50 at 3.3 V | supported | `mmc@4020000`, sunxi-mmc | yes: 50 MHz, 4-bit, SD high-speed, 3.30 V (`/sys/kernel/debug/mmc0/ios`) | OK | — |
 | SMHC0 SDR 150 MHz at 1.8 V / DDR 50 MHz | supported | no `vqmmc-supply`. The PF bank (`vcc-pf`) and the card rail are fixed 3.3 V regulators (ALDO1/DCDCE) shared with other banks | — | N/A: the board cannot switch the SD I/O to 1.8 V (DT regulators. The PCB tap is unconfirmed from the schematic text) | — |
-| SMHC1 SDIO 3.0, 4-bit | supported | `mmc@4021000` + UWE5622, `mmc-ddr-1_8v`, vqmmc 1.8 V | yes: 50 MHz, 4-bit, **SD high-speed timing at 1.80 V** | PARTIAL | new item **W10**: add `sd-uhs-sdr104`/`sd-uhs-ddr50` (if the UWE5622 supports them), check that `ios` shows UHS, re-run the WiFi iperf |
+| SMHC1 SDIO 3.0, 4-bit | supported | `mmc@4021000` + UWE5622, vqmmc 1.8 V, `max-frequency = 150 MHz`, `sd-uhs-sdr50/ddr50/sdr104` (fix/sunxi-h616-small-gaps, merged) | see harness/research/user-manual-review.md Board results | OK\* | W10: `ios` shows a UHS timing, WiFi iperf |
 | SMHC2 eMMC 5.1, 8-bit, HS200/DDR | supported | `mmc@4022000` (disabled) | — | N/A: no eMMC (2.3.1) | — |
 | HW CRC, block size 1–65535 | supported | controller feature used by sunxi-mmc | implied by SD/SDIO OK | OK | — |
 
@@ -148,7 +148,7 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 
 | Feature | Datasheet claim | Driver/DT state | Verified? | Status | Next step |
 |---|---|---|---|---|---|
-| Offline m2m de-interlace, 8-bit NV12/NV21/YV12/YUV422 in/out, 32×32–2048×1280, weave/motion-adaptive, TNR, film-mode detection, 1080p60 @150 MHz | supported | **no DT node, no driver for H616**. `CONFIG_VIDEO_SUN8I_DEINTERLACE=y` matches only `allwinner,sun8i-h3-deinterlace` (other IP). Jernej `jernejsk/linux-1` branch `h616-deinterlace-v1` (DI300) exists, unposted. Vendor 5.4 `drivers/char/sunxi-di/drv_div3x/` | no | **GAP** | **W13**: pull Jernej's `h616-deinterlace-v1`, add the DT node (`iommus = <&iommu 1>`), test with GStreamer `v4l2convert`/FFmpeg `deinterlace_v4l2m2m` |
+| Offline m2m de-interlace, 8-bit NV12/NV21/YV12/YUV422 in/out, 32×32–2048×1280, weave/motion-adaptive, TNR, film-mode detection, 1080p60 @150 MHz | supported | DI300 driver + `deinterlace@1420000` node (`patches.media/h616-di/`, `CONFIG_VIDEO_SUN50I_DI300=m`, `iommus = <&iommu 1>`, SPI 89 = UM GIC DI) | see harness/research/impl-di-jpeg-avs.md | OK\* | W13 tests (impl-di-jpeg-avs.md) |
 
 ### 2.5.3 Graphic 2D (G2D)
 
@@ -163,9 +163,9 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 | Timer0/Timer1 (32-bit down, 8 prescalers) | supported | `timer@3009000`, sun4i-timer (`CONFIG_SUN4I_TIMER=y`). Clockevent `sun4i_tick`, clocksource `timer` | yes (registered) | OK | — |
 | Watchdog | 12 timeouts, IRQ, reset | sunxi-wdt 16 s, systemd watchdog | yes | OK | — |
 | AVS0/AVS1 33-bit A/V sync counters | supported | no Linux driver anywhere | no | GAP | W26 (low value: expose as a clocksource/counter device or document) |
-| High-speed timer (56-bit) | supported | `hstimer@3005000` in the DTSI, but **`CONFIG_SUN5I_HSTIMER` is not set**: the symbol is `bool … if COMPILE_TEST` and only arm32 `ARCH_SUNXI` selects it. Not in `available_clocksource` (`arch_sys_counter timer`) | yes (absent) | **GAP** | **W3**: select `SUN5I_HSTIMER` for arm64 sunxi (Kconfig patch), check `available_clocksource` lists `hstimer` |
+| High-speed timer (56-bit) | supported | `hstimer@3005000` + Kconfig patch + `CONFIG_SUN5I_HSTIMER=y` (fix/sunxi-h616-small-gaps, merged). UM §3.7: D1 register layout, IRQ 45/46, AHB1 clock. The driver uses only the low 32 of the 56 counter bits | see harness/research/user-manual-review.md Board results | OK\* | W3: `available_clocksource` lists `hstimer` |
 | RTC (day/h/m/s counters) | supported | sun6i-rtc `rtc0`. No backup battery on the Zero2 | yes | OK | — |
-| RTC: 32.768 kHz from HOSC-calibrated RC | supported | sun6i-rtc-ccu handles the internal/external osc32k | no (which source is in use was not read) | OK\* | W14 (read `clk_summary` osc32k parent) |
+| RTC: 32.768 kHz from HOSC-calibrated RC | supported | sun6i-rtc-ccu, internal osc32k (UM §3.13: no external 32k crystal input on the H616) | yes: `osc32k` parent `iosc-32k`, 32768 Hz (impl-small-gaps 8e) | OK | — |
 | RTC alarm wake-up | supported | rtcwake | yes: 100/100 suspend cycles | OK | — |
 | RTC 16 general-purpose registers | supported | not exposed (U-Boot/TF-A may use them) | no | OK\* (no user interface needed) | — |
 | GIC-400 (16 SGI, 16 PPI, 160 SPI) | supported | `interrupt-controller@3021000` | yes | OK | — |
@@ -176,7 +176,7 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 | Thermal: over-temperature alarm / shutdown interrupts | supported | sun8i-thermal uses only the data IRQ. Trips are software (passive 85, critical 110) | no | PARTIAL | W14 (low: the HW alarm IRQ is unused, software trips cover it) |
 | CPU configuration (core reset, status, debug) | supported | PSCI hotplug, cpuidle via TF-A | yes | OK | — |
 | IOMMU: hardware VA→PA | supported | sun50i-iommu `30f0000.iommu` (+ our page-size and sibling-reset patches) | yes | OK | — |
-| IOMMU masters DE, DI, VE_R, VE, G2D (parallel, bypass, prefetch, per-master IRQ) | supported | **only the VE uses it** (`iommus = <&iommu 3>, <&iommu 2>`, group 0 = `1c0e000.video-codec`). DE33 nodes have no `iommus` (LE 0702 adds `<&iommu 0>` on `planes@100000`). DI and G2D have no nodes | yes (`/sys/kernel/iommu_groups`) | PARTIAL | DE master in the DE33 plan (zero-copy AFBC). DI master with W13. G2D master with W25 |
+| IOMMU masters DE, DI, VE_R, VE, G2D (parallel, bypass, prefetch, per-master IRQ) | supported | VE `<&iommu 3>, <&iommu 2>`, DE33 planes `<&iommu 0>`, deinterlace `<&iommu 1>`. UM §3.12.3 table 3-8: G2D is **master 6**, which the driver ignored (H6 masters 0-5): fix `fix/sunxi-h616-iommu-g2d-master` (not merged). No G2D node | VE yes (`/sys/kernel/iommu_groups`) | PARTIAL | G2D master with W25 (needs the master-6 fix) |
 | IOMMU 2-level TLB, PTW on miss, permission check | supported | used by the driver | yes (VE perf counters, impl-vdec-main10-perf §1) | OK | — |
 
 ## 2.7 Video output
@@ -186,7 +186,7 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 | Feature | Datasheet claim | Driver/DT state | Verified? | Status | Next step |
 |---|---|---|---|---|---|
 | 1-ch CVBS, NTSC and PAL | supported | our `sun8i_tve` (DRM TVDAC), `tv-encoder@6524000` (disabled until the `orangepi-zero2-expansion` overlay), `CONFIG_DRM_SUN8I_TVE=y` | no (needs a TV + 13-pin board) | OK\* | tracked |
-| Plug status auto-detect | supported | **not implemented**: the connector always reports connected (impl-audio-tve §2 item 5) | no | **GAP** | **W15**: DAC load-detect polling as in the BSP |
+| Plug status auto-detect | supported | DAC load detection in `sun8i_tve` (`drm-sun4i-sun8i-tve-report-the-composite-connector-from-dac-load-detection.patch`, UM §7.2 TVE_030/038), connector polled | yes: "Composite disconnected" with no load (status.md 11-04) | OK\* | W15: plug/unplug a 75 Ω load, status changes within the poll |
 
 ### 2.7.2 HDMI
 
@@ -208,15 +208,15 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 | Feature | Datasheet claim | Driver/DT state | Verified? | Status | Next step |
 |---|---|---|---|---|---|
 | Audio codec: 2 DAC channels, 8–192 kHz | supported | mainline sun4i-codec `allwinner,sun50i-h616-codec`, card `Codec` | no (needs the 13-pin board) | OK\* | tracked |
-| Codec 16- and 20-bit samples | supported | `sun4i_codec_dai`: S16_LE and S32_LE with `sig_bits = 24`, so 20-bit audio fits the 32-bit container | no | OK\* | tracked (line-out row). Play a 24/32-bit file at 192 kHz in the same test |
+| Codec 16- and 20-bit samples | supported | `sun4i_codec_dai`: S16_LE and S32_LE with `sig_bits = 24`. UM §8.4: the FIFO is FIFO_I[19:0], so the effective resolution is 20 bits (sig_bits overstates it). Codec `reg` size fix: `fix/sunxi-h616-codec-reg-size` | no | OK\* | tracked (line-out row). Play S32 at 192 kHz in the same test |
 | LINEOUT differential / single-ended | supported | single-ended LINEOUTL/R on the 13-pin header (sch.: LINEOUTL G19, LINEOUTR G20) | no | OK\* | tracked |
-| Dynamic Range Controller (DRC) | supported | **no control** in sun4i-codec for H616 | no | GAP | W17 |
+| Dynamic Range Controller (DRC) | supported | DRC/HPF switches + level-detector enum for the H616 DAC (fix/sunxi-h616-small-gaps item 7, merged), UM §8.4.6.7/8.4.6.10 bits re-verified. Curve coefficients not exposed | no (needs the 13-pin board) | OK\* | W17: `amixer` lists the DRC controls; listening test |
 | 128×24 FIFO, thresholds, DMA/IRQ | supported | used by the driver | — | OK\* | — |
 | Audio HUB: 2 DAMs | supported | vendor `sunxi_v2` AHUB. `ahub_dam_plat@5097000` bound, `ahub_dam_mach` disabled | no | OK\* | W18 |
-| AHUB: 3 external I2S/PCM + 1 to HDMI | supported | only the HDMI I2S (`ahub1`) is wired up. **External:** I2S0 = PI0–PI4 (RGMII) → N/A. I2S2 = PG10–PG14 (WiFi/BT bank, 32 kHz clock to the module) → N/A (unconfirmed per pin). **I2S3 = PH5–PH9, reachable on the 26-pin header** (shared with SPI1/TWI3), no overlay | no | PARTIAL | **W18**: `ahub` I2S3 overlay for the header + a test with an I2S DAC/loopback |
+| AHUB: 3 external I2S/PCM + 1 to HDMI | supported | HDMI I2S (`ahub1`) + overlay `sun50i-h616-i2s3-ph` for I2S3 on the 26-pin header (PH5–PH9, fix/sunxi-h616-small-gaps item 6, merged). I2S0 (PI, RGMII) and I2S2 (PG, WiFi/BT) N/A | no | OK\* | W18: I2S DAC or DOUT0→DIN0 loopback on the header |
 | LJ/RJ/I2S/PCM/TDM, 8 ch 192 kHz, 16 ch 96 kHz | supported | vendor AHUB driver supports the formats | no | OK\* | W18 |
 | DMIC (8 PDM mics, 8–48 kHz) | supported | `CONFIG_SND_SUN50I_DMIC=y` matches only `sun50i-h6-dmic`. No H616 node | — | N/A: DMIC_CLK/DATA0–3 exist only on PI0–PI4 (§4.3), which are RGMII on the Zero2 | — |
-| OWA (S/PDIF) TX, IEC 60958, 16/20/24-bit | supported | `spdif@5093000` (`sun50i-h616-spdif`, sun4i-spdif) disabled. `spdif_tx_pin` = **PH4, which reaches the 26-pin header** (TWI3-SCK net) | no | OK\* (no overlay) | **W19**: `spdif-ph4` overlay + simple-audio-card, test with an optical/coax transmitter or a logic analyser |
+| OWA (S/PDIF) TX, IEC 60958, 16/20/24-bit | supported | `spdif@5093000` + overlay `sun50i-h616-spdif-out` (PH4, header pin 5, merged). UM §8.3 registers OK. Module clock lacks CLK_SET_RATE_PARENT, so S/PDIF alone can run at a wrong rate: fix `fix/sunxi-h616-spdif-clk-rate` (not merged) | no | OK\* | W19: 44.1/48 kHz out with nothing else played since boot, on a receiver or logic analyser |
 
 ## 2.9 Security engine
 
@@ -227,7 +227,7 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 | MD5, SHA1/224/256/384/512 (HW padding) | supported | sun8i-ce hash | yes: `md5/sha1/sha224/sha256/sha384/sha512-sun8i-ce` | OK | — |
 | HMAC-SHA1/256 | supported | no HMAC in sun8i-ce | yes (absent) | GAP | W29 |
 | RSA 512–4096, ECC 160–521 | supported | no asymmetric support in sun8i-ce | yes (absent) | GAP | W29 |
-| 160-bit PRNG | supported | **`ce_h616_variant` sets no `.prng`** (the H6 variant has `CE_ALG_PRNG_V2`). `CONFIG_CRYPTO_DEV_SUN8I_CE_PRNG` not set | yes: no `*-sun8i-ce` rng in `/proc/crypto` | **GAP** | **W4**: add `.prng = CE_ALG_PRNG_V2`, enable the config, test via AF_ALG rng |
+| 160-bit PRNG | supported | hardware has it (UM §10.1, algorithm 0x1D). Mainline 7.3 removed the sun8i-ce crypto_rng PRNG interface (CVE-2026-80834 fix). Entropy goes through the TRNG hwrng | yes: no `*-sun8i-ce` rng in `/proc/crypto` | N/A (removed upstream on purpose, impl-small-gaps item 3) | — |
 | 256-bit TRNG | supported | `CE_ALG_TRNG_V2`, `/dev/hwrng` | yes: `rng_current = sun8i Crypto Engine TRNG` | OK | — |
 | Internal DMA, task chains, 8 SG, secure/non-secure interfaces | supported | used by the driver (non-secure interface) | yes (implied) | OK | — |
 | Security ID: eFuse chip ID, secure/non-secure zones | supported | sunxi-sid nvmem `sunxi-sid0` (speed bin, THS cal) | yes | OK (non-secure zone) | — |
@@ -252,7 +252,7 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 | EMAC0 10/100/1000, RGMII/RMII, MDIO | supported | dwmac-sun8i, RTL8211F, `rgmii-rxid` | yes: 1000 Mbit/s, iperf3 ~870–910 Mbit/s | PARTIAL | tracked (10/100 + soak) |
 | EMAC1 10/100 with embedded EPHY | supported | `ethernet@5030000` disabled. AC300 PHY driver in config | — | N/A: the Zero2 has one RJ45, wired to the RTL8211F (sch. block "RTL8211F"). EPHY_TXP/N/RXP/N balls (A19–B21) appear only on the SoC symbol page. The text dump cannot prove they are unconnected → **unconfirmed** (prprep-emac1.md agrees: no EMAC1 on the Zero2) | — |
 | Full/half duplex, filters, descriptor DMA, FIFOs | supported | stmmac | full duplex yes | OK\* (half duplex untested) | W31 (forced 10/100 half duplex, with the tracked 10/100 test) |
-| Jumbo frames up to 16 KB | supported | stmmac max MTU for this variant not checked | no | OK\* | W31 (`ip link set end0 mtu 9000` + ping -s against the host) |
+| Jumbo frames up to 16 KB | supported | UM ch. 6: RX_CTL0 bit 29 JUMBO_FRM_EN (9018 B), bit 30 / TX_CTL0 bit 30 frame-length control (16384 B), TX FIFO 4 KB, RX FIFO 16 KB, **descriptor buffer field 11 bits (≤ 2047 B)**. Image kernel: maxmtu 3712 (not usable above 2047). Branch fix/sunxi-h616-emac-jumbo: maxmtu 2018 (single descriptor) | yes (branch, round 2: MTU 2018 OK) | PARTIAL | W31: merge the jumbo branch. 16 KB needs frame-length control + multi-descriptor stmmac normal-descriptor RX/TX |
 
 ### 2.10.3 UART
 
@@ -264,7 +264,7 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 | 16550, 5–8 bits, 1/1.5/2 stop, parity, DMA, HW/SW flow control | supported | 8250_dw (the H616 FIFO-config series v5 is pending upstream) | no | OK\* | tracked (header loopback) |
 | Up to 4 Mbit/s | supported | 8250_dw | no | OK\* | W32 (UART5↔UART2 loopback at 3/4 Mbit/s) |
 | IrDA 1.0 SIR | supported | **no IrDA in 8250_dw/serial core** | no | GAP | W32 (low) |
-| RS-485 / 9-bit mode | supported | 8250_dw has RS-485 (software RTS), 9-bit mode is DW-specific | no | OK\* | W32 |
+| RS-485 / 9-bit mode | supported | UM §9.2.6.20: RS-485 is MCR[7:6] = 2 + RS485_CTL at 0xC0. 8250_dw misdetects DW RS-485/DLF on these offsets (RS-485 then does nothing; divisors truncated, 153600 baud +8.5 %): fix `fix/sunxi-h616-uart-dw-ext-regs` (not merged) | no | PARTIAL | W32: with the fix, em485 RTS on a logic analyser; 9-bit not supported in Linux |
 
 ### 2.10.4 SPI
 
@@ -274,7 +274,7 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 | SPI1 on the 26-pin header | supported | overlays `spidev1_*` | no | OK\* | tracked |
 | Master mode, modes 0–3, CS/CLK polarity, 64-byte FIFOs, IRQ/DMA, 3/4-wire, 1–32-bit frames | supported | spi-sun6i | partly (SPI0) | OK\* | tracked |
 | Slave mode | supported | **no target mode in spi-sun6i** | no | GAP | W33 |
-| Dual/Quad I/O | supported | **H616 matches `sun8i-h3-spi`, whose cfg has no `mode_bits`**. DUAL/QUAD are only on `sun50i-r329-spi`/A523 | no | GAP | **W5**: check whether the H616 has the R329 bit (UM SPI_BCC DRM bit). If yes, add an H616 cfg with DUAL (quad needs PC15/PC16 WP/HOLD: PC16 is the USB1 VBUS switch, so quad is N/A on SPI0) |
+| Dual/Quad I/O | supported | H616 cfg with DUAL/QUAD (UM §9.3.6 SPI_BCC bit 28 DRM, bit 29 Quad_EN, re-verified) + Zero2 NOR `spi-rx-bus-width = <2>` (fix/sunxi-h616-small-gaps, merged). Quad N/A on the Zero2 (WP#/HOLD# not on PC15/PC16) | see harness/research/user-manual-review.md Board results | OK\* (dual) | W5: mtd0 sha256 unchanged, debugfs params `1S-1S-2S`. TCR sample mode: `fix/sunxi-h616-spi-sample-mode` |
 
 ### 2.10.5 TWI
 
@@ -317,6 +317,25 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 | Feature | Datasheet claim | Status |
 |---|---|---|
 | TFBGA284, 0.65 mm pitch, 14×12 mm | mechanical | N/A |
+
+## User Manual review rows (2026-11-05)
+
+Source: H616 User Manual v1.0 review, `harness/research/user-manual-review.md` (per chapter, with pages). Branches are
+on `stonking-orangepizero2` 8546e5fc1, not merged.
+
+| Feature | UM reference | Driver/DT state | Verified? | Status | Next step |
+|---|---|---|---|---|---|
+| CCU EPHY 25 MHz clock = PLL_PERI0(1X)/24 | §3.3.5.86 p.104 | modelled as a gate below ahb3 (reports 200 MHz). Fix `fix/sunxi-h616-ccu-emac-25m` | no | PARTIAL | `clk_summary`: `emac-25m` 25000000 under `pll-periph0` (AC300/EMAC1 boards) |
+| IOMMU master 6 (G2D) | §3.12.3 table 3-8 p.207 | driver handled masters 0-5 only. Fix `fix/sunxi-h616-iommu-g2d-master` | no | GAP | prerequisite of W25 |
+| UART divisor without DW DLF | §9.2.6.18-20 p.620 | misdetected DLF truncates divisors. Fix `fix/sunxi-h616-uart-dw-ext-regs` | no | PARTIAL | UART5↔UART2 loopback at 153600 and 921600 baud (921600 needs APB2 = PERI0(1X)/8 = 75 MHz) |
+| TWI fast mode 400 kHz timing | §9.1.6.6 p.587 (CLK_DUTY) | duty bit cleared (tLOW 1.25 µs). Fix `fix/sunxi-h616-twi-fast-mode-duty` | no | PARTIAL | TWI3 at 400 kHz: scope tLOW ≥ 1.3 µs |
+| SPI sample mode (SDM/SDC) | §9.3.6.2 p.636 | not programmed on the H616. Fix `fix/sunxi-h616-spi-sample-mode` | no | PARTIAL | SPI1 spidev loopback at 10 MHz and 50/80 MHz |
+| PWM div_m / prescaler / bypass | §9.9.6 pp.788-799 | three register-programming bugs. Fix `fix/sunxi-h616-pwm-enhance-regs` | no | PARTIAL | PWM2/3 complementary with dead zone after a div_m decrease; 700 ms single-channel period |
+| HDMI YUV 4:2:0 output | §7.3 p.459 | RGB only | no | GAP | with W12 |
+| HDMI HBR audio passthrough (up to 1536 kHz) | §7.3 p.459 | not checked | no | OK\* (unconfirmed) | with W16 |
+| MPEG-4 SP/ASP 3840x2160 decode | §4.4 p.299 | see 2.4.1 note | no | OK\* | bit-exact vs FFmpeg, fps reported |
+
+The status counts below predate this section and the 2026-11-05 row updates.
 
 ## Status counts
 

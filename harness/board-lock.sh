@@ -4,7 +4,7 @@
 #   harness/board-lock.sh acquire <owner> [max-wait-s]   blocks until free (default: wait forever), then holds it
 #   harness/board-lock.sh release <owner>                frees it (only the owner may)
 #   harness/board-lock.sh status
-# Hold it for one test session (aim <= 60 min), leave the board booted on the image kernel (or the trial-kernel
+# Hold it only while the board is actively in use (never across host builds or idle waits), leave the board booted on the image kernel (or the trial-kernel
 # fallback armed) before release. A lock older than 4 h is reported as stale but never broken automatically.
 set -uo pipefail
 L=$(cd "$(dirname "$0")" && pwd)/queue/board.lock

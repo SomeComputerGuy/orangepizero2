@@ -7,7 +7,9 @@ Acceptance: docs/spec-checklist.md, docs/datasheet-checklist.md. Status/work lis
 ## Board (shared, one owner at a time)
 - Take the lock before ANY command that touches the board (ssh, serial, reflash, trial kernel, power):
   `harness/board-lock.sh acquire <your-name>`; release with `harness/board-lock.sh release <your-name>`.
-  Hold it for one session (aim <= 60 min), then release so the others can test. Do host-side work while waiting.
+  Hold it ONLY while something is actively running on the board or you are actively using it (user rule
+  2026-11-05). Release it before every host-side build, analysis or wait, and re-acquire when the next test is ready.
+  Never hold it while idle. Do host-side work while waiting for it.
 - Before release the board must be up on the image kernel, or a trial kernel with its fallback armed
   (harness/jpegtest/jpeg-slot.sh pattern). Never leave it unbootable.
 - Board access: `harness/ssh.sh` (root@10.56.0.107 via enx68da73af6279 / 10.56.0.1). Serial: /dev/ttyOPIZ2 only

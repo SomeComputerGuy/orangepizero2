@@ -333,8 +333,37 @@ with 1 tile column (`tc0`) and 4 (`tc2`). IOMMU PMU per master: m2 = VE1 (refere
     `chroma_align_mode` stay 0.
   - `VP9Set10BitReg` sets only the 2-bit stride.
   - The vendor path therefore has the same P010 limit; its 4K output is AFBC.
-- **What a fix needs:** physically contiguous capture buffers with the VE masters untranslated. That costs ~42 MB per 4K
-  P010 buffer, ~10 buffers in an FFmpeg pipeline, so ~450 MB of CMA on a 1 GB board (default CMA here is 64 MB). The 640 MB
-  CMA passthrough boot already logged SLUB allocation-failure output. Not proposed as a default.
+- **Untranslated mode: rejected (user decision, 2026-11-05).** The IOMMU stays on for every master: no passthrough, no
+  per-master bypass, no opt-in. Before the decision a per-master bypass was built and tested on c8 (branch
+  `feat/sunxi-h616-vdec-untranslated`, reverted from test-cumulative; c9 = c7's tree):
+  - IOMMU_BYPASS_REG (0x30) has one bit per master. An overlay with an empty VE `iommus` left only masters 2 and 3
+    untranslated.
+  - VP9 P2 P010 reached 66.7 fps VE-only and 61.2-66.1 fps pipeline (FFmpeg threads 1 to auto), md5 PASS.
+  - The 42 MB 4K 10-bit buffers then come from CMA at run time. They failed with -EBUSY (`cma: ... alloc failed,
+    req-size: 10283 pages, ret: -16`) at cma=480M and cma=640M, which broke the AVS2 10-bit and H.265 md5 runs.
+  - Logs: `vdec-perf/logs/queue-untr/`. The work stopped there.
+- **IOMMU-on ideas for the micro-TLB miss rate (listed only; none built without asking):**
+  - *Why the buffer layout alone cannot fix it [I].*
+    - Every 4K P010 line is 7680 bytes, more than a 4 KiB page. So a 64×64 superblock touches one page per row: 64 luma
+      plus 32 chroma = 96 pages, whatever the stride padding, plane placement or plane order.
+    - A smaller stride can't go below 7680 bytes.
+    - Interleaving luma and chroma lines would no longer be P010 (V4L2, DRM and panfrost import a two-plane layout).
+    - It still gives 96 distinct pages per superblock.
+  - *H.265 hits 96 % because its CTB is 32×32 [M].* The test stream's SPS has log2 min CB 4 and diff 1, so the CTB is
+    32×32. Its superblock touches 32 + 16 = 48 pages, under the 64 entries. That explains the H.265/VP9 gap without any
+    engine difference. VP9 superblocks are always 64×64.
+  - *1. A narrower write unit in the VP9 SDRT writer [RE].* Look for a register mode that emits the secondary output in
+    32-row halves or through a line buffer per superblock row. The candidates are the unknown bits of the SDRT block at
+    H265+0x50..0x58 and of VP9_FUNC_CTRL. The vendor library sets none of them, so this means bit probing with md5
+    checks.
+  - *2. A tiled 10-bit secondary output [RE].* If 0xe8 bits 31:30 or the SDRT format field have a tiled 10-bit mode, a
+    tile is contiguous, so a superblock touches a handful of pages. It is only useful if DE33 and panfrost can import that
+    tiling.
+  - *3. AFBC capture, plus a GPU conversion to linear P010 only where a linear surface is needed.* The AFBC capture writes
+    at a 94-95 % hit rate. Display scans out AFBC directly.
+  - *4. Measure the macro TLB / PTW cache behind the micro TLB.* The PMU has counters beyond the 7 masters. If the
+    micro-TLB misses also miss there, a page-table or capture-buffer allocation order that keeps the 96 pages in one PTW
+    cache line group could cut the miss latency (14 → ~4 cycles per access) even if the miss count stays.
 - **Status of the spec row:** VP9 P2 4K@60 is met with AFBC capture (102 fps on tc0/tc2, 85 on the reference stream,
-  §9.5). It is ~1 fps short with P010 behind the IOMMU (59.0 pipeline in round 3).
+  §9.5). It is ~1 fps short with P010 behind the IOMMU (59.0 pipeline in round 3). The row counts as met through AFBC (coordinator decision, 2026-11-05): that is the 4K60 playback
+  path, because DE33 scans out AFBC.

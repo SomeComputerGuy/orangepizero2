@@ -34,6 +34,13 @@ Acceptance: docs/spec-checklist.md, docs/datasheet-checklist.md. Status/work lis
   exactly `Assisted-by: LLM [TOOL1] [TOOL2]` (Documentation/process/coding-assistants.rst; tools = e.g. coccinelle,
   sparse, smatch, not git/gcc) above the user's Signed-off-by; the AI never adds a Signed-off-by of its own. Never send anything upstream (Mesa, FFmpeg, kernel, Armbian) yourself.
 
+## Budget (user, 2026-11-05)
+- At most 1-2 agents active at once. Spawn no sub-agents, and put new bugs on the work list instead of starting a new agent.
+- Code agents never run, wait on or poll board sessions. They build, write the exact board command and the pass criteria, and hand back. A cheap runner agent does the board run, copies the results off the board at once and writes a short factual summary.
+- Hand back once per task, when done and verified or truly blocked. No interim or status messages.
+- Watchers sleep at least 10 min between checks. Long board runs must be pausable and resumable (never SIGSTOP), and dev turns beat long test runs.
+- Display: a mode the attached display doesn't support is NOT TESTED, never FAIL.
+
 ## Builds
 - Build caching is rule #1: ccache + Armbian artifact caches; no needless full rebuilds. No Docker. No sudo.
 - Do not run Armbian `compile.sh` image builds while another one is running (`pgrep -af compile.sh`).

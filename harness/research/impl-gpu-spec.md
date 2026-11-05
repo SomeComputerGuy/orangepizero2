@@ -373,6 +373,25 @@ There are 0 Fail in gles2 and gles3. The full Mesa CI GLES mustpass set is there
 3. Run `mixedSequence` alone 5 times, and copy its .qpa and the `no_attachments.maximums.all` .qpa to the host.
 4. Optionally, rerun `Images (Kernel 3D *)` with `--timeout 20000`, and capture the `ine` shader with `BIFROST_MESA_DEBUG=shaders` for an upstream report.
 
+### 4b. Rerun on image 8546e5fc1, server variant (2026-11-04/05, `harness/analysis/gpu/cts-8546e5fc1-server/`)
+
+Full queue via `gpu-rerun.sh` (561 min), then the extras unit (MemoryMax=800M).
+
+- **GLES:** identical to the first baseline. gles2 0 Fail, gles3 0 Fail, gles31-main 1 Fail
+  (`fbo.no_attachments.maximums.all`, expected upstream) + 2 OOM, gles31-khr 1 Fail (`mixedSequence`), gles32-khr
+  1405 StartupError (no ES 3.2 context, expected).
+- **OOM cases run alone under an 800 MB memcg: both Pass.** They only OOM when the whole queue shares the board's
+  memory, so they are not a driver bug; record as "run alone on 1 GB boards".
+- **`KHR-GLES31.core.blend_equation_advanced.test_coherency.mixedSequence`: Fail 5/5 alone.** Deterministic, so a real
+  panfrost/G31 blend_equation_advanced_coherent bug, not flakiness. Goes into the OpenCL/compiler work item
+  (status.md item 3) as a GLES bug to fix or to stop advertising coherency.
+- **OpenCL (rusticl):** 3136 subtests passed, 78 failed (was 3132 / 82). Binaries: 44 Pass, 11 Fail, 2 Crash
+  (Relationals, Integer Ops: "Unhandled ALU op ine"), 3 Timeout (Images Kernel 3D int/uint/float at 5000 s).
+  Failing subtests: Math 50 (was 54), Atomics 8, Half Ops 5, C11 Atomics 5, Basic 3, Thread Dimensions 3, API 1,
+  Images Kernel 2D float 1, Samplerless int/uint/float 1 each. Same classes as section 4; this is the baseline for
+  the OpenCL fixes.
+- **dEQP-VK subset:** 5227 StartupError ("Vulkan is not supported", status.md item 5).
+
 ## 5. Recommended plan
 
 0. **GLES 1.0 (new gap):** rebuild the Ubuntu Mesa deb with `-Dgles1=enabled` and add `libgles1` (§2.0).

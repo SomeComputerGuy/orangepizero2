@@ -1,11 +1,56 @@
-# GStreamer hardware JPEG decode on cedrus (v4l2sljpegdec): state 2026-11-05 (odd-size/mjmix/dmesg analysed, fixes in code, 06 queued)
+# GStreamer hardware JPEG decode on cedrus (v4l2sljpegdec): state 2026-11-05 night (05/06 run and analysed: test bugs + patch 0107, recheck job 11 queued)
 
 ## Rounds so far
 - 02-gst-jpeg (done, build/gst-jpeg/results/, summary harness/runner-queue/done/02-gst-jpeg.summary.md): hardware path
   works and is byte-identical to the driver's own output; the three "wrong output" items it left are closed below.
-- 05-gst-jpeg-gaps (queued): caps refusals (separate chroma tables, multi-scan, 4096x4096) -> jpegdec. Unchanged.
-- 06-gst-jpeg-oddsize (queued, this round): odd/sub-MCU sizes in all chroma layouts, resolution changes down and up,
-  odd-size clip, per-case kernel-log counts. Package harness/gst-jpeg/oddsize/, bundle build/gst-jpeg/bundle-oddsize.
+- 05-gst-jpeg-gaps (done, build/gst-jpeg/results-gaps/, summary done/05-gst-jpeg-gaps.summary.md): 10 of 11 PASS on the
+  stock kernel (#17, no ENUM_FRAMESIZES). All caps refusals (separate tables, multi-scan, also in MJPEG) -> jpegdec,
+  hw cases bit-identical to the driver, DMESG clean. z4096x4096 FAIL = test bug, see below.
+- 06-gst-jpeg-oddsize (done, build/gst-jpeg/results-oddsize/, summary done/06-gst-jpeg-oddsize.summary.md): 9 of 12
+  PASS; every still hw == driver exactly, every case `dmesg +0`, mjmix/mjmix-up (0106) PASS. The 3 FAILs = test bugs,
+  see below; compare.txt regenerated with the fixed reference: 12 of 12 PASS (original kept as compare.run1.txt).
+- 11-gst-jpeg-recheck (queued, harness/runner-queue/11-gst-jpeg-recheck.md): the failing cases of both on the newest
+  cumulative kernel with patches 0101-0107. Package harness/gst-jpeg/recheck/, bundle build/gst-jpeg/bundle-recheck.
+
+## Jobs 05 and 06 analysed on the host (2026-11-05 night): four test bugs, one real gap (patch 0107), no hardware fault
+1. **05 z4096x4096 "not refused" (KSIZES=1): test bug.** gaps/board-test.sh derived KSIZES from `grep '^ *width: \['`
+   over the whole gst-inspect output, which matched the SRC template (`width: [ 1, 2147483647 ]`, always there). The
+   SINK template of the run had no width/height at all (inspect.txt), i.e. the kernel (#17 of Oct 30, the stock image
+   kernel) has no ENUM_FRAMESIZES and the case should have been SKIPPED. Neither the element (probe_sink_caps puts the
+   STEPWISE range into the sink template when the ioctl works), nor jpegparse (caps had width=4096, height=4096), nor
+   the kernel range was at fault; cedrus S_FMT clamps to cedrus_max_size(), gst_v4l2_decoder_set_sink_fmt() sees the
+   smaller size and fails with EINVAL, the loud element error of 05's log. Fixed: KSIZES now looks at the SINK
+   template section only (gaps/board-test.sh; recheck/board-test.sh; compare.py prints the sink range).
+2. **Found while fixing 1, a real gap: the sink range would have put sub-macroblock pictures on jpegdec.** With
+   ENUM_FRAMESIZES the sink caps became `width: [16, 4096], height: [16, 2304]` (cedrus_enum_framesizes reports
+   CEDRUS_MIN_WIDTH/HEIGHT = 16), so on a c11+ kernel 1x1, 8x8 and 15x15 JPEGs would be refused by the caps and
+   decoded by jpegdec, although the hardware decodes them (06: z1x1, z8x8, z15x15-444 hw == driver). The minimum is a
+   coded-size constraint (the driver rounds the format up), only the maximum excludes a decoder. **Patch 0107**
+   (v4l2codecs decoder, gst_v4l2_decoder_probe_sink_caps(): lower bound 1 for STEPWISE), source commit 4a9abbf on
+   branch opiz2. No kernel change: ENUM_FRAMESIZES reporting the coded minimum is what V4L2 drivers do (Hantro: 48).
+3. **06 z33x17-422 / z15x15-444 FAIL(c-ref): test bug (reference model), hardware right.** hw == driver exactly for
+   both. The engine's 4:2:0 output is: 4:2:2 -> rows averaged in pairs with rounding, 4:4:4 -> columns averaged in
+   pairs then rows, both including the MCU padding column/row the encoder wrote (modelled by decoding the image with
+   ffmpeg at the SOF size rounded up to whole MCUs). Against that model the dumps are within max|d| 1 on every plane
+   (33x17 4:2:2, 15x15 4:4:4, and the 02 1080p s422/s444 dumps). compare.py had used ffmpeg's swscale yuvj420p
+   output, which is a different filter: 27 dB (and 43-47 dB even at 1080p), fine for the 30 dB threshold only on
+   large smooth pictures. Fixed: recheck/compare.py `engine_ref()` (also the 4:1:1 driver formula and 4:2:0, all at
+   max|d| <= 3); oddsize/compare.py now runs it.
+4. **06 mj-z33x17 FAIL(psnr): test bug (threshold).** hw vs jpegdec min PSNR 47.48 dB over 30 frames against a 48 dB
+   threshold; hw vs ffmpeg (-idct int) per frame max|d| 1/1/1 (63.9/63.0/62.2 dB). The 48 dB is just the IDCT
+   difference between the engine and libjpeg-turbo on a 33x17 frame (the stills show the same 47-48.6 dB at that
+   size, 51 dB at 1080p). Fixed: clips are checked per frame against the ffmpeg reference (max|d| <= 3); the jpegdec
+   PSNR is reported only.
+5. **06 check 1 "no v4l2sljpegdec in inspect.txt": test bug.** The gst-inspect grep filter dropped the `Name` line.
+   Fixed in oddsize/, gaps/ and recheck/board-test.sh (`Name` added to the filter).
+6. **06 norank `dmesg +1055`, rc=124: not our pipeline, known work-list item, recorded as designed.** The
+   `GST_PLUGIN_FEATURE_RANK=` run lets gst-plugins-good's stateful `v4l2jpegdec` (same rank 257) win; it queues
+   buffers cedrus refuses (`failed to parse JPEG header: -22` / `Failed to setup decoding job: -22`, 527 pairs at
+   46 ms) and never finishes. The kernel lines are the ones fix/sunxi-cedrus-jpeg-quiet-refusals demotes (merged as
+   c14 = 0324a5d4b; job 06 ran on the stock kernel). Why the stateful element's buffers fail the header parse is
+   still unknown (not truncation: z1921x1081.jpg is 595 KB, gst-plugins-good's encoded buffer is w*h*12/8/2 =
+   1.56 MB); the recheck job records a `GST_DEBUG=v4l2videodec:6,v4l2bufferpool:6` log of that run
+   (out/norank.gstdebug.txt) for the work-list item. The MARGINAL override stays until it is understood.
 
 ## The three 02 "wrong output" items, resolved on the host from the 02 results (2026-11-05 evening)
 1. **z17x33 / z17x33-411 `hw==drv DIFF`, differing db/pb/db3 md5s: a test bug, not a decoder bug.** compare.py modelled
@@ -72,9 +117,12 @@
   selector; tables in force when each scan starts; reset per image, MPF sub-images keep the primary's).
 - 0105 v4l2sljpegdec: sink caps add `scans=1, component-tables={shared,luma-chroma}`; per-image check also parses
   DQT/DHT and refuses (element error) 16-bit DQT, Huffman selectors > 1, Cb/Cr tables differing in content.
-- **0106 jpegparse (new)**: caps height from the container only for interlaced streams (fields); a smaller first
+- **0106 jpegparse**: caps height from the container only for interlaced streams (fields); a smaller first
   image counts as a field only at the frame width. Fixes the resolution change in MJPEG containers for every
-  downstream decoder that trusts the caps (jpegdec).
+  downstream decoder that trusts the caps (jpegdec). Verified by 06 (mjmix, mjmix-up PASS, caps 640x480 320x240).
+- **0107 v4l2codecs decoder (new, commit 4a9abbf)**: gst_v4l2_decoder_probe_sink_caps() uses 1 as the lower bound of
+  the STEPWISE width/height range (the minimum is the coded size, only the maximum excludes a decoder), so 1x1..15x15
+  pictures stay on the hardware path on kernels with ENUM_FRAMESIZES. Affects every v4l2sl* decoder (0002 series).
 - Fallback semantics: caps refuse -> decodebin/playbin plug jpegdec (grey, RGB/CMYK, progressive, lossless, non-1x1
   chroma factors, 4:4:0, >1 scan, separate chroma tables, and with the framesizes kernel fix sizes above 4096x2304).
   Per-image element error remains for: 12-bit samples, SOF1 with Th 2/3, DNL (height 0), scan component order !=
@@ -86,7 +134,7 @@
   every v4l2sl* decoder a width/height range so 4096x4096 JPEG goes to jpegdec up front. Board check: 05 case
   z4096x4096 (SKIPPED on kernels without it).
 - **fix/sunxi-cedrus-jpeg-quiet-refusals** (0324a5d4b on test-cumulative 626dff92e = c13, worktree
-  wt-cedrus-jpeg-quiet, NOT merged): patch
+  wt-cedrus-jpeg-quiet; merged as c14 = 0324a5d4b per kernel-check/cumulative-kernels.txt): patch
   `patches.media/h616-jpeg/media-cedrus-jpeg-quiet-the-refusal-of-undecodable-images.patch` (end of series.conf).
   cedrus_jpeg.c: `cedrus_jpeg_fail()`, the header-parse failure and the "does not fit the capture format" message
   become dev_dbg(); cedrus_dec.c: "Failed to setup decoding job" -> dev_err_ratelimited(). Dry-run applies on the
@@ -97,10 +145,16 @@
 ## Test packages
 - 02 (harness/gst-jpeg/, bundle build/gst-jpeg/bundle): unchanged but compare.py's layout fix; rerun not needed
   (its compare.txt was regenerated from the kept dumps: all stills `hw==drv EXACT`).
-- 05 gaps (harness/gst-jpeg/gaps/, bundle-gaps, dev .so with 0101-0105): queued as before; compare.py layout fix
-  only (its cases are even-sized, no effect).
-- **06 oddsize (harness/gst-jpeg/oddsize/, bundle-oddsize, dev .so with 0101-0106, runner job
-  harness/runner-queue/06-gst-jpeg-oddsize.md)**: gen-vectors.sh -> build/gst-jpeg/vec-oddsize (cases.txt:
+- 05 gaps (harness/gst-jpeg/gaps/, bundle-gaps, dev .so with 0101-0105): done; board-test.sh KSIZES/Name fixed for
+  any rerun (the bundle's copy is the old one: re-copy board-test.sh into the bundle before a rerun).
+- **11 recheck (harness/gst-jpeg/recheck/: make-bundle.sh -> build/gst-jpeg/bundle-recheck, run-job.sh, board-test.sh,
+  compare.py, HANDOFF.md; dev .so with 0101-0107 from build/gst-jpeg/out, build log build-dev-recheck.log)**: installs
+  the newest cumulative kernel (vp9-vectors/run-job.sh pattern), cases s420, z17x33-411, z33x17-422, z15x15-444, z1x1,
+  z8x8 (still), z4096x4096 (size: must fall back), mj-z33x17 (clip), norank with GST_DEBUG log; restores the stock
+  kernel. compare.py (shared with oddsize/) checks INSPECT (Name, rank, `sink-range ok` = lower bound 1), stills and
+  clip frames vs the engine-exact ffmpeg reference (max|d| <= 3), hw == driver, autoplug, caps sizes, `dmesg +0`.
+- 06 oddsize (harness/gst-jpeg/oddsize/, bundle-oddsize, dev .so with 0101-0106, runner job
+  harness/runner-queue/06-gst-jpeg-oddsize.md): done. gen-vectors.sh -> build/gst-jpeg/vec-oddsize (cases.txt:
   `NAME W H still SAMP` / `NAME 0 0 clip SEQ`): stills z17x33 (420), z17x33-411, z33x17-422, z15x15-444, z1x1, z8x8,
   z1921x1081, z2049x64, z4095x2303; clips mjmix (640x480*15,320x240*15), mjmix-up (320x240*15,640x480*15),
   mj-z33x17 (33x17*30; odd-size frames encoded with ImageMagick, ffmpeg's mjpeg encoder rounds odd sizes).
@@ -113,14 +167,18 @@
   and z17x33-411 PASS, mjmix (pre-0106) FAIL(caps,sw-size) as expected.
 
 ## Next steps
-1. Runner: 05 (gaps) then 06 (oddsize) on any booted kernel; 06's NORANK dmesg count is informational until the
-   quiet-refusals fix is in the cumulative kernel (c14+), then it should be a handful of rate-limited lines.
-2. If 06 fails: `hw!=drv` or `y-ref`/`c-ref` on a still means a real crop/stride problem at that size (look at
-   out/NAME.hw.yuv vs out/NAME.drv.yuv with compare.py's planes_gst/planes_tight); `caps` or `sw-size` on a clip
-   means 0106 did not take (check that the bundle's libgstjpegformat.so is the 0106 build: inspect.txt lists the
-   plugin path); `dmesg` on a case means our pipeline sent something the driver refused (out/dmesg.txt has the lines).
-3. Then integration: `scripts/build-media-debs.sh gst-plugins-bad1.0` with patches/gstreamer 0101-0106, apply
+1. Runner: job 11 (recheck) on the newest cumulative kernel (c15+). Expected: INSPECT `KSIZES=1; sink-range ok
+   width=[1,4096] height=[1,2304]`, 8 of 8 PASS, every `dmesg +0`, NORANK a handful of rate-limited lines (c14+
+   quiet-refusals) and out/norank.gstdebug.txt for the work-list item.
+2. If 11 fails: `sink-range BAD` = the bundle is not the 0107 build (BUILD.txt in the bundle names the commit);
+   z4096x4096 `db/pb/db3` = the caps range did not exclude it (inspect.txt SINK template); z1x1/z8x8/z15x15 `db`
+   with picked jpegdec = 0107 not effective; `hw!=drv` or `y-ref`/`c-ref` on a still = a real crop/stride problem
+   at that size (out/NAME.hw.yuv vs out/NAME.drv.yuv with compare.py's planes_gst/planes_tight); `ref` on the clip =
+   look at the per-frame max|d|; `dmesg` on a case = our pipeline sent something the driver refused (out/dmesg.txt).
+3. Then integration: `scripts/build-media-debs.sh gst-plugins-bad1.0` with patches/gstreamer 0101-0107, apply
    harness/research/gst-jpeg/image-integration.patch, image build, verify-board. Re-check the 02 package's check 4
-   threshold (PSNR only).
+   threshold (PSNR only; use recheck/compare.py's reference instead).
 4. Deferred: throughput (above). Work list: jpegdec/videoconvert 4:1:1 chroma (upstream GStreamer, affects only the
-   software path); the stateful v4l2jpegdec hang on cedrus (gst-plugins-good; the MARGINAL override covers it).
+   software path); the stateful v4l2jpegdec hang on cedrus (gst-plugins-good 1.28.7 source at
+   /home/aruni/orangepi5/work/gst-plugins-good-1.28.7; analyse job 11's out/norank.gstdebug.txt; the MARGINAL override
+   covers it until then).

@@ -18,10 +18,11 @@ rm -f "$GST_REGISTRY"
 dmesg > "$O/dmesg-before.txt"
 {
 uname -r; uname -v; gst-launch-1.0 --version | head -2
-gst-inspect-1.0 v4l2sljpegdec 2>&1 | grep -E 'Rank|Long-name|image/jpeg|sof-marker|sampling|colorspace|interlace|scans|component-tables|width|height|SINK|SRC' | head -40
+gst-inspect-1.0 v4l2sljpegdec 2>&1 | grep -E 'Name|Rank|Long-name|image/jpeg|sof-marker|sampling|colorspace|interlace|scans|component-tables|width|height|SINK|SRC' | head -40
 } > "$O/inspect.txt" 2>&1
-# a kernel that enumerates frame sizes gives the sink caps a width/height range
-if grep -Eq '^ *width: \[' "$O/inspect.txt"; then KSIZES=1; else KSIZES=0; fi
+# a kernel that enumerates frame sizes gives the SINK caps a width/height range (the SRC template always has one:
+# job 05 matched that and ran the size case on a kernel without ENUM_FRAMESIZES)
+if sed -n '/SINK template/,/SRC template/p' "$O/inspect.txt" | grep -Eq '^ *width: \['; then KSIZES=1; else KSIZES=0; fi
 echo "KSIZES=$KSIZES" >> "$O/inspect.txt"
 T="timeout -k 5 60"
 dec() { # name file element-chain tag

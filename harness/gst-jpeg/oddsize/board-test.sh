@@ -19,7 +19,7 @@ rm -f "$GST_REGISTRY"
 dmesg > "$O/dmesg-before.txt"
 {
 uname -r; uname -v; gst-launch-1.0 --version | head -2
-gst-inspect-1.0 v4l2sljpegdec 2>&1 | grep -E 'Rank|Long-name|image/jpeg|sof-marker|sampling|colorspace|interlace|scans|component-tables|width|height|SINK|SRC' | head -40
+gst-inspect-1.0 v4l2sljpegdec 2>&1 | grep -E 'Name|Rank|Long-name|image/jpeg|sof-marker|sampling|colorspace|interlace|scans|component-tables|width|height|SINK|SRC' | head -40
 } > "$O/inspect.txt" 2>&1
 T="timeout -k 5 60"
 R=$O/results.txt; : > "$R"

@@ -1,0 +1,53 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 21:17:04 +0000
+Subject: [PATCH] v4l2codecs: decoder: Do not bound the sink caps below by the
+ smallest coded size
+
+gst_v4l2_decoder_probe_sink_caps() put the STEPWISE minimum that
+VIDIOC_ENUM_FRAMESIZES reports into the sink pad template as the lower
+bound of width and height. That minimum is a coded frame size (cedrus
+reports 16x16, Hantro 48x48), while the caps carry the display size: a
+picture smaller than one macroblock is coded at the minimum size and
+decodes fine, the driver rounds the format up. With the bound, a 15x15,
+8x8 or 1x1 JPEG (or an 8x8 H.264 stream) is refused by the caps and
+autopluggers fall back to a software decoder for exactly the pictures
+the hardware handles trivially.
+
+Keep only the maximum, for the same reason the step is already left out.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2codecs/gstv4l2decoder.c | 13 ++++++++-----
+ 1 file changed, 8 insertions(+), 5 deletions(-)
+
+diff --git a/sys/v4l2codecs/gstv4l2decoder.c b/sys/v4l2codecs/gstv4l2decoder.c
+index a634530..98ee880 100644
+--- a/sys/v4l2codecs/gstv4l2decoder.c
++++ b/sys/v4l2codecs/gstv4l2decoder.c
+@@ -480,13 +480,16 @@ gst_v4l2_decoder_probe_sink_caps (GstV4l2Decoder * self, guint32 pix_fmt,
+     gst_caps_unref (caps);
+     caps = sized_caps;
+   } else {
+-    /* For STEPWISE, the step is not expressed in the caps, since the caps
+-     * carry the display size, which may not be aligned to the step */
++    /* For STEPWISE, neither the step nor the minimum is expressed in the
++     * caps: both constrain the coded frame size, while the caps carry the
++     * display size, which need not be aligned to the step and may be smaller
++     * than the smallest coded size (the driver rounds the format up). Only
++     * the maximum excludes a decoder. */
+     caps = gst_caps_make_writable (caps);
+-    gst_v4l2_decoder_set_size_range (caps, "width", size.stepwise.min_width,
++    gst_v4l2_decoder_set_size_range (caps, "width", 1,
+         size.stepwise.max_width);
+-    gst_v4l2_decoder_set_size_range (caps, "height",
+-        size.stepwise.min_height, size.stepwise.max_height);
++    gst_v4l2_decoder_set_size_range (caps, "height", 1,
++        size.stepwise.max_height);
+   }
+ 
+   GST_DEBUG_OBJECT (self, "Probed sink caps: %" GST_PTR_FORMAT, caps);
+-- 
+2.55.0
+

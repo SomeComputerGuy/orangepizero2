@@ -71,3 +71,7 @@ rep(P, '\tdev_dbg(kbdev->dev, "%s\\n", __func__);\n\n\tpm_runtime_set_autosuspen
        '\t\t kbdev->nr_clocks, kbdev->nr_regulators,\n'
        '\t\t kbdev->nr_clocks ? clk_get_rate(kbdev->clocks[0]) : 0UL);\n\n'
        '\tpm_runtime_set_autosuspend_delay(kbdev->dev, AUTO_SUSPEND_DELAY);')
+# After a panfrost unbind (and with the 7.x driver core) the runtime-PM usage count can already be 1 at probe;
+# the generic glue treated that as fatal. Warn only.
+rep(P, '\t\tdev_warn(kbdev->dev, "%s: Device runtime usage count unexpectedly non zero %d",\n\t\t\t __func__, atomic_read(&kbdev->dev->power.usage_count));\n\t\tret = -EINVAL;\n',
+       '\t\tdev_warn(kbdev->dev, "%s: Device runtime usage count unexpectedly non zero %d",\n\t\t\t __func__, atomic_read(&kbdev->dev->power.usage_count));\n')

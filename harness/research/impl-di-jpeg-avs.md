@@ -788,3 +788,10 @@ module on c3 with CAPTURE field NONE, sequence numbers and the OUTPUT payload ke
 the default item is "Bob, Frame Rate". With "Motion Adaptive, Frame Rate" it gives 56/58 (Requests: a held source keeps its
 request incomplete), and with the real default, "Motion Adaptive, Field Rate", it hangs: the second CAPTURE timestamp
 matches no source buffer, and two sources are held.
+
+#### compliance-v2 on the board (2026-11-05, c7 = test-cumulative 91c6912a4, which includes ca92040e8)
+The default is "Bob, Frame Rate". `v4l2-compliance -s`: 58/58, 0 failed, 0 warnings. `std-ctrl-compare.sh` against the c2
+baseline gives 53 PASS and 0 failures: all old items, TNR and FMD outputs are still bit-identical. With -P (OUTPUT queued
+before the later STREAMON), the second field of the first frame is at +20 ms for "Bob, Field Rate" and "Motion Adaptive,
+Field Rate"; without priming both fields carry the OUTPUT timestamp. Three MA field-rate runs killed with SIGKILL, then a
+weave stream: still exact, 0 kernel warnings. di300err PASS. Logs: kernel-check/board-di-std/{run-c7.log,out-new-c7,compare-c7.txt}.

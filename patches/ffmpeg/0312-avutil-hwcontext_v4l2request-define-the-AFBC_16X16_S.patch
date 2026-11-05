@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 11:29:02 +0000
+Subject: [PATCH] avutil/hwcontext_v4l2request: define the AFBC_16X16_SPLIT
+ fourccs when missing
+
+The AFBC capture formats added for Cedrus are guarded by
+#if defined(V4L2_PIX_FMT_YUV420_{8,10}_AFBC_16X16_SPLIT). Distribution
+linux/videodev2.h (e.g. Ubuntu linux-libc-dev) does not carry these
+definitions yet, so a packaged build silently drops the AFBC path and
+Cedrus 10-bit output (VP9/HEVC/AVS2 Main10) cannot be imported.
+
+Provide the kernel uAPI fourccs ('AS12', 'AS01') as #ifndef fallbacks,
+like the local v4l2-stateless-*.h headers do for the controls. They step
+aside once the kernel headers define them.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavutil/hwcontext_v4l2request.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/libavutil/hwcontext_v4l2request.c b/libavutil/hwcontext_v4l2request.c
+index b6633d9..6705cee 100644
+--- a/libavutil/hwcontext_v4l2request.c
++++ b/libavutil/hwcontext_v4l2request.c
+@@ -34,6 +34,18 @@
+ #include "hwcontext_v4l2request_internal.h"
+ #include "mem.h"
+ 
++/*
++ * Cedrus AFBC capture formats (Jernej Skrabec's sunxi media patches, not yet in
++ * linux/videodev2.h of most distributions). The fourccs are fixed by the kernel
++ * uAPI; the driver only enumerates them when it supports them.
++ */
++#ifndef V4L2_PIX_FMT_YUV420_8_AFBC_16X16_SPLIT
++#define V4L2_PIX_FMT_YUV420_8_AFBC_16X16_SPLIT  v4l2_fourcc('A', 'S', '1', '2')
++#endif
++#ifndef V4L2_PIX_FMT_YUV420_10_AFBC_16X16_SPLIT
++#define V4L2_PIX_FMT_YUV420_10_AFBC_16X16_SPLIT v4l2_fourcc('A', 'S', '0', '1')
++#endif
++
+ typedef struct V4L2RequestVideoDecoder {
+     dev_t media_dev;
+     dev_t video_dev;

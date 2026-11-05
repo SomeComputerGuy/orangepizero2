@@ -1,0 +1,177 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@siol.net>
+Date: Fri, 9 Oct 2026 03:46:15 +0200
+Subject: [PATCH 206/208] avcodec/h263dec: let hwaccels decode a picture
+ segment by segment
+
+Some hardware decoders (the MPEG engine of the Allwinner video engine)
+cannot parse MPEG-4 video packet headers nor H.263 GOB and slice
+headers: they decode a given number of macroblocks from a given bit
+position and need to be told where each segment of the picture starts,
+with the macroblock address and quantiser of its header.
+
+Add HWACCEL_CAP_RESYNC_SLICES. With it, the decoder keeps looking for
+resync markers and GOB or slice start codes after the first slice, and
+calls decode_slice() once per segment with its header parsed into the
+context. As the macroblocks in between are not decoded, the search
+scans the bitstream: byte aligned resync markers for MPEG-4, which stop
+at the next start code so that packed B-frames are still found, and GOB
+start codes at any bit position for H.263, which does not align them.
+The position of the header is kept in H263DecContext.resync_pos.
+
+Other hwaccels are unchanged: they still get a single decode_slice()
+call for the whole picture.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@siol.net>
+---
+ libavcodec/h263dec.c          | 12 +++++--
+ libavcodec/h263dec.h          |  1 +
+ libavcodec/hwaccel_internal.h |  7 ++++
+ libavcodec/ituh263dec.c       | 67 +++++++++++++++++++++++++++++++++++
+ 4 files changed, 84 insertions(+), 3 deletions(-)
+
+diff --git a/libavcodec/h263dec.c b/libavcodec/h263dec.c
+index 23fd16b726..c4a828862a 100644
+--- a/libavcodec/h263dec.c
++++ b/libavcodec/h263dec.c
+@@ -217,8 +217,10 @@ static int decode_slice(H263DecContext *const h)
+         const uint8_t *start = h->gb.buffer + get_bits_count(&h->gb) / 8;
+         ret = FF_HW_CALL(h->c.avctx, decode_slice, start,
+                          get_bits_bytesize(&h->gb, 0) - get_bits_count(&h->gb) / 8);
+-        // ensure we exit decode loop
+-        h->c.mb_y = h->c.mb_height;
++        // ensure we exit decode loop, unless the hwaccel wants the segments
++        if (!(ffhwaccel(h->c.avctx->hwaccel)->caps_internal &
++              HWACCEL_CAP_RESYNC_SLICES))
++            h->c.mb_y = h->c.mb_height;
+         return ret;
+     }
+ 
+@@ -595,7 +597,11 @@ int ff_h263_decode_frame(AVCodecContext *avctx, AVFrame *pict,
+             int prev_x = h->c.mb_x, prev_y = h->c.mb_y;
+             if (ff_h263_resync(h) < 0)
+                 break;
+-            if (prev_y * h->c.mb_width + prev_x < h->c.mb_y * h->c.mb_width + h->c.mb_x)
++            if (avctx->hwaccel) {
++                /* Only reached with HWACCEL_CAP_RESYNC_SLICES. */
++                if (prev_y * h->c.mb_width + prev_x >= h->c.mb_y * h->c.mb_width + h->c.mb_x)
++                    break;
++            } else if (prev_y * h->c.mb_width + prev_x < h->c.mb_y * h->c.mb_width + h->c.mb_x)
+                 h->c.er.error_occurred = 1;
+         }
+ 
+diff --git a/libavcodec/h263dec.h b/libavcodec/h263dec.h
+index ab647f5224..985a3681d1 100644
+--- a/libavcodec/h263dec.h
++++ b/libavcodec/h263dec.h
+@@ -96,6 +96,7 @@ typedef struct H263DecContext {
+ #define SLICE_NOEND     -3 ///<no end marker or error found but mb count exceeded
+ 
+     GetBitContext last_resync_gb;    ///< used to search for the next resync marker
++    int resync_pos;                  ///< bit position of the last GOB or video packet header found for a hwaccel
+ 
+     uint8_t permutated_intra_h_scantable[64];
+     uint8_t permutated_intra_v_scantable[64];
+diff --git a/libavcodec/hwaccel_internal.h b/libavcodec/hwaccel_internal.h
+index 7224406815..2d03f39c77 100644
+--- a/libavcodec/hwaccel_internal.h
++++ b/libavcodec/hwaccel_internal.h
+@@ -30,6 +30,13 @@
+ 
+ #define HWACCEL_CAP_ASYNC_SAFE      (1 << 0)
+ #define HWACCEL_CAP_THREAD_SAFE     (1 << 1)
++/**
++ * The hwaccel cannot continue across H.263 GOB headers or MPEG-4 video packet
++ * headers: the H.263/MPEG-4 decoders locate them and call decode_slice() once
++ * per segment of the picture that starts with such a header, with the header
++ * parsed into the decoder context (mb_x, mb_y, qscale).
++ */
++#define HWACCEL_CAP_RESYNC_SLICES   (1 << 2)
+ 
+ typedef struct FFHWAccel {
+     /**
+diff --git a/libavcodec/ituh263dec.c b/libavcodec/ituh263dec.c
+index 53ead30c48..08a3b1c9ed 100644
+--- a/libavcodec/ituh263dec.c
++++ b/libavcodec/ituh263dec.c
+@@ -210,6 +210,70 @@ static int h263_decode_gob_header(H263DecContext *const h)
+     return 0;
+ }
+ 
++/**
++ * Find the next GOB or video packet header after the start of the current
++ * segment for a hwaccel, which does not decode the macroblocks in between.
++ * H.263 GOB start codes need not be byte aligned, unlike MPEG-4 resync
++ * markers, so they are searched at bit granularity.
++ */
++static int h263_resync_hwaccel(H263DecContext *const h)
++{
++    const int mpeg4 = h->c.codec_id == AV_CODEC_ID_MPEG4;
++    const uint8_t *buf = h->gb.buffer;
++    const int size = get_bits_bytesize(&h->gb, 0);
++    int start, ret;
++
++#if CONFIG_MPEG4_DECODER
++    /* Without resync markers, the macroblock data may emulate one. */
++    if (mpeg4 && !((const Mpeg4DecContext *)h)->resync_marker)
++        return -1;
++#endif
++
++    h->gb = h->last_resync_gb;
++    if (mpeg4)
++        align_get_bits(&h->gb);
++    start = get_bits_count(&h->gb);
++
++    for (int pos = start >> 3; pos + 3 < size; pos++) {
++        /* 16 zero bits starting in byte pos cover all of byte pos + 1. */
++        if (buf[pos + 1])
++            continue;
++
++        /*
++         * A start code ends the VOP: resync markers never emulate one. Stop
++         * there, like the macroblock decoding would, for packed B-frames.
++         */
++        if (mpeg4 && !buf[pos] && buf[pos + 2] == 1 && pos * 8 >= start) {
++            skip_bits_long(&h->gb, pos * 8 - get_bits_count(&h->gb));
++            return -1;
++        }
++
++        for (int bit = pos * 8; bit < pos * 8 + (mpeg4 ? 1 : 8); bit++) {
++            GetBitContext bak;
++
++            if (bit < start)
++                continue;
++            skip_bits_long(&h->gb, bit - get_bits_count(&h->gb));
++            if (show_bits(&h->gb, 16) ||
++                (!mpeg4 && !(show_bits(&h->gb, 17) & 1)))
++                continue;
++
++            bak = h->gb;
++#if CONFIG_MPEG4_DECODER
++            if (mpeg4)
++                ret = ff_mpeg4_decode_video_packet_header(h);
++            else
++#endif
++                ret = h263_decode_gob_header(h);
++            if (ret >= 0)
++                return h->resync_pos = bit;
++            h->gb = bak;
++        }
++    }
++
++    return -1;
++}
++
+ /**
+  * Decode the group of blocks / video packet header / slice header (MPEG-4 Studio).
+  * @return bit position of the resync_marker, or <0 if none was found
+@@ -218,6 +282,9 @@ int ff_h263_resync(H263DecContext *const h)
+ {
+     int left, pos, ret;
+ 
++    if (h->c.avctx->hwaccel && !h->c.studio_profile)
++        return h263_resync_hwaccel(h);
++
+     /* In MPEG-4 studio mode look for a new slice startcode
+      * and decode slice header */
+     if (h->c.codec_id==AV_CODEC_ID_MPEG4 && h->c.studio_profile) {

@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 06:07:38 +0000
+Subject: [PATCH 302/311] avcodec/v4l2_request_mpeg4: decode interlaced B-VOP
+ streams in software
+
+Cedrus wraps the vertical field vectors of interlaced B-VOPs to half
+their range and the driver refuses those pictures. Fall back to software
+at init when an interlaced VOL allows B-VOPs (low_delay unset).
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/v4l2_request_mpeg4.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/libavcodec/v4l2_request_mpeg4.c b/libavcodec/v4l2_request_mpeg4.c
+index 677ae68095..5375f0d983 100644
+--- a/libavcodec/v4l2_request_mpeg4.c
++++ b/libavcodec/v4l2_request_mpeg4.c
+@@ -202,7 +202,14 @@ static int mpeg4_unsupported(AVCodecContext *avctx)
+            ctx->vol_sprite_usage == STATIC_SPRITE ||
+            ctx->sprite_brightness_change || ctx->new_pred ||
+            ctx->scalability || ctx->quant_precision != 5 ||
+-           ctx->h.data_partitioning || ctx->rvlc;
++           ctx->h.data_partitioning || ctx->rvlc ||
++           /*
++            * Cedrus wraps the vertical field vectors of interlaced B-VOPs to
++            * half their range and refuses them: decode in software when the
++            * VOL allows B-VOPs. A B-VOP behind a wrong low_delay flag clears
++            * it, and fails here instead of decoding wrongly.
++            */
++           (!s->progressive_sequence && !s->low_delay);
+ }
+ 
+ static int mpeg4_find_vop(const uint8_t *buf, unsigned int size,

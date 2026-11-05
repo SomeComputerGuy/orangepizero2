@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 06:08:06 +0000
+Subject: [PATCH 303/311] avcodec/mpeg4videodec: do not round the GMC1 average
+ MV with a zero shift
+
+RSHIFT(x, 0) evaluates to x - 1 for negative x (the rounding term
+(1 << 0) >> 1 is 0, but the negative branch still subtracts 1). With
+a == 0 the GMC1 sum is exact, so use it unshifted.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/mpeg4videodec.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/libavcodec/mpeg4videodec.c b/libavcodec/mpeg4videodec.c
+index cc97f64ba4..19009f6582 100644
+--- a/libavcodec/mpeg4videodec.c
++++ b/libavcodec/mpeg4videodec.c
+@@ -861,7 +861,8 @@ static inline int get_amv(Mpeg4DecContext *ctx, int n)
+         if (ctx->divx_version == 500 && ctx->divx_build == 413 && a >= s->quarter_sample)
+             sum = ctx->sprite_offset[0][n] / (1 << (a - s->quarter_sample));
+         else
+-            sum = RSHIFT(ctx->sprite_offset[0][n] * (1 << s->quarter_sample), a);
++            sum = a ? RSHIFT(ctx->sprite_offset[0][n] * (1 << s->quarter_sample), a)
++                    : ctx->sprite_offset[0][n] * (1 << s->quarter_sample);
+     } else {
+         dx    = ctx->sprite_delta[n][0];
+         dy    = ctx->sprite_delta[n][1];

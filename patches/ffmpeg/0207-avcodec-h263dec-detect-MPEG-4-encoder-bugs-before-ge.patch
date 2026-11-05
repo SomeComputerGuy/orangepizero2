@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@siol.net>
+Date: Fri, 9 Oct 2026 03:46:15 +0200
+Subject: [PATCH 207/208] avcodec/h263dec: detect MPEG-4 encoder bugs before
+ get_format()
+
+ff_mpeg4_workaround_bugs() runs after the pixel format and with it the
+hwaccel are chosen for the first picture. A hwaccel which has to tell
+the hardware about encoder bugs, or fall back to software when the
+hardware cannot reproduce them, cannot know them in its init().
+
+Run it before h263_get_format(). It only depends on the headers parsed
+so far and the IDCT setup it may change is done by ff_h263_decode_init().
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@siol.net>
+---
+ libavcodec/h263dec.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/libavcodec/h263dec.c b/libavcodec/h263dec.c
+index c4a828862a..018eb5aae6 100644
+--- a/libavcodec/h263dec.c
++++ b/libavcodec/h263dec.c
+@@ -501,6 +501,12 @@ int ff_h263_decode_frame(AVCodecContext *avctx, AVFrame *pict,
+         return ret;
+     }
+ 
++#if CONFIG_MPEG4_DECODER
++    /* before h263_get_format(): hwaccels check the workarounds in init() */
++    if (avctx->codec_id == AV_CODEC_ID_MPEG4)
++        ff_mpeg4_workaround_bugs(avctx);
++#endif
++
+     if (!h->c.context_initialized) {
+         avctx->pix_fmt = h263_get_format(avctx);
+         if ((ret = ff_mpv_common_init(s)) < 0)
+@@ -513,7 +519,6 @@ int ff_h263_decode_frame(AVCodecContext *avctx, AVFrame *pict,
+     if (avctx->codec_id == AV_CODEC_ID_MPEG4) {
+         if (h->c.pict_type != AV_PICTURE_TYPE_B && h->c.mb_num/2 > get_bits_left(&h->gb))
+             return AVERROR_INVALIDDATA;
+-        ff_mpeg4_workaround_bugs(avctx);
+         if (h->c.studio_profile != (h->c.idsp.idct == NULL))
+             ff_mpv_idct_init(s);
+     }

@@ -1,0 +1,50 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 06:07:38 +0000
+Subject: [PATCH 301/311] avcodec/mpeg4video: scale field direct vertical
+ vectors at frame precision
+
+In interlaced B-VOPs the ISO/IEC 14496-5 reference decoder keeps the
+co-located field vectors in frame units (twice the field vector),
+computes (y * TRB) / TRD + MVD there and drops the half line. FFmpeg
+divided the field-unit vector, so the vertical vector differed by one
+unit whenever the frame-unit quotient was odd.
+
+vcon_ge_1_asp_l4 vs. 14496-5 vm_dec: 32571 luma MBs off by > 4 -> 0.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/mpeg4video.c | 15 +++++++++------
+ 1 file changed, 9 insertions(+), 6 deletions(-)
+
+diff --git a/libavcodec/mpeg4video.c b/libavcodec/mpeg4video.c
+index a53ce72dfd..c8fe1dc662 100644
+--- a/libavcodec/mpeg4video.c
++++ b/libavcodec/mpeg4video.c
+@@ -147,16 +147,19 @@ int ff_mpeg4_set_direct_mv(MpegEncContext *s, int mx, int my)
+             }
+             s->mv[0][i][0] = s->p_field_mv_table[i][0][mb_index][0] *
+                              time_pb / time_pp + mx;
+-            s->mv[0][i][1] = s->p_field_mv_table[i][0][mb_index][1] *
+-                             time_pb / time_pp + my;
++            /* ISO/IEC 14496-5 scales the vertical field vector in frame
++             * units (twice the field vector), then drops the half line. */
++            s->mv[0][i][1] = (2 * s->p_field_mv_table[i][0][mb_index][1] *
++                              time_pb / time_pp + my) >> 1;
+             s->mv[1][i][0] = mx ? s->mv[0][i][0] -
+                                   s->p_field_mv_table[i][0][mb_index][0]
+                                 : s->p_field_mv_table[i][0][mb_index][0] *
+                                   (time_pb - time_pp) / time_pp;
+-            s->mv[1][i][1] = my ? s->mv[0][i][1] -
+-                                  s->p_field_mv_table[i][0][mb_index][1]
+-                                : s->p_field_mv_table[i][0][mb_index][1] *
+-                                  (time_pb - time_pp) / time_pp;
++            s->mv[1][i][1] = (my ? 2 * s->p_field_mv_table[i][0][mb_index][1] *
++                                       time_pb / time_pp + my -
++                                       2 * s->p_field_mv_table[i][0][mb_index][1]
++                                 : 2 * s->p_field_mv_table[i][0][mb_index][1] *
++                                   (time_pb - time_pp) / time_pp) >> 1;
+         }
+         return MB_TYPE_DIRECT2 | MB_TYPE_16x8 |
+                MB_TYPE_BIDIR_MV | MB_TYPE_INTERLACED;

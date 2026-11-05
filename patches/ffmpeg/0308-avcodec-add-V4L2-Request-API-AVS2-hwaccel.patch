@@ -1,0 +1,670 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 09:27:14 +0000
+Subject: [PATCH 308/311] avcodec: add V4L2 Request API AVS2 hwaccel
+
+Add a V4L2 Request API hwaccel for the native AVS2 decoder, using the
+stateless AVS2 uAPI of the Allwinner H616 cedrus driver: the OUTPUT
+format V4L2_PIX_FMT_AVS2_FRAME, one coded picture (picture header and
+all slices, with their start codes) per request, and the SEQUENCE,
+PICTURE, WEIGHT_QUANT and ALF controls. The reference list is passed
+resolved, in reference configuration set order, with every reference's
+own reference POC list, its picture type and the background flag; the
+weighting quantization matrices are the final ones for the picture.
+
+The sequence control is set at init so that the driver knows the bit
+depth before the CAPTURE format is chosen (NV12 for Main, P010 for
+Main10) and can refuse the size or the coding tools early.
+
+The uAPI is not upstream yet; v4l2-stateless-avs2.h carries a private
+copy of its definitions, skipped when the kernel headers provide them,
+in the same way as the MPEG-4 and VC-1 hwaccels.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ configure                        |   2 +
+ libavcodec/Makefile              |   3 +-
+ libavcodec/avs2dec.c             |  11 +-
+ libavcodec/hwaccels.h            |   1 +
+ libavcodec/v4l2-stateless-avs2.h | 257 +++++++++++++++++++++++++++
+ libavcodec/v4l2_request_avs2.c   | 291 +++++++++++++++++++++++++++++++
+ 6 files changed, 563 insertions(+), 2 deletions(-)
+ create mode 100644 libavcodec/v4l2-stateless-avs2.h
+ create mode 100644 libavcodec/v4l2_request_avs2.c
+
+diff --git a/configure b/configure
+index 12f8d4d194..1c1bf84123 100755
+--- a/configure
++++ b/configure
+@@ -3374,6 +3374,8 @@ av1_videotoolbox_hwaccel_deps="videotoolbox"
+ av1_videotoolbox_hwaccel_select="av1_decoder"
+ av1_vulkan_hwaccel_deps="vulkan"
+ av1_vulkan_hwaccel_select="av1_decoder"
++avs2_v4l2request_hwaccel_deps="v4l2_request"
++avs2_v4l2request_hwaccel_select="avs2_decoder"
+ cavs_v4l2request_hwaccel_deps="v4l2_request"
+ cavs_v4l2request_hwaccel_select="cavs_decoder"
+ dpx_vulkan_hwaccel_deps="vulkan spirv_compiler"
+diff --git a/libavcodec/Makefile b/libavcodec/Makefile
+index 3b622edf7f..c6d9868330 100644
+--- a/libavcodec/Makefile
++++ b/libavcodec/Makefile
+@@ -1055,6 +1055,7 @@ OBJS-$(CONFIG_AV1_NVDEC_HWACCEL)          += nvdec_av1.o
+ OBJS-$(CONFIG_AV1_V4L2REQUEST_HWACCEL)    += v4l2_request_av1.o
+ OBJS-$(CONFIG_AV1_VAAPI_HWACCEL)          += vaapi_av1.o
+ OBJS-$(CONFIG_AV1_VDPAU_HWACCEL)          += vdpau_av1.o
++OBJS-$(CONFIG_AVS2_V4L2REQUEST_HWACCEL)   += v4l2_request_avs2.o
+ OBJS-$(CONFIG_AV1_VIDEOTOOLBOX_HWACCEL)   += videotoolbox_av1.o
+ OBJS-$(CONFIG_AV1_VULKAN_HWACCEL)         += vulkan_decode.o vulkan_av1.o
+ OBJS-$(CONFIG_CAVS_V4L2REQUEST_HWACCEL)   += v4l2_request_cavs.o
+@@ -1375,7 +1376,7 @@ SKIPHEADERS-$(CONFIG_VULKAN)           += ffv1_vulkan.h prores_vulkan.h vulkan_v
+                                           vulkan_encode.h vulkan_decode.h
+ SKIPHEADERS-$(CONFIG_V4L2_M2M)         += v4l2_buffers.h v4l2_context.h v4l2_m2m.h
+ SKIPHEADERS-$(CONFIG_V4L2_REQUEST)     += v4l2_request.h v4l2-stateless-vc1.h \
+-                                          v4l2-stateless-mpeg4.h v4l2-stateless-avs.h
++                                          v4l2-stateless-mpeg4.h v4l2-stateless-avs.h v4l2-stateless-avs2.h
+ SKIPHEADERS-$(CONFIG_ZLIB)             += zlib_wrapper.h
+ 
+ TESTPROGS = avcodec                                                     \
+diff --git a/libavcodec/avs2dec.c b/libavcodec/avs2dec.c
+index 1571d82928..539d750c8c 100644
+--- a/libavcodec/avs2dec.c
++++ b/libavcodec/avs2dec.c
+@@ -130,9 +130,12 @@ static av_cold void avs2_decode_flush(AVCodecContext *avctx)
+ static int avs2_get_format(AVCodecContext *avctx)
+ {
+     AVS2DecContext *s = avctx->priv_data;
+-    enum AVPixelFormat pix_fmts[2], *fmtp = pix_fmts;
++    enum AVPixelFormat pix_fmts[3], *fmtp = pix_fmts;
+     int ret;
+ 
++#if CONFIG_AVS2_V4L2REQUEST_HWACCEL
++    *fmtp++ = AV_PIX_FMT_DRM_PRIME;
++#endif
+     *fmtp++ = s->pix_fmt;
+     *fmtp   = AV_PIX_FMT_NONE;
+ 
+@@ -722,4 +725,10 @@ const FFCodec ff_avs2_decoder = {
+     .flush          = avs2_decode_flush,
+     .p.capabilities = AV_CODEC_CAP_DR1,
+     .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP,
++    .hw_configs     = (const AVCodecHWConfigInternal *const []) {
++#if CONFIG_AVS2_V4L2REQUEST_HWACCEL
++        HWACCEL_V4L2REQUEST(avs2),
++#endif
++        NULL
++    },
+ };
+diff --git a/libavcodec/hwaccels.h b/libavcodec/hwaccels.h
+index 8300dee16c..45c67baf00 100644
+--- a/libavcodec/hwaccels.h
++++ b/libavcodec/hwaccels.h
+@@ -29,6 +29,7 @@ extern const struct FFHWAccel ff_av1_vaapi_hwaccel;
+ extern const struct FFHWAccel ff_av1_vdpau_hwaccel;
+ extern const struct FFHWAccel ff_av1_videotoolbox_hwaccel;
+ extern const struct FFHWAccel ff_av1_vulkan_hwaccel;
++extern const struct FFHWAccel ff_avs2_v4l2request_hwaccel;
+ extern const struct FFHWAccel ff_cavs_v4l2request_hwaccel;
+ extern const struct FFHWAccel ff_dpx_vulkan_hwaccel;
+ extern const struct FFHWAccel ff_ffv1_vulkan_hwaccel;
+diff --git a/libavcodec/v4l2-stateless-avs2.h b/libavcodec/v4l2-stateless-avs2.h
+new file mode 100644
+index 0000000000..428e626c6f
+--- /dev/null
++++ b/libavcodec/v4l2-stateless-avs2.h
+@@ -0,0 +1,257 @@
++/* SPDX-License-Identifier: ((GPL-2.0+ WITH Linux-syscall-note) OR BSD-3-Clause) */
++/*
++ * Stateless AVS2 (GB/T 33475.2, IEEE 1857.4) decoder controls.
++ *
++ * Private copy of the definitions proposed for include/uapi/linux/videodev2.h
++ * and include/uapi/linux/v4l2-controls.h, for use until they are part of the
++ * kernel headers. It must be kept in sync with the kernel patches. Everything
++ * here is skipped when the kernel headers already provide the definitions.
++ */
++
++#ifndef AVCODEC_V4L2_STATELESS_AVS2_H
++#define AVCODEC_V4L2_STATELESS_AVS2_H
++
++#include <linux/videodev2.h>
++
++#ifndef V4L2_PIX_FMT_AVS2_FRAME
++#define V4L2_PIX_FMT_AVS2_FRAME v4l2_fourcc('A', 'V', 'S', '2') /* AVS2 parsed frame */
++#endif
++
++#ifndef V4L2_CID_STATELESS_AVS2_SEQUENCE
++
++#define V4L2_CTRL_TYPE_AVS2_SEQUENCE		0x02c0
++#define V4L2_CTRL_TYPE_AVS2_PICTURE		0x02c1
++#define V4L2_CTRL_TYPE_AVS2_WEIGHT_QUANT	0x02c2
++#define V4L2_CTRL_TYPE_AVS2_ALF			0x02c3
++
++#define V4L2_AVS2_PROFILE_MAIN_PICTURE			0x12
++#define V4L2_AVS2_PROFILE_MAIN				0x20
++#define V4L2_AVS2_PROFILE_MAIN10			0x22
++
++#define V4L2_AVS2_SEQUENCE_FLAG_PROGRESSIVE_SEQUENCE	0x00000001
++#define V4L2_AVS2_SEQUENCE_FLAG_FIELD_CODED_SEQUENCE	0x00000002
++#define V4L2_AVS2_SEQUENCE_FLAG_LOW_DELAY		0x00000004
++#define V4L2_AVS2_SEQUENCE_FLAG_TEMPORAL_ID_ENABLE	0x00000008
++#define V4L2_AVS2_SEQUENCE_FLAG_WEIGHT_QUANT_ENABLE	0x00000010
++#define V4L2_AVS2_SEQUENCE_FLAG_BACKGROUND_PICTURE_ENABLE 0x00000020
++#define V4L2_AVS2_SEQUENCE_FLAG_MHP_SKIP_ENABLE		0x00000040
++#define V4L2_AVS2_SEQUENCE_FLAG_DHP_ENABLE		0x00000080
++#define V4L2_AVS2_SEQUENCE_FLAG_WSM_ENABLE		0x00000100
++#define V4L2_AVS2_SEQUENCE_FLAG_AMP_ENABLE		0x00000200
++#define V4L2_AVS2_SEQUENCE_FLAG_NSQT_ENABLE		0x00000400
++#define V4L2_AVS2_SEQUENCE_FLAG_NSIP_ENABLE		0x00000800
++#define V4L2_AVS2_SEQUENCE_FLAG_SECONDARY_TRANSFORM_ENABLE 0x00001000
++#define V4L2_AVS2_SEQUENCE_FLAG_SAO_ENABLE		0x00002000
++#define V4L2_AVS2_SEQUENCE_FLAG_ALF_ENABLE		0x00004000
++#define V4L2_AVS2_SEQUENCE_FLAG_PMVR_ENABLE		0x00008000
++#define V4L2_AVS2_SEQUENCE_FLAG_CROSS_SLICE_LOOPFILTER_ENABLE 0x00010000
++#define V4L2_AVS2_SEQUENCE_FLAG_BCBR_ENABLE		0x00020000
++
++#define V4L2_CID_STATELESS_AVS2_SEQUENCE	(V4L2_CID_CODEC_STATELESS_BASE + 900)
++/**
++ * struct v4l2_ctrl_avs2_sequence - AVS2 sequence header
++ *
++ * Syntax elements of sequence_header(), GB/T 33475.2 section 7.1.2.2. The
++ * reference configuration sets (RCS) of the sequence header are not part
++ * of the control: the reference pictures of each picture are passed,
++ * resolved, with struct v4l2_ctrl_avs2_picture. The weighting quantization
++ * matrices of the sequence header are passed, resolved for each picture,
++ * with struct v4l2_ctrl_avs2_weight_quant.
++ *
++ * @flags: see V4L2_AVS2_SEQUENCE_FLAG_{}. BACKGROUND_PICTURE_ENABLE is set
++ *	when background_picture_disable is 0.
++ * @horizontal_size: horizontal_size, the width of the picture in luma
++ *	samples.
++ * @vertical_size: vertical_size, the height of the picture in luma samples.
++ * @profile_id: profile_id, see V4L2_AVS2_PROFILE_{}.
++ * @level_id: level_id.
++ * @chroma_format: chroma_format, 1 for 4:2:0.
++ * @sample_precision: sample_precision: 1 for 8-bit, 2 for 10-bit samples.
++ * @encoding_precision: encoding_precision: 1 for 8-bit, 2 for 10-bit
++ *	coding. Set to 1 when the profile has no encoding_precision.
++ * @lcu_size: lcu_size, the base 2 logarithm of the largest coding unit
++ *	size, 4 to 6.
++ * @picture_reorder_delay: picture_reorder_delay, 0 when LOW_DELAY is set.
++ * @reserved: padding field. Should be zeroed by applications.
++ */
++struct v4l2_ctrl_avs2_sequence {
++	__u32	flags;
++	__u16	horizontal_size;
++	__u16	vertical_size;
++	__u8	profile_id;
++	__u8	level_id;
++	__u8	chroma_format;
++	__u8	sample_precision;
++	__u8	encoding_precision;
++	__u8	lcu_size;
++	__u8	picture_reorder_delay;
++	__u8	reserved[5];
++};
++
++#define V4L2_AVS2_PICTURE_TYPE_I			0
++#define V4L2_AVS2_PICTURE_TYPE_P			1
++#define V4L2_AVS2_PICTURE_TYPE_B			2
++#define V4L2_AVS2_PICTURE_TYPE_F			3
++
++#define V4L2_AVS2_PICTURE_FLAG_PROGRESSIVE_FRAME	0x00000001
++#define V4L2_AVS2_PICTURE_FLAG_PICTURE_STRUCTURE	0x00000002
++#define V4L2_AVS2_PICTURE_FLAG_TOP_FIELD_FIRST		0x00000004
++#define V4L2_AVS2_PICTURE_FLAG_REPEAT_FIRST_FIELD	0x00000008
++#define V4L2_AVS2_PICTURE_FLAG_IS_TOP_FIELD		0x00000010
++#define V4L2_AVS2_PICTURE_FLAG_FIXED_PICTURE_QP		0x00000020
++#define V4L2_AVS2_PICTURE_FLAG_LOOP_FILTER_DISABLE	0x00000040
++#define V4L2_AVS2_PICTURE_FLAG_REFERED_BY_OTHERS	0x00000080
++#define V4L2_AVS2_PICTURE_FLAG_BACKGROUND_PICTURE	0x00000100
++#define V4L2_AVS2_PICTURE_FLAG_BACKGROUND_PICTURE_OUTPUT 0x00000200
++#define V4L2_AVS2_PICTURE_FLAG_BACKGROUND_PRED		0x00000400
++#define V4L2_AVS2_PICTURE_FLAG_BACKGROUND_REFERENCE	0x00000800
++#define V4L2_AVS2_PICTURE_FLAG_RANDOM_ACCESS_DECODABLE	0x00001000
++#define V4L2_AVS2_PICTURE_FLAG_WEIGHT_QUANT_ENABLE	0x00002000
++
++#define V4L2_AVS2_MAX_REF_PICS				7
++
++#define V4L2_AVS2_REF_PIC_FLAG_BACKGROUND		0x01
++
++/**
++ * struct v4l2_avs2_ref_pic - AVS2 reference picture
++ *
++ * @timestamp: timestamp of the V4L2 capture buffer holding the reference
++ *	picture. See note in struct v4l2_ctrl_avs2_picture.
++ * @poc: picture order count of the reference picture, derived as for
++ *	@poc of struct v4l2_ctrl_avs2_picture when it was decoded.
++ * @ref_poc: picture order counts of the reference pictures of the
++ *	reference picture itself, in the order of its own reference list
++ *	(ref_pics[] of the picture control it was decoded with).
++ * @picture_type: picture type of the reference picture when it was decoded,
++ *	see V4L2_AVS2_PICTURE_TYPE_{}.
++ * @num_ref_pics: number of valid entries in @ref_poc.
++ * @flags: see V4L2_AVS2_REF_PIC_FLAG_{}.
++ * @reserved: padding field. Should be zeroed by applications.
++ */
++struct v4l2_avs2_ref_pic {
++	__u64	timestamp;
++	__s32	poc;
++	__s32	ref_poc[V4L2_AVS2_MAX_REF_PICS];
++	__u8	picture_type;
++	__u8	num_ref_pics;
++	__u8	flags;
++	__u8	reserved[5];
++};
++
++#define V4L2_CID_STATELESS_AVS2_PICTURE		(V4L2_CID_CODEC_STATELESS_BASE + 901)
++/**
++ * struct v4l2_ctrl_avs2_picture - AVS2 picture header and reference list
++ *
++ * Syntax elements of intra_picture_header() or inter_picture_header(),
++ * GB/T 33475.2 sections 7.1.3.1 and 7.1.3.2, and the reference picture
++ * list of the picture.
++ *
++ * The OUTPUT buffer holds one coded picture: its picture header and all
++ * its slices, in decoding order, with their start codes and as found in
++ * the elementary stream (pseudo start code bits not removed). Sequence
++ * headers, extensions and user data may precede the picture header.
++ *
++ * @ref_pics: the reference pictures, in the order of the reference
++ *	configuration set of the picture. For a P or F picture with
++ *	BACKGROUND_REFERENCE, the last entry is the background picture. For a
++ *	P picture with BACKGROUND_PRED (an S picture), the first entry is the
++ *	background picture.
++ * @data_offset: offset in bytes from the start of the OUTPUT buffer to the
++ *	first byte of the start code prefix of the first slice.
++ * @flags: see V4L2_AVS2_PICTURE_FLAG_{}.
++ * @poc: picture order count: decode_order_index, made monotonic across its
++ *	8-bit wrap around, plus picture_output_delay minus
++ *	picture_reorder_delay of the sequence (decode_order_index only when the
++ *	sequence is low delay).
++ * @picture_type: V4L2_AVS2_PICTURE_TYPE_I for intra_picture_header(),
++ *	otherwise the picture type from picture_coding_type.
++ * @num_ref_pics: num_of_reference_picture of the reference configuration set
++ *	of the picture, the number of valid entries in @ref_pics.
++ * @decode_order_index: decode_order_index.
++ * @temporal_id: temporal_id, 0 when the sequence has no temporal id.
++ * @picture_output_delay: picture_output_delay.
++ * @picture_qp: picture_qp.
++ * @alpha_c_offset: alpha_c_offset, 0 unless loop_filter_parameter_flag.
++ * @beta_offset: beta_offset, 0 unless loop_filter_parameter_flag.
++ * @chroma_quant_param_delta_cb: chroma_quant_param_delta_cb, 0 when
++ *	chroma_quant_param_disable is set.
++ * @chroma_quant_param_delta_cr: chroma_quant_param_delta_cr, 0 when
++ *	chroma_quant_param_disable is set.
++ * @reserved: padding field. Should be zeroed by applications.
++ *
++ * Note: the timestamp refers to the timestamp field in struct v4l2_buffer.
++ * Use v4l2_timeval_to_ns() to convert the struct timeval to a __u64.
++ */
++struct v4l2_ctrl_avs2_picture {
++	struct v4l2_avs2_ref_pic ref_pics[V4L2_AVS2_MAX_REF_PICS];
++	__u32	data_offset;
++	__u32	flags;
++	__s32	poc;
++	__u8	picture_type;
++	__u8	num_ref_pics;
++	__u8	decode_order_index;
++	__u8	temporal_id;
++	__u8	picture_output_delay;
++	__u8	picture_qp;
++	__s8	alpha_c_offset;
++	__s8	beta_offset;
++	__s8	chroma_quant_param_delta_cb;
++	__s8	chroma_quant_param_delta_cr;
++	__u8	reserved[2];
++};
++
++#define V4L2_CID_STATELESS_AVS2_WEIGHT_QUANT	(V4L2_CID_CODEC_STATELESS_BASE + 902)
++/**
++ * struct v4l2_ctrl_avs2_weight_quant - AVS2 weighting quantization matrices
++ *
++ * The weighting quantization matrices WeightQuantMatrix4x4 and
++ * WeightQuantMatrix8x8 that apply to the picture (GB/T 33475.2 section
++ * 9.2.4), resolved by the application from the sequence and picture
++ * headers: the default matrices, the matrices of the sequence header, the
++ * picture header matrices, or the matrices derived from the weighting
++ * quantization parameters of the picture header. Every entry is 64 when
++ * weighting quantization is disabled for the picture.
++ *
++ * @matrix_4x4: 4x4 matrix in raster scan order.
++ * @matrix_8x8: 8x8 matrix in raster scan order.
++ */
++struct v4l2_ctrl_avs2_weight_quant {
++	__u8	matrix_4x4[16];
++	__u8	matrix_8x8[64];
++};
++
++#define V4L2_AVS2_ALF_FLAG_LUMA_ENABLE			0x01
++#define V4L2_AVS2_ALF_FLAG_CB_ENABLE			0x02
++#define V4L2_AVS2_ALF_FLAG_CR_ENABLE			0x04
++
++#define V4L2_AVS2_ALF_MAX_LUMA_FILTERS			16
++#define V4L2_AVS2_ALF_NUM_COEFFS			9
++
++#define V4L2_CID_STATELESS_AVS2_ALF		(V4L2_CID_CODEC_STATELESS_BASE + 903)
++/**
++ * struct v4l2_ctrl_avs2_alf - AVS2 adaptive loop filter parameters
++ *
++ * The alf_parameter_set() of the picture header, GB/T 33475.2 section
++ * 7.1.8. Only used when the sequence enables the adaptive loop filter.
++ *
++ * @luma_coeff: alf_coeff_luma[i][j] of the luma filters, as coded.
++ * @chroma_coeff: alf_coeff_chroma[0][j] (Cb) and alf_coeff_chroma[1][j]
++ *	(Cr), as coded.
++ * @luma_region_filter: luma filter index used by each of the 16 regions,
++ *	derived from alf_region_distance[].
++ * @flags: see V4L2_AVS2_ALF_FLAG_{}, picture_alf_enable_flag[0..2].
++ * @num_luma_filters: alf_filter_num_minus1 + 1.
++ * @reserved: padding field. Should be zeroed by applications.
++ */
++struct v4l2_ctrl_avs2_alf {
++	__s16	luma_coeff[V4L2_AVS2_ALF_MAX_LUMA_FILTERS][V4L2_AVS2_ALF_NUM_COEFFS];
++	__s16	chroma_coeff[2][V4L2_AVS2_ALF_NUM_COEFFS];
++	__u8	luma_region_filter[V4L2_AVS2_ALF_MAX_LUMA_FILTERS];
++	__u8	flags;
++	__u8	num_luma_filters;
++	__u8	reserved[6];
++};
++
++#endif /* V4L2_CID_STATELESS_AVS2_SEQUENCE */
++
++#endif /* AVCODEC_V4L2_STATELESS_AVS2_H */
+diff --git a/libavcodec/v4l2_request_avs2.c b/libavcodec/v4l2_request_avs2.c
+new file mode 100644
+index 0000000000..54d66509e7
+--- /dev/null
++++ b/libavcodec/v4l2_request_avs2.c
+@@ -0,0 +1,291 @@
++/*
++ * V4L2 Request API AVS2 hwaccel
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++#include "config.h"
++
++#include "avs2dec.h"
++#include "hwaccel_internal.h"
++#include "hwconfig.h"
++#include "internal.h"
++#include "v4l2_request.h"
++#include "v4l2-stateless-avs2.h"
++
++typedef struct V4L2RequestControlsAVS2 {
++    V4L2RequestPictureContext pic;
++    struct v4l2_ctrl_avs2_sequence sequence;
++    struct v4l2_ctrl_avs2_picture picture;
++    struct v4l2_ctrl_avs2_weight_quant weight_quant;
++    struct v4l2_ctrl_avs2_alf alf;
++} V4L2RequestControlsAVS2;
++
++static void fill_sequence(struct v4l2_ctrl_avs2_sequence *ctrl,
++                          const AVS2SequenceHeader *seq)
++{
++    *ctrl = (struct v4l2_ctrl_avs2_sequence) {
++        .horizontal_size       = seq->width,
++        .vertical_size         = seq->height,
++        .profile_id            = seq->profile_id,
++        .level_id              = seq->level_id,
++        .chroma_format         = seq->chroma_format,
++        .sample_precision      = seq->sample_precision,
++        .encoding_precision    = seq->encoding_precision,
++        .lcu_size              = seq->lcu_size,
++        .picture_reorder_delay = seq->picture_reorder_delay,
++    };
++
++    if (seq->progressive_sequence)
++        ctrl->flags |= V4L2_AVS2_SEQUENCE_FLAG_PROGRESSIVE_SEQUENCE;
++    if (seq->field_coded_sequence)
++        ctrl->flags |= V4L2_AVS2_SEQUENCE_FLAG_FIELD_CODED_SEQUENCE;
++    if (seq->low_delay)
++        ctrl->flags |= V4L2_AVS2_SEQUENCE_FLAG_LOW_DELAY;
++    if (seq->temporal_id_enable)
++        ctrl->flags |= V4L2_AVS2_SEQUENCE_FLAG_TEMPORAL_ID_ENABLE;
++    if (seq->weight_quant_enable)
++        ctrl->flags |= V4L2_AVS2_SEQUENCE_FLAG_WEIGHT_QUANT_ENABLE;
++    if (seq->background_picture_enable)
++        ctrl->flags |= V4L2_AVS2_SEQUENCE_FLAG_BACKGROUND_PICTURE_ENABLE;
++    if (seq->mhp_skip_enable)
++        ctrl->flags |= V4L2_AVS2_SEQUENCE_FLAG_MHP_SKIP_ENABLE;
++    if (seq->dhp_enable)
++        ctrl->flags |= V4L2_AVS2_SEQUENCE_FLAG_DHP_ENABLE;
++    if (seq->wsm_enable)
++        ctrl->flags |= V4L2_AVS2_SEQUENCE_FLAG_WSM_ENABLE;
++    if (seq->amp_enable)
++        ctrl->flags |= V4L2_AVS2_SEQUENCE_FLAG_AMP_ENABLE;
++    if (seq->nsqt_enable)
++        ctrl->flags |= V4L2_AVS2_SEQUENCE_FLAG_NSQT_ENABLE;
++    if (seq->nsip_enable)
++        ctrl->flags |= V4L2_AVS2_SEQUENCE_FLAG_NSIP_ENABLE;
++    if (seq->secondary_transform_enable)
++        ctrl->flags |= V4L2_AVS2_SEQUENCE_FLAG_SECONDARY_TRANSFORM_ENABLE;
++    if (seq->sao_enable)
++        ctrl->flags |= V4L2_AVS2_SEQUENCE_FLAG_SAO_ENABLE;
++    if (seq->alf_enable)
++        ctrl->flags |= V4L2_AVS2_SEQUENCE_FLAG_ALF_ENABLE;
++    if (seq->pmvr_enable)
++        ctrl->flags |= V4L2_AVS2_SEQUENCE_FLAG_PMVR_ENABLE;
++    if (seq->cross_slice_loopfilter_enable)
++        ctrl->flags |= V4L2_AVS2_SEQUENCE_FLAG_CROSS_SLICE_LOOPFILTER_ENABLE;
++    if (seq->bcbr_enable)
++        ctrl->flags |= V4L2_AVS2_SEQUENCE_FLAG_BCBR_ENABLE;
++}
++
++static void fill_picture(struct v4l2_ctrl_avs2_picture *ctrl,
++                         const AVS2DecContext *s)
++{
++    const AVS2PictureHeader *pic = &s->pic;
++    const AVS2Frame *cur = s->cur;
++
++    *ctrl = (struct v4l2_ctrl_avs2_picture) {
++        .data_offset                 = s->data_offset,
++        .poc                         = cur->poc,
++        .picture_type                = pic->picture_type,
++        .num_ref_pics                = s->num_refs,
++        .decode_order_index          = pic->doi,
++        .temporal_id                 = pic->temporal_id,
++        .picture_output_delay        = pic->output_delay,
++        .picture_qp                  = pic->picture_qp,
++        .alpha_c_offset              = pic->alpha_c_offset,
++        .beta_offset                 = pic->beta_offset,
++        .chroma_quant_param_delta_cb = pic->chroma_quant_param_delta_cb,
++        .chroma_quant_param_delta_cr = pic->chroma_quant_param_delta_cr,
++    };
++
++    if (pic->progressive_frame)
++        ctrl->flags |= V4L2_AVS2_PICTURE_FLAG_PROGRESSIVE_FRAME;
++    if (pic->picture_structure)
++        ctrl->flags |= V4L2_AVS2_PICTURE_FLAG_PICTURE_STRUCTURE;
++    if (pic->top_field_first)
++        ctrl->flags |= V4L2_AVS2_PICTURE_FLAG_TOP_FIELD_FIRST;
++    if (pic->repeat_first_field)
++        ctrl->flags |= V4L2_AVS2_PICTURE_FLAG_REPEAT_FIRST_FIELD;
++    if (pic->is_top_field)
++        ctrl->flags |= V4L2_AVS2_PICTURE_FLAG_IS_TOP_FIELD;
++    if (pic->fixed_picture_qp)
++        ctrl->flags |= V4L2_AVS2_PICTURE_FLAG_FIXED_PICTURE_QP;
++    if (pic->loop_filter_disable)
++        ctrl->flags |= V4L2_AVS2_PICTURE_FLAG_LOOP_FILTER_DISABLE;
++    if (pic->rcs.refered_by_others)
++        ctrl->flags |= V4L2_AVS2_PICTURE_FLAG_REFERED_BY_OTHERS;
++    if (pic->background_picture)
++        ctrl->flags |= V4L2_AVS2_PICTURE_FLAG_BACKGROUND_PICTURE;
++    if (pic->background_output)
++        ctrl->flags |= V4L2_AVS2_PICTURE_FLAG_BACKGROUND_PICTURE_OUTPUT;
++    if (pic->background_pred)
++        ctrl->flags |= V4L2_AVS2_PICTURE_FLAG_BACKGROUND_PRED;
++    if (pic->background_reference)
++        ctrl->flags |= V4L2_AVS2_PICTURE_FLAG_BACKGROUND_REFERENCE;
++    if (pic->random_access_decodable)
++        ctrl->flags |= V4L2_AVS2_PICTURE_FLAG_RANDOM_ACCESS_DECODABLE;
++    if (pic->weight_quant_enable)
++        ctrl->flags |= V4L2_AVS2_PICTURE_FLAG_WEIGHT_QUANT_ENABLE;
++
++    for (int i = 0; i < s->num_refs; i++) {
++        const AVS2Frame *ref = s->refs[i];
++        struct v4l2_avs2_ref_pic *r = &ctrl->ref_pics[i];
++
++        r->timestamp    = ff_v4l2_request_get_capture_timestamp(ref->f);
++        r->poc          = ref->poc;
++        r->picture_type = ref->picture_type;
++        r->num_ref_pics = ref->num_refs;
++        for (int j = 0; j < ref->num_refs; j++)
++            r->ref_poc[j] = ref->ref_poc[j];
++        if (ref->background && ref == s->background)
++            r->flags |= V4L2_AVS2_REF_PIC_FLAG_BACKGROUND;
++    }
++}
++
++static void fill_alf(struct v4l2_ctrl_avs2_alf *ctrl, const AVS2ALFParams *alf)
++{
++    memset(ctrl, 0, sizeof(*ctrl));
++
++    if (alf->enable[0])
++        ctrl->flags |= V4L2_AVS2_ALF_FLAG_LUMA_ENABLE;
++    if (alf->enable[1])
++        ctrl->flags |= V4L2_AVS2_ALF_FLAG_CB_ENABLE;
++    if (alf->enable[2])
++        ctrl->flags |= V4L2_AVS2_ALF_FLAG_CR_ENABLE;
++
++    ctrl->num_luma_filters = alf->num_luma_filters;
++    for (int f = 0; f < AVS2_ALF_MAX_FILTERS; f++)
++        for (int i = 0; i < AVS2_ALF_NUM_COEFFS; i++)
++            ctrl->luma_coeff[f][i] = alf->luma_coeff[f][i];
++    for (int c = 0; c < 2; c++)
++        for (int i = 0; i < AVS2_ALF_NUM_COEFFS; i++)
++            ctrl->chroma_coeff[c][i] = alf->chroma_coeff[c][i];
++    memcpy(ctrl->luma_region_filter, alf->region_filter,
++           sizeof(ctrl->luma_region_filter));
++}
++
++static int v4l2_request_avs2_start_frame(AVCodecContext *avctx,
++                                         av_unused const AVBufferRef *buf_ref,
++                                         const uint8_t *buffer,
++                                         uint32_t size)
++{
++    const AVS2DecContext *s = avctx->priv_data;
++    V4L2RequestControlsAVS2 *controls = s->cur->hwaccel_picture_private;
++    int ret;
++
++    ret = ff_v4l2_request_start_frame(avctx, &controls->pic, s->cur->f);
++    if (ret)
++        return ret;
++
++    fill_sequence(&controls->sequence, &s->seq);
++    fill_picture(&controls->picture, s);
++    memcpy(controls->weight_quant.matrix_4x4, s->pic.wqm[0],
++           sizeof(controls->weight_quant.matrix_4x4));
++    memcpy(controls->weight_quant.matrix_8x8, s->pic.wqm[1],
++           sizeof(controls->weight_quant.matrix_8x8));
++    fill_alf(&controls->alf, &s->pic.alf);
++
++    /* The picture header and all its slices, with their start codes. */
++    return ff_v4l2_request_append_output(avctx, &controls->pic, buffer, size);
++}
++
++static int v4l2_request_avs2_decode_slice(AVCodecContext *avctx,
++                                          av_unused const uint8_t *buffer,
++                                          av_unused uint32_t size)
++{
++    /* The whole picture is appended by start_frame(). */
++    return 0;
++}
++
++static int v4l2_request_avs2_end_frame(AVCodecContext *avctx)
++{
++    const AVS2DecContext *s = avctx->priv_data;
++    V4L2RequestControlsAVS2 *controls = s->cur->hwaccel_picture_private;
++    struct v4l2_ext_control control[] = {
++        {
++            .id   = V4L2_CID_STATELESS_AVS2_SEQUENCE,
++            .ptr  = &controls->sequence,
++            .size = sizeof(controls->sequence),
++        },
++        {
++            .id   = V4L2_CID_STATELESS_AVS2_PICTURE,
++            .ptr  = &controls->picture,
++            .size = sizeof(controls->picture),
++        },
++        {
++            .id   = V4L2_CID_STATELESS_AVS2_WEIGHT_QUANT,
++            .ptr  = &controls->weight_quant,
++            .size = sizeof(controls->weight_quant),
++        },
++        {
++            .id   = V4L2_CID_STATELESS_AVS2_ALF,
++            .ptr  = &controls->alf,
++            .size = sizeof(controls->alf),
++        },
++    };
++
++    return ff_v4l2_request_decode_frame(avctx, &controls->pic,
++                                        control, FF_ARRAY_ELEMS(control));
++}
++
++static int v4l2_request_avs2_init(AVCodecContext *avctx)
++{
++    const AVS2DecContext *s = avctx->priv_data;
++    struct v4l2_ctrl_avs2_sequence sequence;
++    struct v4l2_ext_control control[] = {
++        {
++            .id   = V4L2_CID_STATELESS_AVS2_SEQUENCE,
++            .ptr  = &sequence,
++            .size = sizeof(sequence),
++        },
++    };
++
++    if (!s->seq_valid)
++        return AVERROR(EINVAL);
++
++    /*
++     * The sequence sets the bit depth, with it the CAPTURE formats, and lets
++     * the driver refuse the size or the coding tools before decoding.
++     */
++    fill_sequence(&sequence, &s->seq);
++
++    return ff_v4l2_request_init(avctx, control, FF_ARRAY_ELEMS(control), NULL);
++}
++
++static int v4l2_request_avs2_frame_params(AVCodecContext *avctx,
++                                          AVBufferRef *hw_frames_ctx)
++{
++    const AVS2DecContext *s = avctx->priv_data;
++    uint8_t bit_depth = s->seq_valid ? 6 + 2 * s->seq.sample_precision : 0;
++
++    return ff_v4l2_request_frame_params(avctx, hw_frames_ctx,
++                                        V4L2_PIX_FMT_AVS2_FRAME, bit_depth);
++}
++
++const FFHWAccel ff_avs2_v4l2request_hwaccel = {
++    .p.name             = "avs2_v4l2request",
++    .p.type             = AVMEDIA_TYPE_VIDEO,
++    .p.id               = AV_CODEC_ID_AVS2,
++    .p.pix_fmt          = AV_PIX_FMT_DRM_PRIME,
++    .start_frame        = v4l2_request_avs2_start_frame,
++    .decode_slice       = v4l2_request_avs2_decode_slice,
++    .end_frame          = v4l2_request_avs2_end_frame,
++    .flush              = ff_v4l2_request_flush,
++    .frame_priv_data_size = sizeof(V4L2RequestControlsAVS2),
++    .init               = v4l2_request_avs2_init,
++    .uninit             = ff_v4l2_request_uninit,
++    .priv_data_size     = sizeof(V4L2RequestContext),
++    .frame_params       = v4l2_request_avs2_frame_params,
++    .caps_internal      = HWACCEL_CAP_ASYNC_SAFE,
++};

@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 11:17:16 +0000
+Subject: [PATCH 311/311] fate/source: list the local V4L2 stateless uAPI
+ headers
+
+The VC-1, MPEG-4 Part 2/H.263, AVS and AVS2 V4L2 Request hwaccels carry
+copies of their kernel uAPI definitions (libavcodec/v4l2-stateless-*.h),
+used until linux/v4l2-controls.h and linux/videodev2.h provide them. They
+keep the kernel uAPI SPDX licence line rather than an FFmpeg licence
+header, so add them to the list of files without a standard header.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ tests/ref/fate/source | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/tests/ref/fate/source b/tests/ref/fate/source
+index 78d3a2e0fa..3129afda09 100644
+--- a/tests/ref/fate/source
++++ b/tests/ref/fate/source
+@@ -4,6 +4,10 @@ libavcodec/interplayacm.c
+ libavcodec/log2_tab.c
+ libavcodec/reverse.c
+ libavcodec/riscv/cpu_common.c
++libavcodec/v4l2-stateless-avs.h
++libavcodec/v4l2-stateless-avs2.h
++libavcodec/v4l2-stateless-mpeg4.h
++libavcodec/v4l2-stateless-vc1.h
+ libavdevice/file_open.c
+ libavdevice/reverse.c
+ libavdevice/riscv/cpu_common.c

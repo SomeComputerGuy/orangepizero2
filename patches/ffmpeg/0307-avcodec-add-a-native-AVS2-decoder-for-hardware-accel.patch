@@ -1,0 +1,1589 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 09:27:14 +0000
+Subject: [PATCH 307/311] avcodec: add a native AVS2 decoder for hardware
+ acceleration
+
+Add an AVS2 (GB/T 33475.2, IEEE 1857.4) decoder which parses the
+sequence and picture headers in software and leaves the slice decoding
+to a hardware accelerator, like the native AV1 decoder: there is no
+software fallback, and it fails with ENOSYS when no hwaccel is
+available. It is registered after libdavs2 so that a build with the
+software decoder keeps preferring it.
+
+The decoder removes the pseudo start code prevention bits of the
+headers, parses the sequence header (reference configuration sets,
+weighting quantization matrices) and the intra and inter picture
+headers (RCS selection, picture structure, loop filter and chroma
+quantizer offsets, the three weighting quantization data modes, the
+adaptive loop filter parameters with the region to filter map), and
+resolves the weighting quantization matrices that apply to each
+picture. The default matrices and parameter sets are the normative
+defaults of the standard.
+
+It owns the decoded picture buffer: decode_order_index unwrapping, POC
+derivation, reference lookup by DOI in RCS order, the background
+picture (G, GB and S pictures), marking and removal including the
+|delta POC| >= 128 rule, and output bumping in POC order driven by
+picture_reorder_delay. Pictures whose references are missing before the
+first intra picture (open GOP) are skipped, later ones are concealed
+with the latest reference. A sequence header which changes the
+picture format waits until the pictures of the old sequence have been
+returned, then re-runs get_format().
+
+Only progressive, frame coded 4:2:0 sequences are accepted. The
+decoder exposes its context to the hwaccels: the picture header, the
+resolved reference list with the per-picture reference POC lists the
+hardware needs for temporal motion vector prediction, and the coded
+picture (header and slices, with start codes) in the packet.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ configure              |   1 +
+ libavcodec/Makefile    |   1 +
+ libavcodec/allcodecs.c |   2 +
+ libavcodec/avs2_ps.c   | 506 ++++++++++++++++++++++++++++
+ libavcodec/avs2_ps.h   | 154 +++++++++
+ libavcodec/avs2dec.c   | 725 +++++++++++++++++++++++++++++++++++++++++
+ libavcodec/avs2dec.h   |  88 +++++
+ 7 files changed, 1477 insertions(+)
+ create mode 100644 libavcodec/avs2_ps.c
+ create mode 100644 libavcodec/avs2_ps.h
+ create mode 100644 libavcodec/avs2dec.c
+ create mode 100644 libavcodec/avs2dec.h
+
+diff --git a/configure b/configure
+index 7ade7b5f21..12f8d4d194 100755
+--- a/configure
++++ b/configure
+@@ -3106,6 +3106,7 @@ atrac1_decoder_select="sinewin"
+ atrac3p_decoder_select="sinewin"
+ atrac3pal_decoder_select="sinewin"
+ av1_decoder_select="atsc_a53 cbs_av1 dovi_rpudec"
++avs2_decoder_select="avs2_parser"
+ bink_decoder_select="blockdsp hpeldsp"
+ binkaudio_dct_decoder_select="wma_freqs"
+ binkaudio_rdft_decoder_select="wma_freqs"
+diff --git a/libavcodec/Makefile b/libavcodec/Makefile
+index 36462eebe0..3b622edf7f 100644
+--- a/libavcodec/Makefile
++++ b/libavcodec/Makefile
+@@ -274,6 +274,7 @@ OBJS-$(CONFIG_ATRAC9_DECODER)          += atrac9dec.o
+ OBJS-$(CONFIG_AURA_DECODER)            += cyuv.o
+ OBJS-$(CONFIG_AURA2_DECODER)           += aura.o
+ OBJS-$(CONFIG_AV1_DECODER)             += av1dec.o av1_parse.o
++OBJS-$(CONFIG_AVS2_DECODER)            += avs2dec.o avs2_ps.o
+ OBJS-$(CONFIG_AV1_CUVID_DECODER)       += cuviddec.o
+ OBJS-$(CONFIG_AV1_D3D12VA_ENCODER)     += d3d12va_encode_av1.o av1_levels.o
+ OBJS-$(CONFIG_AV1_MEDIACODEC_DECODER)  += mediacodecdec.o
+diff --git a/libavcodec/allcodecs.c b/libavcodec/allcodecs.c
+index 695214f192..b415edcaa6 100644
+--- a/libavcodec/allcodecs.c
++++ b/libavcodec/allcodecs.c
+@@ -789,6 +789,8 @@ extern const FFCodec ff_libcodec2_encoder;
+ extern const FFCodec ff_libcodec2_decoder;
+ extern const FFCodec ff_libdav1d_decoder;
+ extern const FFCodec ff_libdavs2_decoder;
++/* hwaccel hooks only, so prefer external decoders */
++extern const FFCodec ff_avs2_decoder;
+ extern const FFCodec ff_libfdk_aac_encoder;
+ extern const FFCodec ff_libfdk_aac_decoder;
+ extern const FFCodec ff_libgsm_encoder;
+diff --git a/libavcodec/avs2_ps.c b/libavcodec/avs2_ps.c
+new file mode 100644
+index 0000000000..a46903d0ac
+--- /dev/null
++++ b/libavcodec/avs2_ps.c
+@@ -0,0 +1,506 @@
++/*
++ * AVS2 sequence and picture header syntax
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++#include <string.h>
++
++#include "libavutil/error.h"
++#include "avs2.h"
++#include "avs2_ps.h"
++#include "get_bits.h"
++#include "golomb.h"
++
++/*
++ * Weighting quantization defaults, GB/T 33475.2 section 9.2.4: the parameter
++ * sets of weighting_quant_param_index (0 = detailed, 1 = undetailed), the
++ * default 4x4 and 8x8 matrices and the four weighting_quant_model position
++ * maps. The 8x8 default entry [3][7] is 28 in the AVS2 reference software
++ * (davs2) and in the Allwinner decoder library this decoder was verified
++ * against; the Amlogic driver has 112 there.
++ */
++static const uint8_t wq_param_default[2][6] = {
++    { 64, 49, 53, 58, 58,  64 },
++    { 67, 71, 71, 80, 80, 106 },
++};
++
++static const uint8_t wq_default_4x4[16] = {
++    64, 64, 64, 68,
++    64, 64, 68, 72,
++    64, 68, 76, 80,
++    72, 76, 84, 96,
++};
++
++static const uint8_t wq_default_8x8[64] = {
++     64,  64,  64,  64,  68,  68,  72,  76,
++     64,  64,  64,  68,  72,  76,  84,  92,
++     64,  64,  68,  72,  76,  80,  88, 100,
++     64,  68,  72,  80,  84,  92, 100,  28,
++     68,  72,  80,  84,  92, 104, 112, 128,
++     76,  80,  84,  92, 104, 116, 132, 152,
++     96, 100, 104, 116, 124, 140, 164, 188,
++    104, 108, 116, 128, 152, 172, 192, 216,
++};
++
++static const uint8_t wq_model_8x8[4][64] = {
++    {
++        0, 0, 0, 4, 4, 4, 5, 5,
++        0, 0, 3, 3, 3, 3, 5, 5,
++        0, 3, 2, 2, 1, 1, 5, 5,
++        4, 3, 2, 2, 1, 5, 5, 5,
++        4, 3, 1, 1, 5, 5, 5, 5,
++        4, 3, 1, 5, 5, 5, 5, 5,
++        5, 5, 5, 5, 5, 5, 5, 5,
++        5, 5, 5, 5, 5, 5, 5, 5,
++    }, {
++        0, 0, 0, 4, 4, 4, 5, 5,
++        0, 0, 4, 4, 4, 4, 5, 5,
++        0, 3, 2, 2, 2, 1, 5, 5,
++        3, 3, 2, 2, 1, 5, 5, 5,
++        3, 3, 2, 1, 5, 5, 5, 5,
++        3, 3, 1, 5, 5, 5, 5, 5,
++        5, 5, 5, 5, 5, 5, 5, 5,
++        5, 5, 5, 5, 5, 5, 5, 5,
++    }, {
++        0, 0, 0, 4, 4, 3, 5, 5,
++        0, 0, 4, 4, 3, 2, 5, 5,
++        0, 4, 4, 3, 2, 1, 5, 5,
++        4, 4, 3, 2, 1, 5, 5, 5,
++        4, 3, 2, 1, 5, 5, 5, 5,
++        3, 2, 1, 5, 5, 5, 5, 5,
++        5, 5, 5, 5, 5, 5, 5, 5,
++        5, 5, 5, 5, 5, 5, 5, 5,
++    }, {
++        0, 0, 0, 3, 2, 1, 5, 5,
++        0, 0, 4, 3, 2, 1, 5, 5,
++        0, 4, 4, 3, 2, 1, 5, 5,
++        3, 3, 3, 3, 2, 5, 5, 5,
++        2, 2, 2, 2, 5, 5, 5, 5,
++        1, 1, 1, 5, 5, 5, 5, 5,
++        5, 5, 5, 5, 5, 5, 5, 5,
++        5, 5, 5, 5, 5, 5, 5, 5,
++    },
++};
++
++static const uint8_t wq_model_4x4[4][16] = {
++    { 0, 4, 3, 5, 4, 2, 1, 5, 3, 1, 1, 5, 5, 5, 5, 5 },
++    { 0, 4, 4, 5, 3, 2, 2, 5, 3, 2, 1, 5, 5, 5, 5, 5 },
++    { 0, 4, 3, 5, 4, 3, 2, 5, 3, 2, 1, 5, 5, 5, 5, 5 },
++    { 0, 3, 1, 5, 3, 4, 2, 5, 1, 2, 2, 5, 5, 5, 5, 5 },
++};
++
++unsigned ff_avs2_remove_pseudo_codes(uint8_t *dst, const uint8_t *src,
++                                     unsigned len)
++{
++    unsigned zeros = 0, out = 0;
++
++    memset(dst, 0, len + AV_INPUT_BUFFER_PADDING_SIZE);
++
++    /*
++     * An encoder inserts the two bits '10' before any byte that would
++     * complete a 0x000000, 0x000001 or 0x000002 pattern, so the byte after
++     * two zero bytes reads 0x02 and its two low bits are not data.
++     */
++    for (unsigned i = 0; i < len; i++) {
++        unsigned bits = 8, v = src[i];
++
++        if (zeros >= 2 && v == 0x02) {
++            bits  = 6;
++            v   >>= 2;
++            zeros = 0;
++        } else {
++            zeros = v ? 0 : zeros + 1;
++        }
++
++        while (bits--) {
++            if (v & (1u << bits))
++                dst[out >> 3] |= 0x80 >> (out & 7);
++            out++;
++        }
++    }
++
++    return out;
++}
++
++static int parse_rcs(GetBitContext *gb, AVS2RCS *rcs)
++{
++    rcs->refered_by_others = get_bits1(gb);
++    rcs->num_ref = get_bits(gb, 3);
++    if (rcs->num_ref > AVS2_MAX_REFS)
++        return AVERROR_INVALIDDATA;
++    for (int i = 0; i < rcs->num_ref; i++)
++        rcs->ref_delta[i] = get_bits(gb, 6);
++    rcs->num_removed = get_bits(gb, 3);
++    if (rcs->num_removed > AVS2_MAX_REFS)
++        return AVERROR_INVALIDDATA;
++    for (int i = 0; i < rcs->num_removed; i++)
++        rcs->removed_delta[i] = get_bits(gb, 6);
++    skip_bits1(gb); /* marker_bit */
++
++    return 0;
++}
++
++static int parse_wq_matrix(GetBitContext *gb, uint8_t wqm[2][64])
++{
++    for (int i = 0; i < 16; i++) {
++        int v = get_ue_golomb(gb);
++        if (v < 0 || v > 255)
++            return AVERROR_INVALIDDATA;
++        wqm[0][i] = v;
++    }
++    for (int i = 0; i < 64; i++) {
++        int v = get_ue_golomb(gb);
++        if (v < 0 || v > 255)
++            return AVERROR_INVALIDDATA;
++        wqm[1][i] = v;
++    }
++
++    return 0;
++}
++
++int ff_avs2_parse_sequence_header(AVS2SequenceHeader *seq, const uint8_t *buf,
++                                  unsigned bits, void *logctx)
++{
++    GetBitContext gbc, *gb = &gbc;
++    int ret;
++
++    ret = init_get_bits(gb, buf, bits);
++    if (ret < 0)
++        return ret;
++
++    memset(seq, 0, sizeof(*seq));
++
++    seq->profile_id           = get_bits(gb, 8);
++    seq->level_id             = get_bits(gb, 8);
++    seq->progressive_sequence = get_bits1(gb);
++    seq->field_coded_sequence = get_bits1(gb);
++    seq->width                = get_bits(gb, 14);
++    seq->height               = get_bits(gb, 14);
++    seq->chroma_format        = get_bits(gb, 2);
++    seq->sample_precision     = get_bits(gb, 3);
++    seq->encoding_precision   = seq->profile_id == AVS2_PROFILE_MAIN10 ?
++                                get_bits(gb, 3) : 1;
++    seq->aspect_ratio         = get_bits(gb, 4);
++    seq->frame_rate_code      = get_bits(gb, 4);
++    skip_bits(gb, 18);  /* bit_rate_lower */
++    skip_bits1(gb);     /* marker_bit */
++    skip_bits(gb, 12);  /* bit_rate_upper */
++    seq->low_delay            = get_bits1(gb);
++    skip_bits1(gb);     /* marker_bit */
++    seq->temporal_id_enable   = get_bits1(gb);
++    skip_bits(gb, 18);  /* bbv_buffer_size */
++    seq->lcu_size             = get_bits(gb, 3);
++
++    seq->weight_quant_enable = get_bits1(gb);
++    if (seq->weight_quant_enable) {
++        if (get_bits1(gb)) {    /* load_seq_weight_quant_data_flag */
++            ret = parse_wq_matrix(gb, seq->wqm);
++            if (ret < 0)
++                return ret;
++        } else {
++            memcpy(seq->wqm[0], wq_default_4x4, 16);
++            memcpy(seq->wqm[1], wq_default_8x8, 64);
++        }
++    }
++
++    seq->background_picture_enable  = !get_bits1(gb);
++    seq->mhp_skip_enable            = get_bits1(gb);
++    seq->dhp_enable                 = get_bits1(gb);
++    seq->wsm_enable                 = get_bits1(gb);
++    seq->amp_enable                 = get_bits1(gb);
++    seq->nsqt_enable                = get_bits1(gb);
++    seq->nsip_enable                = get_bits1(gb);
++    seq->secondary_transform_enable = get_bits1(gb);
++    seq->sao_enable                 = get_bits1(gb);
++    seq->alf_enable                 = get_bits1(gb);
++    seq->pmvr_enable                = get_bits1(gb);
++    skip_bits1(gb);     /* marker_bit */
++
++    seq->num_rcs = get_bits(gb, 6);
++    if (seq->num_rcs > AVS2_MAX_RCS) {
++        av_log(logctx, AV_LOG_ERROR, "Too many reference configuration sets: %d\n",
++               seq->num_rcs);
++        return AVERROR_INVALIDDATA;
++    }
++    for (int i = 0; i < seq->num_rcs; i++) {
++        ret = parse_rcs(gb, &seq->rcs[i]);
++        if (ret < 0)
++            return ret;
++    }
++
++    seq->picture_reorder_delay = seq->low_delay ? 0 : get_bits(gb, 5);
++    seq->cross_slice_loopfilter_enable = get_bits1(gb);
++    /* Only the profiles 0x21 and 0x23 carry bcbr_enable after the reserved bits. */
++    if ((seq->profile_id | 2) == 0x23 && seq->background_picture_enable)
++        seq->bcbr_enable = get_bits1(gb);
++
++    if (get_bits_left(gb) < 0)
++        return AVERROR_INVALIDDATA;
++
++    if (seq->lcu_size < 4 || seq->lcu_size > 6 ||
++        seq->sample_precision < 1 || seq->sample_precision > 2 ||
++        seq->encoding_precision < 1 || seq->encoding_precision > 2 ||
++        seq->width < 16 || seq->height < 16) {
++        av_log(logctx, AV_LOG_ERROR, "Invalid sequence header\n");
++        return AVERROR_INVALIDDATA;
++    }
++
++    return 0;
++}
++
++static int parse_alf(GetBitContext *gb, AVS2ALFParams *alf)
++{
++    uint8_t pattern[16] = { 0 };
++    unsigned pre = 0;
++
++    memset(alf, 0, sizeof(*alf));
++    for (int i = 0; i < 3; i++)
++        alf->enable[i] = get_bits1(gb);
++
++    if (alf->enable[0]) {
++        int n = get_ue_golomb(gb) + 1;
++
++        if (n < 1 || n > AVS2_ALF_MAX_FILTERS)
++            return AVERROR_INVALIDDATA;
++        alf->num_luma_filters = n;
++
++        for (int f = 0; f < n; f++) {
++            if (f > 0) {
++                /* alf_region_distance is not coded for 16 filters */
++                unsigned dist = n == AVS2_ALF_MAX_FILTERS ? 1 : get_ue_golomb(gb);
++
++                pre += dist;
++                if (pre > 15)
++                    return AVERROR_INVALIDDATA;
++                pattern[pre] = 1;
++            }
++            for (int i = 0; i < AVS2_ALF_NUM_COEFFS; i++)
++                alf->luma_coeff[f][i] = get_se_golomb(gb);
++        }
++
++        /* region i uses the filter of the last region with a new filter */
++        for (int i = 1; i < 16; i++)
++            alf->region_filter[i] = alf->region_filter[i - 1] +
++                                    (n > 1 && pattern[i]);
++    }
++
++    for (int c = 0; c < 2; c++)
++        if (alf->enable[1 + c])
++            for (int i = 0; i < AVS2_ALF_NUM_COEFFS; i++)
++                alf->chroma_coeff[c][i] = get_se_golomb(gb);
++
++    return 0;
++}
++
++static void resolve_wq(AVS2PictureHeader *pic, const AVS2SequenceHeader *seq,
++                       int data_index, int param_index, int model,
++                       const int delta[6], const uint8_t pic_wqm[2][64])
++{
++    int param[6];
++
++    if (!seq->weight_quant_enable || !pic->weight_quant_enable) {
++        memset(pic->wqm, 64, sizeof(pic->wqm));
++        return;
++    }
++
++    switch (data_index) {
++    case 0:
++        memcpy(pic->wqm, seq->wqm, sizeof(pic->wqm));
++        break;
++    case 1:
++        for (int i = 0; i < 6; i++) {
++            if (param_index == 0)
++                param[i] = wq_param_default[0][i];
++            else if (param_index == 1)
++                param[i] = delta[i] + wq_param_default[1][i];
++            else
++                param[i] = delta[i] + wq_param_default[0][i];
++            param[i] = av_clip_uint8(param[i]);
++        }
++        for (int i = 0; i < 64; i++)
++            pic->wqm[1][i] = param[wq_model_8x8[model][i]];
++        for (int i = 0; i < 16; i++)
++            pic->wqm[0][i] = param[wq_model_4x4[model][i]];
++        break;
++    default:
++        memcpy(pic->wqm, pic_wqm, sizeof(pic->wqm));
++        break;
++    }
++}
++
++/* The part of the picture header shared by intra and inter pictures. */
++static int parse_picture_tail(GetBitContext *gb, AVS2PictureHeader *pic,
++                              const AVS2SequenceHeader *seq)
++{
++    int data_index = 0, param_index = 0, model = 0;
++    int delta[6] = { 0 };
++    uint8_t pic_wqm[2][64] = { { 0 } };
++    int ret;
++
++    pic->loop_filter_disable = get_bits1(gb);
++    if (!pic->loop_filter_disable && get_bits1(gb)) { /* loop_filter_parameter_flag */
++        pic->alpha_c_offset = av_clip(get_se_golomb(gb), -8, 8);
++        pic->beta_offset    = av_clip(get_se_golomb(gb), -8, 8);
++    }
++    if (!get_bits1(gb)) {   /* chroma_quant_param_disable */
++        pic->chroma_quant_param_delta_cb = av_clip(get_se_golomb(gb), -16, 16);
++        pic->chroma_quant_param_delta_cr = av_clip(get_se_golomb(gb), -16, 16);
++    }
++
++    if (seq->weight_quant_enable) {
++        pic->weight_quant_enable = get_bits1(gb);
++        if (pic->weight_quant_enable) {
++            data_index = get_bits(gb, 2);
++            if (data_index == 1) {
++                skip_bits1(gb);     /* reserved */
++                param_index = get_bits(gb, 2);
++                model       = get_bits(gb, 2);
++                if (param_index == 1 || param_index == 2)
++                    for (int i = 0; i < 6; i++)
++                        delta[i] = get_se_golomb(gb);
++            } else if (data_index == 2) {
++                ret = parse_wq_matrix(gb, pic_wqm);
++                if (ret < 0)
++                    return ret;
++            }
++        }
++    }
++    resolve_wq(pic, seq, data_index, param_index, model, delta, pic_wqm);
++
++    if (seq->alf_enable) {
++        ret = parse_alf(gb, &pic->alf);
++        if (ret < 0)
++            return ret;
++    }
++
++    return 0;
++}
++
++static int parse_picture_rcs(GetBitContext *gb, AVS2PictureHeader *pic,
++                             const AVS2SequenceHeader *seq)
++{
++    if (get_bits1(gb)) {    /* reference_configuration_set_flag */
++        int idx = get_bits(gb, 5);
++
++        if (idx >= seq->num_rcs)
++            return AVERROR_INVALIDDATA;
++        pic->rcs = seq->rcs[idx];
++        return 0;
++    }
++
++    return parse_rcs(gb, &pic->rcs);
++}
++
++static void parse_picture_structure(GetBitContext *gb, AVS2PictureHeader *pic,
++                                    const AVS2SequenceHeader *seq)
++{
++    pic->progressive_frame  = get_bits1(gb);
++    pic->picture_structure  = pic->progressive_frame ? 1 : get_bits1(gb);
++    pic->top_field_first    = get_bits1(gb);
++    pic->repeat_first_field = get_bits1(gb);
++    if (seq->field_coded_sequence) {
++        pic->is_top_field = get_bits1(gb);
++        skip_bits1(gb);     /* reserved */
++    }
++    pic->fixed_picture_qp = get_bits1(gb);
++    pic->picture_qp       = get_bits(gb, 7);
++}
++
++int ff_avs2_parse_picture_header(AVS2PictureHeader *pic,
++                                 const AVS2SequenceHeader *seq, int intra,
++                                 const uint8_t *buf, unsigned bits,
++                                 void *logctx)
++{
++    GetBitContext gbc, *gb = &gbc;
++    int ret;
++
++    ret = init_get_bits(gb, buf, bits);
++    if (ret < 0)
++        return ret;
++
++    memset(pic, 0, sizeof(*pic));
++    pic->intra = intra;
++
++    skip_bits_long(gb, 32);     /* bbv_delay */
++
++    if (intra) {
++        pic->picture_type = AVS2_PIC_I;
++        if (get_bits1(gb))      /* time_code_flag */
++            skip_bits(gb, 24);  /* time_code */
++        if (seq->background_picture_enable) {
++            pic->background_picture = get_bits1(gb);
++            if (pic->background_picture)
++                pic->background_output = get_bits1(gb);
++        }
++    } else {
++        pic->picture_type = get_bits(gb, 2);
++        if (pic->picture_type == 0) {
++            av_log(logctx, AV_LOG_ERROR, "Invalid picture_coding_type\n");
++            return AVERROR_INVALIDDATA;
++        }
++        if (seq->background_picture_enable) {
++            if (pic->picture_type == AVS2_PIC_P)
++                pic->background_pred = get_bits1(gb);
++            if (pic->picture_type != AVS2_PIC_B && !pic->background_pred)
++                pic->background_reference = get_bits1(gb);
++        }
++    }
++
++    pic->doi = get_bits(gb, 8);
++    if (seq->temporal_id_enable)
++        pic->temporal_id = get_bits(gb, 3);
++
++    /* A background picture which is not output (GB) has no output delay. */
++    if (!seq->low_delay &&
++        !(pic->background_picture && !pic->background_output)) {
++        int delay = get_ue_golomb(gb);
++
++        if (delay < 0 || delay > 63)
++            return AVERROR_INVALIDDATA;
++        pic->output_delay         = delay;
++        pic->output_delay_present = 1;
++    }
++
++    ret = parse_picture_rcs(gb, pic, seq);
++    if (ret < 0) {
++        av_log(logctx, AV_LOG_ERROR, "Invalid reference configuration set\n");
++        return ret;
++    }
++
++    if (seq->low_delay)
++        get_ue_golomb_long(gb);     /* bbv_check_times */
++
++    parse_picture_structure(gb, pic, seq);
++
++    if (!intra) {
++        if (pic->picture_type != AVS2_PIC_B || !pic->picture_structure)
++            skip_bits1(gb);     /* reserved */
++        pic->random_access_decodable = get_bits1(gb);
++    }
++
++    ret = parse_picture_tail(gb, pic, seq);
++    if (ret < 0)
++        return ret;
++
++    if (get_bits_left(gb) < 0) {
++        av_log(logctx, AV_LOG_ERROR, "Truncated picture header\n");
++        return AVERROR_INVALIDDATA;
++    }
++
++    return 0;
++}
+diff --git a/libavcodec/avs2_ps.h b/libavcodec/avs2_ps.h
+new file mode 100644
+index 0000000000..5d6830045f
+--- /dev/null
++++ b/libavcodec/avs2_ps.h
+@@ -0,0 +1,154 @@
++/*
++ * AVS2 sequence and picture header syntax
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++#ifndef AVCODEC_AVS2_PS_H
++#define AVCODEC_AVS2_PS_H
++
++#include <stdint.h>
++
++#include "libavutil/log.h"
++
++#define AVS2_MAX_RCS         32
++#define AVS2_MAX_REFS        7
++#define AVS2_ALF_MAX_FILTERS 16
++#define AVS2_ALF_NUM_COEFFS  9
++
++enum AVS2PictureType {
++    AVS2_PIC_I = 0,
++    AVS2_PIC_P = 1,
++    AVS2_PIC_B = 2,
++    AVS2_PIC_F = 3,
++};
++
++/* reference_configuration_set(), GB/T 33475.2 section 7.1.2.3 */
++typedef struct AVS2RCS {
++    uint8_t refered_by_others;
++    uint8_t num_ref;
++    uint8_t ref_delta[AVS2_MAX_REFS];
++    uint8_t num_removed;
++    uint8_t removed_delta[AVS2_MAX_REFS];
++} AVS2RCS;
++
++/* sequence_header(), GB/T 33475.2 section 7.1.2.2 */
++typedef struct AVS2SequenceHeader {
++    uint8_t  profile_id;
++    uint8_t  level_id;
++    uint8_t  progressive_sequence;
++    uint8_t  field_coded_sequence;
++    uint16_t width;
++    uint16_t height;
++    uint8_t  chroma_format;
++    uint8_t  sample_precision;
++    uint8_t  encoding_precision;
++    uint8_t  aspect_ratio;
++    uint8_t  frame_rate_code;
++    uint8_t  low_delay;
++    uint8_t  temporal_id_enable;
++    uint8_t  lcu_size;
++    uint8_t  weight_quant_enable;
++    /* WeightQuantMatrix4x4 and 8x8 of the sequence, raster order */
++    uint8_t  wqm[2][64];
++    uint8_t  background_picture_enable;
++    uint8_t  mhp_skip_enable;
++    uint8_t  dhp_enable;
++    uint8_t  wsm_enable;
++    uint8_t  amp_enable;
++    uint8_t  nsqt_enable;
++    uint8_t  nsip_enable;
++    uint8_t  secondary_transform_enable;
++    uint8_t  sao_enable;
++    uint8_t  alf_enable;
++    uint8_t  pmvr_enable;
++    uint8_t  num_rcs;
++    AVS2RCS  rcs[AVS2_MAX_RCS];
++    uint8_t  picture_reorder_delay;
++    uint8_t  cross_slice_loopfilter_enable;
++    uint8_t  bcbr_enable;
++} AVS2SequenceHeader;
++
++/* alf_parameter_set(), GB/T 33475.2 section 7.1.8 */
++typedef struct AVS2ALFParams {
++    uint8_t enable[3];
++    uint8_t num_luma_filters;
++    int16_t luma_coeff[AVS2_ALF_MAX_FILTERS][AVS2_ALF_NUM_COEFFS];
++    int16_t chroma_coeff[2][AVS2_ALF_NUM_COEFFS];
++    /* filter index of each of the 16 regions, from alf_region_distance[] */
++    uint8_t region_filter[16];
++} AVS2ALFParams;
++
++/* intra_picture_header() and inter_picture_header(), sections 7.1.3.1-2 */
++typedef struct AVS2PictureHeader {
++    uint8_t  intra;
++    uint8_t  picture_type;          /* enum AVS2PictureType */
++    uint8_t  background_picture;    /* G or GB picture */
++    uint8_t  background_output;     /* G: output, GB: reference only */
++    uint8_t  background_pred;       /* S picture */
++    uint8_t  background_reference;  /* P or F with the background as a ref */
++    uint8_t  doi;                   /* decode_order_index */
++    uint8_t  temporal_id;
++    uint8_t  output_delay_present;
++    uint8_t  output_delay;          /* picture_output_delay */
++    AVS2RCS  rcs;
++    uint8_t  progressive_frame;
++    uint8_t  picture_structure;
++    uint8_t  top_field_first;
++    uint8_t  repeat_first_field;
++    uint8_t  is_top_field;
++    uint8_t  fixed_picture_qp;
++    uint8_t  picture_qp;
++    uint8_t  random_access_decodable;
++    uint8_t  loop_filter_disable;
++    int8_t   alpha_c_offset;
++    int8_t   beta_offset;
++    int8_t   chroma_quant_param_delta_cb;
++    int8_t   chroma_quant_param_delta_cr;
++    uint8_t  weight_quant_enable;
++    /* the weighting quantization matrices that apply to this picture */
++    uint8_t  wqm[2][64];
++    AVS2ALFParams alf;
++} AVS2PictureHeader;
++
++/**
++ * Remove the pseudo start code prevention bits of a header unit: the two
++ * bits that follow a 0x000002 pattern. Writes at most len bytes to dst,
++ * which must have room for len bytes plus AV_INPUT_BUFFER_PADDING_SIZE.
++ *
++ * @return the number of valid bits in dst
++ */
++unsigned ff_avs2_remove_pseudo_codes(uint8_t *dst, const uint8_t *src,
++                                     unsigned len);
++
++/**
++ * Parse a sequence header, buf pointing after its start code and already
++ * freed of pseudo start codes.
++ */
++int ff_avs2_parse_sequence_header(AVS2SequenceHeader *seq, const uint8_t *buf,
++                                  unsigned bits, void *logctx);
++
++/**
++ * Parse an intra or inter picture header, buf pointing after its start code
++ * and already freed of pseudo start codes.
++ */
++int ff_avs2_parse_picture_header(AVS2PictureHeader *pic,
++                                 const AVS2SequenceHeader *seq, int intra,
++                                 const uint8_t *buf, unsigned bits,
++                                 void *logctx);
++
++#endif /* AVCODEC_AVS2_PS_H */
+diff --git a/libavcodec/avs2dec.c b/libavcodec/avs2dec.c
+new file mode 100644
+index 0000000000..1571d82928
+--- /dev/null
++++ b/libavcodec/avs2dec.c
+@@ -0,0 +1,725 @@
++/*
++ * AVS2 decoder
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++/*
++ * AVS2 (GB/T 33475.2, IEEE 1857.4) decoder which parses the sequence and
++ * picture headers, keeps the decoded picture buffer and leaves the slice
++ * decoding to a hardware accelerator. There is no software fallback.
++ */
++
++#include "config_components.h"
++
++#include "libavutil/avassert.h"
++#include "libavutil/mem.h"
++#include "libavutil/pixdesc.h"
++#include "libavutil/refstruct.h"
++
++#include "avcodec.h"
++#include "avs2.h"
++#include "avs2dec.h"
++#include "codec_internal.h"
++#include "decode.h"
++#include "hwaccel_internal.h"
++#include "hwconfig.h"
++
++/* decode_packet(): the packet has to wait until the DPB has been emptied */
++#define AVS2_NEED_FLUSH 1
++
++/* Start code values of slices: slice_vertical_position bits 7..0 */
++#define AVS2_SLICE_MAX_CODE 0x8f
++
++/* Pictures whose POC is this far from the current one stop being references. */
++#define AVS2_MAX_POC_DISTANCE 128
++
++static void avs2_frame_unref(AVS2Frame *f)
++{
++    av_frame_unref(f->f);
++    av_refstruct_unref(&f->hwaccel_picture_private);
++    f->used = f->referenced = f->background = f->needs_output = 0;
++}
++
++static void avs2_dpb_reset(AVS2DecContext *s)
++{
++    for (int i = 0; i < AVS2_MAX_DPB; i++)
++        avs2_frame_unref(&s->dpb[i]);
++    for (int i = 0; i < s->nb_out; i++)
++        av_frame_unref(s->out[i]);
++    s->nb_out             = 0;
++    s->background         = NULL;
++    s->cur                = NULL;
++    s->doi_wrap           = 0;
++    s->prev_doi           = -1;
++    s->prev_output_delay  = 0;
++    s->last_output_poc    = 0;
++    s->output_started     = 0;
++    s->seen_intra         = 0;
++}
++
++static av_cold int avs2_decode_init(AVCodecContext *avctx)
++{
++    AVS2DecContext *s = avctx->priv_data;
++
++    s->avctx = avctx;
++    s->pkt   = av_packet_alloc();
++    if (!s->pkt)
++        return AVERROR(ENOMEM);
++
++    for (int i = 0; i < AVS2_MAX_DPB; i++) {
++        s->dpb[i].f = av_frame_alloc();
++        if (!s->dpb[i].f)
++            return AVERROR(ENOMEM);
++    }
++    for (int i = 0; i < FF_ARRAY_ELEMS(s->out); i++) {
++        s->out[i] = av_frame_alloc();
++        if (!s->out[i])
++            return AVERROR(ENOMEM);
++    }
++
++    s->prev_doi = -1;
++    s->pix_fmt  = AV_PIX_FMT_NONE;
++
++    return 0;
++}
++
++static av_cold int avs2_decode_close(AVCodecContext *avctx)
++{
++    AVS2DecContext *s = avctx->priv_data;
++
++    for (int i = 0; i < AVS2_MAX_DPB; i++) {
++        if (s->dpb[i].f)
++            avs2_frame_unref(&s->dpb[i]);
++        av_frame_free(&s->dpb[i].f);
++    }
++    for (int i = 0; i < FF_ARRAY_ELEMS(s->out); i++)
++        av_frame_free(&s->out[i]);
++    av_packet_free(&s->pkt);
++    av_freep(&s->hdr_buf);
++    s->hdr_buf_size = 0;
++
++    return 0;
++}
++
++static av_cold void avs2_decode_flush(AVCodecContext *avctx)
++{
++    AVS2DecContext *s = avctx->priv_data;
++
++    avs2_dpb_reset(s);
++    av_packet_unref(s->pkt);
++
++    if (FF_HW_HAS_CB(avctx, flush))
++        FF_HW_SIMPLE_CALL(avctx, flush);
++}
++
++static int avs2_get_format(AVCodecContext *avctx)
++{
++    AVS2DecContext *s = avctx->priv_data;
++    enum AVPixelFormat pix_fmts[2], *fmtp = pix_fmts;
++    int ret;
++
++    *fmtp++ = s->pix_fmt;
++    *fmtp   = AV_PIX_FMT_NONE;
++
++    ret = ff_get_format(avctx, pix_fmts);
++    if (ret < 0)
++        return ret;
++
++    /* The slices are only decoded by a hardware accelerator. */
++    if (!avctx->hwaccel) {
++        av_log(avctx, AV_LOG_ERROR,
++               "No hardware accelerator for AVS2 decoding is available.\n");
++        avctx->pix_fmt = AV_PIX_FMT_NONE;
++        return AVERROR(ENOSYS);
++    }
++
++    avctx->pix_fmt = ret;
++
++    return 0;
++}
++
++static int avs2_set_sequence(AVCodecContext *avctx, const AVS2SequenceHeader *seq)
++{
++    AVS2DecContext *s = avctx->priv_data;
++    int ret;
++
++    if (seq->chroma_format != 1) {
++        avpriv_report_missing_feature(avctx, "chroma_format %d",
++                                      seq->chroma_format);
++        return AVERROR_PATCHWELCOME;
++    }
++
++    ret = ff_set_dimensions(avctx, seq->width, seq->height);
++    if (ret < 0)
++        return ret;
++    avctx->coded_width  = FFALIGN(seq->width, 8);
++    avctx->coded_height = FFALIGN(seq->height, 8);
++
++    avctx->profile = seq->profile_id;
++    avctx->level   = seq->level_id;
++    if (ff_avs2_frame_rate_tab[seq->frame_rate_code].num)
++        avctx->framerate = ff_avs2_frame_rate_tab[seq->frame_rate_code];
++    avctx->has_b_frames = seq->picture_reorder_delay;
++
++    switch (seq->aspect_ratio) {
++    case 1:
++        avctx->sample_aspect_ratio = (AVRational) { 1, 1 };
++        break;
++    case 2:
++        avctx->sample_aspect_ratio = av_div_q((AVRational) { 4, 3 },
++                                              (AVRational) { seq->width, seq->height });
++        break;
++    case 3:
++        avctx->sample_aspect_ratio = av_div_q((AVRational) { 16, 9 },
++                                              (AVRational) { seq->width, seq->height });
++        break;
++    case 4:
++        avctx->sample_aspect_ratio = av_div_q((AVRational) { 221, 100 },
++                                              (AVRational) { seq->width, seq->height });
++        break;
++    }
++
++    s->pix_fmt = seq->sample_precision == 2 ? AV_PIX_FMT_YUV420P10 :
++                                              AV_PIX_FMT_YUV420P;
++    s->seq       = *seq;
++    s->seq_valid = 1;
++
++    return avs2_get_format(avctx);
++}
++
++/* Do the new sequence parameters need new frames? */
++static int avs2_sequence_changed(const AVS2SequenceHeader *a,
++                                 const AVS2SequenceHeader *b)
++{
++    return a->width != b->width || a->height != b->height ||
++           a->chroma_format != b->chroma_format ||
++           a->sample_precision != b->sample_precision ||
++           a->encoding_precision != b->encoding_precision ||
++           a->profile_id != b->profile_id;
++}
++
++static int avs2_dpb_in_use(const AVS2DecContext *s)
++{
++    for (int i = 0; i < AVS2_MAX_DPB; i++)
++        if (s->dpb[i].used)
++            return 1;
++    return 0;
++}
++
++static AVS2Frame *avs2_find_ref(AVS2DecContext *s, int64_t doi)
++{
++    for (int i = 0; i < AVS2_MAX_DPB; i++) {
++        AVS2Frame *f = &s->dpb[i];
++
++        if (f->used && f->referenced && f->doi == doi)
++            return f;
++    }
++    return NULL;
++}
++
++/* A stand-in for a missing reference: the latest picture still referenced. */
++static AVS2Frame *avs2_any_ref(AVS2DecContext *s)
++{
++    AVS2Frame *best = NULL;
++
++    for (int i = 0; i < AVS2_MAX_DPB; i++) {
++        AVS2Frame *f = &s->dpb[i];
++
++        if (f->used && f->referenced && (!best || f->doi > best->doi))
++            best = f;
++    }
++    return best;
++}
++
++static int avs2_pending_count(const AVS2DecContext *s)
++{
++    int n = 0;
++
++    for (int i = 0; i < AVS2_MAX_DPB; i++)
++        n += s->dpb[i].used && s->dpb[i].needs_output;
++    return n;
++}
++
++static AVS2Frame *avs2_smallest_pending(AVS2DecContext *s)
++{
++    AVS2Frame *best = NULL;
++
++    for (int i = 0; i < AVS2_MAX_DPB; i++) {
++        AVS2Frame *f = &s->dpb[i];
++
++        if (f->used && f->needs_output && (!best || f->poc < best->poc))
++            best = f;
++    }
++    return best;
++}
++
++static void avs2_release_unused(AVS2DecContext *s)
++{
++    for (int i = 0; i < AVS2_MAX_DPB; i++) {
++        AVS2Frame *f = &s->dpb[i];
++
++        if (f->used && !f->referenced && !f->background && !f->needs_output)
++            avs2_frame_unref(f);
++    }
++}
++
++static int avs2_output_frame(AVS2DecContext *s, AVS2Frame *f)
++{
++    int ret;
++
++    av_assert0(s->nb_out < FF_ARRAY_ELEMS(s->out));
++
++    ret = av_frame_ref(s->out[s->nb_out], f->f);
++    if (ret < 0)
++        return ret;
++    s->nb_out++;
++
++    av_log(s->avctx, AV_LOG_TRACE, "output poc %d (doi %"PRId64")\n",
++           f->poc, f->doi);
++
++    f->needs_output    = 0;
++    s->last_output_poc = f->poc;
++    s->output_started  = 1;
++
++    return 0;
++}
++
++/*
++ * Output pictures in POC order once no earlier picture can still arrive:
++ * when the POC continues the output sequence, when more pictures wait than
++ * picture_reorder_delay allows, or at the end of the sequence.
++ */
++static int avs2_bump(AVS2DecContext *s, int flush)
++{
++    int ret;
++
++    for (;;) {
++        AVS2Frame *f = avs2_smallest_pending(s);
++
++        if (!f)
++            break;
++        if (!flush && !s->seq.low_delay &&
++            !(s->output_started && f->poc <= s->last_output_poc + 1) &&
++            avs2_pending_count(s) <= s->seq.picture_reorder_delay + 1)
++            break;
++
++        ret = avs2_output_frame(s, f);
++        if (ret < 0)
++            return ret;
++    }
++    avs2_release_unused(s);
++
++    return 0;
++}
++
++static AVS2Frame *avs2_get_free_frame(AVS2DecContext *s)
++{
++    for (;;) {
++        AVS2Frame *f;
++
++        avs2_release_unused(s);
++        for (int i = 0; i < AVS2_MAX_DPB; i++)
++            if (!s->dpb[i].used)
++                return &s->dpb[i];
++
++        /* No free entry: output the earliest pending picture early. */
++        f = avs2_smallest_pending(s);
++        if (!f || avs2_output_frame(s, f) < 0)
++            return NULL;
++    }
++}
++
++/* Reference pictures of the current picture, in the order of its RCS. */
++static int avs2_set_refs(AVS2DecContext *s, int64_t doi)
++{
++    const AVS2PictureHeader *pic = &s->pic;
++    int missing = 0;
++
++    s->num_refs = 0;
++    if (pic->intra)
++        return 0;
++
++    for (int i = 0; i < pic->rcs.num_ref; i++) {
++        s->refs[i] = avs2_find_ref(s, doi - pic->rcs.ref_delta[i]);
++        if (!s->refs[i]) {
++            av_log(s->avctx, s->seen_intra ? AV_LOG_WARNING : AV_LOG_DEBUG,
++                   "Reference picture doi %"PRId64" of picture doi %"PRId64" is missing\n",
++                   doi - pic->rcs.ref_delta[i], doi);
++            missing = 1;
++        }
++    }
++    s->num_refs = pic->rcs.num_ref;
++
++    if (pic->background_pred) {
++        /* S picture: the background picture is its only reference */
++        s->refs[0]  = s->background;
++        s->num_refs = FFMAX(s->num_refs, 1);
++        missing    |= !s->background;
++    } else if (pic->background_reference && s->num_refs) {
++        s->refs[s->num_refs - 1] = s->background;
++        missing |= !s->background;
++    }
++
++    if (!missing)
++        return 0;
++
++    /* Pictures before the first intra picture of an open GOP: skip them. */
++    if (!s->seen_intra)
++        return AVERROR(EAGAIN);
++
++    for (int i = 0; i < s->num_refs; i++) {
++        if (!s->refs[i]) {
++            s->refs[i] = avs2_any_ref(s);
++            if (!s->refs[i])
++                return AVERROR_INVALIDDATA;
++        }
++    }
++    return 0;
++}
++
++/* Marking after the current picture is decoded, GB/T 33475.2 section 9.2. */
++static void avs2_mark_refs(AVS2DecContext *s, AVS2Frame *cur)
++{
++    const AVS2PictureHeader *pic = &s->pic;
++
++    for (int i = 0; i < pic->rcs.num_removed; i++) {
++        AVS2Frame *f = avs2_find_ref(s, cur->doi - pic->rcs.removed_delta[i]);
++
++        if (f)
++            f->referenced = 0;
++    }
++
++    for (int i = 0; i < AVS2_MAX_DPB; i++) {
++        AVS2Frame *f = &s->dpb[i];
++
++        if (f->used && f->referenced && f != cur &&
++            FFABS(f->poc - cur->poc) >= AVS2_MAX_POC_DISTANCE)
++            f->referenced = 0;
++    }
++
++    /* A GB picture is never a regular reference, only the background. */
++    cur->referenced = pic->rcs.refered_by_others &&
++                      !(pic->background_picture && !pic->background_output);
++
++    if (pic->background_picture) {
++        if (s->background)
++            s->background->background = 0;
++        cur->background = 1;
++        s->background   = cur;
++    }
++
++    cur->needs_output = !(pic->background_picture && !pic->background_output);
++}
++
++static int avs2_decode_picture(AVCodecContext *avctx, const AVPacket *pkt,
++                               unsigned hdr_start, unsigned hdr_end,
++                               unsigned slice_start, unsigned pic_end)
++{
++    AVS2DecContext *s = avctx->priv_data;
++    AVS2PictureHeader *pic = &s->pic;
++    int intra = pkt->data[hdr_start + 3] == AVS2_INTRA_PIC_START_CODE;
++    unsigned hdr_len = hdr_end - hdr_start - 4, bits;
++    AVS2Frame *cur;
++    int64_t doi;
++    int32_t poc;
++    int ret;
++
++    av_fast_malloc(&s->hdr_buf, &s->hdr_buf_size,
++                   hdr_len + AV_INPUT_BUFFER_PADDING_SIZE);
++    if (!s->hdr_buf)
++        return AVERROR(ENOMEM);
++    bits = ff_avs2_remove_pseudo_codes(s->hdr_buf, pkt->data + hdr_start + 4,
++                                       hdr_len);
++
++    ret = ff_avs2_parse_picture_header(pic, &s->seq, intra, s->hdr_buf, bits,
++                                       avctx);
++    if (ret < 0)
++        return ret;
++
++    if (!slice_start) {
++        av_log(avctx, AV_LOG_ERROR, "Picture without slices\n");
++        return AVERROR_INVALIDDATA;
++    }
++
++    if (s->seq.field_coded_sequence || !pic->picture_structure) {
++        avpriv_report_missing_feature(avctx, "Field coded pictures");
++        return AVERROR_PATCHWELCOME;
++    }
++
++    /* decode_order_index without its 8-bit wrap around */
++    if (s->prev_doi >= 0 && pic->doi < s->prev_doi)
++        s->doi_wrap += 256;
++    s->prev_doi = pic->doi;
++    doi = pic->doi + s->doi_wrap;
++
++    /* A GB picture carries no output delay: keep the previous one. */
++    if (!pic->output_delay_present)
++        pic->output_delay = s->prev_output_delay;
++    s->prev_output_delay = pic->output_delay;
++
++    poc = s->seq.low_delay ? doi :
++          doi + pic->output_delay - s->seq.picture_reorder_delay;
++
++    ret = avs2_set_refs(s, doi);
++    if (ret == AVERROR(EAGAIN))
++        return 0;
++    if (ret < 0)
++        return ret;
++
++    /* get_format() failed to find one: no software fallback */
++    if (!avctx->hwaccel)
++        return AVERROR(ENOSYS);
++
++    cur = avs2_get_free_frame(s);
++    if (!cur) {
++        av_log(avctx, AV_LOG_ERROR, "No free decoded picture buffer entry\n");
++        return AVERROR_INVALIDDATA;
++    }
++
++    ret = ff_get_buffer(avctx, cur->f, AV_GET_BUFFER_FLAG_REF);
++    if (ret < 0)
++        return ret;
++
++    ret = ff_hwaccel_frame_priv_alloc(avctx, &cur->hwaccel_picture_private);
++    if (ret < 0)
++        goto fail;
++
++    cur->used         = 1;
++    cur->doi          = doi;
++    cur->poc          = poc;
++    cur->picture_type = pic->picture_type;
++    cur->num_refs     = pic->background_pred ? 1 : s->num_refs;
++    for (int i = 0; i < s->num_refs; i++)
++        cur->ref_poc[i] = s->refs[i]->poc;
++
++    switch (pic->picture_type) {
++    case AVS2_PIC_I:
++        cur->f->pict_type = AV_PICTURE_TYPE_I;
++        cur->f->flags    |= AV_FRAME_FLAG_KEY;
++        break;
++    case AVS2_PIC_B:
++        cur->f->pict_type = AV_PICTURE_TYPE_B;
++        cur->f->flags    &= ~AV_FRAME_FLAG_KEY;
++        break;
++    default:
++        cur->f->pict_type = AV_PICTURE_TYPE_P;
++        cur->f->flags    &= ~AV_FRAME_FLAG_KEY;
++        break;
++    }
++
++    s->cur         = cur;
++    s->pic_data    = pkt->data + hdr_start;
++    s->pic_size    = pic_end - hdr_start;
++    s->data_offset = slice_start - hdr_start;
++
++    av_log(avctx, AV_LOG_DEBUG,
++           "picture %c doi %"PRId64" poc %d qp %d refs %d size %u offset %u\n",
++           "IPBF"[pic->picture_type], doi, poc, pic->picture_qp, s->num_refs,
++           s->pic_size, s->data_offset);
++
++    ret = FF_HW_CALL(avctx, start_frame, pkt->buf, s->pic_data, s->pic_size);
++    if (ret < 0)
++        goto fail;
++    ret = FF_HW_SIMPLE_CALL(avctx, end_frame);
++    if (ret < 0)
++        goto fail;
++
++    s->cur = NULL;
++    if (intra)
++        s->seen_intra = 1;
++
++    avs2_mark_refs(s, cur);
++
++    return avs2_bump(s, 0);
++
++fail:
++    s->cur = NULL;
++    avs2_frame_unref(cur);
++    return ret;
++}
++
++static unsigned avs2_next_start_code(const uint8_t *p, unsigned len, unsigned from)
++{
++    for (unsigned i = from; i + 3 < len; i++)
++        if (!p[i] && !p[i + 1] && p[i + 2] == 1)
++            return i;
++    return len;
++}
++
++/*
++ * A packet holds at most one picture (its header and slices), which may be
++ * preceded by a sequence header, user data and extensions, and followed by
++ * user data, extensions or a sequence end code.
++ */
++static int avs2_decode_packet(AVCodecContext *avctx, const AVPacket *pkt)
++{
++    AVS2DecContext *s = avctx->priv_data;
++    unsigned len = pkt->size, pos, hdr_start = 0, hdr_end = 0;
++    unsigned slice_start = 0, pic_end = 0;
++    int in_pic = 0, have_pic = 0, end_of_seq = 0, ret;
++
++    pos = avs2_next_start_code(pkt->data, len, 0);
++    while (pos < len) {
++        unsigned next = avs2_next_start_code(pkt->data, len, pos + 3);
++        uint8_t code = pkt->data[pos + 3];
++        int is_slice = code <= AVS2_SLICE_MAX_CODE;
++
++        if (in_pic && !is_slice) {
++            pic_end = pos;
++            in_pic  = 0;
++        }
++
++        switch (code) {
++        case AVS2_SEQ_START_CODE: {
++            AVS2SequenceHeader seq;
++            unsigned bits;
++
++            if (have_pic) {
++                av_log(avctx, AV_LOG_WARNING,
++                       "Ignoring a sequence header after the picture\n");
++                break;
++            }
++
++            av_fast_malloc(&s->hdr_buf, &s->hdr_buf_size,
++                           next - pos - 4 + AV_INPUT_BUFFER_PADDING_SIZE);
++            if (!s->hdr_buf)
++                return AVERROR(ENOMEM);
++            bits = ff_avs2_remove_pseudo_codes(s->hdr_buf, pkt->data + pos + 4,
++                                               next - pos - 4);
++            ret = ff_avs2_parse_sequence_header(&seq, s->hdr_buf, bits, avctx);
++            if (ret < 0)
++                return ret;
++
++            if (!s->seq_valid || avs2_sequence_changed(&s->seq, &seq)) {
++                /* The pictures of the old sequence have to leave first. */
++                if (avs2_dpb_in_use(s))
++                    return AVS2_NEED_FLUSH;
++                ret = avs2_set_sequence(avctx, &seq);
++                if (ret < 0)
++                    return ret;
++            } else {
++                s->seq = seq;
++            }
++            break;
++        }
++        case AVS2_INTRA_PIC_START_CODE:
++        case AVS2_INTER_PIC_START_CODE:
++            if (have_pic) {
++                av_log(avctx, AV_LOG_WARNING, "Ignoring a second picture in the packet\n");
++                break;
++            }
++            in_pic      = 1;
++            have_pic    = 1;
++            hdr_start   = pos;
++            hdr_end     = next;
++            slice_start = 0;
++            pic_end     = len;
++            break;
++        case AVS2_SEQ_END_CODE:
++            end_of_seq = 1;
++            break;
++        default:
++            if (is_slice && in_pic && !slice_start)
++                slice_start = pos;
++            break;
++        }
++
++        pos = next;
++    }
++
++    if (!have_pic) {
++        if (end_of_seq)
++            return avs2_bump(s, 1);
++        return 0;
++    }
++
++    if (!s->seq_valid) {
++        av_log(avctx, AV_LOG_WARNING, "Picture before any sequence header, skipped\n");
++        return 0;
++    }
++
++    ret = avs2_decode_picture(avctx, pkt, hdr_start, hdr_end, slice_start, pic_end);
++    if (ret < 0)
++        return ret;
++
++    if (end_of_seq)
++        return avs2_bump(s, 1);
++
++    return 0;
++}
++
++static int avs2_receive_frame(AVCodecContext *avctx, AVFrame *frame)
++{
++    AVS2DecContext *s = avctx->priv_data;
++    int ret;
++
++    for (;;) {
++        if (s->nb_out) {
++            av_frame_move_ref(frame, s->out[0]);
++            s->nb_out--;
++            for (int i = 0; i < s->nb_out; i++)
++                FFSWAP(AVFrame *, s->out[i], s->out[i + 1]);
++            return 0;
++        }
++
++        if (!s->pkt->data) {
++            ret = ff_decode_get_packet(avctx, s->pkt);
++            if (ret == AVERROR_EOF) {
++                if (!avs2_pending_count(s))
++                    return AVERROR_EOF;
++                ret = avs2_bump(s, 1);
++                if (ret < 0)
++                    return ret;
++                continue;
++            }
++            if (ret < 0)
++                return ret;
++        }
++
++        ret = avs2_decode_packet(avctx, s->pkt);
++        if (ret == AVS2_NEED_FLUSH) {
++            /* Drain the old sequence; the packet is decoded afterwards. */
++            ret = avs2_bump(s, 1);
++            if (ret < 0)
++                return ret;
++            for (int i = 0; i < AVS2_MAX_DPB; i++)
++                s->dpb[i].referenced = s->dpb[i].background = 0;
++            s->background = NULL;
++            avs2_release_unused(s);
++            continue;
++        }
++
++        av_packet_unref(s->pkt);
++        if (ret < 0)
++            return ret;
++    }
++}
++
++const FFCodec ff_avs2_decoder = {
++    .p.name         = "avs2",
++    CODEC_LONG_NAME("AVS2-P2/IEEE1857.4"),
++    .p.type         = AVMEDIA_TYPE_VIDEO,
++    .p.id           = AV_CODEC_ID_AVS2,
++    .priv_data_size = sizeof(AVS2DecContext),
++    .init           = avs2_decode_init,
++    .close          = avs2_decode_close,
++    FF_CODEC_RECEIVE_FRAME_CB(avs2_receive_frame),
++    .flush          = avs2_decode_flush,
++    .p.capabilities = AV_CODEC_CAP_DR1,
++    .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP,
++};
+diff --git a/libavcodec/avs2dec.h b/libavcodec/avs2dec.h
+new file mode 100644
+index 0000000000..c8b373e9ee
+--- /dev/null
++++ b/libavcodec/avs2dec.h
+@@ -0,0 +1,88 @@
++/*
++ * AVS2 decoder
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++#ifndef AVCODEC_AVS2DEC_H
++#define AVCODEC_AVS2DEC_H
++
++#include <stdint.h>
++
++#include "libavutil/frame.h"
++#include "avcodec.h"
++#include "avs2_ps.h"
++#include "packet.h"
++
++/* Decoded picture buffer entries: references, pending output, background. */
++#define AVS2_MAX_DPB 32
++
++typedef struct AVS2Frame {
++    AVFrame *f;
++    void *hwaccel_picture_private;  ///< RefStruct reference
++
++    uint8_t used;           ///< holds a decoded picture
++    uint8_t referenced;     ///< may be used for reference by later pictures
++    uint8_t background;     ///< the background (scene) reference, G or GB
++    uint8_t needs_output;
++
++    int64_t doi;            ///< decode_order_index without its 8-bit wrap
++    int32_t poc;
++    uint8_t picture_type;   ///< enum AVS2PictureType
++
++    /* the reference list of this picture when it was decoded, by POC */
++    uint8_t num_refs;
++    int32_t ref_poc[AVS2_MAX_REFS];
++} AVS2Frame;
++
++typedef struct AVS2DecContext {
++    AVCodecContext *avctx;
++    AVPacket *pkt;
++
++    AVS2SequenceHeader seq;
++    int seq_valid;
++    enum AVPixelFormat pix_fmt;
++
++    /* the picture being decoded */
++    AVS2PictureHeader pic;
++    AVS2Frame *cur;
++    /* its references, in the order of the reference configuration set */
++    AVS2Frame *refs[AVS2_MAX_REFS];
++    int num_refs;
++    /* its coded data: picture header and slices, with start codes */
++    const uint8_t *pic_data;
++    uint32_t pic_size;
++    uint32_t data_offset;   ///< offset of the first slice in pic_data
++
++    AVS2Frame dpb[AVS2_MAX_DPB];
++    AVS2Frame *background;  ///< the current background picture, if any
++    int64_t doi_wrap;
++    int prev_doi;
++    int prev_output_delay;
++    int64_t last_output_poc;
++    int output_started;
++    int seen_intra;
++
++    /* pictures bumped out of the DPB, waiting for receive_frame() */
++    AVFrame *out[AVS2_MAX_DPB + 1];
++    int nb_out;
++
++    uint8_t *hdr_buf;
++    unsigned hdr_buf_size;
++} AVS2DecContext;
++
++#endif /* AVCODEC_AVS2DEC_H */

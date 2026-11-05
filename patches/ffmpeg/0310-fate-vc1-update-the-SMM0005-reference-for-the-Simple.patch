@@ -1,0 +1,49 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 11:17:16 +0000
+Subject: [PATCH 310/311] fate/vc1: update the SMM0005 reference for the
+ Simple/Main B-picture fixes
+
+"avcodec/vc1_mc: fix FASTUVMC rounding of interpolated backward chroma
+MVs" and "avcodec/vc1_pred: pull back the co-located MV of Simple/Main
+direct mode" change the decoded B pictures of SMM0005 (frames 9, 11, ...,
+21), which their commit messages report now match the SMPTE reference
+decoder. The FATE reference is FFmpeg's own earlier output, so update it.
+All other FATE tests are unchanged.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ tests/ref/fate/vc1test_smm0005 | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/tests/ref/fate/vc1test_smm0005 b/tests/ref/fate/vc1test_smm0005
+index 0c189ca558..d923ebc162 100644
+--- a/tests/ref/fate/vc1test_smm0005
++++ b/tests/ref/fate/vc1test_smm0005
+@@ -12,18 +12,18 @@
+ 0,          6,          6,        1,   518400, 0xf770b86b
+ 0,          7,          7,        1,   518400, 0xb1ec5f47
+ 0,          8,          8,        1,   518400, 0xee591da8
+-0,          9,          9,        1,   518400, 0x18046c55
++0,          9,          9,        1,   518400, 0x530d6bab
+ 0,         10,         10,        1,   518400, 0xcfe7bb62
+-0,         11,         11,        1,   518400, 0x260e7ecd
++0,         11,         11,        1,   518400, 0x5a3480ac
+ 0,         12,         12,        1,   518400, 0x3a3034cc
+-0,         13,         13,        1,   518400, 0xee7800dd
++0,         13,         13,        1,   518400, 0x2c27f504
+ 0,         14,         14,        1,   518400, 0xdc4176b4
+-0,         15,         15,        1,   518400, 0x7bb037db
++0,         15,         15,        1,   518400, 0x14f9ab49
+ 0,         16,         16,        1,   518400, 0x4d4721d1
+-0,         17,         17,        1,   518400, 0xbd5cc3b4
++0,         17,         17,        1,   518400, 0x2219d44c
+ 0,         18,         18,        1,   518400, 0x678acc34
+-0,         19,         19,        1,   518400, 0xb3ffba44
++0,         19,         19,        1,   518400, 0xa46ad41e
+ 0,         20,         20,        1,   518400, 0xda9ebefb
+-0,         21,         21,        1,   518400, 0xb810bc59
++0,         21,         21,        1,   518400, 0x177ecd60
+ 0,         22,         22,        1,   518400, 0xc79fc02d
+ 0,         23,         23,        1,   518400, 0x28d9ad0d

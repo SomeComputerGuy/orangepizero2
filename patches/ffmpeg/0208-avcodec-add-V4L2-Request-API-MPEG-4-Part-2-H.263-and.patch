@@ -1,0 +1,1127 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jernej Skrabec <jernej.skrabec@siol.net>
+Date: Fri, 9 Oct 2026 03:46:27 +0200
+Subject: [PATCH 208/208] avcodec: add V4L2 Request API MPEG-4 Part 2, H.263
+ and Sorenson Spark hwaccels
+
+Add hwaccels for the proposed V4L2 stateless MPEG-4 Part 2, H.263 and
+Sorenson Spark decoder API: the MG4S, S263 and SPKS pixel formats with
+the MPEG4_VOL, MPEG4_VOP, MPEG4_QUANTISATION, MPEG4_QUIRKS and
+H263_PICTURE controls, and the optional MPEG4_SLICE_PARAMS and
+H263_SLICE_PARAMS arrays for drivers which cannot parse video packet,
+GOB or slice headers (HWACCEL_CAP_RESYNC_SLICES). A private copy of the
+uAPI is used until it is in the kernel headers.
+
+The output buffer gets the VOP or picture from its start code, without
+the VOL, GOV or user data which may precede it, and only that VOP of a
+packed DivX frame.
+
+The encoder bugs detected by ff_mpeg4_workaround_bugs() which matter to
+the reconstruction of the stream are passed as quirks; when the driver
+cannot reproduce one of them, or the stream uses tools outside of the
+Simple and Advanced Simple profiles, init() fails and the decoder falls
+back to software. The H263_PICTURE control of the first picture is set
+in init(), so that the driver can refuse the H.263 modes it lacks
+before decoding starts.
+
+Tested with the Cedrus driver on Allwinner H616.
+
+Signed-off-by: Jernej Skrabec <jernej.skrabec@siol.net>
+---
+ configure                         |   6 +
+ libavcodec/Makefile               |   6 +-
+ libavcodec/flvdec.c               |   9 +
+ libavcodec/h263dec.c              |  10 +-
+ libavcodec/hwaccels.h             |   3 +
+ libavcodec/mpeg4videodec.c        |   3 +
+ libavcodec/v4l2-stateless-mpeg4.h | 264 ++++++++++++
+ libavcodec/v4l2_request_mpeg4.c   | 651 ++++++++++++++++++++++++++++++
+ 8 files changed, 950 insertions(+), 2 deletions(-)
+ create mode 100644 libavcodec/v4l2-stateless-mpeg4.h
+ create mode 100644 libavcodec/v4l2_request_mpeg4.c
+
+diff --git a/configure b/configure
+index fb3ac45d0d..985428bbff 100755
+--- a/configure
++++ b/configure
+@@ -3377,10 +3377,14 @@ dpx_vulkan_hwaccel_deps="vulkan spirv_compiler"
+ dpx_vulkan_hwaccel_select="dpx_decoder"
+ ffv1_vulkan_hwaccel_deps="vulkan spirv_compiler"
+ ffv1_vulkan_hwaccel_select="ffv1_decoder"
++h263_v4l2request_hwaccel_deps="v4l2_request"
++h263_v4l2request_hwaccel_select="h263_decoder"
+ h263_vaapi_hwaccel_deps="vaapi"
+ h263_vaapi_hwaccel_select="h263_decoder"
+ h263_videotoolbox_hwaccel_deps="videotoolbox"
+ h263_videotoolbox_hwaccel_select="h263_decoder"
++flv_v4l2request_hwaccel_deps="v4l2_request"
++flv_v4l2request_hwaccel_select="flv_decoder"
+ h264_d3d11va_hwaccel_deps="d3d11va"
+ h264_d3d11va_hwaccel_select="h264_decoder"
+ h264_d3d11va2_hwaccel_deps="d3d11va"
+@@ -3451,6 +3455,8 @@ mpeg2_videotoolbox_hwaccel_deps="videotoolbox"
+ mpeg2_videotoolbox_hwaccel_select="mpeg2video_decoder"
+ mpeg4_nvdec_hwaccel_deps="nvdec"
+ mpeg4_nvdec_hwaccel_select="mpeg4_decoder"
++mpeg4_v4l2request_hwaccel_deps="v4l2_request"
++mpeg4_v4l2request_hwaccel_select="mpeg4_decoder"
+ mpeg4_vaapi_hwaccel_deps="vaapi"
+ mpeg4_vaapi_hwaccel_select="mpeg4_decoder"
+ mpeg4_vdpau_hwaccel_deps="vdpau"
+diff --git a/libavcodec/Makefile b/libavcodec/Makefile
+index c8f51f6727..f4ec9e3121 100644
+--- a/libavcodec/Makefile
++++ b/libavcodec/Makefile
+@@ -1058,6 +1058,8 @@ OBJS-$(CONFIG_AV1_VIDEOTOOLBOX_HWACCEL)   += videotoolbox_av1.o
+ OBJS-$(CONFIG_AV1_VULKAN_HWACCEL)         += vulkan_decode.o vulkan_av1.o
+ OBJS-$(CONFIG_DPX_VULKAN_HWACCEL)         += vulkan_decode.o vulkan_dpx.o
+ OBJS-$(CONFIG_FFV1_VULKAN_HWACCEL)        += vulkan_decode.o ffv1_vulkan.o vulkan_ffv1.o
++OBJS-$(CONFIG_FLV_V4L2REQUEST_HWACCEL)    += v4l2_request_mpeg4.o
++OBJS-$(CONFIG_H263_V4L2REQUEST_HWACCEL)   += v4l2_request_mpeg4.o
+ OBJS-$(CONFIG_H263_VAAPI_HWACCEL)         += vaapi_mpeg4.o
+ OBJS-$(CONFIG_H263_VIDEOTOOLBOX_HWACCEL)  += videotoolbox.o
+ OBJS-$(CONFIG_H264_D3D11VA_HWACCEL)       += dxva2_h264.o
+@@ -1094,6 +1096,7 @@ OBJS-$(CONFIG_MPEG2_VAAPI_HWACCEL)        += vaapi_mpeg2.o
+ OBJS-$(CONFIG_MPEG2_VDPAU_HWACCEL)        += vdpau_mpeg12.o
+ OBJS-$(CONFIG_MPEG2_VIDEOTOOLBOX_HWACCEL) += videotoolbox.o
+ OBJS-$(CONFIG_MPEG4_NVDEC_HWACCEL)        += nvdec_mpeg4.o
++OBJS-$(CONFIG_MPEG4_V4L2REQUEST_HWACCEL)  += v4l2_request_mpeg4.o
+ OBJS-$(CONFIG_MPEG4_VAAPI_HWACCEL)        += vaapi_mpeg4.o
+ OBJS-$(CONFIG_MPEG4_VDPAU_HWACCEL)        += vdpau_mpeg4.o
+ OBJS-$(CONFIG_MPEG4_VIDEOTOOLBOX_HWACCEL) += videotoolbox.o
+@@ -1368,7 +1371,8 @@ SKIPHEADERS-$(CONFIG_VIDEOTOOLBOX)     += videotoolbox.h vt_internal.h
+ SKIPHEADERS-$(CONFIG_VULKAN)           += ffv1_vulkan.h prores_vulkan.h vulkan_video.h \
+                                           vulkan_encode.h vulkan_decode.h
+ SKIPHEADERS-$(CONFIG_V4L2_M2M)         += v4l2_buffers.h v4l2_context.h v4l2_m2m.h
+-SKIPHEADERS-$(CONFIG_V4L2_REQUEST)     += v4l2_request.h v4l2-stateless-vc1.h
++SKIPHEADERS-$(CONFIG_V4L2_REQUEST)     += v4l2_request.h v4l2-stateless-vc1.h \
++                                          v4l2-stateless-mpeg4.h
+ SKIPHEADERS-$(CONFIG_ZLIB)             += zlib_wrapper.h
+ 
+ TESTPROGS = avcodec                                                     \
+diff --git a/libavcodec/flvdec.c b/libavcodec/flvdec.c
+index 0f6eaad5c6..df206e3165 100644
+--- a/libavcodec/flvdec.c
++++ b/libavcodec/flvdec.c
+@@ -18,10 +18,13 @@
+  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+  */
+ 
++#include "config_components.h"
++
+ #include "libavutil/imgutils.h"
+ 
+ #include "codec_internal.h"
+ #include "flvdec.h"
++#include "hwconfig.h"
+ #include "h263dec.h"
+ #include "mpegvideo.h"
+ #include "mpegvideodec.h"
+@@ -120,4 +123,10 @@ const FFCodec ff_flv_decoder = {
+     .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP |
+                       FF_CODEC_CAP_SKIP_FRAME_FILL_PARAM,
+     .p.max_lowres   = 3,
++    .hw_configs     = (const AVCodecHWConfigInternal *const []) {
++#if CONFIG_FLV_V4L2REQUEST_HWACCEL
++                          HWACCEL_V4L2REQUEST(flv),
++#endif
++                          NULL
++                      },
+ };
+diff --git a/libavcodec/h263dec.c b/libavcodec/h263dec.c
+index 018eb5aae6..b43b4c3726 100644
+--- a/libavcodec/h263dec.c
++++ b/libavcodec/h263dec.c
+@@ -61,6 +61,10 @@ static const enum AVPixelFormat h263_hwaccel_pixfmt_list_420[] = {
+ #endif
+ #if CONFIG_H263_VIDEOTOOLBOX_HWACCEL || CONFIG_MPEG4_VIDEOTOOLBOX_HWACCEL
+     AV_PIX_FMT_VIDEOTOOLBOX,
++#endif
++#if CONFIG_H263_V4L2REQUEST_HWACCEL || CONFIG_MPEG4_V4L2REQUEST_HWACCEL || \
++    CONFIG_FLV_V4L2REQUEST_HWACCEL
++    AV_PIX_FMT_DRM_PRIME,
+ #endif
+     AV_PIX_FMT_YUV420P,
+     AV_PIX_FMT_NONE
+@@ -82,7 +86,8 @@ static enum AVPixelFormat h263_get_format(AVCodecContext *avctx)
+ 
+     if (avctx->codec_id == AV_CODEC_ID_H263  ||
+         avctx->codec_id == AV_CODEC_ID_H263P ||
+-        avctx->codec_id == AV_CODEC_ID_MPEG4)
++        avctx->codec_id == AV_CODEC_ID_MPEG4 ||
++        avctx->codec_id == AV_CODEC_ID_FLV1)
+         return avctx->pix_fmt = ff_get_format(avctx, h263_hwaccel_pixfmt_list_420);
+ 
+     return AV_PIX_FMT_YUV420P;
+@@ -684,6 +689,9 @@ static const AVCodecHWConfigInternal *const h263_hw_config_list[] = {
+ #endif
+ #if CONFIG_H263_VIDEOTOOLBOX_HWACCEL
+     HWACCEL_VIDEOTOOLBOX(h263),
++#endif
++#if CONFIG_H263_V4L2REQUEST_HWACCEL
++    HWACCEL_V4L2REQUEST(h263),
+ #endif
+     NULL
+ };
+diff --git a/libavcodec/hwaccels.h b/libavcodec/hwaccels.h
+index 0249ebb7ce..94b877368d 100644
+--- a/libavcodec/hwaccels.h
++++ b/libavcodec/hwaccels.h
+@@ -31,6 +31,8 @@ extern const struct FFHWAccel ff_av1_videotoolbox_hwaccel;
+ extern const struct FFHWAccel ff_av1_vulkan_hwaccel;
+ extern const struct FFHWAccel ff_dpx_vulkan_hwaccel;
+ extern const struct FFHWAccel ff_ffv1_vulkan_hwaccel;
++extern const struct FFHWAccel ff_flv_v4l2request_hwaccel;
++extern const struct FFHWAccel ff_h263_v4l2request_hwaccel;
+ extern const struct FFHWAccel ff_h263_vaapi_hwaccel;
+ extern const struct FFHWAccel ff_h263_videotoolbox_hwaccel;
+ extern const struct FFHWAccel ff_h264_d3d11va_hwaccel;
+@@ -68,6 +70,7 @@ extern const struct FFHWAccel ff_mpeg2_vaapi_hwaccel;
+ extern const struct FFHWAccel ff_mpeg2_vdpau_hwaccel;
+ extern const struct FFHWAccel ff_mpeg2_videotoolbox_hwaccel;
+ extern const struct FFHWAccel ff_mpeg4_nvdec_hwaccel;
++extern const struct FFHWAccel ff_mpeg4_v4l2request_hwaccel;
+ extern const struct FFHWAccel ff_mpeg4_vaapi_hwaccel;
+ extern const struct FFHWAccel ff_mpeg4_vdpau_hwaccel;
+ extern const struct FFHWAccel ff_mpeg4_videotoolbox_hwaccel;
+diff --git a/libavcodec/mpeg4videodec.c b/libavcodec/mpeg4videodec.c
+index 3d20f7c389..cc97f64ba4 100644
+--- a/libavcodec/mpeg4videodec.c
++++ b/libavcodec/mpeg4videodec.c
+@@ -4109,6 +4109,9 @@ const FFCodec ff_mpeg4_decoder = {
+ #endif
+ #if CONFIG_MPEG4_VIDEOTOOLBOX_HWACCEL
+                                HWACCEL_VIDEOTOOLBOX(mpeg4),
++#endif
++#if CONFIG_MPEG4_V4L2REQUEST_HWACCEL
++                               HWACCEL_V4L2REQUEST(mpeg4),
+ #endif
+                                NULL
+                            },
+diff --git a/libavcodec/v4l2-stateless-mpeg4.h b/libavcodec/v4l2-stateless-mpeg4.h
+new file mode 100644
+index 0000000000..e3186a2b65
+--- /dev/null
++++ b/libavcodec/v4l2-stateless-mpeg4.h
+@@ -0,0 +1,264 @@
++/* SPDX-License-Identifier: ((GPL-2.0+ WITH Linux-syscall-note) OR BSD-3-Clause) */
++/*
++ * Stateless MPEG-4 Part 2 (ISO/IEC 14496-2), H.263 (ITU-T H.263) and
++ * Sorenson Spark decoder controls.
++ *
++ * Private copy of the definitions proposed for include/uapi/linux/videodev2.h
++ * and include/uapi/linux/v4l2-controls.h, for use until they are part of the
++ * kernel headers. It must be kept in sync with the kernel patches. Everything
++ * here is skipped when the kernel headers already provide the definitions.
++ */
++
++#ifndef AVCODEC_V4L2_STATELESS_MPEG4_H
++#define AVCODEC_V4L2_STATELESS_MPEG4_H
++
++#include <linux/videodev2.h>
++
++#ifndef V4L2_PIX_FMT_MPEG4_SLICE
++#define V4L2_PIX_FMT_MPEG4_SLICE v4l2_fourcc('M', 'G', '4', 'S') /* MPEG-4 Part 2 parsed VOP data */
++#define V4L2_PIX_FMT_H263_SLICE v4l2_fourcc('S', '2', '6', '3') /* H.263 parsed picture data */
++#define V4L2_PIX_FMT_SPK_SLICE v4l2_fourcc('S', 'P', 'K', 'S') /* Sorenson Spark parsed picture data */
++#endif
++
++#ifndef V4L2_CID_STATELESS_MPEG4_VOL
++
++#define V4L2_CTRL_TYPE_MPEG4_VOL		0x02a0
++#define V4L2_CTRL_TYPE_MPEG4_VOP		0x02a1
++#define V4L2_CTRL_TYPE_MPEG4_QUANTISATION	0x02a2
++#define V4L2_CTRL_TYPE_MPEG4_SLICE_PARAMS	0x02a3
++
++#define V4L2_CTRL_TYPE_H263_PICTURE		0x02b0
++#define V4L2_CTRL_TYPE_H263_SLICE_PARAMS	0x02b1
++
++#define V4L2_MPEG4_VOL_FLAG_INTERLACED			0x01
++#define V4L2_MPEG4_VOL_FLAG_QUANT_TYPE			0x02
++#define V4L2_MPEG4_VOL_FLAG_QUARTER_SAMPLE		0x04
++#define V4L2_MPEG4_VOL_FLAG_RESYNC_MARKER_DISABLE	0x08
++#define V4L2_MPEG4_VOL_FLAG_DATA_PARTITIONED		0x10
++#define V4L2_MPEG4_VOL_FLAG_REVERSIBLE_VLC		0x20
++
++#define V4L2_MPEG4_SPRITE_ENABLE_NONE			0
++#define V4L2_MPEG4_SPRITE_ENABLE_GMC			2
++
++#define V4L2_MPEG4_MAX_GMC_WARPING_POINTS		3
++
++#define V4L2_CID_STATELESS_MPEG4_VOL	(V4L2_CID_CODEC_STATELESS_BASE + 700)
++/**
++ * struct v4l2_ctrl_mpeg4_vol - MPEG-4 video object layer
++ *
++ * All the members, except the flags, carry the syntax elements of the same
++ * name of the video_object_layer() syntax of ISO/IEC 14496-2. Only the
++ * rectangular, 8-bit, 4:2:0 video object layers of the Simple and Advanced
++ * Simple profiles are covered.
++ *
++ * @flags: see V4L2_MPEG4_VOL_FLAG_{}.
++ * @video_object_layer_width: width of the VOP in luma samples.
++ * @video_object_layer_height: height of the VOP in luma samples.
++ * @vop_time_increment_resolution: number of ticks in one second.
++ * @sprite_enable: V4L2_MPEG4_SPRITE_ENABLE_NONE or
++ *	V4L2_MPEG4_SPRITE_ENABLE_GMC; static sprites are not supported.
++ * @no_of_sprite_warping_points: number of GMC warping points, 0 to 3.
++ * @sprite_warping_accuracy: GMC warping accuracy code, 0 to 3.
++ * @reserved: padding field. Should be zeroed by applications.
++ */
++struct v4l2_ctrl_mpeg4_vol {
++	__u32	flags;
++	__u16	video_object_layer_width;
++	__u16	video_object_layer_height;
++	__u16	vop_time_increment_resolution;
++	__u8	sprite_enable;
++	__u8	no_of_sprite_warping_points;
++	__u8	sprite_warping_accuracy;
++	__u8	reserved[3];
++};
++
++#define V4L2_MPEG4_VOP_CODING_TYPE_I			0
++#define V4L2_MPEG4_VOP_CODING_TYPE_P			1
++#define V4L2_MPEG4_VOP_CODING_TYPE_B			2
++#define V4L2_MPEG4_VOP_CODING_TYPE_S			3
++
++#define V4L2_MPEG4_VOP_FLAG_ROUNDING_TYPE		0x01
++#define V4L2_MPEG4_VOP_FLAG_TOP_FIELD_FIRST		0x02
++#define V4L2_MPEG4_VOP_FLAG_ALTERNATE_VERTICAL_SCAN	0x04
++
++#define V4L2_CID_STATELESS_MPEG4_VOP	(V4L2_CID_CODEC_STATELESS_BASE + 701)
++/**
++ * struct v4l2_ctrl_mpeg4_vop - MPEG-4 video object plane
++ *
++ * @backward_ref_ts: timestamp of the V4L2 capture buffer to use as backward
++ *	reference, used with B-VOPs.
++ * @forward_ref_ts: timestamp of the V4L2 capture buffer to use as forward
++ *	reference, used with P-VOPs, S-VOPs and B-VOPs.
++ * @data_bit_offset: offset in bits from the first bit of the VOP start code
++ *	to the first macroblock.
++ * @flags: see V4L2_MPEG4_VOP_FLAG_{}.
++ * @trb: TRB of B-VOPs, in ticks of vop_time_increment_resolution.
++ * @trd: TRD of B-VOPs, in ticks of vop_time_increment_resolution.
++ * @trb_field: TRB of field B-VOP macroblocks, in field periods.
++ * @trd_field: TRD of field B-VOP macroblocks, in field periods.
++ * @sprite_trajectory_du: horizontal GMC warping point trajectories of
++ *	S-VOPs, as decoded from sprite_trajectory().
++ * @sprite_trajectory_dv: vertical GMC warping point trajectories of S-VOPs.
++ * @vop_coding_type: see V4L2_MPEG4_VOP_CODING_TYPE_{}.
++ * @vop_quant: vop_quant syntax element, 1 to 31.
++ * @intra_dc_vlc_thr: intra_dc_vlc_thr syntax element, 0 to 7.
++ * @vop_fcode_forward: vop_fcode_forward syntax element, 1 to 7.
++ * @vop_fcode_backward: vop_fcode_backward syntax element, 1 to 7.
++ * @backward_ref_vop_coding_type: coding type of the backward reference of
++ *	B-VOPs, V4L2_MPEG4_VOP_CODING_TYPE_I, P or S.
++ * @reserved: padding field. Should be zeroed by applications.
++ */
++struct v4l2_ctrl_mpeg4_vop {
++	__u64	backward_ref_ts;
++	__u64	forward_ref_ts;
++	__u32	data_bit_offset;
++	__u32	flags;
++	__u32	trb;
++	__u32	trd;
++	__u16	trb_field;
++	__u16	trd_field;
++	__s16	sprite_trajectory_du[V4L2_MPEG4_MAX_GMC_WARPING_POINTS];
++	__s16	sprite_trajectory_dv[V4L2_MPEG4_MAX_GMC_WARPING_POINTS];
++	__u8	vop_coding_type;
++	__u8	vop_quant;
++	__u8	intra_dc_vlc_thr;
++	__u8	vop_fcode_forward;
++	__u8	vop_fcode_backward;
++	__u8	backward_ref_vop_coding_type;
++	__u8	reserved[2];
++};
++
++#define V4L2_CID_STATELESS_MPEG4_QUANTISATION	(V4L2_CID_CODEC_STATELESS_BASE + 702)
++/**
++ * struct v4l2_ctrl_mpeg4_quantisation - MPEG-4 quantisation matrices
++ *
++ * The matrices are in zigzag scan order and always complete. They default
++ * to the default matrices of ISO/IEC 14496-2. Used with
++ * V4L2_MPEG4_VOL_FLAG_QUANT_TYPE.
++ *
++ * @intra_quantiser_matrix: intra quantisation matrix.
++ * @non_intra_quantiser_matrix: non-intra quantisation matrix.
++ */
++struct v4l2_ctrl_mpeg4_quantisation {
++	__u8	intra_quantiser_matrix[64];
++	__u8	non_intra_quantiser_matrix[64];
++};
++
++#define V4L2_CID_STATELESS_MPEG4_SLICE_PARAMS	(V4L2_CID_CODEC_STATELESS_BASE + 703)
++/**
++ * struct v4l2_ctrl_mpeg4_slice_params - MPEG-4 video packet
++ *
++ * One element per segment of the VOP that starts with a header: the first
++ * one starts with the VOP header, the following ones with a video packet
++ * header (resync marker).
++ *
++ * @offset: offset in bytes from the start of the OUTPUT buffer to the
++ *	first byte of the VOP start code or of the resync marker.
++ * @size: size in bytes of the segment, header included.
++ * @data_bit_offset: offset in bits from the first bit of the segment to its
++ *	first macroblock.
++ * @macroblock_number: number of the first macroblock of the segment, in
++ *	raster scan order.
++ * @quant_scale: quantiser scale of the first macroblock of the segment:
++ *	vop_quant for the first segment, quant_scale for video packets.
++ * @reserved: padding field. Should be zeroed by applications.
++ */
++struct v4l2_ctrl_mpeg4_slice_params {
++	__u32	offset;
++	__u32	size;
++	__u32	data_bit_offset;
++	__u16	macroblock_number;
++	__u8	quant_scale;
++	__u8	reserved;
++};
++
++#define V4L2_MPEG4_QUIRK_EDGE_EXACT_SIZE		0x01
++#define V4L2_MPEG4_QUIRK_QPEL_CHROMA			0x02
++#define V4L2_MPEG4_QUIRK_QPEL_CHROMA2			0x04
++#define V4L2_MPEG4_QUIRK_FIELD_HPEL_CHROMA		0x08
++#define V4L2_MPEG4_QUIRK_DC_NO_CLIP			0x10
++#define V4L2_MPEG4_QUIRK_XVID_ILACE			0x20
++#define V4L2_MPEG4_QUIRK_GMC_UNSCALED_REF		0x40
++
++#define V4L2_CID_STATELESS_MPEG4_QUIRKS		(V4L2_CID_CODEC_STATELESS_BASE + 704)
++
++/* Stateless H.263 and Sorenson Spark controls */
++
++#define V4L2_H263_PICTURE_CODING_TYPE_I			0
++#define V4L2_H263_PICTURE_CODING_TYPE_P			1
++
++#define V4L2_H263_PICTURE_FLAG_ROUNDING_TYPE		0x0001
++#define V4L2_H263_PICTURE_FLAG_PLUSPTYPE		0x0002
++#define V4L2_H263_PICTURE_FLAG_UMV			0x0004
++#define V4L2_H263_PICTURE_FLAG_SAC			0x0008
++#define V4L2_H263_PICTURE_FLAG_AP			0x0010
++#define V4L2_H263_PICTURE_FLAG_AIC			0x0020
++#define V4L2_H263_PICTURE_FLAG_DF			0x0040
++#define V4L2_H263_PICTURE_FLAG_SS			0x0080
++#define V4L2_H263_PICTURE_FLAG_SS_RECTANGULAR		0x0100
++#define V4L2_H263_PICTURE_FLAG_SS_ARBITRARY		0x0200
++#define V4L2_H263_PICTURE_FLAG_ISD			0x0400
++#define V4L2_H263_PICTURE_FLAG_AIV			0x0800
++#define V4L2_H263_PICTURE_FLAG_MQ			0x1000
++#define V4L2_H263_PICTURE_FLAG_RRU			0x2000
++
++#define V4L2_CID_STATELESS_H263_PICTURE	(V4L2_CID_CODEC_STATELESS_BASE + 800)
++/**
++ * struct v4l2_ctrl_h263_picture - H.263 or Sorenson Spark picture
++ *
++ * @forward_ref_ts: timestamp of the V4L2 capture buffer to use as reference,
++ *	used with P pictures.
++ * @data_bit_offset: offset in bits from the first bit of the picture start
++ *	code to the first macroblock.
++ * @flags: see V4L2_H263_PICTURE_FLAG_{}.
++ * @width: width of the picture in luma samples.
++ * @height: height of the picture in luma samples.
++ * @picture_coding_type: see V4L2_H263_PICTURE_CODING_TYPE_{}.
++ * @pquant: PQUANT syntax element, 1 to 31.
++ * @spk_version: version of the Sorenson Spark bitstream, 0 or 1. Zero for
++ *	H.263.
++ * @reserved: padding field. Should be zeroed by applications.
++ */
++struct v4l2_ctrl_h263_picture {
++	__u64	forward_ref_ts;
++	__u32	data_bit_offset;
++	__u32	flags;
++	__u16	width;
++	__u16	height;
++	__u8	picture_coding_type;
++	__u8	pquant;
++	__u8	spk_version;
++	__u8	reserved;
++};
++
++#define V4L2_CID_STATELESS_H263_SLICE_PARAMS	(V4L2_CID_CODEC_STATELESS_BASE + 801)
++/**
++ * struct v4l2_ctrl_h263_slice_params - H.263 GOB or slice
++ *
++ * One element per segment of the picture that starts with a header: the
++ * first one starts with the picture header, the following ones with a GOB
++ * or slice header. GOBs without a header continue the previous segment.
++ *
++ * @offset: offset in bytes from the start of the OUTPUT buffer to the byte
++ *	which holds the first bit of the picture, GOB or slice start code.
++ * @size: size in bytes of the segment, header included.
++ * @data_bit_offset: offset in bits from the first bit of the byte at
++ *	@offset to the first macroblock of the segment.
++ * @macroblock_number: number of the first macroblock of the segment, in
++ *	raster scan order.
++ * @quant_scale: quantiser of the first macroblock of the segment: PQUANT,
++ *	GQUANT or SQUANT.
++ * @reserved: padding field. Should be zeroed by applications.
++ */
++struct v4l2_ctrl_h263_slice_params {
++	__u32	offset;
++	__u32	size;
++	__u32	data_bit_offset;
++	__u16	macroblock_number;
++	__u8	quant_scale;
++	__u8	reserved;
++};
++
++#endif /* V4L2_CID_STATELESS_MPEG4_VOL */
++
++#endif /* AVCODEC_V4L2_STATELESS_MPEG4_H */
+diff --git a/libavcodec/v4l2_request_mpeg4.c b/libavcodec/v4l2_request_mpeg4.c
+new file mode 100644
+index 0000000000..677ae68095
+--- /dev/null
++++ b/libavcodec/v4l2_request_mpeg4.c
+@@ -0,0 +1,651 @@
++/*
++ * V4L2 Request API MPEG-4 Part 2, H.263 and Sorenson Spark hwaccel
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++#include "config.h"
++#include "config_components.h"
++
++#include "libavutil/intreadwrite.h"
++
++#include "hwaccel_internal.h"
++#include "hwconfig.h"
++#include "h263dec.h"
++#include "internal.h"
++#include "mpeg4video.h"
++#include "mpeg4videodec.h"
++#include "mpeg4videodefs.h"
++#include "mpegutils.h"
++#include "startcode.h"
++#include "v4l2_request.h"
++#include "v4l2-stateless-mpeg4.h"
++
++/* The MPEG-4 and H.263 slice parameters share their layout. */
++_Static_assert(sizeof(struct v4l2_ctrl_mpeg4_slice_params) ==
++               sizeof(struct v4l2_ctrl_h263_slice_params), "slice params");
++
++/* Video packets or GOBs with a header in one picture */
++#define MPEG4_MAX_SLICES 2048
++
++typedef struct V4L2RequestContextMPEG4 {
++    V4L2RequestContext base;
++    /* Size of the SLICE_PARAMS array of the driver, 0 if it has no such control. */
++    unsigned int max_slice_params;
++    /* MPEG-4 quirks the driver emulates */
++    uint32_t supported_quirks;
++} V4L2RequestContextMPEG4;
++
++typedef struct V4L2RequestControlsMPEG4 {
++    V4L2RequestPictureContext pic;
++    union {
++        struct {
++            struct v4l2_ctrl_mpeg4_vol vol;
++            struct v4l2_ctrl_mpeg4_vop vop;
++            struct v4l2_ctrl_mpeg4_quantisation quantisation;
++            uint32_t quirks;
++        };
++        struct v4l2_ctrl_h263_picture picture;
++    };
++    /* Offset of the start code of the picture in the bitstream buffer */
++    unsigned int start;
++    /* Size of the picture in the bitstream buffer, from its start code */
++    unsigned int size;
++    struct v4l2_ctrl_mpeg4_slice_params slices[MPEG4_MAX_SLICES];
++    /* Bit position of the start code of each slice, from the picture start */
++    unsigned int slice_pos[MPEG4_MAX_SLICES];
++    unsigned int nb_slices;
++} V4L2RequestControlsMPEG4;
++
++static int mpeg4_intra_dc_vlc_thr(const Mpeg4DecContext *ctx)
++{
++    switch (ctx->intra_dc_threshold) {
++    case 99: return 0;
++    case 13: return 1;
++    case 15: return 2;
++    case 17: return 3;
++    case 19: return 4;
++    case 21: return 5;
++    case 23: return 6;
++    case 0:  return 7;
++    }
++    return 0;
++}
++
++static void mpeg4_fill_vol(AVCodecContext *avctx,
++                           struct v4l2_ctrl_mpeg4_vol *vol)
++{
++    const Mpeg4DecContext *ctx = avctx->priv_data;
++    const MPVContext *s = &ctx->h.c;
++
++    *vol = (struct v4l2_ctrl_mpeg4_vol) {
++        .video_object_layer_width      = s->width,
++        .video_object_layer_height     = s->height,
++        .vop_time_increment_resolution = avctx->framerate.num,
++    };
++
++    if (!s->progressive_sequence)
++        vol->flags |= V4L2_MPEG4_VOL_FLAG_INTERLACED;
++    if (ctx->mpeg_quant)
++        vol->flags |= V4L2_MPEG4_VOL_FLAG_QUANT_TYPE;
++    if (s->quarter_sample)
++        vol->flags |= V4L2_MPEG4_VOL_FLAG_QUARTER_SAMPLE;
++    if (!ctx->resync_marker)
++        vol->flags |= V4L2_MPEG4_VOL_FLAG_RESYNC_MARKER_DISABLE;
++    if (ctx->h.data_partitioning)
++        vol->flags |= V4L2_MPEG4_VOL_FLAG_DATA_PARTITIONED;
++    if (ctx->rvlc)
++        vol->flags |= V4L2_MPEG4_VOL_FLAG_REVERSIBLE_VLC;
++
++    if (ctx->vol_sprite_usage == GMC_SPRITE) {
++        vol->sprite_enable               = V4L2_MPEG4_SPRITE_ENABLE_GMC;
++        vol->no_of_sprite_warping_points = ctx->num_sprite_warping_points;
++        vol->sprite_warping_accuracy     = ctx->sprite_warping_accuracy;
++    }
++}
++
++/*
++ * The deviations from ISO/IEC 14496-2 of the encoder of the stream, as
++ * detected by ff_mpeg4_workaround_bugs(), which the driver has to emulate.
++ * Those which the bitstream cannot exhibit are left out. Returns a negative
++ * value if a deviation cannot be described to the driver at all.
++ */
++static int mpeg4_get_quirks(AVCodecContext *avctx, uint32_t *quirks,
++                            uint32_t *optional)
++{
++    const Mpeg4DecContext *ctx = avctx->priv_data;
++    const MPVContext *s = &ctx->h.c;
++    int bugs = s->workaround_bugs;
++
++    *quirks = *optional = 0;
++
++    if (bugs & (FF_BUG_AMV | FF_BUG_IEDGE))
++        return AVERROR(ENOSYS);
++    if ((bugs & FF_BUG_STD_QPEL) && s->quarter_sample)
++        return AVERROR(ENOSYS);
++
++    if (bugs & FF_BUG_EDGE)
++        *quirks |= V4L2_MPEG4_QUIRK_EDGE_EXACT_SIZE;
++    if ((bugs & FF_BUG_QPEL_CHROMA) && s->quarter_sample)
++        *quirks |= V4L2_MPEG4_QUIRK_QPEL_CHROMA;
++    if ((bugs & FF_BUG_QPEL_CHROMA2) && s->quarter_sample)
++        *quirks |= V4L2_MPEG4_QUIRK_QPEL_CHROMA2;
++    /*
++     * The chroma vectors of the direct mode of quarter sample B-VOPs,
++     * which packed DivX streams have even when they claim low delay, have
++     * no quirk.
++     */
++    if ((bugs & FF_BUG_DIRECT_BLOCKSIZE) && s->quarter_sample &&
++        (!s->low_delay || ctx->h.divx_packed || s->pict_type == AV_PICTURE_TYPE_B))
++        return AVERROR(ENOSYS);
++    if ((bugs & FF_BUG_HPEL_CHROMA) && !s->progressive_sequence)
++        *quirks |= V4L2_MPEG4_QUIRK_FIELD_HPEL_CHROMA;
++    if ((bugs & FF_BUG_XVID_ILACE) && !s->progressive_sequence)
++        *quirks |= V4L2_MPEG4_QUIRK_XVID_ILACE;
++    if (ctx->vol_sprite_usage == GMC_SPRITE &&
++        ctx->divx_version == 500 && ctx->divx_build == 413)
++        *quirks |= V4L2_MPEG4_QUIRK_GMC_UNSCALED_REF;
++
++    /*
++     * Only matters for intra DC values above 2047, which no sane encoder
++     * produces: decode anyway if the driver cannot emulate it.
++     */
++    if (bugs & FF_BUG_DC_CLIP)
++        *optional |= V4L2_MPEG4_QUIRK_DC_NO_CLIP;
++
++    return 0;
++}
++
++static int mpeg4_check_quirks(AVCodecContext *avctx, uint32_t *quirks)
++{
++    V4L2RequestContextMPEG4 *ctx = avctx->internal->hwaccel_priv_data;
++    uint32_t optional;
++    int ret;
++
++    ret = mpeg4_get_quirks(avctx, quirks, &optional);
++    if (ret)
++        return ret;
++
++    if (*quirks & ~ctx->supported_quirks) {
++        av_log(avctx, AV_LOG_VERBOSE,
++               "Encoder quirks 0x%x not supported by the driver\n",
++               *quirks & ~ctx->supported_quirks);
++        return AVERROR(ENOSYS);
++    }
++
++    *quirks |= optional & ctx->supported_quirks;
++
++    return 0;
++}
++
++static int mpeg4_unsupported(AVCodecContext *avctx)
++{
++    const Mpeg4DecContext *ctx = avctx->priv_data;
++    const MPVContext *s = &ctx->h.c;
++
++    /* Only the tools of the Simple and Advanced Simple profiles */
++    return s->studio_profile || ctx->shape != RECT_SHAPE ||
++           ctx->vol_sprite_usage == STATIC_SPRITE ||
++           ctx->sprite_brightness_change || ctx->new_pred ||
++           ctx->scalability || ctx->quant_precision != 5 ||
++           ctx->h.data_partitioning || ctx->rvlc;
++}
++
++static int mpeg4_find_vop(const uint8_t *buf, unsigned int size,
++                          unsigned int data_pos, unsigned int *start,
++                          unsigned int *end)
++{
++    const uint8_t *p = buf, *vop = NULL;
++    uint32_t state = -1;
++
++    /* The last VOP start code before the macroblock data */
++    while (p < buf + data_pos) {
++        p = avpriv_find_start_code(p, buf + data_pos, &state);
++        if (state == VOP_STARTCODE)
++            vop = p - 4;
++    }
++    if (!vop)
++        return AVERROR_INVALIDDATA;
++
++    /* No start code can be emulated by the VOP, resync markers included. */
++    state = -1;
++    p = avpriv_find_start_code(buf + data_pos, buf + size, &state);
++    *start = vop - buf;
++    *end   = (state & 0xffffff00) == 0x100 ? p - 4 - buf : size;
++
++    return 0;
++}
++
++static int v4l2_request_mpeg4_start_frame(AVCodecContext *avctx,
++                                          av_unused const AVBufferRef *buf_ref,
++                                          const uint8_t *buffer,
++                                          uint32_t size)
++{
++    const Mpeg4DecContext *ctx = avctx->priv_data;
++    const H263DecContext *h = &ctx->h;
++    const MPVContext *s = &h->c;
++    V4L2RequestControlsMPEG4 *controls = s->cur_pic.ptr->hwaccel_picture_private;
++    unsigned int data_pos = get_bits_count(&h->gb);
++    unsigned int end;
++    int ret;
++
++    if (mpeg4_unsupported(avctx))
++        return AVERROR(ENOSYS);
++
++    ret = mpeg4_check_quirks(avctx, &controls->quirks);
++    if (ret)
++        return ret;
++
++    ret = mpeg4_find_vop(buffer, size, data_pos >> 3, &controls->start, &end);
++    if (ret)
++        return ret;
++    controls->size = end - controls->start;
++
++    ret = ff_v4l2_request_start_frame(avctx, &controls->pic, s->cur_pic.ptr->f);
++    if (ret)
++        return ret;
++
++    mpeg4_fill_vol(avctx, &controls->vol);
++
++    controls->vop = (struct v4l2_ctrl_mpeg4_vop) {
++        .data_bit_offset    = data_pos - 8 * controls->start,
++        .vop_coding_type    = s->pict_type - AV_PICTURE_TYPE_I,
++        .vop_quant          = s->qscale,
++        .intra_dc_vlc_thr   = mpeg4_intra_dc_vlc_thr(ctx),
++        .vop_fcode_forward  = s->pict_type != AV_PICTURE_TYPE_I ? ctx->f_code : 1,
++        .vop_fcode_backward = s->pict_type == AV_PICTURE_TYPE_B ? ctx->b_code : 1,
++    };
++
++    if (s->no_rounding)
++        controls->vop.flags |= V4L2_MPEG4_VOP_FLAG_ROUNDING_TYPE;
++    if (s->top_field_first)
++        controls->vop.flags |= V4L2_MPEG4_VOP_FLAG_TOP_FIELD_FIRST;
++    if (s->alternate_scan)
++        controls->vop.flags |= V4L2_MPEG4_VOP_FLAG_ALTERNATE_VERTICAL_SCAN;
++
++    if (s->pict_type != AV_PICTURE_TYPE_I && s->last_pic.ptr)
++        controls->vop.forward_ref_ts =
++            ff_v4l2_request_get_capture_timestamp(s->last_pic.ptr->f);
++
++    if (s->pict_type == AV_PICTURE_TYPE_B) {
++        if (!s->next_pic.ptr)
++            return AVERROR_INVALIDDATA;
++        controls->vop.backward_ref_ts =
++            ff_v4l2_request_get_capture_timestamp(s->next_pic.ptr->f);
++        controls->vop.backward_ref_vop_coding_type =
++            s->next_pic.ptr->f->pict_type - AV_PICTURE_TYPE_I;
++        controls->vop.trb       = s->pb_time;
++        controls->vop.trd       = s->pp_time;
++        controls->vop.trb_field = s->pb_field_time;
++        controls->vop.trd_field = s->pp_field_time;
++    }
++
++    if (s->pict_type == AV_PICTURE_TYPE_S) {
++        for (int i = 0; i < ctx->num_sprite_warping_points && i < 3; i++) {
++            controls->vop.sprite_trajectory_du[i] = (int16_t)ctx->sprite_traj[i][0];
++            controls->vop.sprite_trajectory_dv[i] = (int16_t)ctx->sprite_traj[i][1];
++        }
++    }
++
++    if (ctx->mpeg_quant) {
++        for (int i = 0; i < 64; i++) {
++            int n = s->idsp.idct_permutation[ff_zigzag_direct[i]];
++
++            controls->quantisation.intra_quantiser_matrix[i]     = s->intra_matrix[n];
++            controls->quantisation.non_intra_quantiser_matrix[i] = s->inter_matrix[n];
++        }
++    }
++
++    controls->nb_slices = 0;
++
++    return ff_v4l2_request_append_output(avctx, &controls->pic,
++                                         buffer + controls->start,
++                                         controls->size);
++}
++
++/*
++ * H.263 tools the controls cannot describe to the driver without flags no
++ * driver supports yet: decode them in software. FFmpeg itself refuses SAC,
++ * rectangular slices, RPS, ISD and RRU.
++ */
++static int h263_unsupported(AVCodecContext *avctx)
++{
++    const H263DecContext *h = avctx->priv_data;
++
++    return h->pb_frame || h->c.obmc || h->loop_filter || h->alt_inter_vlc;
++}
++
++/* Offset of the picture start code: 22 bits for H.263, 17 for Spark */
++static int h263_find_picture(const uint8_t *buf, unsigned int size,
++                             unsigned int data_pos, int flv)
++{
++    for (unsigned int i = 0; i + 2 < size && i < data_pos; i++)
++        if (!buf[i] && !buf[i + 1] && (buf[i + 2] & (flv ? 0xf8 : 0xfc)) == 0x80)
++            return i;
++
++    return AVERROR_INVALIDDATA;
++}
++
++static void h263_fill_picture(AVCodecContext *avctx, int plusptype,
++                              unsigned int data_bit_offset,
++                              struct v4l2_ctrl_h263_picture *picture)
++{
++    const H263DecContext *h = avctx->priv_data;
++    const MPVContext *s = &h->c;
++    int flv = avctx->codec_id == AV_CODEC_ID_FLV1;
++
++    *picture = (struct v4l2_ctrl_h263_picture) {
++        .data_bit_offset     = data_bit_offset,
++        .width               = s->width,
++        .height              = s->height,
++        .picture_coding_type = s->pict_type == AV_PICTURE_TYPE_P ?
++                               V4L2_H263_PICTURE_CODING_TYPE_P :
++                               V4L2_H263_PICTURE_CODING_TYPE_I,
++        .pquant              = s->qscale,
++        .spk_version         = flv ? h->flv : 0,
++    };
++
++    if (s->no_rounding)
++        picture->flags |= V4L2_H263_PICTURE_FLAG_ROUNDING_TYPE;
++    if (plusptype)
++        picture->flags |= V4L2_H263_PICTURE_FLAG_PLUSPTYPE;
++    if (plusptype ? h->umvplus : h->h263_long_vectors)
++        picture->flags |= V4L2_H263_PICTURE_FLAG_UMV;
++    if (s->h263_aic)
++        picture->flags |= V4L2_H263_PICTURE_FLAG_AIC;
++    if (h->modified_quant)
++        picture->flags |= V4L2_H263_PICTURE_FLAG_MQ;
++    if (h->h263_slice_structured)
++        picture->flags |= V4L2_H263_PICTURE_FLAG_SS;
++
++    if (s->pict_type == AV_PICTURE_TYPE_P && s->last_pic.ptr)
++        picture->forward_ref_ts =
++            ff_v4l2_request_get_capture_timestamp(s->last_pic.ptr->f);
++}
++
++static int v4l2_request_h263_start_frame(AVCodecContext *avctx,
++                                         av_unused const AVBufferRef *buf_ref,
++                                         const uint8_t *buffer,
++                                         uint32_t size)
++{
++    const H263DecContext *h = avctx->priv_data;
++    const MPVContext *s = &h->c;
++    V4L2RequestControlsMPEG4 *controls = s->cur_pic.ptr->hwaccel_picture_private;
++    unsigned int data_pos = get_bits_count(&h->gb);
++    int flv = avctx->codec_id == AV_CODEC_ID_FLV1;
++    int plusptype, start, ret;
++
++    if (h263_unsupported(avctx) || s->pict_type == AV_PICTURE_TYPE_B)
++        return AVERROR(ENOSYS);
++
++    start = h263_find_picture(buffer, size, data_pos >> 3, flv);
++    if (start < 0)
++        return start;
++    controls->start = start;
++    controls->size  = size - start;
++
++    /* source format 7 in PTYPE: PLUSPTYPE follows */
++    plusptype = !flv && controls->size >= 8 &&
++                ((AV_RB64(buffer + start) >> 26) & 7) == 7;
++
++    ret = ff_v4l2_request_start_frame(avctx, &controls->pic, s->cur_pic.ptr->f);
++    if (ret)
++        return ret;
++
++    h263_fill_picture(avctx, plusptype, data_pos - 8 * start,
++                      &controls->picture);
++    controls->nb_slices = 0;
++
++    return ff_v4l2_request_append_output(avctx, &controls->pic,
++                                         buffer + start, controls->size);
++}
++
++/*
++ * Called by h263dec.c for the picture header and for every GOB or video
++ * packet header it finds (HWACCEL_CAP_RESYNC_SLICES), with the header parsed.
++ */
++static int v4l2_request_mpeg4_decode_slice(AVCodecContext *avctx,
++                                           av_unused const uint8_t *buffer,
++                                           av_unused uint32_t size)
++{
++    const H263DecContext *h = avctx->priv_data;
++    const MPVContext *s = &h->c;
++    V4L2RequestControlsMPEG4 *controls = s->cur_pic.ptr->hwaccel_picture_private;
++    unsigned int first = !controls->nb_slices;
++    unsigned int pos, data_pos;
++
++    if (controls->nb_slices >= MPEG4_MAX_SLICES)
++        return AVERROR(ENOSYS);
++
++    data_pos = get_bits_count(&h->gb) - 8 * controls->start;
++    pos      = first ? 0 : h->resync_pos - 8 * controls->start;
++    if (data_pos > 8 * controls->size || pos > data_pos)
++        return AVERROR_INVALIDDATA;
++
++    controls->slice_pos[controls->nb_slices] = pos;
++    controls->slices[controls->nb_slices++] =
++        (struct v4l2_ctrl_mpeg4_slice_params) {
++            .offset            = pos >> 3,
++            .data_bit_offset   = data_pos - (pos & ~7),
++            .macroblock_number = first ? 0 : s->mb_y * s->mb_width + s->mb_x,
++            .quant_scale       = s->qscale,
++        };
++
++    return 0;
++}
++
++static void mpeg4_finish_slices(V4L2RequestControlsMPEG4 *controls)
++{
++    for (unsigned int i = 0; i < controls->nb_slices; i++) {
++        /* The byte which holds the next start code ends the segment. */
++        unsigned int end = i + 1 < controls->nb_slices ?
++                           (controls->slice_pos[i + 1] + 7) >> 3 :
++                           controls->size;
++
++        controls->slices[i].size = end - controls->slices[i].offset;
++    }
++}
++
++static int v4l2_request_mpeg4_end_frame(AVCodecContext *avctx)
++{
++    const H263DecContext *h = avctx->priv_data;
++    const MPVContext *s = &h->c;
++    V4L2RequestContextMPEG4 *ctx = avctx->internal->hwaccel_priv_data;
++    V4L2RequestControlsMPEG4 *controls = s->cur_pic.ptr->hwaccel_picture_private;
++    struct v4l2_ext_control control[5];
++    int count = 0;
++
++    mpeg4_finish_slices(controls);
++
++    if (avctx->codec_id == AV_CODEC_ID_MPEG4) {
++        control[count++] = (struct v4l2_ext_control) {
++            .id   = V4L2_CID_STATELESS_MPEG4_VOL,
++            .ptr  = &controls->vol,
++            .size = sizeof(controls->vol),
++        };
++        control[count++] = (struct v4l2_ext_control) {
++            .id   = V4L2_CID_STATELESS_MPEG4_VOP,
++            .ptr  = &controls->vop,
++            .size = sizeof(controls->vop),
++        };
++        if (controls->vol.flags & V4L2_MPEG4_VOL_FLAG_QUANT_TYPE)
++            control[count++] = (struct v4l2_ext_control) {
++                .id   = V4L2_CID_STATELESS_MPEG4_QUANTISATION,
++                .ptr  = &controls->quantisation,
++                .size = sizeof(controls->quantisation),
++            };
++        if (ctx->supported_quirks)
++            control[count++] = (struct v4l2_ext_control) {
++                .id    = V4L2_CID_STATELESS_MPEG4_QUIRKS,
++                .value = controls->quirks,
++            };
++    } else {
++        control[count++] = (struct v4l2_ext_control) {
++            .id   = V4L2_CID_STATELESS_H263_PICTURE,
++            .ptr  = &controls->picture,
++            .size = sizeof(controls->picture),
++        };
++    }
++
++    if (ctx->max_slice_params) {
++        if (controls->nb_slices > ctx->max_slice_params)
++            return AVERROR(ENOSYS);
++
++        control[count++] = (struct v4l2_ext_control) {
++            .id   = avctx->codec_id == AV_CODEC_ID_MPEG4 ?
++                    V4L2_CID_STATELESS_MPEG4_SLICE_PARAMS :
++                    V4L2_CID_STATELESS_H263_SLICE_PARAMS,
++            .ptr  = controls->slices,
++            .size = sizeof(controls->slices[0]) * controls->nb_slices,
++        };
++    }
++
++    return ff_v4l2_request_decode_frame(avctx, &controls->pic, control, count);
++}
++
++static int v4l2_request_mpeg4_post_frames_ctx(AVCodecContext *avctx)
++{
++    V4L2RequestContextMPEG4 *ctx = avctx->internal->hwaccel_priv_data;
++    int mpeg4 = avctx->codec_id == AV_CODEC_ID_MPEG4;
++    struct v4l2_query_ext_ctrl slice_params = {
++        .id = mpeg4 ? V4L2_CID_STATELESS_MPEG4_SLICE_PARAMS :
++                      V4L2_CID_STATELESS_H263_SLICE_PARAMS,
++    };
++    struct v4l2_query_ext_ctrl quirks = {
++        .id = V4L2_CID_STATELESS_MPEG4_QUIRKS,
++    };
++    uint32_t needed;
++
++    if (!ff_v4l2_request_query_control(avctx, &slice_params))
++        ctx->max_slice_params = FFMIN(FFMAX(slice_params.dims[0], 1),
++                                      MPEG4_MAX_SLICES);
++    else
++        ctx->max_slice_params = 0;
++
++    if (!mpeg4)
++        return 0;
++
++    if (!ff_v4l2_request_query_control(avctx, &quirks))
++        ctx->supported_quirks = quirks.maximum;
++    else
++        ctx->supported_quirks = 0;
++
++    /* Fall back to software when the driver cannot follow the encoder. */
++    return mpeg4_check_quirks(avctx, &needed);
++}
++
++static int v4l2_request_mpeg4_init(AVCodecContext *avctx)
++{
++    struct v4l2_ctrl_mpeg4_vol vol;
++    struct v4l2_ext_control control[] = {
++        {
++            .id   = V4L2_CID_STATELESS_MPEG4_VOL,
++            .ptr  = &vol,
++            .size = sizeof(vol),
++        },
++    };
++
++    if (mpeg4_unsupported(avctx))
++        return AVERROR(ENOSYS);
++
++    /* Lets the driver refuse the tools or the size before decoding. */
++    mpeg4_fill_vol(avctx, &vol);
++
++    return ff_v4l2_request_init(avctx, control, FF_ARRAY_ELEMS(control),
++                                v4l2_request_mpeg4_post_frames_ctx);
++}
++
++static int v4l2_request_h263_init(AVCodecContext *avctx)
++{
++    const H263DecContext *h = avctx->priv_data;
++    struct v4l2_ctrl_h263_picture picture;
++    struct v4l2_ext_control control[] = {
++        {
++            .id   = V4L2_CID_STATELESS_H263_PICTURE,
++            .ptr  = &picture,
++            .size = sizeof(picture),
++        },
++    };
++
++    if (h263_unsupported(avctx))
++        return AVERROR(ENOSYS);
++
++    /*
++     * Lets the driver refuse the coding tools or the size before decoding:
++     * the extended picture type tools stay enabled until a header changes
++     * them, which the first picture header of a stream does.
++     */
++    h263_fill_picture(avctx, h->umvplus || h->c.h263_aic ||
++                      h->modified_quant || h->h263_slice_structured, 0,
++                      &picture);
++    picture.forward_ref_ts = 0;
++    /* The Spark decoder may not have parsed a picture header yet. */
++    picture.pquant = FFMAX(picture.pquant, 1);
++
++    return ff_v4l2_request_init(avctx, control, FF_ARRAY_ELEMS(control),
++                                v4l2_request_mpeg4_post_frames_ctx);
++}
++
++static int v4l2_request_mpeg4_frame_params(AVCodecContext *avctx,
++                                           AVBufferRef *hw_frames_ctx)
++{
++    uint32_t pixelformat;
++
++    switch (avctx->codec_id) {
++    case AV_CODEC_ID_MPEG4:
++        pixelformat = V4L2_PIX_FMT_MPEG4_SLICE;
++        break;
++    case AV_CODEC_ID_FLV1:
++        pixelformat = V4L2_PIX_FMT_SPK_SLICE;
++        break;
++    default:
++        pixelformat = V4L2_PIX_FMT_H263_SLICE;
++        break;
++    }
++
++    return ff_v4l2_request_frame_params(avctx, hw_frames_ctx, pixelformat, 8);
++}
++
++#define V4L2_REQUEST_MPEG4_HWACCEL(codec, id_, start)                       \
++const FFHWAccel ff_ ## codec ## _v4l2request_hwaccel = {                     \
++    .p.name             = #codec "_v4l2request",                             \
++    .p.type             = AVMEDIA_TYPE_VIDEO,                                \
++    .p.id               = id_,                                               \
++    .p.pix_fmt          = AV_PIX_FMT_DRM_PRIME,                              \
++    .start_frame        = start ## _start_frame,                             \
++    .decode_slice       = v4l2_request_mpeg4_decode_slice,                   \
++    .end_frame          = v4l2_request_mpeg4_end_frame,                      \
++    .flush              = ff_v4l2_request_flush,                             \
++    .frame_priv_data_size = sizeof(V4L2RequestControlsMPEG4),                \
++    .init               = start ## _init,                                    \
++    .uninit             = ff_v4l2_request_uninit,                            \
++    .priv_data_size     = sizeof(V4L2RequestContextMPEG4),                   \
++    .frame_params       = v4l2_request_mpeg4_frame_params,                   \
++    .caps_internal      = HWACCEL_CAP_ASYNC_SAFE | HWACCEL_CAP_RESYNC_SLICES, \
++}
++
++#if CONFIG_MPEG4_V4L2REQUEST_HWACCEL
++V4L2_REQUEST_MPEG4_HWACCEL(mpeg4, AV_CODEC_ID_MPEG4, v4l2_request_mpeg4);
++#endif
++
++#if CONFIG_H263_V4L2REQUEST_HWACCEL
++V4L2_REQUEST_MPEG4_HWACCEL(h263, AV_CODEC_ID_H263, v4l2_request_h263);
++#endif
++
++#if CONFIG_FLV_V4L2REQUEST_HWACCEL
++V4L2_REQUEST_MPEG4_HWACCEL(flv, AV_CODEC_ID_FLV1, v4l2_request_h263);
++#endif

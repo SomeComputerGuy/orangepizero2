@@ -1,0 +1,497 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 06:41:32 +0000
+Subject: [PATCH 305/311] avcodec/cavsdec: add the plumbing for hwaccels
+
+Let the decoder negotiate its pixel format with ff_get_format() at the
+first sequence header, allocate the hwaccel private data of every
+picture and, when a hwaccel is active, hand it the whole picture (from
+the picture start code to the end of its last slice, as annex A keeps
+start code prefixes out of the slice data) instead of decoding the
+macroblock layer: start_frame() gets the picture, decode_slice() the
+first slice start code onwards, so the hwaccel can tell where the slice
+data begins. The sequence and picture header fields a stateless decoder
+needs are parsed and kept: progressive_sequence, chroma_format,
+sample_precision, frame_rate_code, top_field_first, repeat_first_field,
+advanced_pred_mode_disable, the skip_mode_flag of a field coded I
+picture, and the Guangdian (AVS+, GY/T 257.1) additions: bbv_delay
+extension, no_forward_reference_flag, pb_field_enhanced_flag, the
+weighting quantization parameters and aec_enable. Each reference keeps
+its picture_structure and top_field_first, and the reference before
+DPB[1] stays known by its distance and flags for the direct mode of B
+pictures. The coded size is whole macroblocks (an even number of rows
+when interlaced), horizontal_size and vertical_size the displayed part.
+
+The Guangdian profile is accepted in the sequence header but, without a
+hwaccel, refused as before; the software decoder's output is unchanged
+(FATE cavs and the bunny and test card references).
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/cavs.c    |   3 +
+ libavcodec/cavs.h    |  45 ++++++++++
+ libavcodec/cavsdec.c | 197 +++++++++++++++++++++++++++++++++++++------
+ 3 files changed, 218 insertions(+), 27 deletions(-)
+
+diff --git a/libavcodec/cavs.c b/libavcodec/cavs.c
+index 4db6892452..628000fc9a 100644
+--- a/libavcodec/cavs.c
++++ b/libavcodec/cavs.c
+@@ -837,6 +837,9 @@ av_cold int ff_cavs_end(AVCodecContext *avctx)
+ {
+     AVSContext *h = avctx->priv_data;
+ 
++    av_refstruct_unref(&h->cur.hwaccel_picture_private);
++    av_refstruct_unref(&h->DPB[0].hwaccel_picture_private);
++    av_refstruct_unref(&h->DPB[1].hwaccel_picture_private);
+     av_frame_free(&h->cur.f);
+     av_frame_free(&h->DPB[0].f);
+     av_frame_free(&h->DPB[1].f);
+diff --git a/libavcodec/cavs.h b/libavcodec/cavs.h
+index d3a88ca403..9cf26d5ae2 100644
+--- a/libavcodec/cavs.h
++++ b/libavcodec/cavs.h
+@@ -27,6 +27,7 @@
+ 
+ #include "libavutil/frame.h"
+ #include "libavutil/mem_internal.h"
++#include "libavutil/refstruct.h"
+ 
+ #include "avcodec.h"
+ #include "cavsdsp.h"
+@@ -42,6 +43,9 @@
+ #define PIC_I_START_CODE        0x000001b3
+ #define PIC_PB_START_CODE       0x000001b6
+ 
++#define CAVS_PROFILE_JIZHUN             0x20
++#define CAVS_PROFILE_GUANGDIAN          0x48    ///< AVS+ (AVS1-P16, GY/T 257.1)
++
+ #define A_AVAIL                          1
+ #define B_AVAIL                          2
+ #define C_AVAIL                          4
+@@ -164,8 +168,23 @@ struct dec_2dvlc {
+ typedef struct AVSFrame {
+     AVFrame *f;
+     int poc;
++    /* picture header fields a hwaccel needs of a reference picture */
++    int pic_structure;
++    int top_field_first;
++    void *hwaccel_picture_private;
+ } AVSFrame;
+ 
++/** AVS+ weighting quantization parameters of a picture header, as coded */
++typedef struct AVSWeightQuant {
++    int chroma_quant_param_disable;
++    int chroma_quant_param_delta_cb;
++    int chroma_quant_param_delta_cr;
++    int weighting_quant_param_index;
++    int weighting_quant_model;
++    int weighting_quant_param_delta1[6];
++    int weighting_quant_param_delta2[6];
++} AVSWeightQuant;
++
+ typedef struct AVSContext {
+     AVCodecContext *avctx;
+     BlockDSPContext bdsp;
+@@ -175,19 +194,38 @@ typedef struct AVSContext {
+     GetBitContext gb;
+     AVSFrame cur;     ///< currently decoded frame
+     AVSFrame DPB[2];  ///< reference frames
++    /** the reference decoded before DPB[1], as far as a hwaccel needs it */
++    struct {
++        int valid;
++        int poc;
++        int pic_structure;
++        int top_field_first;
++        int intra;
++    } ref2;
+     int dist[2];     ///< temporal distances from current frame to ref frames
+     int low_delay;
+     int profile, level;
++    int progressive_seq;
++    int chroma_format, sample_precision;
+     int aspect_ratio;
++    int frame_rate_code;
+     int mb_width, mb_height;
+     int width, height;
+     int stream_revision; ///<0 for samples from 2006, 1 for rm52j encoder
+     int progressive;
+     int pic_structure;
++    int top_field_first, repeat_first_field;
++    int advanced_pred_mode_disable;
+     int skip_mode_flag; ///< select between skip_count or one skip_flag per MB
+     int loop_filter_disable;
+     int alpha_offset, beta_offset;
+     int ref_flag;
++    /* AVS+ (Guangdian profile) picture header fields, for hwaccels */
++    int no_forward_reference;
++    int pb_field_enhanced;
++    int weighting_quant;
++    AVSWeightQuant wq;
++    int aec_enable;
+     int mbx, mby, mbidx; ///< macroblock coordinates
+     int flags;         ///< availability flags of neighbouring macroblocks
+     int stc;           ///< last start code
+@@ -252,6 +290,13 @@ extern const uint8_t     ff_cavs_partition_flags[30];
+ extern const cavs_vector ff_cavs_intra_mv;
+ extern const cavs_vector ff_cavs_dir_mv;
+ 
++/** Release the frame of an AVSFrame and what the hwaccel attached to it. */
++static inline void cavs_frame_unref(AVSFrame *frame)
++{
++    av_frame_unref(frame->f);
++    av_refstruct_unref(&frame->hwaccel_picture_private);
++}
++
+ static inline void set_mvs(cavs_vector *mv, enum cavs_block size) {
+     switch(size) {
+     case BLK_16X16:
+diff --git a/libavcodec/cavsdec.c b/libavcodec/cavsdec.c
+index fffe0657f9..7f525bd50a 100644
+--- a/libavcodec/cavsdec.c
++++ b/libavcodec/cavsdec.c
+@@ -25,6 +25,8 @@
+  * @author Stefan Gehrer <stefan.gehrer@gmx.de>
+  */
+ 
++#include "config_components.h"
++
+ #include "libavutil/attributes.h"
+ #include "libavutil/avassert.h"
+ #include "libavutil/emms.h"
+@@ -35,6 +37,8 @@
+ #include "cavs.h"
+ #include "codec_internal.h"
+ #include "decode.h"
++#include "hwaccel_internal.h"
++#include "hwconfig.h"
+ #include "mathops.h"
+ #include "mpeg12data.h"
+ #include "startcode.h"
+@@ -984,6 +988,46 @@ static inline int check_for_slice(AVSContext *h)
+  *
+  ****************************************************************************/
+ 
++/**
++ * Hand the whole picture to the hwaccel, from its start code to the end of
++ * its last slice. Annex A keeps start code prefixes out of the slice data,
++ * so the next start code of another unit ends the picture; extensions and
++ * user data before the first slice belong to it.
++ */
++static int decode_pic_hwaccel(AVSContext *h)
++{
++    const FFHWAccel *hwaccel = ffhwaccel(h->avctx->hwaccel);
++    const uint8_t *buf = h->gb.buffer - 4;       /* the picture start code */
++    const uint8_t *end = h->gb.buffer + (h->gb.size_in_bits >> 3);
++    const uint8_t *p = h->gb.buffer, *slice = NULL, *pic_end = end;
++    uint32_t stc = -1;
++    int ret;
++
++    while (p < end) {
++        p = avpriv_find_start_code(p, end, &stc);
++        if ((stc & 0xFFFFFF00) != 0x100)
++            break;
++        if (stc <= SLICE_MAX_START_CODE) {
++            if (!slice)
++                slice = p - 4;
++        } else if (slice || (stc != EXT_START_CODE && stc != USER_START_CODE)) {
++            pic_end = p - 4;
++            break;
++        }
++    }
++    /* streams of the pre-final revision have no slice start codes */
++    if (!slice)
++        slice = buf + 4;
++
++    ret = hwaccel->start_frame(h->avctx, NULL, buf, pic_end - buf);
++    if (ret < 0)
++        return ret;
++    ret = hwaccel->decode_slice(h->avctx, slice, pic_end - slice);
++    if (ret < 0)
++        return ret;
++    return hwaccel->end_frame(h->avctx);
++}
++
+ static int decode_pic(AVSContext *h)
+ {
+     int ret;
+@@ -994,10 +1038,15 @@ static int decode_pic(AVSContext *h)
+         av_log(h->avctx, AV_LOG_ERROR, "No sequence header decoded yet\n");
+         return AVERROR_INVALIDDATA;
+     }
++    /* the Guangdian profile is left to the hwaccels */
++    if (h->profile == CAVS_PROFILE_GUANGDIAN && !h->avctx->hwaccel)
++        return AVERROR_PATCHWELCOME;
+ 
+-    av_frame_unref(h->cur.f);
++    cavs_frame_unref(&h->cur);
+ 
+     skip_bits(&h->gb, 16);//bbv_dwlay
++    if (h->profile == CAVS_PROFILE_GUANGDIAN)
++        skip_bits(&h->gb, 8); //marker_bit, bbv_delay_extension
+     if (h->stc == PIC_PB_START_CODE) {
+         h->cur.f->pict_type = get_bits(&h->gb, 2) + AV_PICTURE_TYPE_I;
+         if (h->cur.f->pict_type > AV_PICTURE_TYPE_B) {
+@@ -1013,8 +1062,10 @@ static int decode_pic(AVSContext *h)
+         if (get_bits1(&h->gb))
+             skip_bits(&h->gb, 24);//time_code
+         /* old sample clips were all progressive and no low_delay,
+-           bump stream revision if detected otherwise */
+-        if (h->low_delay || !(show_bits(&h->gb, 9) & 1))
++           bump stream revision if detected otherwise; a Guangdian
++           stream always has the marker bit */
++        if (h->profile == CAVS_PROFILE_GUANGDIAN ||
++            h->low_delay || !(show_bits(&h->gb, 9) & 1))
+             h->stream_revision = 1;
+         /* similarly test top_field_first and repeat_first_field */
+         else if (show_bits(&h->gb, 11) & 3)
+@@ -1031,15 +1082,21 @@ static int decode_pic(AVSContext *h)
+     if (ret < 0)
+         return ret;
+ 
+-    if (!h->edge_emu_buffer) {
+-        int alloc_size = FFALIGN(FFABS(h->cur.f->linesize[0]) + 32, 32);
+-        h->edge_emu_buffer = av_mallocz(alloc_size * 2 * 24);
+-        if (!h->edge_emu_buffer)
+-            return AVERROR(ENOMEM);
+-    }
++    if (h->avctx->hwaccel) {
++        ret = ff_hwaccel_frame_priv_alloc(h->avctx, &h->cur.hwaccel_picture_private);
++        if (ret < 0)
++            return ret;
++    } else {
++        if (!h->edge_emu_buffer) {
++            int alloc_size = FFALIGN(FFABS(h->cur.f->linesize[0]) + 32, 32);
++            h->edge_emu_buffer = av_mallocz(alloc_size * 2 * 24);
++            if (!h->edge_emu_buffer)
++                return AVERROR(ENOMEM);
++        }
+ 
+-    if ((ret = ff_cavs_init_pic(h)) < 0)
+-        return ret;
++        if ((ret = ff_cavs_init_pic(h)) < 0)
++            return ret;
++    }
+     h->cur.poc = get_bits(&h->gb, 8) * 2;
+ 
+     /* get temporal distances and MV scaling factors */
+@@ -1068,21 +1125,31 @@ static int decode_pic(AVSContext *h)
+     h->pic_structure = 1;
+     if (!h->progressive)
+         h->pic_structure = get_bits1(&h->gb);
++    h->advanced_pred_mode_disable = 0;
+     if (!h->pic_structure && h->stc == PIC_PB_START_CODE)
+-        skip_bits1(&h->gb);     //advanced_pred_mode_disable
+-    skip_bits1(&h->gb);        //top_field_first
+-    skip_bits1(&h->gb);        //repeat_first_field
++        h->advanced_pred_mode_disable = get_bits1(&h->gb);
++    h->top_field_first    = get_bits1(&h->gb);
++    h->repeat_first_field = get_bits1(&h->gb);
+     h->pic_qp_fixed =
+     h->qp_fixed = get_bits1(&h->gb);
+     h->qp       = get_bits(&h->gb, 6);
++    h->no_forward_reference = h->pb_field_enhanced = 0;
+     if (h->cur.f->pict_type == AV_PICTURE_TYPE_I) {
++        /* only a field coded I picture has skip_mode_flag: its second
++           field uses the P macroblock layer */
+         if (!h->progressive && !h->pic_structure)
+-            skip_bits1(&h->gb);//what is this?
++            h->skip_mode_flag  = get_bits1(&h->gb);
+         skip_bits(&h->gb, 4);   //reserved bits
+     } else {
+         if (!(h->cur.f->pict_type == AV_PICTURE_TYPE_B && h->pic_structure == 1))
+             h->ref_flag        = get_bits1(&h->gb);
+-        skip_bits(&h->gb, 4);   //reserved bits
++        /* no_forward_reference_flag and pb_field_enhanced_flag of the
++           Guangdian profile, reserved bits in JiZhun */
++        h->no_forward_reference = get_bits1(&h->gb);
++        h->pb_field_enhanced    = get_bits1(&h->gb);
++        if (h->profile != CAVS_PROFILE_GUANGDIAN)
++            h->no_forward_reference = h->pb_field_enhanced = 0;
++        skip_bits(&h->gb, 2);   //reserved bits
+         h->skip_mode_flag      = get_bits1(&h->gb);
+     }
+     h->loop_filter_disable     = get_bits1(&h->gb);
+@@ -1098,8 +1165,47 @@ static int decode_pic(AVSContext *h)
+         h->alpha_offset = h->beta_offset  = 0;
+     }
+ 
++    /* the Guangdian profile ends the header with the weighting
++       quantization parameters and aec_enable */
++    h->weighting_quant = h->aec_enable = 0;
++    if (h->profile == CAVS_PROFILE_GUANGDIAN) {
++        h->weighting_quant = get_bits1(&h->gb);
++        if (h->weighting_quant) {
++            AVSWeightQuant *wq = &h->wq;
++
++            memset(wq, 0, sizeof(*wq));
++            wq->chroma_quant_param_disable = get_bits1(&h->gb);
++            if (!wq->chroma_quant_param_disable) {
++                wq->chroma_quant_param_delta_cb = get_se_golomb(&h->gb);
++                wq->chroma_quant_param_delta_cr = get_se_golomb(&h->gb);
++            }
++            wq->weighting_quant_param_index = get_bits(&h->gb, 2);
++            wq->weighting_quant_model       = get_bits(&h->gb, 2);
++            if (wq->weighting_quant_param_index == 1) {
++                for (int i = 0; i < 6; i++)
++                    wq->weighting_quant_param_delta1[i] = get_se_golomb(&h->gb);
++            } else if (wq->weighting_quant_param_index == 2) {
++                for (int i = 0; i < 6; i++)
++                    wq->weighting_quant_param_delta2[i] = get_se_golomb(&h->gb);
++            }
++        }
++        h->aec_enable = get_bits1(&h->gb);
++        if (get_bits_left(&h->gb) < 0)
++            return AVERROR_INVALIDDATA;
++    }
++
++    h->cur.pic_structure   = h->pic_structure;
++    h->cur.top_field_first = h->top_field_first;
++    if (!h->progressive) {
++        h->cur.f->flags |= AV_FRAME_FLAG_INTERLACED;
++        if (h->top_field_first)
++            h->cur.f->flags |= AV_FRAME_FLAG_TOP_FIELD_FIRST;
++    }
++
+     ret = 0;
+-    if (h->cur.f->pict_type == AV_PICTURE_TYPE_I) {
++    if (h->avctx->hwaccel) {
++        ret = decode_pic_hwaccel(h);
++    } else if (h->cur.f->pict_type == AV_PICTURE_TYPE_I) {
+         do {
+             check_for_slice(h);
+             ret = decode_mb_i(h, 0);
+@@ -1163,7 +1269,13 @@ static int decode_pic(AVSContext *h)
+     }
+     emms_c();
+     if (ret >= 0 && h->cur.f->pict_type != AV_PICTURE_TYPE_B) {
+-        av_frame_unref(h->DPB[1].f);
++        /* DPB[1] stays known to the hwaccels as the third reference */
++        h->ref2.valid           = !!h->DPB[1].f->data[0];
++        h->ref2.poc             = h->DPB[1].poc;
++        h->ref2.pic_structure   = h->DPB[1].pic_structure;
++        h->ref2.top_field_first = h->DPB[1].top_field_first;
++        h->ref2.intra           = h->DPB[1].f->pict_type == AV_PICTURE_TYPE_I;
++        cavs_frame_unref(&h->DPB[1]);
+         FFSWAP(AVSFrame, h->cur, h->DPB[1]);
+         FFSWAP(AVSFrame, h->DPB[0], h->DPB[1]);
+     }
+@@ -1176,20 +1288,28 @@ static int decode_pic(AVSContext *h)
+  *
+  ****************************************************************************/
+ 
++static const enum AVPixelFormat cavs_pix_fmts[] = {
++    AV_PIX_FMT_YUV420P,
++    AV_PIX_FMT_NONE
++};
++
+ static int decode_seq_header(AVSContext *h)
+ {
+     int frame_rate_code;
+     int width, height;
++    int mb_height;
+     int ret;
+ 
+     h->profile = get_bits(&h->gb, 8);
+-    if (h->profile != 0x20) {
++    /* the sequence header is the same for both profiles */
++    if (h->profile != CAVS_PROFILE_JIZHUN &&
++        h->profile != CAVS_PROFILE_GUANGDIAN) {
+         avpriv_report_missing_feature(h->avctx,
+                                       "only support JiZhun profile");
+         return AVERROR_PATCHWELCOME;
+     }
+     h->level   = get_bits(&h->gb, 8);
+-    skip_bits1(&h->gb); //progressive sequence
++    h->progressive_seq = get_bits1(&h->gb);
+ 
+     width  = get_bits(&h->gb, 14);
+     height = get_bits(&h->gb, 14);
+@@ -1202,8 +1322,8 @@ static int decode_seq_header(AVSContext *h)
+         av_log(h->avctx, AV_LOG_ERROR, "Dimensions invalid\n");
+         return AVERROR_INVALIDDATA;
+     }
+-    skip_bits(&h->gb, 2); //chroma format
+-    skip_bits(&h->gb, 3); //sample_precision
++    h->chroma_format    = get_bits(&h->gb, 2);
++    h->sample_precision = get_bits(&h->gb, 3);
+     h->aspect_ratio = get_bits(&h->gb, 4);
+     frame_rate_code = get_bits(&h->gb, 4);
+     if (frame_rate_code == 0 || frame_rate_code > 13) {
+@@ -1211,23 +1331,43 @@ static int decode_seq_header(AVSContext *h)
+                "frame_rate_code %d is invalid\n", frame_rate_code);
+         frame_rate_code = 1;
+     }
++    h->frame_rate_code = frame_rate_code;
+ 
+     skip_bits(&h->gb, 18); //bit_rate_lower
+     skip_bits1(&h->gb);    //marker_bit
+     skip_bits(&h->gb, 12); //bit_rate_upper
+     h->low_delay =  get_bits1(&h->gb);
+ 
+-    ret = ff_set_dimensions(h->avctx, width, height);
++    /* the coded picture is whole macroblocks, an even number of rows when
++       interlaced; horizontal_size and vertical_size are the displayed part */
++    mb_height = h->progressive_seq ? (height + 15) >> 4
++                                   : ((height + 31) >> 5) * 2;
++    ret = ff_set_dimensions(h->avctx, ((width + 15) >> 4) * 16, mb_height * 16);
+     if (ret < 0)
+         return ret;
++    h->avctx->width  = width;
++    h->avctx->height = height;
+ 
+     h->width  = width;
+     h->height = height;
+     h->mb_width  = (h->width  + 15) >> 4;
+     h->mb_height = (h->height + 15) >> 4;
+     h->avctx->framerate = ff_mpeg12_frame_rate_tab[frame_rate_code];
+-    if (!h->top_qp)
++    h->avctx->profile   = h->profile;
++    h->avctx->level     = h->level;
++    if (!h->top_qp) {
++        /* the first sequence header: choose the output format and hwaccel */
++        ret = ff_get_format(h->avctx, cavs_pix_fmts);
++        if (ret < 0)
++            return ret;
++        h->avctx->pix_fmt = ret;
++        if (h->profile == CAVS_PROFILE_GUANGDIAN && !h->avctx->hwaccel) {
++            avpriv_report_missing_feature(h->avctx,
++                                          "Guangdian profile without a hwaccel");
++            return AVERROR_PATCHWELCOME;
++        }
+         return ff_cavs_init_top_lines(h);
++    }
+     return 0;
+ }
+ 
+@@ -1276,8 +1416,9 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
+             break;
+         case PIC_I_START_CODE:
+             if (!h->got_keyframe) {
+-                av_frame_unref(h->DPB[0].f);
+-                av_frame_unref(h->DPB[1].f);
++                cavs_frame_unref(&h->DPB[0]);
++                cavs_frame_unref(&h->DPB[1]);
++                h->ref2.valid = 0;
+                 h->got_keyframe = 1;
+             }
+         case PIC_PB_START_CODE:
+@@ -1303,6 +1444,7 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
+                 }
+             } else {
+                 av_frame_move_ref(rframe, h->cur.f);
++                av_refstruct_unref(&h->cur.hwaccel_picture_private);
+             }
+             break;
+         case EXT_START_CODE:
+@@ -1312,7 +1454,8 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
+             //mpeg_decode_user_data(avctx, buf_ptr, input_size);
+             break;
+         default:
+-            if (stc <= SLICE_MAX_START_CODE) {
++            /* a hwaccel decodes the slices of the picture in one go */
++            if (stc <= SLICE_MAX_START_CODE && !avctx->hwaccel) {
+                 init_get_bits(&h->gb, buf_ptr, input_size);
+                 decode_slice_header(h, &h->gb);
+             }

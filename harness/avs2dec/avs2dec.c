@@ -784,6 +784,9 @@ static int get_free_frame(struct decoder *d)
 /* ------------------------------------------------------------------ */
 /* V4L2 stateless decoding                                            */
 
+static bool afbc_out;			/* -o given with AVS2_CAP=AFBC */
+static unsigned int afbc_written;	/* AFBC frames written to -o */
+
 struct v4l2_ctx {
 	int video_fd, media_fd;
 	int req_fd[NUM_OUT_BUFS];
@@ -795,6 +798,7 @@ struct v4l2_ctx {
 	unsigned int num_cap;
 	unsigned int next_out;
 	bool p010;
+	bool afbc;		/* AFBC capture: -o gets the raw buffers */
 	/*
 	 * Requests in flight, oldest first (AVS2_DEPTH, default 2): the next
 	 * picture is queued while the VE still decodes the previous one, so
@@ -994,11 +998,16 @@ static struct v4l2_ctx *v4l2_open(const char *video, const char *media,
 		v->p010 = false;
 		fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_NV12_32L32;
 	}
-	/* AVS2_CAP=AFBC: 10-bit AFBC (no readback), throughput runs only. */
+	/*
+	 * AVS2_CAP=AFBC: 10-bit AFBC capture. No linear readback or md5:
+	 * either AVS2_NOOUT=1 (throughput runs) or -o file, which then gets
+	 * the raw AFBC capture buffers in output order (see readback_frame()).
+	 */
 	if (getenv("AVS2_CAP") && !strcmp(getenv("AVS2_CAP"), "AFBC")) {
-		if (!getenv("AVS2_NOOUT"))
-			die("AVS2_CAP=AFBC needs AVS2_NOOUT=1");
+		if (!getenv("AVS2_NOOUT") && !afbc_out)
+			die("AVS2_CAP=AFBC needs AVS2_NOOUT=1 or -o file");
 		v->p010 = false;
+		v->afbc = true;
 		fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUV420_10_AFBC_16X16_SPLIT;
 	}
 	fmt.fmt.pix.width = s->width;
@@ -1178,6 +1187,9 @@ static void v4l2_submit(struct decoder *d, const uint8_t *data, size_t len,
  * AVS2_DUMP=a,b only write output frames a, b, ... to the -o file (the
  *               md5s still cover every frame);
  * AVS2_NOOUT=1  skip reading the pictures back (no md5): throughput runs.
+ * AVS2_CAP=AFBC with -o file: the raw 10-bit AFBC capture buffers go to the
+ *               file in output order (32-byte header per frame, see
+ *               readback_frame()) for vdec-perf/afbc/afbc-gpu-check.
  */
 static bool out8;
 static bool dump_this = true;
@@ -1257,6 +1269,36 @@ static void readback_frame(struct decoder *d, int idx)
 	/* AVS2_NOOUT=1: no readback or md5 (throughput runs). */
 	if (!v || (getenv("AVS2_NOOUT") && atoi(getenv("AVS2_NOOUT"))))
 		return;
+
+	/*
+	 * AFBC capture: write the raw capture buffer to the -o file behind a
+	 * 32-byte header (the afbc-gpu-check dump format: magic, size, width,
+	 * height, DRM fourcc YUV420_10BIT, AFBC 16x16|SPARSE|SPLIT modifier,
+	 * output index). The md5 of an AFBC surface means nothing, so none.
+	 */
+	if (v->afbc) {
+		struct {
+			char magic[8];
+			uint32_t size, width, height, drm_format;
+			uint64_t modifier;
+			uint32_t index;
+		} __attribute__((packed)) hdr = {
+			{ 'A', 'F', 'B', 'C', 'D', 'M', 'P', '1' },
+			v->cap_len[idx], w, h,
+			0x30315559,		/* DRM_FORMAT_YUV420_10BIT */
+			(8ULL << 56) | 0x1 | 0x40 | 0x400,
+			f->out_index,
+		};
+
+		if (!d->out)
+			die("AFBC capture needs -o");
+		if (fwrite(&hdr, sizeof(hdr), 1, d->out) != 1 ||
+		    fwrite(v->cap_map[idx], 1, hdr.size, d->out) != hdr.size)
+			die("write: %s", strerror(errno));
+		fflush(d->out);
+		afbc_written++;
+		return;
+	}
 
 	if (d->frame_md5)
 		md5_init(&d->frame_md5_ctx);
@@ -1589,6 +1631,7 @@ int main(int argc, char **argv)
 	if (optind + 1 != argc || d.num_bufs < 2 || d.num_bufs > MAX_BUFS)
 		usage();
 	out8 = getenv("AVS2_OUT8") && atoi(getenv("AVS2_OUT8"));
+	afbc_out = outname != NULL;
 
 	/* "-" or any non-regular file (a pipe from curl) is read to EOF. */
 	if (!strcmp(argv[optind], "-"))
@@ -1720,7 +1763,9 @@ int main(int argc, char **argv)
 
 	md5_final(&d.md5, sum);
 	printf("%u pictures decoded, %u output", d.pic_count, d.out_count);
-	if (!parse_only)
+	if (afbc_written)
+		printf(", %u AFBC capture buffers written", afbc_written);
+	else if (!parse_only)
 		printf(", md5 %s", sum);
 	printf("\n");
 

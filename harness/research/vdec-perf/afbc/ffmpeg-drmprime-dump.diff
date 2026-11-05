@@ -1,0 +1,86 @@
+diff --git a/libavcodec/decode.c b/libavcodec/decode.c
+index ca1adfa..5e43312 100644
+--- a/libavcodec/decode.c
++++ b/libavcodec/decode.c
+@@ -609,6 +609,73 @@ static int decode_simple_receive_frame(AVCodecContext *avctx, AVFrame *frame)
+     return 0;
+ }
+ 
++/*
++ * Local test hook (Zero2 AFBC bit-exactness check, not for upstream):
++ * V4L2REQUEST_DUMP=path writes every output DRM_PRIME frame's dma-buf
++ * (the raw V4L2 capture buffer, e.g. the VE's AFBC surface) to path in
++ * output order, each preceded by a 32-byte header:
++ *   "AFBCDMP1", u32 size, u32 width, u32 height, u32 drm_format,
++ *   u64 modifier, u32 index.  V4L2REQUEST_DUMP_MAX=n stops after n frames.
++ */
++#include <sys/mman.h>
++#include <sys/ioctl.h>
++#include <linux/dma-buf.h>
++#include <unistd.h>
++#include "libavutil/hwcontext_drm.h"
++
++static void v4l2request_test_dump(AVFrame *frame)
++{
++    static FILE *out;
++    static int tried, max_frames;
++    static unsigned index;
++    const AVDRMFrameDescriptor *desc;
++    struct dma_buf_sync sync;
++    void *map;
++    struct {
++        char magic[8];
++        uint32_t size, width, height, drm_format;
++        uint64_t modifier;
++        uint32_t index;
++    } __attribute__((packed)) hdr = { { 'A', 'F', 'B', 'C', 'D', 'M', 'P', '1' } };
++
++    if (!tried) {
++        const char *path = getenv("V4L2REQUEST_DUMP");
++        const char *max = getenv("V4L2REQUEST_DUMP_MAX");
++        tried = 1;
++        if (path)
++            out = fopen(path, "wb");
++        if (path && !out)
++            av_log(NULL, AV_LOG_ERROR, "V4L2REQUEST_DUMP: cannot open %s\n", path);
++        max_frames = max ? atoi(max) : 0;
++    }
++    if (!out || frame->format != AV_PIX_FMT_DRM_PRIME || !frame->data[0])
++        return;
++    if (max_frames && index >= (unsigned)max_frames)
++        return;
++    desc = (const AVDRMFrameDescriptor *)frame->data[0];
++    if (desc->nb_objects < 1)
++        return;
++    map = mmap(NULL, desc->objects[0].size, PROT_READ, MAP_SHARED, desc->objects[0].fd, 0);
++    if (map == MAP_FAILED) {
++        av_log(NULL, AV_LOG_ERROR, "V4L2REQUEST_DUMP: mmap failed\n");
++        return;
++    }
++    sync.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ;
++    ioctl(desc->objects[0].fd, DMA_BUF_IOCTL_SYNC, &sync);
++    hdr.size = desc->objects[0].size;
++    hdr.width = frame->width;
++    hdr.height = frame->height;
++    hdr.drm_format = desc->layers[0].format;
++    hdr.modifier = desc->objects[0].format_modifier;
++    hdr.index = index++;
++    fwrite(&hdr, sizeof(hdr), 1, out);
++    fwrite(map, 1, hdr.size, out);
++    fflush(out);
++    sync.flags = DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ;
++    ioctl(desc->objects[0].fd, DMA_BUF_IOCTL_SYNC, &sync);
++    munmap(map, hdr.size);
++}
++
+ int ff_decode_receive_frame_internal(AVCodecContext *avctx, AVFrame *frame)
+ {
+     AVCodecInternal *avci = avctx->internal;
+@@ -698,6 +765,7 @@ static int decode_receive_frame_internal(AVCodecContext *avctx, AVFrame *frame,
+                 }
+             }
+         }
++        v4l2request_test_dump(frame);
+     }
+ 
+     /* free the per-frame decode data */

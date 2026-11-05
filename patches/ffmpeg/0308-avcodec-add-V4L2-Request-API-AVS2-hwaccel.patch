@@ -1,6 +1,6 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Arun Iyengar <aiyengar1990@gmail.com>
-Date: Thu, 5 Nov 2026 06:42:36 +0000
+Date: Thu, 5 Nov 2026 09:27:14 +0000
 Subject: [PATCH 308/308] avcodec: add V4L2 Request API AVS2 hwaccel
 
 Add a V4L2 Request API hwaccel for the native AVS2 decoder, using the
@@ -67,7 +67,7 @@ index 3b622ed..c6d9868 100644
  
  TESTPROGS = avcodec                                                     \
 diff --git a/libavcodec/avs2dec.c b/libavcodec/avs2dec.c
-index 1454f43..b4acd3c 100644
+index 1571d82..539d750 100644
 --- a/libavcodec/avs2dec.c
 +++ b/libavcodec/avs2dec.c
 @@ -130,9 +130,12 @@ static av_cold void avs2_decode_flush(AVCodecContext *avctx)
@@ -84,7 +84,7 @@ index 1454f43..b4acd3c 100644
      *fmtp++ = s->pix_fmt;
      *fmtp   = AV_PIX_FMT_NONE;
  
-@@ -723,4 +726,10 @@ const FFCodec ff_avs2_decoder = {
+@@ -722,4 +725,10 @@ const FFCodec ff_avs2_decoder = {
      .flush          = avs2_decode_flush,
      .p.capabilities = AV_CODEC_CAP_DR1,
      .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP,

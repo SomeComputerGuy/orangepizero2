@@ -1,6 +1,6 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Arun Iyengar <aiyengar1990@gmail.com>
-Date: Thu, 5 Nov 2026 06:42:36 +0000
+Date: Thu, 5 Nov 2026 09:27:14 +0000
 Subject: [PATCH 307/308] avcodec: add a native AVS2 decoder for hardware
  acceleration
 
@@ -44,9 +44,9 @@ Generated-by: LLM
  libavcodec/allcodecs.c |   2 +
  libavcodec/avs2_ps.c   | 506 ++++++++++++++++++++++++++++
  libavcodec/avs2_ps.h   | 154 +++++++++
- libavcodec/avs2dec.c   | 726 +++++++++++++++++++++++++++++++++++++++++
+ libavcodec/avs2dec.c   | 725 +++++++++++++++++++++++++++++++++++++++++
  libavcodec/avs2dec.h   |  88 +++++
- 7 files changed, 1478 insertions(+)
+ 7 files changed, 1477 insertions(+)
  create mode 100644 libavcodec/avs2_ps.c
  create mode 100644 libavcodec/avs2_ps.h
  create mode 100644 libavcodec/avs2dec.c
@@ -763,10 +763,10 @@ index 0000000..5d68300
 +#endif /* AVCODEC_AVS2_PS_H */
 diff --git a/libavcodec/avs2dec.c b/libavcodec/avs2dec.c
 new file mode 100644
-index 0000000..1454f43
+index 0000000..1571d82
 --- /dev/null
 +++ b/libavcodec/avs2dec.c
-@@ -0,0 +1,726 @@
+@@ -0,0 +1,725 @@
 +/*
 + * AVS2 decoder
 + *
@@ -1250,6 +1250,10 @@ index 0000000..1454f43
 +    if (ret < 0)
 +        return ret;
 +
++    /* get_format() failed to find one: no software fallback */
++    if (!avctx->hwaccel)
++        return AVERROR(ENOSYS);
++
 +    cur = avs2_get_free_frame(s);
 +    if (!cur) {
 +        av_log(avctx, AV_LOG_ERROR, "No free decoded picture buffer entry\n");
@@ -1296,11 +1300,6 @@ index 0000000..1454f43
 +           "picture %c doi %"PRId64" poc %d qp %d refs %d size %u offset %u\n",
 +           "IPBF"[pic->picture_type], doi, poc, pic->picture_qp, s->num_refs,
 +           s->pic_size, s->data_offset);
-+
-+    if (!avctx->hwaccel) {
-+        ret = AVERROR(ENOSYS);
-+        goto fail;
-+    }
 +
 +    ret = FF_HW_CALL(avctx, start_frame, pkt->buf, s->pic_data, s->pic_size);
 +    if (ret < 0)

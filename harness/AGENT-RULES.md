@@ -28,7 +28,9 @@ Acceptance: docs/spec-checklist.md, docs/datasheet-checklist.md. Status/work lis
 - Project repo (this one, origin SomeComputerGuy/orangepizero2): commit your reports/scripts; pull --rebase before
   push; no force-push; non-destructive git only.
 - Author: Arun Iyengar <aiyengar1990@gmail.com>. A hook adds trailers. NEVER add Co-Authored-By.
-  Mesa commits carry `Generated-by: LLM`. Never send anything upstream (Mesa, FFmpeg, kernel, Armbian) yourself.
+  Mesa commits carry `Generated-by: LLM`. Kernel patches (sunxi-7.3 patch files, anything meant for LKML) carry
+  exactly `Assisted-by: LLM [TOOL1] [TOOL2]` (Documentation/process/coding-assistants.rst; tools = e.g. coccinelle,
+  sparse, smatch, not git/gcc) above the user's Signed-off-by; the AI never adds a Signed-off-by of its own. Never send anything upstream (Mesa, FFmpeg, kernel, Armbian) yourself.
 
 ## Builds
 - Build caching is rule #1: ccache + Armbian artifact caches; no needless full rebuilds. No Docker. No sudo.

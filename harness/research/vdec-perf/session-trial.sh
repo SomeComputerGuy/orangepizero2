@@ -4,6 +4,7 @@
 H=/home/aruni/orangepizero2; S=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh; T=${1:?tag}; R=${2:?round}; O=$S/logs/queue-$R
 K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
 mkdir -p $O
+[[ $T =~ ^c[0-9]+$ ]] && T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)  # newest cumulative tag
 waitup() { for i in $(seq 1 60); do sleep 5; $SSH -n true 2>/dev/null && return 0; done; return 1; }
 restore() { $SSH -n 'ln -sfn vmlinuz-7.3.1-edge-sunxi64 /boot/Image; rm -f /boot/vdec-trial; sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'
   waitup && $SSH -n 'echo restored: $(uname -rv) $(readlink /boot/Image)' | tee -a $O/round.txt; }
@@ -22,5 +23,5 @@ else
 fi
 $SSH -n 'uname -rv; touch /run/vdec-ok; ls /dev/video0' | tee -a $O/board-info.txt
 scp -q "${K[@]}" $S/ve-timeline.sh $S/board-queue-$R.sh root@10.56.0.107:/root/vp/
-$SSH -n "chmod +x /root/vp/ve-timeline.sh; MHZ=${MHZ:-600} timeout 3600 bash /root/vp/board-queue-$R.sh" 2>&1 | tee $O/round.txt
+$SSH -n "chmod +x /root/vp/ve-timeline.sh; MHZ=${MHZ:-600} timeout ${TMO:-3600} bash /root/vp/board-queue-$R.sh" 2>&1 | tee $O/round.txt
 restore

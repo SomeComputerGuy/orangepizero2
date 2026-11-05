@@ -4,6 +4,9 @@
 set -e
 H=/home/aruni/orangepizero2; S=$H/harness/research/vdec-perf; SV=$H/kernel-check/vdec-serve; t=$1
 SSH=$H/harness/ssh.sh
+# Cumulative tags (c<N>) always install the newest one (AGENT-RULES "Builds"), also for sessions queued earlier.
+if [[ $t =~ ^c[0-9]+$ ]]; then n=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)
+  [ "$n" != "$t" ] && echo "install-kernel: $t -> newest cumulative tag $n"; t=$n; fi
 # fallback service (if the image lacks it)
 base64 -w0 $H/harness/research/vdec/vdec-fallback.sh | $SSH 'base64 -d > /usr/local/sbin/vdec-fallback.sh; chmod +x /usr/local/sbin/vdec-fallback.sh'
 base64 -w0 $SV/vdec-fallback.service | $SSH 'base64 -d > /etc/systemd/system/vdec-fallback.service; systemctl daemon-reload; systemctl enable vdec-fallback.service 2>&1 | tail -1'

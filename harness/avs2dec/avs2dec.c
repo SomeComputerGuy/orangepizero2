@@ -1528,9 +1528,10 @@ static void decode_picture(struct decoder *d, const uint8_t *data, size_t len,
 			doi, poc, p.qp);
 		for (i = 0; i < nrefs; i++)
 			fprintf(stderr, " %d", cur->ref_poc[i]);
-		fprintf(stderr, " alf %d%d%d/%u wq %d len %zu off %zu buf %d\n",
+		fprintf(stderr, " alf %d%d%d/%u wq %d len %zu off %zu buf %d flags 0x%04x\n",
 			p.alf.enable[0], p.alf.enable[1], p.alf.enable[2],
-			p.alf.num_luma, p.wq_enable, len, data_offset, idx);
+			p.alf.num_luma, p.wq_enable, len, data_offset, idx,
+			pc.flags);
 	}
 
 	if (d->v4l2) {
@@ -1720,6 +1721,12 @@ int main(int argc, char **argv)
 						s.low_delay ? " low-delay" : "",
 						s.sao ? " sao" : "", s.alf ? " alf" : "",
 						s.wq_enable, s.background_enable);
+				if (!d.seq.valid && verbose) {
+					struct v4l2_ctrl_avs2_sequence sc;
+
+					fill_sequence_ctrl(&s, &sc);
+					fprintf(stderr, "sequence flags 0x%05x\n", sc.flags);
+				}
 				d.seq = s;
 				if (!parse_only && !d.v4l2) {
 					d.v4l2 = v4l2_open(video, media, &d.seq,

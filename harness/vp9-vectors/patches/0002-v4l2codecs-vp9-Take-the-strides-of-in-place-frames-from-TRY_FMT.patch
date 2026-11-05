@@ -1,0 +1,198 @@
+From f9b2a3dbff8be58fa66c57cb03dee3857a63abf5 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 19:16:47 +0000
+Subject: [PATCH] v4l2codecs: vp9: Take the strides of in-place frames from
+ TRY_FMT
+
+A VP9 inter frame decoded in place into the CAPTURE buffers of a larger
+format does not necessarily have the line stride of that format: the
+cedrus hardware (Allwinner H616) derives the stride of every reference
+from the width of that reference, so the driver writes such a frame
+with the stride of a frame of its own width, while rkvdec keeps the
+stride of the format. Both report the layout of a frame of a given size
+through VIDIOC_TRY_FMT on the CAPTURE queue.
+
+Ask the driver with TRY_FMT for the frame size when an inter frame is
+decoded in place, and put those strides into the GstVideoMeta of the
+output buffers; the plane offsets stay those of the buffer. For the
+coded size this is the format itself, so nothing changes for streams
+without inter frame resizes.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2codecs/gstv4l2codecvp9dec.c | 40 +++++++++++++++++++++---
+ sys/v4l2codecs/gstv4l2decoder.c     | 48 +++++++++++++++++++++++++++++
+ sys/v4l2codecs/gstv4l2decoder.h     |  5 +++
+ 3 files changed, 88 insertions(+), 5 deletions(-)
+
+diff --git a/sys/v4l2codecs/gstv4l2codecvp9dec.c b/sys/v4l2codecs/gstv4l2codecvp9dec.c
+index e9e3245..2fa533f 100644
+--- a/sys/v4l2codecs/gstv4l2codecvp9dec.c
++++ b/sys/v4l2codecs/gstv4l2codecvp9dec.c
+@@ -129,6 +129,10 @@ struct _GstV4l2CodecVp9Dec
+   /* An inter frame resolution change that fits in the CAPTURE buffers:
+    * negotiate only the output caps and keep the V4L2 formats and buffers. */
+   gboolean resize_in_place;
++  /* The layout of the current frame size in the CAPTURE buffers: the format
++   * itself, or after an in-place resize what TRY_FMT reports for that size
++   * (the strides of such a frame; the plane offsets are the format's). */
++  GstVideoInfoDmaDrm frame_vinfo_drm;
+ 
+   struct v4l2_ctrl_vp9_frame v4l2_vp9_frame;
+   struct v4l2_ctrl_vp9_compressed_hdr v4l2_delta_probs;
+@@ -526,10 +530,26 @@ gst_v4l2_codec_vp9_dec_negotiate (GstVideoDecoder * decoder)
+ 
+   if (self->resize_in_place) {
+     self->resize_in_place = FALSE;
+-    GST_DEBUG_OBJECT (self, "Decoding %ix%i frames in the %ix%i buffers",
++    /* The driver decodes the frame at the top-left corner of a buffer and
++     * tells through TRY_FMT how a frame of that size lies in the buffers:
++     * with the format's stride (rkvdec), or the stride of a frame of its own
++     * width (cedrus, whose hardware derives reference strides from their
++     * width). The GstVideoMeta of the output buffers carries those strides. */
++    if (!gst_v4l2_decoder_try_src_format (self->decoder, self->width,
++            self->height, &self->frame_vinfo_drm)) {
++      GST_ELEMENT_ERROR (self, CORE, NEGOTIATION,
++          ("Unsupported resolution change on an inter frame"),
++          ("No layout for %ix%i frames in the %ix%i buffers", self->width,
++              self->height, GST_VIDEO_INFO_WIDTH (&self->vinfo_drm.vinfo),
++              GST_VIDEO_INFO_HEIGHT (&self->vinfo_drm.vinfo)));
++      return FALSE;
++    }
++    GST_DEBUG_OBJECT (self,
++        "Decoding %ix%i frames in the %ix%i buffers, stride %i",
+         self->width, self->height,
+         GST_VIDEO_INFO_WIDTH (&self->vinfo_drm.vinfo),
+-        GST_VIDEO_INFO_HEIGHT (&self->vinfo_drm.vinfo));
++        GST_VIDEO_INFO_HEIGHT (&self->vinfo_drm.vinfo),
++        GST_VIDEO_INFO_PLANE_STRIDE (&self->frame_vinfo_drm.vinfo, 0));
+     goto done;
+   }
+ 
+@@ -581,6 +601,7 @@ gst_v4l2_codec_vp9_dec_negotiate (GstVideoDecoder * decoder)
+     return FALSE;
+   }
+   gst_caps_unref (caps);
++  self->frame_vinfo_drm = self->vinfo_drm;
+ 
+ done:
+   if (self->output_state)
+@@ -714,7 +735,8 @@ done:
+ 
+ /* Whether a frame of this size can be decoded into the CAPTURE buffers of the
+  * current format (the driver decodes it at the top-left corner, with the
+- * stride and plane offsets of the format). */
++ * plane offsets of the format and the strides TRY_FMT reports for its size,
++ * see negotiate()). */
+ static gboolean
+ gst_v4l2_codec_vp9_dec_fits_in_buffers (GstV4l2CodecVp9Dec * self,
+     const GstVp9FrameHeader * frame_hdr)
+@@ -1125,19 +1147,27 @@ gst_v4l2_codec_vp9_dec_duplicate_picture (GstVp9Decoder * decoder,
+ 
+ /* The pool describes the whole buffer in the GstVideoMeta. Make it describe
+  * the frame instead, which is smaller than the buffer after an inter frame
+- * resolution change (and by the driver's alignment otherwise), keeping the
+- * stride and plane offsets of the buffer. */
++ * resolution change (and by the driver's alignment otherwise), with the
++ * strides the driver reported for the frame size and the plane offsets of
++ * the buffer. */
+ static void
+ gst_v4l2_codec_vp9_dec_set_output_meta (GstV4l2CodecVp9Dec * self,
+     GstBuffer * buffer)
+ {
+   GstVideoMeta *vmeta = gst_buffer_get_video_meta (buffer);
++  const GstVideoInfo *finfo = &self->frame_vinfo_drm.vinfo;
++  guint i;
+ 
+   if (!vmeta)
+     return;
+ 
+   vmeta->width = self->width;
+   vmeta->height = self->height;
++
++  if (GST_VIDEO_INFO_FORMAT (finfo) != GST_VIDEO_FORMAT_UNKNOWN &&
++      GST_VIDEO_INFO_N_PLANES (finfo) == vmeta->n_planes)
++    for (i = 0; i < vmeta->n_planes; i++)
++      vmeta->stride[i] = GST_VIDEO_INFO_PLANE_STRIDE (finfo, i);
+ }
+ 
+ static GstFlowReturn
+diff --git a/sys/v4l2codecs/gstv4l2decoder.c b/sys/v4l2codecs/gstv4l2decoder.c
+index b8b9aec..27512d8 100644
+--- a/sys/v4l2codecs/gstv4l2decoder.c
++++ b/sys/v4l2codecs/gstv4l2decoder.c
+@@ -749,6 +749,54 @@ gst_v4l2_decoder_select_src_format (GstV4l2Decoder * self, GstCaps * caps,
+   return TRUE;
+ }
+ 
++/* The layout of a frame of the given size in the CAPTURE buffers of the
++ * current format, as the driver reports it through VIDIOC_TRY_FMT. Stateless
++ * decoders derive the CAPTURE size from the coded (OUTPUT) size, so for the
++ * coded size this is the format itself. For a VP9 inter frame that the driver
++ * decodes in place into the buffers of a larger format, it gives the line
++ * strides of that frame; the plane offsets stay those of the format. */
++gboolean
++gst_v4l2_decoder_try_src_format (GstV4l2Decoder * self, guint width,
++    guint height, GstVideoInfoDmaDrm * vinfo_drm)
++{
++  struct v4l2_format fmt = {
++    .type = self->src_buf_type,
++  };
++  gint ret;
++
++  ret = ioctl (self->video_fd, VIDIOC_G_FMT, &fmt);
++  if (ret < 0) {
++    GST_ERROR_OBJECT (self, "VIDIOC_G_FMT failed: %s", g_strerror (errno));
++    return FALSE;
++  }
++
++  if (self->mplane) {
++    fmt.fmt.pix_mp.width = width;
++    fmt.fmt.pix_mp.height = height;
++  } else {
++    fmt.fmt.pix.width = width;
++    fmt.fmt.pix.height = height;
++  }
++
++  ret = ioctl (self->video_fd, VIDIOC_TRY_FMT, &fmt);
++  if (ret < 0) {
++    GST_ERROR_OBJECT (self, "VIDIOC_TRY_FMT failed: %s", g_strerror (errno));
++    return FALSE;
++  }
++
++  if (!gst_v4l2_format_to_dma_drm_info (&fmt, vinfo_drm)) {
++    GST_ERROR_OBJECT (self, "Unsupported V4L2 pixelformat %" GST_FOURCC_FORMAT,
++        GST_FOURCC_ARGS (fmt.fmt.pix_mp.pixelformat));
++    return FALSE;
++  }
++
++  GST_DEBUG_OBJECT (self, "%ux%u frames have strides %i/%i in the buffers",
++      width, height, GST_VIDEO_INFO_PLANE_STRIDE (&vinfo_drm->vinfo, 0),
++      GST_VIDEO_INFO_PLANE_STRIDE (&vinfo_drm->vinfo, 1));
++
++  return TRUE;
++}
++
+ GstVideoCodecState *
+ gst_v4l2_decoder_set_output_state (GstVideoDecoder * decoder,
+     GstVideoInfoDmaDrm * vinfo_drm, guint width,
+diff --git a/sys/v4l2codecs/gstv4l2decoder.h b/sys/v4l2codecs/gstv4l2decoder.h
+index ec410fe..fd74c7d 100644
+--- a/sys/v4l2codecs/gstv4l2decoder.h
++++ b/sys/v4l2codecs/gstv4l2decoder.h
+@@ -72,6 +72,11 @@ GstCaps *         gst_v4l2_decoder_enum_src_formats (GstV4l2Decoder * self,
+ GstCaps *         gst_v4l2_decoder_enum_all_src_formats (GstV4l2Decoder * self,
+                                                          GstStaticCaps * static_filter);
+ 
++gboolean          gst_v4l2_decoder_try_src_format (GstV4l2Decoder * self,
++                                                   guint width,
++                                                   guint height,
++                                                   GstVideoInfoDmaDrm * vinfo_drm);
++
+ gboolean          gst_v4l2_decoder_select_src_format (GstV4l2Decoder * self,
+                                                       GstCaps * caps,
+                                                       GstVideoInfoDmaDrm * vinfo_drm);
+-- 
+2.55.0
+

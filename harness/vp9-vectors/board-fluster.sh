@@ -7,6 +7,8 @@
 #          c1 = vp90-2-00/01 (quantizer, sharpness, 71), c2 = vp90-2-02/03 (sizes, 137),
 #          c3 = vp90-2-05 .. vp90-2-14 (tiles, show-existing, key-frame resize, 59),
 #          c5 = vp90-2-15 .. vp90-2-22 + vp91 (inter-frame resize, svc, profile 1, 38), c4 = VP9-TEST-VECTORS-HIGH (6).
+#          u1 = inter-frame resize: svc_1280x720_3 (upsize) + the 26 downsize vectors (21-resize_inter x24, 05, 18) (27),
+#          u2 = profile-0 regression subset, one or two vectors per feature group (25). u1/u2 = job vp9-upsize.
 # The dev plugin is loaded from a private plugin path (the system libgstv4l2codecs.so is left out), nothing is
 # installed. Output: DIR/out/CHUNK.md (fluster summary, plain text: OK/KO/ER/TO/NS per vector), DIR/out/CHUNK.log,
 # DIR/out/CHUNK.rc. Every fluster line is also printed to stdout with a timestamp (the host's stall watchdog watches
@@ -38,6 +40,13 @@ case $C in
 	c3) SUITE=VP9-TEST-VECTORS; SEL='!vp90-2-00- !vp90-2-01- !vp90-2-02- !vp90-2-03- !vp90-2-15- !vp90-2-16- !vp90-2-17- !vp90-2-18- !vp90-2-19- !vp90-2-2 !vp91-' ;;
 	c5) SUITE=VP9-TEST-VECTORS; SEL='vp90-2-15- vp90-2-16- vp90-2-17- vp90-2-18- vp90-2-19- vp90-2-2 vp91-' ;;
 	c4) SUITE=VP9-TEST-VECTORS-HIGH; SEL='' ;;
+	u1) SUITE=VP9-TEST-VECTORS; SEL='vp90-2-22-svc_1280x720_3 vp90-2-21- vp90-2-05-resize vp90-2-18-resize' ;;
+	u2) SUITE=VP9-TEST-VECTORS; SEL='vp90-2-00-quantizer-00. vp90-2-00-quantizer-63. vp90-2-01-sharpness-1. vp90-2-02-size-08x08.
+	    vp90-2-02-size-66x66. vp90-2-02-size-lf-1920x1080. vp90-2-03-size-226x226. vp90-2-03-deltaq. vp90-2-06-bilinear.
+	    vp90-2-07-frame_parallel. vp90-2-08-tile-4x4. vp90-2-08-tile_1x8_frame_parallel. vp90-2-09-aq2. vp90-2-09-lf_deltas.
+	    vp90-2-10-show-existing-frame. vp90-2-11-size-351x287. vp90-2-12-droppable_1. vp90-2-14-resize-fp-tiles-1-16.
+	    vp90-2-14-resize-10frames-fp-tiles-1-2-4-8. vp90-2-15-segkey. vp90-2-16-intra-only. vp90-2-17-show-existing-frame.
+	    vp90-2-19-skip. vp90-2-20-big_superframe-01. vp90-2-22-svc_1280x720_1.' ;;
 	*) echo "unknown chunk $C"; echo ROUND-DONE; exit 1 ;;
 esac
 # shellcheck disable=SC2086

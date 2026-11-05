@@ -4,6 +4,9 @@ Task: docs/status.md item 9, "port OPi5's VP9 resize fix (0606/2228 + GStreamer 
 vectors". Code agent, no board access. Kernel branch `fix/sunxi-cedrus-vp9-inter-resize` (armbian-build, pushed to
 `fork`, commit f8be54bac, off test-cumulative aa6e29312 = c9; **merged as cumulative c10**, so c10..c14 contain it).
 Runner jobs: `04-vp9-vectors` (done, harness bug, see §6) and the rerun `harness/runner-queue/10-vp9-vectors.md`.
+Group B (inter-frame upsize, §7): kernel branch `fix/sunxi-cedrus-vp9-inter-upsize` (armbian-build **7897dec08**, off
+test-cumulative 8140b4eeb = c16, pushed to `fork`, **not merged**: the coordinator merges), runner job
+`harness/runner-queue/13-vp9-upsize.md` (DEV, blocks itself until the newest cumulative kernel contains 7897dec08).
 
 ## 1. Which 64 vectors, and why (groups)
 
@@ -17,7 +20,7 @@ suite (fluster VP9-TEST-VECTORS.json, 305 vectors) and `ffprobe` frame-size/key-
 | group | vectors | what the stream does | cause of the FFmpeg failure | GStreamer (our fluster decoder) |
 |---|---|---|---|---|
 | A. inter-frame downsize | 24 x `vp90-2-21-resize_inter_*` (to 1/2 or 3/4 on frame 10, error resilient, no later key frame), `vp90-2-05-resize.ivf` (352x288 -> 282x173 -> 352x288), `vp90-2-18-resize.ivf` (310x230 -> 248x138 -> 310x230 -> 155x115) = **26** | size change on an inter frame, references of the old size are used with scaled motion compensation | FFmpeg reallocates the CAPTURE queue -> references gone | v4l2slvp9dec 1.28 drops every frame after the change until a key frame unless the driver has REMOVE_BUFS (cedrus: no) -> fail. **Fixed here** (kernel + GStreamer patch), to be confirmed on the board |
-| B. inter-frame upsize | `vp90-2-22-svc_1280x720_3.ivf` (key 320x180, inter 640x360 and 1280x720, repeated) = **1** | frames larger than the CAPTURE buffers, references smaller | same reallocation issue; Jernej's "references of a different size" case | **Open**: needs `VIDIOC_REMOVE_BUFS` + S_FMT(CAPTURE) while streaming + per-buffer plane offsets in cedrus (the OPi5 rkvdec "patch 3" route). The driver now rejects such a frame with -EINVAL instead of overrunning the buffers |
+| B. inter-frame upsize | `vp90-2-22-svc_1280x720_3.ivf` (one key frame 320x180, then inter frames 640x360, 1280x720, 320x180, 640x360, ... 60 frames, 20 per size) = **1** | frames larger than the CAPTURE buffers, references smaller (2x and 4x upscaling) | same reallocation issue; Jernej's "references of a different size" case | **Implemented** (7897dec08, §7): `VIDIOC_REMOVE_BUFS` + S_FMT while streaming + per-buffer layouts in cedrus; GStreamer 1.28 takes its REMOVE_BUFS path on its own. To be confirmed on the board (job 13) |
 | C. key-frame resize | 36 x `vp90-2-14-resize-*` (432x240 ... 3840x2160 and 4096x2304 on **key frames**, 10 or 3 frames each) = **36** | resolution changes only on key frames | FFmpeg hwaccel reinit at every key-frame size change (its problem, not the hardware's) | normal renegotiation (streamoff, S_FMT, new buffers) -> expected to pass; the 4096x2304 frames test the VP9 maximum size |
 | D. show-existing-frame | `vp90-2-10-show-existing-frame.webm` = **1** | show_existing_frame of a frame FFmpeg's hwaccel reorders differently | FFmpeg output order artefact | duplicate_picture() -> expected to pass |
 
@@ -88,14 +91,16 @@ GST_DEBUG=v4l2codecs*:6 to see which stride it used), and the GstVideoMeta strid
 
 ## 5. Open items (work list, not started)
 
-- Group B (`svc_1280x720_3`): `q->supports_remove_bufs` for the CAPTURE queue, S_FMT(CAPTURE/OUTPUT) with a larger
-  size while streaming for VP9, per-buffer plane offsets / 2-bit plane / P010 recon offset in `cedrus_buffer` (the
-  references then live in buffers of different formats). One vector; also what real adaptive streams do (WebRTC VP9
-  SVC/simulcast up-switch).
-- P010 and AFBC capture with in-place resize are untested (no 10-bit resize vector exists; profile 2 vectors are
-  fixed-size).
-- Documentation of the TRY_FMT contract if this goes upstream (dev-stateless-decoder.rst), and agreement with the OPi5
-  rkvdec side.
+- Group B is implemented (§7) but unmeasured: job 13 after the coordinator merges 7897dec08 into test-cumulative.
+- 10-bit resize (in place or upsize): `VE_DEC_VP9_FIRST_OUT_OFFSET` (low-2-bit plane offset) is one register,
+  programmed for the current frame; whether the hardware derives it for references of another size as it derives
+  their stride is unknown. P010 and AFBC capture with resize are untested (no 10-bit resize vector exists; profile 2
+  vectors are fixed-size).
+- Documentation of the TRY_FMT contract if this goes upstream (dev-stateless-decoder.rst: the REMOVE_BUFS resize
+  sequence is not described there either; hantro and now cedrus implement it), and agreement with the OPi5 rkvdec
+  side (rkvdec has no `vidioc_remove_bufs` and refuses S_FMT while busy, so svc_1280x720_3 fails there too).
+- The 64-buffer CAPTURE limit covers three overlapping GStreamer buffer sets (14 each); a stream that grows four times
+  within a few frames would hit it (CREATE_BUFS -ENOBUFS, decoder error, no overrun).
 
 ## 6. Board runs
 
@@ -136,3 +141,76 @@ Rerun: job `harness/runner-queue/10-vp9-vectors.md` on c14 (0324a5d4b), with the
 vp90-2-00-quantizer-00.webm + a direct `gst-launch` with GST_DEBUG=2 into `out/pre.gst.txt`; not OK -> BLOCKED with
 the reason, no chunks) and CHECK 0 (kernel >= c10 and pre-flight OK). Bundle rebuilt (`make-bundle.sh`,
 board-fluster.sh changed; plugin unchanged).
+
+## 7. Group B: inter-frame upsize (2026-11-05 22:00, code agent vp9-upsize, no board access)
+
+Kernel branch `fix/sunxi-cedrus-vp9-inter-upsize` = armbian-build **7897dec08** (one patch
+`patches.media/h616-vdec/media-cedrus-VP9-resize-the-CAPTURE-queue-while-streaming.patch` appended to series.conf,
+worktree `wt-vp9-upsize`, pushed to `fork` only). Syntax-checked against the c16 tree with the kernel's own flags
+(`-Werror -fsyntax-only`, all 14 cedrus .c files), checkpatch `--strict` clean, `patch --dry-run` applies on the c16
+tree. Not built: cumul-build through the coordinator.
+
+### Design (V4L2 stateless rules, what hantro/rkvdec/GStreamer do)
+
+- dev-stateless-decoder.rst only describes the resolution change with STREAMOFF + REQBUFS(0), which frees the
+  references. The alternative that upstream added for exactly this (VP9/AV1 inter-frame growth) is `VIDIOC_REMOVE_BUFS`
+  (vidioc-remove-bufs.rst; `V4L2_BUF_CAP_SUPPORTS_REMOVE_BUFS` reported by REQBUFS/CREATE_BUFS when the driver sets
+  `vidioc_remove_bufs`): buffers in DEQUEUED state can be removed one by one while streaming, and CREATE_BUFS adds
+  buffers of the current format (vb2 reuses the free indices, `max_num_buffers`). The driver must then accept the new
+  size while streaming: hantro (`hantro_set_fmt_out`) accepts S_FMT(OUTPUT) while streaming as long as the coded
+  pixelformat stays, and S_FMT(CAPTURE) at any time for decoders. rkvdec (OPi5) has neither: no `vidioc_remove_bufs`,
+  `-EBUSY` on S_FMT while busy, so the svc vector fails there too (their 0606 covers smaller frames only).
+- GStreamer 1.28 v4l2codecs already implements the client side (`gst_v4l2_decoder_has_remove_bufs`): on an inter frame
+  whose size changes, `new_picture()` calls `negotiate()` **without streaming off**: `reset_allocation()` (the free
+  buffers of both allocators are REMOVE_BUFS'd at once, the outstanding ones - references in the DPB, frames
+  downstream, requests in flight - when their GstMemory is released and the allocator is disposed), S_FMT(OUTPUT) with
+  the new coded size, S_EXT_CTRLS(VP9_FRAME), ENUM_FMT/TRY_FMT probes, S_FMT(CAPTURE), then `decide_allocation()` ->
+  CREATE_BUFS(OUTPUT) x (1 + render delay) and CREATE_BUFS(CAPTURE) x (8 + min + 4), each with G_FMT's sizeimage; no
+  STREAMON (already streaming). Our 0001 (OPi5 0010) keeps that path for frames that do not fit and decodes smaller
+  frames in place; 0002 is unaffected. **No GStreamer change is needed** for the upsize: the plugin only has to see the
+  capability.
+- Kernel side, therefore (the patch):
+  1. `.vidioc_remove_bufs = v4l2_m2m_ioctl_remove_bufs` (REQBUFS/CREATE_BUFS report the capability for every codec; the
+     ioctl itself is codec-agnostic: it frees DEQUEUED buffers).
+  2. `cedrus_s_fmt_vid_out()`: a new coded size of the same codec while the queues have buffers is accepted for VP9
+     (`cedrus_resizes_while_busy()`): `src_fmt` is replaced, the CAPTURE format follows the size and **keeps its pixel
+     format** (the generic path resets it to the first valid one); codec, queue flags unchanged.
+     `cedrus_s_fmt_vid_cap()`: accepted while busy for VP9 if the pixel format stays. The other codecs keep the old
+     rules, because they take the layout of their references from `ctx->dst_fmt`.
+  3. Per-buffer layout: `cedrus_buf_prepare()` records the CAPTURE format in `struct cedrus_buffer.fmt` (a snapshot at
+     QBUF/PREPARE_BUF time, outside the codec union). `cedrus_vp9_setup()` takes the layout of the **destination buffer**
+     from that snapshot (so frames whose requests were queued before the S_FMT are still written in the layout
+     userspace prepared them with and knows from its GstVideoMeta), checks the frame fits that buffer (else -EINVAL as
+     before), and reads each reference through its own snapshot (`cedrus_vp9_frame_addr()`, new
+     `cedrus_dst_frame_addr_in(fmt, buf, plane)` / `cedrus_dst_frame_fmt_of(fmt)` in cedrus.h; the P010 hidden-surface
+     offset comes from the buffer's format too). The reference line stride is derived by the hardware from the
+     reference's width (f8be54bac), so only the plane offsets had to become per-buffer. In-place (smaller) frames keep
+     the f8be54bac rule: frame stride, buffer's plane offsets; TRY_FMT unchanged.
+  4. `cedrus_dst_p010_output_set(ctx, buf, buf_fmt, pic)`: buffer layout and visible picture separately (H.265/AVS2 pass
+     the format twice).
+  5. `dst_vq->max_num_buffers = CEDRUS_MAX_CAPTURE_BUFFERS (64)`: the svc vector grows twice within three frames, so
+     three GStreamer buffer sets (14 each, the 320x180 set is still referenced when the 1280x720 set is created) can
+     coexist, more than the default 32 (CREATE_BUFS would fail with -ENOBUFS).
+- The frame-size sequence of the vector (ffprobe): I 320x180, then P 640x360, P 1280x720, P 320x180, P 640x360, ...
+  (60 frames, 20 per size). So after the two upsizes every later frame fits in the 1280x736 buffers and is decoded
+  in place (f8be54bac path, GstVideoMeta strides from TRY_FMT), while referencing frames of all three sizes in buffers
+  of two layouts. Scale factors: the hardware step field is 1/16 pel with 5 bits (equal size = 16, 2x larger ref = 32
+  is the VP9 maximum), 2x/4x smaller references give 8/4; the vendor Vp9RefFramSize() encodes them the same way.
+
+### Test package
+
+`harness/vp9-vectors/run-upsize.sh` + `HANDOFF-upsize.md`, job `13-vp9-upsize.md` (DEV): refuses to touch the board
+unless the newest cumulative kernel contains 7897dec08 (git merge-base in wt-cumulative; BLOCKED otherwise), then
+run-job.sh with `OUT=logs/upsize JOB=upsize` and the new board-fluster.sh chunks u1 (svc_1280x720_3 + the 26
+downsize vectors, 27) and u2 (25-vector profile-0 regression subset: one or two per feature group incl. 1920x1080,
+8x8, intra-only, show-existing, two key-frame resize vectors, svc_1280x720_1). check-results.py got a job argument
+(`full` | `upsize`), the full job's CHECK 4 now expects svc_1280x720_3 to pass on a kernel that contains 7897dec08
+(same git test). Bundle rebuilt (board-fluster.sh changed; plugin unchanged). The u1/u2 selectors were verified
+against the suite JSON (27/25) and the checker against synthetic OK/KO summaries (PASS; CHECK 2 FAIL on a KO).
+
+Expected: CHECK 2 Success if the hardware upscales references 2x and 4x as the vendor library programs it. Failure
+modes: ER with dmesg "VP9 frame 640x360 larger than its 320x192 CAPTURE buffer" = GStreamer did not take the
+REMOVE_BUFS path (check `out/env.txt`: the dev plugin must be the one loaded, and `GST_DEBUG=v4l2codecs*:6` would show
+"remove buffers"); ER with "VIDIOC_S_FMT failed: Device or resource busy" = the kernel refused the resize (wrong
+kernel); KO (wrong md5) with 3/4 passing = scaling or layout of the upscaled references (compare the 640x360 frame 1
+md5 against libvpx; the first suspect is the reference chroma offset of the 320x180 buffers, 320*192).

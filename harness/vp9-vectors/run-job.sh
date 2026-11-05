@@ -9,12 +9,13 @@
 # stock image kernel, releases. Resumable: chunks listed in $OUT/state are skipped; the pre-flight always runs after
 # a boot. Between chunks the lock is handed over if another session waits.
 # Exit 0 = all chunks ran (pass/fail: check-results.py, see HANDOFF.md); 2 = blocked ($OUT/BLOCKED); 1 = setup error.
+# Other jobs on the same package (run-upsize.sh) set OUT (results dir) and JOB (check-results.py mode) and pass chunks.
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/vp9-vectors; VP=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh
 K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
-CHUNKS=${*:-c1 c2 c3 c5 c4}; CT=1200; STALL=300
+CHUNKS=${*:-c1 c2 c3 c5 c4}; CT=1200; STALL=300; JOB=${JOB:-full}
 GOOD=vp90-2-00-quantizer-00.webm  # the pre-flight vector (board-fluster.sh pre)
-OUT=$S/logs/runner; mkdir -p $OUT; touch $OUT/state; rm -f $OUT/BLOCKED
+OUT=${OUT:-$S/logs/runner}; mkdir -p $OUT; touch $OUT/state; rm -f $OUT/BLOCKED
 TL=$(tail -1 $H/kernel-check/cumulative-kernels.txt); T=$(cut -d' ' -f1 <<< "$TL")
 want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || exit 1
 [ -f $H/build/vp9-vectors/bundle.tar ] || { echo "bundle missing: run harness/vp9-vectors/make-bundle.sh"; exit 1; }
@@ -81,6 +82,6 @@ for c in $CHUNKS; do
   log "chunk $c start"; run_chunk $c
 done
 restore; release
-python3 -I $S/check-results.py $OUT > $OUT/check.txt 2>&1; log "check-results: $(tail -1 $OUT/check.txt)"
+python3 -I $S/check-results.py $OUT $JOB > $OUT/check.txt 2>&1; log "check-results: $(tail -1 $OUT/check.txt)"
 log "job end: $(wc -l < $OUT/state) of $(echo $CHUNKS | wc -w) chunks done"
 [ -f $OUT/BLOCKED ] && exit 2; exit 0

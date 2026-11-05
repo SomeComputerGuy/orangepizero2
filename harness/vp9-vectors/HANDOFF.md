@@ -30,7 +30,7 @@ Results: `harness/vp9-vectors/logs/runner/`: `runner.log`, `kernel.txt`, `chunk-
 
 Run (the script already does it at the end; re-run if needed):
 
-    python3 -I harness/vp9-vectors/check-results.py harness/vp9-vectors/logs/runner
+    python3 -I harness/vp9-vectors/check-results.py harness/vp9-vectors/logs/runner full
 
 and copy its `CHECK ...: PASS|FAIL (...)` lines, the `VERDICT:` line and the `| group | success | total | failing |`
 table into the summary verbatim. The checks are:
@@ -41,7 +41,7 @@ table into the summary verbatim. The checks are:
 | 1 | all five chunks ran | c1 c2 c3 c5 c4.md present, 311 vectors seen |
 | 2 | **the fix**: 24 x vp90-2-21-resize_inter_* + vp90-2-05-resize + vp90-2-18-resize | 26/26 Success |
 | 3 | every other decodable vector | all Success (302 of the 305 profile-0 vectors + vp92-2-20-10bit-yuv420); the failing names are listed |
-| 4 | expected-unsupported vectors (vp91 x2, vp90-2-22-svc_1280x720_3, 12-bit, vp93 x6) | none is Success (a Success here is a finding, report it; an ER/KO is expected) |
+| 4 | expected-unsupported vectors (vp91 x2, 12-bit, vp93 x6, and vp90-2-22-svc_1280x720_3 only on a kernel without armbian-build 7897dec08 = fix/sunxi-cedrus-vp9-inter-upsize; the checker asks git) | none is Success (a Success here is a finding, report it; an ER/KO is expected) |
 | 5 | dmesg | no `timed out`, IOMMU fault, Oops, WARNING |
 | 6 | fluster | no per-vector timeout (90 s) |
 

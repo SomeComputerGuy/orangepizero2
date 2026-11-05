@@ -35,6 +35,8 @@ Acceptance: docs/spec-checklist.md, docs/datasheet-checklist.md. Status/work lis
   sparse, smatch, not git/gcc) above the user's Signed-off-by; the AI never adds a Signed-off-by of its own. Never send anything upstream (Mesa, FFmpeg, kernel, Armbian) yourself.
 
 ## Budget (user, 2026-11-05)
+- Chain: code agents put a board test package (script + HANDOFF.md) in a job file in harness/runner-queue/ and hand back. ONE cheap runner (harness/RUNNER.md) runs the jobs in order and reports to the coordinator only. The coordinator then briefs a FRESH code agent from the RESULTS.md and the runner summary; long-history agents are never resumed.
+- Every task keeps a RESULTS.md (or a section in its impl notes) that is current enough to brief a fresh agent from.
 - At most 1-2 agents active at once. Spawn no sub-agents, and put new bugs on the work list instead of starting a new agent.
 - Code agents never run, wait on or poll board sessions. They build, write the exact board command and the pass criteria, and hand back. A cheap runner agent does the board run, copies the results off the board at once and writes a short factual summary.
 - Hand back once per task, when done and verified or truly blocked. No interim or status messages.

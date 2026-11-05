@@ -37,6 +37,7 @@ Acceptance: docs/spec-checklist.md, docs/datasheet-checklist.md. Status/work lis
 ## Builds
 - Build caching is rule #1: ccache + Armbian artifact caches; no needless full rebuilds. No Docker. No sudo.
 - Do not run Armbian `compile.sh` image builds while another one is running (`pgrep -af compile.sh`).
+- Never turn off, bypass, blacklist or rank down anything that is on by default (IOMMU, drivers, hw blocks, codecs, services), not even as an opt-in or for speed. Fix it so it works with everything on, or report and ask.
 - Board lock owner names are per session (e.g. vdec-r4, vdec-soak), never shared between two scripts: acquire exits 3
   if the name already holds the lock, and a release by the second script would free the first one's lock.
 - **Test kernels are cumulative** (user rule for all SBC projects, same as OPi5): fix B's test kernel contains A+B,

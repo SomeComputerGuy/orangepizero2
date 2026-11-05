@@ -69,6 +69,7 @@ struct opts {
 	bool list;
 	bool loop;
 	int afbc_pitch;		/* -1: use the descriptor pitch */
+	int commit_delay_us;	/* pattern mode: wait this long after a flip before the next commit */
 };
 
 static struct opts o = {
@@ -939,7 +940,9 @@ static void usage(void)
 "  -k, --keep-primary     leave the primary plane on (VI plane zpos 2)\n"
 "  -s, --no-scale         1:1, top-left\n"
 "  -l, --loop             loop the input\n"
-"      --afbc-pitch N     pitch passed with AFBC framebuffers (descriptor's)\n");
+"      --afbc-pitch N     pitch passed with AFBC framebuffers (descriptor's)\n"
+"  -D, --commit-delay US  pattern mode: sleep US us after each flip event before\n"
+"                         the next commit (puts the commit at a chosen scanout phase)\n");
 	exit(2);
 }
 
@@ -951,7 +954,8 @@ int main(int argc, char **argv)
 		{ "extra-hw-frames", 1, 0, 'x' }, { "pixfmt", 1, 0, 'f' },
 		{ "log", 1, 0, 'o' }, { "hold", 1, 0, 'H' }, { "keep-primary", 0, 0, 'k' },
 		{ "no-scale", 0, 0, 's' }, { "loop", 0, 0, 'l' }, { "list", 0, 0, 'L' },
-		{ "pattern", 1, 0, 'P' }, { "afbc-pitch", 1, 0, 'A' }, { 0 }
+		{ "pattern", 1, 0, 'P' }, { "afbc-pitch", 1, 0, 'A' },
+		{ "commit-delay", 1, 0, 'D' }, { 0 }
 	};
 	struct dec d = { 0 };
 	struct dumb dumbs[2];
@@ -965,7 +969,7 @@ int main(int argc, char **argv)
 	bool eos = false, first = true, starved = false;
 	int64_t pat_frame = 0;
 
-	while ((c = getopt_long(argc, argv, "d:c:m:p:n:q:x:f:o:H:kslLP:A:", lo, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "d:c:m:p:n:q:x:f:o:H:kslLP:A:D:", lo, NULL)) != -1) {
 		switch (c) {
 		case 'd': o.device = optarg; break;
 		case 'c': o.connector = optarg; break;
@@ -986,6 +990,7 @@ int main(int argc, char **argv)
 		case 'L': o.list = true; break;
 		case 'P': o.pattern = optarg; break;
 		case 'A': o.afbc_pitch = atoi(optarg); break;
+		case 'D': o.commit_delay_us = atoi(optarg); break;
 		default: usage();
 		}
 	}
@@ -1089,6 +1094,8 @@ int main(int argc, char **argv)
 			}
 			if (have) {
 				starved = false;
+				if (o.pattern && o.commit_delay_us && !first)
+					usleep(o.commit_delay_us);
 				S.t_commit = now_s();
 				S.depth = depth;
 				S.in_flight = qf;

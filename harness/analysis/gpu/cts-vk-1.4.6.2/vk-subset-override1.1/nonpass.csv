@@ -1,0 +1,19 @@
+test,status,mesa_g52_expectation,detail
+dEQP-VK.api.device_init.create_device_global_priority.basic,Fail,g52-fails:Fail,Fail
+dEQP-VK.api.device_init.create_device_global_priority_khr.basic,Fail,g52-fails:Fail,Fail
+dEQP-VK.subgroups.basic.compute.subgroupbarrier,OOM,new,SIGKILL x2 (memcg OOM): Test case 'dEQP-VK.subgroups.basic.compute.subgroupbarrier'.. | Incomplete job or timeout | FATAL ERROR: Test program crashed
+dEQP-VK.subgroups.basic.compute.subgroupelect,OOM,new,SIGKILL x2 (memcg OOM): Test case 'dEQP-VK.subgroups.basic.compute.subgroupelect'.. | Incomplete job or timeout | FATAL ERROR: Test program crashed
+dEQP-VK.subgroups.basic.compute.subgroupmemorybarrier,OOM,new,SIGKILL x2 (memcg OOM): Test case 'dEQP-VK.subgroups.basic.compute.subgroupmemorybarrier'.. | Incomplete job or timeout | FATAL ERROR: Test program crashed
+dEQP-VK.subgroups.basic.compute.subgroupmemorybarrierbuffer,OOM,new,SIGKILL x2 (memcg OOM): Test case 'dEQP-VK.subgroups.basic.compute.subgroupmemorybarrierbuffer'.. | Incomplete job or timeout | FATAL ERROR: Test program crashed
+dEQP-VK.subgroups.basic.compute.subgroupmemorybarrierimage,OOM,new,SIGKILL x2 (memcg OOM): Test case 'dEQP-VK.subgroups.basic.compute.subgroupmemorybarrierimage'.. | Incomplete job or timeout | FATAL ERROR: Test program crashed
+dEQP-VK.subgroups.basic.compute.subgroupmemorybarriershared,OOM,new,SIGKILL x2 (memcg OOM): Test case 'dEQP-VK.subgroups.basic.compute.subgroupmemorybarriershared'.. | Incomplete job or timeout | FATAL ERROR: Test program crashed
+dEQP-VK.subgroups.basic.framebuffer.subgroupbarrier_fragment,OOM,new,SIGKILL x2 (memcg OOM): Test case 'dEQP-VK.subgroups.basic.framebuffer.subgroupbarrier_fragment'.. | Incomplete job or timeout | FATAL ERROR: Test program crashed
+dEQP-VK.subgroups.basic.framebuffer.subgroupmemorybarrier_fragment,OOM,new,SIGKILL x2 (memcg OOM): Test case 'dEQP-VK.subgroups.basic.framebuffer.subgroupmemorybarrier_fragment'.. | Incomplete job or timeout | FATAL ERROR: Test program crashed
+dEQP-VK.subgroups.basic.framebuffer.subgroupmemorybarrierbuffer_fragment,OOM,new,SIGKILL x2 (memcg OOM): Test case 'dEQP-VK.subgroups.basic.framebuffer.subgroupmemorybarrierbuffer_fragment'.. | Incomplete job or timeout | FATAL ERROR: Test program crashed
+dEQP-VK.subgroups.basic.framebuffer.subgroupmemorybarrierimage_fragment,OOM,new,SIGKILL x2 (memcg OOM): Test case 'dEQP-VK.subgroups.basic.framebuffer.subgroupmemorybarrierimage_fragment'.. | Incomplete job or timeout | FATAL ERROR: Test program crashed
+dEQP-VK.subgroups.basic.graphics.subgroupbarrier,OOM,new,SIGKILL x2 (memcg OOM): Test case 'dEQP-VK.subgroups.basic.graphics.subgroupbarrier'.. | Incomplete job or timeout | FATAL ERROR: Test program crashed
+dEQP-VK.subgroups.basic.graphics.subgroupelect,OOM,new,SIGKILL x2 (memcg OOM): Test case 'dEQP-VK.subgroups.basic.graphics.subgroupelect'.. | Incomplete job or timeout | FATAL ERROR: Test program crashed
+dEQP-VK.subgroups.basic.graphics.subgroupmemorybarrier,OOM,new,SIGKILL x2 (memcg OOM): Test case 'dEQP-VK.subgroups.basic.graphics.subgroupmemorybarrier'.. | Incomplete job or timeout | FATAL ERROR: Test program crashed
+dEQP-VK.subgroups.basic.graphics.subgroupmemorybarrierbuffer,OOM,new,SIGKILL x2 (memcg OOM): Test case 'dEQP-VK.subgroups.basic.graphics.subgroupmemorybarrierbuffer'.. | Incomplete job or timeout | FATAL ERROR: Test program crashed
+dEQP-VK.subgroups.basic.graphics.subgroupmemorybarrierimage,OOM,new,SIGKILL x2 (memcg OOM): Test case 'dEQP-VK.subgroups.basic.graphics.subgroupmemorybarrierimage'.. | Incomplete job or timeout | FATAL ERROR: Test program crashed
+dEQP-VK.subgroups.clustered.graphics.subgroupclusteredmul_ivec4,OOM,new,SIGKILL x2 (memcg OOM): Test case 'dEQP-VK.subgroups.clustered.graphics.subgroupclusteredmul_ivec4'.. | Incomplete job or timeout | FATAL ERROR: Test program crashed

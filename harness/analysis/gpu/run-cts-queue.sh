@@ -21,7 +21,9 @@ if [ ! -f $R/opencl-mesa/done ]; then
 fi
 V=/root/cts/deqp-vk
 if [ -x $V/deqp-vk ] && [ ! -f $R/vk-subset/results.csv ]; then
-  VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/panfrost_icd.json PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1 \
+  # Same env as Mesa CI panfrost-g52-vk (src/panfrost/ci/gitlab-ci.yml); deqp-vk must come from vulkan-cts-* (build-deqp-vk.sh)
+  VK_DRIVER_FILES=/usr/share/vulkan/icd.d/panfrost_icd.json VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/panfrost_icd.json \
+  PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1 MESA_VK_IGNORE_CONFORMANCE_WARNING=1 PANVK_DEBUG=sync \
     python3 $D/deqp-run.py --deqp $V/deqp-vk --caselist $V/mustpass/vk-subset.txt --out $R/vk-subset --jobs 1 --timeout 300
   sync
 fi

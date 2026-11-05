@@ -218,6 +218,7 @@ Why 1.0, from the source:
 What is missing for "Vulkan 1.1" with open drivers: in 26.2.4 only the version gate, and the
 experimental load gate on v7. The feature set is present. Mesa 26.3 removes the version gate (it reports 1.3). The load gate
 stays, and there is no conformance submission. The dEQP-VK subset below measures how well it actually works.
+**dEQP-VK results and the 1.1 blockers (subgroup ops fault the G31 GPU): section 4c.**
 
 ## 3. OpenCL "2.0"
 
@@ -391,6 +392,86 @@ Full queue via `gpu-rerun.sh` (561 min), then the extras unit (MemoryMax=800M).
   Images Kernel 2D float 1, Samplerless int/uint/float 1 each. Same classes as section 4; this is the baseline for
   the OpenCL fixes.
 - **dEQP-VK subset:** 5227 StartupError ("Vulkan is not supported", status.md item 5).
+
+### 4c. dEQP-VK fixed and run (2026-11-05, board kernel 7.3.1-edge-sunxi64, Mesa 26.2.4, `harness/analysis/gpu/cts-vk-1.4.6.2/`)
+
+**What was wrong:** the build source, not the target or the driver. The old `deqp-vk` came from the **GLES** release tag
+`opengl-es-cts-3.2.14.1`. In the GL/GLES release branches, `framework/platform/lnx/tcuLnxPlatform.cpp` has no
+`getVulkanPlatform()` (no `tcuLnxVulkanPlatform` member, even though the file sits in the tree). So the base-class
+default in `tcuPlatform.cpp:54` throws "Vulkan is not supported" before libvulkan is ever loaded, whatever `DEQP_TARGET` says.
+Mesa CI builds deqp-vk from a **Vulkan** release (`build-deqp.sh`: `DEQP_VK_VERSION=1.4.6.2`).
+
+**Fix** (`harness/analysis/gpu/build-deqp-vk.sh`, host, idempotent, ccache):
+* VK-GL-CTS `vulkan-cts-1.4.6.2` (f6a2970) plus Mesa CI's 4 `vk_cts_commits_to_backport` (all apply cleanly; patch sha256s
+  in `dl-vulkan-cts-1.4.6.2/patches/`). External pins come from that tag's `fetch_sources.py`: SPIRV-Tools 2d14d2e76aa7,
+  glslang 715c8500e7cd, SPIRV-Headers 6dd7ba990830, amber 53a4c8934bf7, jsoncpp 9059f5cad030, renderdoc header
+  (sha256 checked). zlib and libpng are the same pins as the GLES tree.
+* `DEQP_TARGET=vulkan_headless`. This is the Linux platform with `VK_EXT_headless_surface`; there is no X11 or Wayland on the board, and it
+  is the right target once the source is right. Video tests are off. Same cross toolchain as the GLES build. `TMPDIR` is on disk, because
+  /tmp is a shared tmpfs that filled up during the first try.
+* Staged tree: stripped `deqp-vk` (69 MB) + `vulkan/` data + `mustpass/vk-subset.txt` (the old 5227-case subset restricted to
+  names that exist in 1.4.6.2: **5225**) + `mustpass/vk-main-1in100.txt` (every 100th line of the 1.4.6.2 vk-main:
+  **32476** cases). The full vk-main (3 247 552 cases, 416 MB) stays on the host (`gpu-src/vk-mustpass-1.4.6.2/`).
+* Board env = Mesa CI `panfrost-g52-vk`: `PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1 MESA_VK_IGNORE_CONFORMANCE_WARNING=1
+  PANVK_DEBUG=sync`, plus `VK_DRIVER_FILES`/`VK_ICD_FILENAMES` = panfrost_icd.json. `run-vk-subset.sh [OUT [CASELIST]]`
+  runs one list under a 600 MB memcg. `cts-restage.sh` stages it; its `api.smoke` sanity now gives **6/6 Pass**.
+* **`deqp-run.py` bugs found and fixed:** (1) dEQP runs a caselist in test-tree order, not file order. Resuming by
+  list position after a clean exit therefore re-ran cases (11 553 rows for 5225 cases in the first try). The runner now tracks the set of reported cases,
+  and on a clean exit marks the unreported ones `NotFound`. Earlier GLES results were deduplicated by name, so their numbers stand, but
+  a Crash or Timeout there may have skipped unrelated cases. (2) Every SIGKILL was recorded as `OOM`. Now it is OOM only if the
+  cgroup's `memory.events oom_kill` went up; otherwise it is Crash. The runs below used the old runner: their "OOM" rows are **GPU
+  faults or hangs, not OOM** (0 oom-kills in the kernel log), so they are counted as Crash below.
+
+**Results** (jobs=1, PANVK_DEBUG=sync; Crash = SIGKILL after a GPU fault or hang):
+
+| Run | Cases | Pass | NotSupported | Fail | Crash | Time |
+|---|---|---|---|---|---|---|
+| vk-subset, as shipped (API 1.0) | 5225 | **3332** | 1888 | 5 | 0 | 79 s |
+| vk-main 1/100, API 1.0 | 32476 | **6345** | 26121 | 3 | 7 | 447 s |
+| vk-subset, `MESA_VK_VERSION_OVERRIDE=1.1` | 5225 | 3360 | 1847 | 2 | 16 | 159 s |
+| vk-main 1/100, override 1.1 | 32476 | 6457 | 25987 | 3 | 29 | 522 s |
+| vk-subset, override 1.3 (what Mesa 26.3 reports) | 5225 | 3390 | 1808 | 2 | 25 | 212 s |
+| vk-main 1/100, override 1.3 | 32476 | 6573 | 25827 | 3 | 73 | 818 s |
+
+At API 1.0, 99.8 % of the cases that run pass (6345 of 6355 in the 1/100 sample). The top NotSupported reasons are
+extensions or features panvk v7 does not expose: shader_object, fragment_shading_rate, primitives_generated_query, the exclusive
+compute queue, D16_S8, ray tracing, geometry/tessellation and sparse. In the 1/100 sample, 1787 cases are gated only on "Vulkan 1.1 not supported" or
+"Subgroup operations are not supported". The override opens them up.
+
+**Triage** (`vk-triage.py`; it matches against Mesa main `src/panfrost/ci/panfrost-g52-{fails,flakes,skips}.txt`, `panvk-{skips,flakes}.txt`):
+* *Test setup, now fixed:* the old wrong build (5227 StartupError), the runner re-run bug and the OOM mislabel. The 2 subset names that
+  are missing in 1.4.6.2 were renamed upstream, not dropped by us.
+* *Known upstream, same as the G52:* `api.device_init.create_device_global_priority{,_khr}.basic` (g52-fails). The
+  `..._global_priority_query{,_khr}.basic` twins fail the same way (`vkCreateDevice` → `VK_ERROR_EXTENSION_NOT_PRESENT` with
+  a global-priority struct) and are the same bug. 3 `glsl.texture_functions.*offset.mirrored_repeat.*` image mismatches are
+  in `panvk-skips.txt` (Mesa does not even run them).
+* *API 1.0 only:* `create_device_unsupported_features.protected_memory_features` (device creation with the 1.1 struct
+  `protectedMemory=TRUE` does not return `VK_ERROR_FEATURE_NOT_PRESENT`). It passes at 1.1 and 1.3, so it is a 1.0 + 1.1-struct corner, not a 1.1 blocker.
+* **Real driver bugs, G31-specific (not in any Mesa G52 list):**
+  - `spirv_assembly.type.vec4.{i8,i16,u16,u32,i64,u64}.*_frag` (7 in the sample, already at API 1.0): fragment job hangs
+    (`gpu sched timeout, js=0`), 2 per case. These are small-int vec4 bit_field_insert/u_extract/clamp in fragment shaders.
+  - **Subgroup operations** (all only reachable with the 1.1+ override): `subgroups.basic.*` (elect, barrier, memory barriers; compute,
+    graphics and fragment), `subgroups.{arithmetic,clustered,quad,shuffle,ballot_broadcast}.*`, the
+    `memory_model.*.subgroup.*` scope cases and `glsl.derivate.dfdx*{subgroup,dynamic_*}`. The kernel logs `js fault ...
+    status=INSTR_INVALID_ENC` on js=0 (fragment) and js=1 (compute/vertex): 261 faults + 28 hangs over the override runs.
+    In other words, the Bifrost compiler emits an instruction encoding the G31 rejects. The minimal reproducer is
+    `dEQP-VK.subgroups.basic.compute.subgroupelect` alone ("Incomplete job or timeout", then abort).
+    `builtin_var.compute.subgroupsize_compute` passes, but that only compares gl_SubgroupSize with the reported property.
+    Mesa runs the full vk-main on the G52 (same v7 arch) without these failures, so the cause is specific to the G31 (or to 26.2.4 vs main). One hypothesis, not
+    verified: `pan_subgroup_size()` gives every v7 an 8-wide subgroup (G52), and the G31 is a 4-wide core.
+    Next step: a debug Mesa build in `mesa-work/` (Ubuntu's release build prints nothing with `BIFROST_MESA_DEBUG=shaders`)
+    to disassemble the faulting shader.
+
+**What Vulkan 1.1 (datasheet row) would take from here:**
+1. *Version gate:* 26.2.4 returns 1.0 for v7. Mesa 26.3 (ba09d293e54) returns 1.3. For our image, either backport that one-line
+   change to an image Mesa build, or wait for an Ubuntu 26.3 package.
+2. *Load gate:* v7 still needs `PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1` on main. The image would have to set it system-wide, or patch it out
+   in our Mesa build. That is an explicit "experimental driver" decision for the user.
+3. *Make the 1.1 core subgroup ops work on the G31:* subgroup BASIC in compute is required in 1.1, and today `subgroupElect` faults the
+   GPU. This is the real blocker: a compiler bug to find and fix (item above), plus the 7 small-int fragment hangs.
+4. *Then* run the full 3.25 M-case vk-main at 1.1. Scaling the 1/100 timings gives roughly 14 h at 1.1 and about 23 h at 1.3, in board slots
+   (resumable). Classify against the G52 lists. "Vulkan 1.1 conformant" in the Khronos sense also needs a submission (none
+   exists for panvk on Bifrost), so this project can reach "Vulkan 1.1 functional, CTS-tested", not "conformant".
 
 ## 5. Recommended plan
 

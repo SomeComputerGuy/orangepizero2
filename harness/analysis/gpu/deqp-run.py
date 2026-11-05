@@ -39,6 +39,17 @@ def wait_for_memory(min_kb=350000, poll=60):
         time.sleep(poll)
 
 
+def memcg_oom_kills():
+    """oom_kill count of our cgroup (v2), so a SIGKILL is only called OOM when the memcg really killed something."""
+    try:
+        cg = open("/proc/self/cgroup").read().strip().split("::", 1)[1]
+        for l in open("/sys/fs/cgroup%s/memory.events" % cg):
+            if l.startswith("oom_kill "): return int(l.split()[1])
+    except (OSError, IndexError, ValueError):
+        pass
+    return None
+
+
 def oom_first():
     """deqp children are the OOM killer's first choice; the runner itself is protected (see main)."""
     with open("/proc/self/oom_score_adj", "w") as f:
@@ -63,35 +74,40 @@ def run_shard(idx, cases, a, extra):
             base = VK_ARGS if os.path.basename(a.deqp).startswith("deqp-vk") else MESA_CI_ARGS  # Mesa CI gives deqp-vk no GL/surface args
             cmd = [a.deqp, "--deqp-caselist-file=" + cl, "--deqp-log-filename=" + os.path.join(a.out, "shard-%d.qpa" % idx)] + base + extra
             wait_for_memory()
+            ooms0 = memcg_oom_kills()
             p = subprocess.Popen(cmd, cwd=os.path.dirname(a.deqp), preexec_fn=oom_first, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                  text=True, errors="replace", bufsize=1)
             sel = selectors.DefaultSelector(); sel.register(p.stdout, selectors.EVENT_READ)
             pos = {c: i for i, c in enumerate(todo)}
             cur, t0, tail, last = None, time.time(), [], -1
+            seen = set()  # reported (or crashed) in this process; dEQP runs in tree order, not caselist order
+            rest = lambda extra=(): [c for c in todo if c not in seen and c not in extra]
             while True:
                 if not sel.select(timeout=a.timeout):
                     p.kill(); p.wait()
                     if cur:
                         w.writerow([cur, "Timeout", "%.1f" % (time.time() - t0), "no output for %ds" % a.timeout]); fo.flush()
-                        todo = todo[pos[cur] + 1:]
+                        todo = rest((cur,))
                     break
                 line = p.stdout.readline()
                 if not line:
                     p.wait()
-                    if cur and p.returncode == -9:  # OOM/external kill: retry once, then record OOM and move on
+                    ooms1 = memcg_oom_kills()
+                    oom = p.returncode == -9 and (ooms0 is None or ooms1 is None or ooms1 > ooms0)
+                    if cur and oom:  # memcg OOM kill: retry once, then record OOM and move on
                         kills[cur] = kills.get(cur, 0) + 1
                         with open(kpath, "w") as kf:
                             json.dump(kills, kf)
                         if kills[cur] < 2:
-                            todo = todo[pos[cur]:]
+                            todo = rest()
                         else:
                             w.writerow([cur, "OOM", "%.1f" % (time.time() - t0),
                                         "SIGKILL x%d (memcg OOM): " % kills[cur] + " | ".join(l.strip() for l in tail[-3:])[:250]]); fo.flush()
-                            todo = todo[pos[cur] + 1:]
+                            todo = rest((cur,))
                     elif cur:  # died inside a case
                         w.writerow([cur, "Crash", "%.1f" % (time.time() - t0),
                                     ("exit %d: " % p.returncode) + " | ".join(l.strip() for l in tail[-3:])[:300]]); fo.flush()
-                        todo = todo[pos[cur] + 1:]
+                        todo = rest((cur,))
                     elif last < 0:  # exited before reporting any case: record why instead of "Missing"
                         msg = "exit %d before first case: " % p.returncode + " | ".join(l.strip() for l in tail)[:300]
                         with open(os.path.join(a.out, "shard-%d.startup.log" % idx), "w") as lf:
@@ -100,8 +116,12 @@ def run_shard(idx, cases, a, extra):
                         for c in todo:
                             w.writerow([c, "StartupError", "", msg])
                         fo.flush(); todo = []
-                    else:
-                        todo = todo[last + 1:]  # clean exit; resume after last reported
+                    elif p.returncode != 0:  # died between cases: resume with what was not reported
+                        todo = rest()
+                    else:  # clean exit: every case dEQP knows was run; the rest do not exist in this binary
+                        for c in rest():
+                            w.writerow([c, "NotFound", "", "not in this deqp binary (clean exit without running it)"])
+                        fo.flush(); todo = []
                     break
                 tail = (tail + [line])[-6:]
                 m = RE_CASE.match(line.rstrip("\n"))
@@ -110,7 +130,7 @@ def run_shard(idx, cases, a, extra):
                 m = RE_RES.match(line.rstrip("\n"))
                 if m and cur:
                     w.writerow([cur, m.group(1), "%.2f" % (time.time() - t0), m.group(2)[:300]]); fo.flush()
-                    last = pos.get(cur, -1)
+                    last = pos.get(cur, -1); seen.add(cur)
                     cur = None
             # any case never started by a clean-exiting process is left in todo only if it crashed
 

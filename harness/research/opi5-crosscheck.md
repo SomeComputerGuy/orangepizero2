@@ -181,6 +181,9 @@ No collisions. Apply results:
 Upstream rule for both: whichever stateless uAPI lands first, the other rebases. Keep the numbers above.
 When DI300 goes upstream it needs a reserved `V4L2_CID_USER_SUNXI_DI300_BASE`. Take the next free slot in
 linux-next at send time, coordinated with IEP's 0x1260. 0x1100 must not be sent as-is.
+Done 2026-11-05 (`fix/sunxi-h616-di300-std-controls`): IEP2 dropped its private controls and its 0x1260 range, and
+DI300 now has `V4L2_CID_USER_SUNXI_DI300_BASE` = `V4L2_CID_USER_BASE + 0x1260` (16 controls, uAPI header
+`linux/sunxi-di300.h`; 0x1240/0x1250 are DCMIPP/IT6625 in newer kernels). Recheck linux-next before sending.
 
 ### 3.3 Deinterlacer controls: divergent
 

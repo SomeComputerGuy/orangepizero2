@@ -56,21 +56,30 @@ The test kernel for `d5f4c3d35` was `kernel-check/work-video/linux-7.3.1` (Image
 - `media-sunxi-sun50i-di300-fix-input-order-planar-form.patch`: items 1-5 above.
 - `media-sunxi-sun50i-di300-add-weave-bob-frame-rate-an.patch`: modes, TNR, VOF, capture format conversion.
 
-`V4L2_CID_DEINTERLACING_MODE` (standard control, driver menu). It is grabbed while streaming because it decides the buffer handling.
+`V4L2_CID_DEINTERLACING_MODE` (standard control, driver menu). Since 2026-11-05 it follows the OPi5 IEP2 convention
+(branch `fix/sunxi-h616-di300-std-controls`): applications match items by name (QUERYMENU), the index order is the
+driver's; frame rate = 1 CAPTURE per OUTPUT buffer, field rate = 2 (second one half a frame period later); a progressive
+(`V4L2_FIELD_NONE`) source is passed through in every item but TNR-only; while streaming a change of rate (or to/from
+TNR-only) returns EBUSY, a change of method at the same rate is accepted (no grab) and the next job restarts the new method
+from a fresh-stream state (history released, motion flags zeroed, TNR references/gain reset).
 
 | value | name | inputs (DMA_CTL) | output | DIT_SETTING | history | out/in |
 |---|---|---|---|---|---|---|
 | 0 | Motion Adaptive, Field Rate (vendor 60 Hz) | F0 = n-2, F1 = n-1, F2 = n (DI\|P\|C) | DIT0 + DIT1 | 0,4,16,20, diag | 2 | 2 |
 | 1 | Motion Adaptive, Frame Rate (vendor 30 Hz) | F1 = n-1, F2 = n (P\|C) | DIT1 | 0,4,16, 24 (1-frame) | 1 | 1 |
-| 2 | Bob | F1 = n (P) | DIT1 | 0,16, 24 | 0 | 1 |
+| 2 | Bob, Frame Rate (was "Bob") | F1 = n (P) | DIT1 | 0,16, 24 | 0 | 1 |
 | 3 | Weave | F1 = n (P) | DIT1 | 24 only | 0 | 1 |
 | 4 | Noise Reduction Only (only if FUNC_VSN tnr_exist) | F1 = n-1, F2 = n (P\|C), MD + TNR, no DIT | TNR channel | n/a | 1 | 1 |
+| 5 | Bob, Field Rate | F0 = F1 = F2 = n (DI\|P\|C), no MD | DIT1 = dst0 (first field), DIT0 = dst1 (second field) | 0,16 | 0 | 2 |
 
 - Motion detection (FUNC_EN MD, DMA FR|FW) is on when a real previous frame exists. The first run of a stream is spatial (bob-like)
   in every motion mode, as in Jernej's warm-up rule.
 - **Lag.** The motion modes deinterlace F1, i.e. one frame behind the input. Each input still yields its outputs at once,
   so synchronous clients don't stall. The first frame is output twice and the last frame never; the timestamps are those of the
   source buffer (as in sun8i-di). Weave, bob and TNR-only have no lag.
+- Private controls: `include/uapi/linux/sunxi-di300.h`, reserved range `V4L2_CID_USER_SUNXI_DI300_BASE` =
+  `V4L2_CID_USER_BASE + 0x1260` (16 controls): FMD_STATS +0, FMD_ENABLE +1, FMD_WEAVE +2, TNR_MODE +3, TNR_STRENGTH +4,
+  TNR_LEVEL +5. Until 2026-11-05 they were at `V4L2_CID_USER_BASE + 0x1100..0x1105`, inside the CCS range (0x10f0 + 128).
 - **TNR** (`V4L2_CID_SUNXI_DI300_TNR_MODE`: off, fixed, adaptive; `TNR_STRENGTH` 0-255, default 0x3a; `TNR_LEVEL` high/middle/low,
   which sets the adaptive bounds 52-62 / 28-48 / 16-38).
   - Writes the vendor's fixed tuning at resume (0x240-0x2ac).

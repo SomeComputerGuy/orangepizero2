@@ -16,6 +16,14 @@
  *
  * -r N repeats the input N times without file output, for throughput.
  * -v prints the FMD statistics after each job (field-rate mode with -z).
+ * -p sends the input as progressive (V4L2_FIELD_NONE): every mode but tnr
+ *    must pass it through (-c weave).
+ * -S mode@k changes the deinterlacing mode while streaming, once the
+ *    first k input frames are done; -k k skips the first k input frames
+ *    (to compare with a fresh stream in the new mode).
+ *
+ * The mode is set by its menu item name (VIDIOC_QUERYMENU), as the
+ * indices may differ between deinterlacers.
  *
  * Build: make (aarch64) in this directory.
  */
@@ -34,13 +42,19 @@
 #include <unistd.h>
 #include <linux/videodev2.h>
 
-/* driver-private controls (sun50i-di300.c) */
-#define CID_FMD_STATS		(V4L2_CID_USER_BASE + 0x1100)
-#define CID_FMD_ENABLE		(V4L2_CID_USER_BASE + 0x1101)
-#define CID_FMD_WEAVE		(V4L2_CID_USER_BASE + 0x1102)
-#define CID_TNR_MODE		(V4L2_CID_USER_BASE + 0x1103)
-#define CID_TNR_STRENGTH	(V4L2_CID_USER_BASE + 0x1104)
-#define CID_TNR_LEVEL		(V4L2_CID_USER_BASE + 0x1105)
+/*
+ * driver-private controls, include/uapi/linux/sunxi-di300.h (until
+ * 2026-11-05 they were at V4L2_CID_USER_BASE + 0x1100..0x1105)
+ */
+#ifndef V4L2_CID_USER_SUNXI_DI300_BASE
+#define V4L2_CID_USER_SUNXI_DI300_BASE	(V4L2_CID_USER_BASE + 0x1260)
+#endif
+#define CID_FMD_STATS		(V4L2_CID_USER_SUNXI_DI300_BASE + 0)
+#define CID_FMD_ENABLE		(V4L2_CID_USER_SUNXI_DI300_BASE + 1)
+#define CID_FMD_WEAVE		(V4L2_CID_USER_SUNXI_DI300_BASE + 2)
+#define CID_TNR_MODE		(V4L2_CID_USER_SUNXI_DI300_BASE + 3)
+#define CID_TNR_STRENGTH	(V4L2_CID_USER_SUNXI_DI300_BASE + 4)
+#define CID_TNR_LEVEL		(V4L2_CID_USER_SUNXI_DI300_BASE + 5)
 
 #define NOUT	4
 #define NCAP	8
@@ -63,7 +77,14 @@ static const struct fmtinfo fmts[] = {
 	{ "422p", V4L2_PIX_FMT_YUV422P, 2, 1, 3, false },
 };
 
-static const char *modes[] = { "field", "frame", "bob", "weave", "tnr" };
+#define NMODES	6
+static const char *modes[NMODES] = { "field", "frame", "bob", "weave", "tnr", "bobfield" };
+/* V4L2_CID_DEINTERLACING_MODE item names */
+static const char *mode_items[NMODES] = {
+	"Motion Adaptive, Field Rate", "Motion Adaptive, Frame Rate", "Bob, Frame Rate",
+	"Weave", "Noise Reduction Only", "Bob, Field Rate",
+};
+static const bool mode_field_rate[NMODES] = { true, false, false, false, false, true };
 static const char *tnrmodes[] = { "off", "fixed", "adaptive" };
 
 struct buf {
@@ -144,6 +165,23 @@ static void set_ctrl(uint32_t id, int32_t v)
 
 	if (ioctl(fd, VIDIOC_S_CTRL, &c))
 		die("VIDIOC_S_CTRL");
+}
+
+/* menu index of a V4L2_CID_DEINTERLACING_MODE item, by name */
+static int mode_index(int mode)
+{
+	struct v4l2_queryctrl q = { .id = V4L2_CID_DEINTERLACING_MODE };
+
+	if (ioctl(fd, VIDIOC_QUERYCTRL, &q))
+		die("QUERYCTRL(DEINTERLACING_MODE)");
+	for (int i = q.minimum; i <= q.maximum; i++) {
+		struct v4l2_querymenu m = { .id = q.id, .index = i };
+
+		if (!ioctl(fd, VIDIOC_QUERYMENU, &m) && !strcmp((char *)m.name, mode_items[mode]))
+			return i;
+	}
+	fprintf(stderr, "no deinterlacing mode \"%s\"\n", mode_items[mode]);
+	exit(1);
 }
 
 static void set_weave(uint32_t a, uint32_t b)
@@ -282,10 +320,13 @@ static void check_keep(uint8_t **in, unsigned int nin, unsigned int out_idx,
 static void usage(void)
 {
 	fprintf(stderr,
-		"usage: di300test -W w -H h -f fmt [-F capfmt] [-m field|frame|bob|weave|tnr]\n"
+		"usage: di300test -W w -H h -f fmt [-F capfmt]\n"
+		"         [-m field|frame|bob|bobfield|weave|tnr] [-S mode@k] [-p]\n"
 		"         [-t off|fixed|adaptive] [-s strength] [-l 0-2] [-b] [-z]\n"
-		"         [-w p0,p1] [-c weave|keep] [-r repeat] [-n frames] [-d dev] [-v]\n"
-		"         -i in.yuv [-o out.yuv]\n"
+		"         [-w p0,p1] [-c weave|keep] [-r repeat] [-k skip] [-n frames]\n"
+		"         [-d dev] [-v] -i in.yuv [-o out.yuv]\n"
+		"modes: field = Motion Adaptive, Field Rate; frame = Motion Adaptive, Frame Rate;\n"
+		"       bob = Bob, Frame Rate; bobfield = Bob, Field Rate; weave; tnr = Noise Reduction Only\n"
 		"formats: nv12 nv21 i420 yv12 nv16 nv61 422p\n");
 	exit(2);
 }
@@ -293,9 +334,10 @@ static void usage(void)
 int main(int argc, char **argv)
 {
 	const char *dev = NULL, *inpath = NULL, *outpath = NULL, *check = NULL;
-	int mode = 0, tnr = -1, strength = -1, level = -1, opt;
-	unsigned int repeat = 1, maxframes = 0, w0 = 3, w1 = 3;
-	bool bff = false, fmd = false, weave_set = false;
+	int mode = 0, tnr = -1, strength = -1, level = -1, opt, smode = -1;
+	unsigned int repeat = 1, maxframes = 0, skip = 0, w0 = 3, w1 = 3, sat = 0;
+	bool bff = false, fmd = false, weave_set = false, prog = false;
+	char sname[16];
 	FILE *fin, *fout = NULL;
 	struct v4l2_format f;
 	uint8_t **frames;
@@ -303,13 +345,20 @@ int main(int argc, char **argv)
 	size_t isz, osz;
 
 	ifmt = ofmt = NULL;
-	while ((opt = getopt(argc, argv, "W:H:f:F:m:t:s:l:bzw:c:r:n:d:i:o:v")) != -1) {
+	while ((opt = getopt(argc, argv, "W:H:f:F:m:S:pt:s:l:bzw:c:r:k:n:d:i:o:v")) != -1) {
 		switch (opt) {
 		case 'W': W = atoi(optarg); break;
 		case 'H': H = atoi(optarg); break;
 		case 'f': ifmt = find_fmt(optarg); break;
 		case 'F': ofmt = find_fmt(optarg); break;
-		case 'm': mode = find_idx(modes, 5, optarg); break;
+		case 'm': mode = find_idx(modes, NMODES, optarg); break;
+		case 'S':
+			if (sscanf(optarg, "%15[a-z]@%u", sname, &sat) != 2)
+				usage();
+			smode = find_idx(modes, NMODES, sname);
+			break;
+		case 'p': prog = true; break;
+		case 'k': skip = atoi(optarg); break;
 		case 't': tnr = find_idx(tnrmodes, 3, optarg); break;
 		case 's': strength = atoi(optarg); break;
 		case 'l': level = atoi(optarg); break;
@@ -345,6 +394,11 @@ int main(int argc, char **argv)
 			free(p);
 			break;
 		}
+		if (skip) {
+			skip--;
+			free(p);
+			continue;
+		}
 		frames = realloc(frames, (nin + 1) * sizeof(*frames));
 		frames[nin++] = p;
 		if (maxframes && nin == maxframes)
@@ -368,7 +422,7 @@ int main(int argc, char **argv)
 	f.fmt.pix.width = W;
 	f.fmt.pix.height = H;
 	f.fmt.pix.pixelformat = ifmt->fourcc;
-	f.fmt.pix.field = mode == 4 ? V4L2_FIELD_NONE :
+	f.fmt.pix.field = mode == 4 || prog ? V4L2_FIELD_NONE :
 			  bff ? V4L2_FIELD_INTERLACED_BT : V4L2_FIELD_INTERLACED_TB;
 	if (ioctl(fd, VIDIOC_S_FMT, &f))
 		die("S_FMT output");
@@ -391,10 +445,11 @@ int main(int argc, char **argv)
 		return 1;
 	}
 	cbpl = f.fmt.pix.bytesperline;
-	fprintf(stderr, "%ux%u %s -> %s, bytesperline %u/%u, mode %s\n", W, H,
-		ifmt->name, ofmt->name, obpl, cbpl, modes[mode]);
+	fprintf(stderr, "%ux%u %s -> %s, bytesperline %u/%u, mode %s (\"%s\" = %d)%s\n", W, H,
+		ifmt->name, ofmt->name, obpl, cbpl, modes[mode], mode_items[mode],
+		mode_index(mode), prog ? ", progressive" : "");
 
-	set_ctrl(V4L2_CID_DEINTERLACING_MODE, mode);
+	set_ctrl(V4L2_CID_DEINTERLACING_MODE, mode_index(mode));
 	if (tnr >= 0)
 		set_ctrl(CID_TNR_MODE, tnr);
 	if (strength >= 0)
@@ -419,7 +474,9 @@ int main(int argc, char **argv)
 		die("STREAMON capture");
 
 	unsigned int total = nin * repeat, sent = 0, done_in = 0, outs = 0, mism = 0;
-	unsigned int expect_per = mode == 0 ? 2 : 1;
+	/* progressive input is passed through: one output per input */
+	unsigned int expect_per = mode_field_rate[mode] && !prog ? 2 : 1;
+	unsigned int switch_out = 0;	/* outputs before the -S switch */
 	bool ofree[NOUT];
 	uint8_t *packed = malloc(osz > isz ? osz : isz);
 	double t0 = now(), tlast = t0;
@@ -432,8 +489,24 @@ int main(int argc, char **argv)
 		struct v4l2_buffer b;
 		int i;
 
-		/* feed */
-		for (i = 0; i < NOUT && sent < total; i++) {
+		/* -S: once the first sat inputs are done, change the mode */
+		if (smode >= 0 && sent == sat && outs == sent * expect_per) {
+			struct v4l2_control c = { .id = V4L2_CID_DEINTERLACING_MODE,
+						  .value = mode_index(smode) };
+			int r = ioctl(fd, VIDIOC_S_CTRL, &c);
+
+			printf("switch to %s at input %u: %s\n", modes[smode], sat,
+			       r ? strerror(errno) : "ok");
+			if (!r) {
+				mode = smode;
+				switch_out = outs;
+				if (!(mode_field_rate[mode] && !prog) != (expect_per == 1))
+					printf("switch: rate changed although S_CTRL succeeded: FAIL\n");
+			}
+			smode = -1;
+		}
+		/* feed (stop at the switch point until it is done) */
+		for (i = 0; i < NOUT && sent < total && (smode < 0 || sent < sat); i++) {
 			if (!ofree[i])
 				continue;
 			copy_frame(ifmt, frames[sent % nin], obufs[i].p, obpl, true);
@@ -490,6 +563,8 @@ int main(int argc, char **argv)
 
 	printf("frames in %u, out %u, %.3f s, %.1f out/s, %.1f Mpixel/s in\n", sent, outs, el,
 	       el > 0 ? outs / el : 0, el > 0 ? (double)sent * W * H / el / 1e6 : 0);
+	if (switch_out)
+		printf("outputs after the switch start at %u\n", switch_out);
 	if (check && !strcmp(check, "weave"))
 		printf("weave check: %s (%u mismatching frames)\n", mism ? "FAIL" : "PASS", mism);
 

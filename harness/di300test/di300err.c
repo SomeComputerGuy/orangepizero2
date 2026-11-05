@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: MIT
 /*
  * di300err: error-path checks for the sun50i-di300 mem2mem driver.
- * Streams NV12 720x576 in field mode, checks that the mode control and
- * the formats are locked (EBUSY) while streaming, then stops both queues
- * with jobs still queued and checks that every buffer comes back.
+ * Streams NV12 720x576 in field mode and checks the
+ * V4L2_CID_DEINTERLACING_MODE rules while streaming (items by name): a
+ * change of output rate, or to TNR-only, returns EBUSY; a change of
+ * method at the same rate is accepted and the control is not grabbed.
+ * The formats are locked (EBUSY). Then stops both queues with jobs still
+ * queued and checks that every buffer comes back.
  * Usage: di300err [/dev/videoN]
  */
 #include <errno.h>
@@ -28,6 +31,39 @@ static void check(const char *what, int ok)
 	fails += !ok;
 }
 
+/* menu index of a V4L2_CID_DEINTERLACING_MODE item, -1 if absent */
+static int mode_index(const char *name)
+{
+	struct v4l2_queryctrl q = { .id = V4L2_CID_DEINTERLACING_MODE };
+
+	if (ioctl(fd, VIDIOC_QUERYCTRL, &q))
+		return -1;
+	for (int i = q.minimum; i <= q.maximum; i++) {
+		struct v4l2_querymenu m = { .id = q.id, .index = i };
+
+		if (!ioctl(fd, VIDIOC_QUERYMENU, &m) && !strcmp((char *)m.name, name))
+			return i;
+	}
+	return -1;
+}
+
+/* set a mode by name, return 0 or errno */
+static int set_mode(const char *name)
+{
+	struct v4l2_control c = { .id = V4L2_CID_DEINTERLACING_MODE, .value = mode_index(name) };
+
+	if (c.value < 0)
+		return ENOENT;
+	return ioctl(fd, VIDIOC_S_CTRL, &c) ? errno : 0;
+}
+
+static int get_mode(void)
+{
+	struct v4l2_control c = { .id = V4L2_CID_DEINTERLACING_MODE };
+
+	return ioctl(fd, VIDIOC_G_CTRL, &c) ? -1 : c.value;
+}
+
 static int qbuf(int type, int i)
 {
 	struct v4l2_buffer b = { .type = type, .memory = V4L2_MEMORY_MMAP, .index = i };
@@ -41,7 +77,7 @@ int main(int argc, char **argv)
 {
 	const char *dev = argc > 1 ? argv[1] : "/dev/video1";
 	int types[2] = { V4L2_BUF_TYPE_VIDEO_OUTPUT, V4L2_BUF_TYPE_VIDEO_CAPTURE };
-	struct v4l2_control c = { .id = V4L2_CID_DEINTERLACING_MODE };
+	struct v4l2_queryctrl q = { .id = V4L2_CID_DEINTERLACING_MODE };
 	struct v4l2_format f;
 	int i, t, r, e;
 
@@ -50,8 +86,8 @@ int main(int argc, char **argv)
 		perror(dev);
 		return 2;
 	}
-	c.value = 0;	/* field-rate motion mode */
-	ioctl(fd, VIDIOC_S_CTRL, &c);
+	check("set \"Motion Adaptive, Field Rate\" before streaming",
+	      !set_mode("Motion Adaptive, Field Rate"));
 	for (t = 0; t < 2; t++) {
 		struct v4l2_requestbuffers rb = { .count = N, .type = types[t], .memory = V4L2_MEMORY_MMAP };
 
@@ -80,10 +116,20 @@ int main(int argc, char **argv)
 	for (t = 0; t < 2; t++)
 		ioctl(fd, VIDIOC_STREAMON, &types[t]);
 
-	c.value = 1;
-	r = ioctl(fd, VIDIOC_S_CTRL, &c);
-	e = errno;
-	check("S_CTRL(DEINTERLACING_MODE) while streaming: EBUSY", r < 0 && e == EBUSY);
+	check("streaming: to \"Motion Adaptive, Frame Rate\" (rate): EBUSY",
+	      set_mode("Motion Adaptive, Frame Rate") == EBUSY);
+	check("streaming: to \"Bob, Frame Rate\" (rate): EBUSY", set_mode("Bob, Frame Rate") == EBUSY);
+	check("streaming: to \"Weave\" (rate): EBUSY", set_mode("Weave") == EBUSY);
+	check("streaming: to \"Noise Reduction Only\": EBUSY",
+	      set_mode("Noise Reduction Only") == EBUSY);
+	check("streaming: value unchanged after EBUSY",
+	      get_mode() == mode_index("Motion Adaptive, Field Rate"));
+	check("streaming: control not grabbed",
+	      !ioctl(fd, VIDIOC_QUERYCTRL, &q) && !(q.flags & V4L2_CTRL_FLAG_GRABBED));
+	check("streaming: to \"Bob, Field Rate\" (same rate): ok", !set_mode("Bob, Field Rate"));
+	check("streaming: value is \"Bob, Field Rate\"", get_mode() == mode_index("Bob, Field Rate"));
+	check("streaming: back to \"Motion Adaptive, Field Rate\": ok",
+	      !set_mode("Motion Adaptive, Field Rate"));
 	f.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 	ioctl(fd, VIDIOC_G_FMT, &f);
 	f.fmt.pix.width = 352;
@@ -116,8 +162,8 @@ int main(int argc, char **argv)
 		}
 		check(t ? "no CAPTURE buffer left queued" : "no OUTPUT buffer left queued", !queued);
 	}
-	c.value = 1;
-	check("S_CTRL(DEINTERLACING_MODE) after STREAMOFF", !ioctl(fd, VIDIOC_S_CTRL, &c));
+	check("after STREAMOFF: to \"Motion Adaptive, Frame Rate\": ok",
+	      !set_mode("Motion Adaptive, Frame Rate"));
 	/* restart once to show the context is still usable */
 	for (i = 0; i < N; i++)
 		qbuf(V4L2_BUF_TYPE_VIDEO_CAPTURE, i);
@@ -132,6 +178,22 @@ int main(int argc, char **argv)
 		r = poll(&p, 1, 2000);
 		check("restart: capture buffer within 2 s", r > 0 && !ioctl(fd, VIDIOC_DQBUF, &b));
 	}
+	/* frame-rate class: method changes allowed, field rate not */
+	check("frame rate: to \"Bob, Frame Rate\": ok", !set_mode("Bob, Frame Rate"));
+	check("frame rate: to \"Weave\": ok", !set_mode("Weave"));
+	check("frame rate: to \"Motion Adaptive, Frame Rate\": ok",
+	      !set_mode("Motion Adaptive, Frame Rate"));
+	check("frame rate: to \"Bob, Field Rate\" (rate): EBUSY", set_mode("Bob, Field Rate") == EBUSY);
+	check("frame rate: to \"Noise Reduction Only\": EBUSY", set_mode("Noise Reduction Only") == EBUSY);
+	for (i = 0; i < 2; i++) {
+		struct pollfd p = { .fd = fd, .events = POLLIN };
+		struct v4l2_buffer b = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE, .memory = V4L2_MEMORY_MMAP };
+
+		r = poll(&p, 1, 2000);
+		check("frame rate: capture buffer after the changes", r > 0 && !ioctl(fd, VIDIOC_DQBUF, &b));
+	}
+	for (t = 0; t < 2; t++)
+		ioctl(fd, VIDIOC_STREAMOFF, &types[t]);
 	close(fd);
 	printf("%s\n", fails ? "FAIL" : "PASS");
 	return !!fails;

@@ -1,0 +1,35 @@
+pll-ve 0x28001800 = 600 MHz; vdd-gpu-sys 900000 uV; gpu devfreq 306000000; temp 58301 56600 59030 57410 
+== 600 MHz, MBUS port 4 QoS HIGHEST
+[q600 vp9p2-p010] rc=0 jobs=648 wall=12.87s span=11.42s | setup 0.26ms ve 17.43ms (max 57.83) | gap ready n=645 avg 0.127ms (wq 0.114ms) | gap starved n=2 avg 24.38ms max 40.11ms fps: ve-only 57.4, ve+setup 56.5, pipeline(span) 56.7, wall 50.4 | idle share: setup 1.5% ready-gap 0.7% starved 0.4% 
+[q600 h265m10-p010] rc=0 jobs=600 wall=10.34s span=9.79s | setup 0.24ms ve 15.90ms (max 17.85) | gap ready n=599 avg 0.175ms (wq 0.092ms) | gap starved n=0 avg 0.00ms max 0.00ms fps: ve-only 62.9, ve+setup 61.9, pipeline(span) 61.3, wall 58.1 | idle share: setup 1.5% ready-gap 1.1% starved 0.0% 
+[q600 avs2-p010] rc=0 jobs=292 wall=6.47s span=4.98s | setup 0.24ms ve 16.70ms (max 17.04) | gap ready n=291 avg 0.107ms (wq 0.104ms) | gap starved n=0 avg 0.00ms max 0.00ms fps: ve-only 59.9, ve+setup 59.0, pipeline(span) 58.7, wall 45.2 | idle share: setup 1.4% ready-gap 0.6% starved 0.0% 
+[q600 gst-h265m10] rc=0 jobs=600 wall=17.03s span=9.64s | setup 0.21ms ve 15.77ms (max 17.03) | gap ready n=599 avg 0.088ms (wq 0.085ms) | gap starved n=0 avg 0.00ms max 0.00ms fps: ve-only 63.4, ve+setup 62.6, pipeline(span) 62.3, wall 35.2 | idle share: setup 1.3% ready-gap 0.5% starved 0.0% 
+[q600 gst-vp9p2] rc=0 jobs=648 wall=12.10s span=11.28s | setup 0.24ms ve 16.93ms (max 57.82) | gap ready n=647 avg 0.241ms (wq 0.111ms) | gap starved n=0 avg 0.00ms max 0.00ms fps: ve-only 59.1, ve+setup 58.3, pipeline(span) 57.5, wall 53.5 | idle share: setup 1.4% ready-gap 1.4% starved 0.0% 
+== 624 MHz
+pll-ve 0x28001900 = 624 MHz
+[f624 vp9p2-p010] rc=0 jobs=648 wall=12.79s span=10.98s | setup 0.25ms ve 16.81ms (max 55.53) | gap ready n=646 avg 0.121ms (wq 0.109ms) | gap starved n=1 avg 18.32ms max 18.32ms fps: ve-only 59.5, ve+setup 58.6, pipeline(span) 59.0, wall 50.7 | idle share: setup 1.5% ready-gap 0.7% starved 0.2% 
+[f624 h265m10-p010] rc=0 jobs=600 wall=10.29s span=9.71s | setup 0.25ms ve 15.81ms (max 18.38) | gap ready n=594 avg 0.094ms (wq 0.091ms) | gap starved n=5 avg 3.10ms max 4.57ms fps: ve-only 63.3, ve+setup 62.3, pipeline(span) 61.8, wall 58.3 | idle share: setup 1.5% ready-gap 0.6% starved 0.2% 
+[f624 avs2-p010] rc=0 jobs=292 wall=6.00s span=4.87s | setup 0.36ms ve 16.20ms (max 17.42) | gap ready n=291 avg 0.116ms (wq 0.108ms) | gap starved n=0 avg 0.00ms max 0.00ms fps: ve-only 61.7, ve+setup 60.4, pipeline(span) 60.0, wall 48.7 | idle share: setup 2.2% ready-gap 0.7% starved 0.0% 
+[f624 gst-h265m10] rc=0 jobs=600 wall=10.65s span=9.57s | setup 0.21ms ve 15.63ms (max 16.77) | gap ready n=599 avg 0.104ms (wq 0.093ms) | gap starved n=0 avg 0.00ms max 0.00ms fps: ve-only 64.0, ve+setup 63.1, pipeline(span) 62.7, wall 56.3 | idle share: setup 1.3% ready-gap 0.7% starved 0.0% 
+[f624 gst-vp9p2] rc=0 jobs=648 wall=11.55s span=10.91s | setup 0.24ms ve 16.40ms (max 55.60) | gap ready n=647 avg 0.188ms (wq 0.110ms) | gap starved n=0 avg 0.00ms max 0.00ms fps: ve-only 61.0, ve+setup 60.1, pipeline(span) 59.4, wall 56.1 | idle share: setup 1.4% ready-gap 1.1% starved 0.0% 
+port4 0x2000020F
+[f624q vp9p2-p010] rc=0 jobs=648 wall=13.00s span=11.18s | setup 0.25ms ve 17.13ms (max 55.54) | gap ready n=644 avg 0.118ms (wq 0.105ms) | gap starved n=3 avg 3.18ms max 4.82ms fps: ve-only 58.4, ve+setup 57.5, pipeline(span) 57.9, wall 49.9 | idle share: setup 1.4% ready-gap 0.7% starved 0.1% 
+[f624q h265m10-p010] rc=0 jobs=600 wall=10.10s span=9.42s | setup 0.24ms ve 15.31ms (max 18.01) | gap ready n=599 avg 0.151ms (wq 0.094ms) | gap starved n=0 avg 0.00ms max 0.00ms fps: ve-only 65.3, ve+setup 64.3, pipeline(span) 63.7, wall 59.4 | idle share: setup 1.5% ready-gap 1.0% starved 0.0% 
+[f624q avs2-p010] rc=0 jobs=292 wall=6.08s span=4.79s | setup 0.22ms ve 16.08ms (max 16.52) | gap ready n=291 avg 0.115ms (wq 0.105ms) | gap starved n=0 avg 0.00ms max 0.00ms fps: ve-only 62.2, ve+setup 61.3, pipeline(span) 60.9, wall 48.0 | idle share: setup 1.4% ready-gap 0.7% starved 0.0% 
+[f624q gst-h265m10] rc=0 jobs=600 wall=10.36s span=9.28s | setup 0.21ms ve 15.12ms (max 16.13) | gap ready n=599 avg 0.125ms (wq 0.088ms) | gap starved n=0 avg 0.00ms max 0.00ms fps: ve-only 66.1, ve+setup 65.2, pipeline(span) 64.7, wall 57.9 | idle share: setup 1.4% ready-gap 0.8% starved 0.0% 
+[f624q gst-vp9p2] rc=0 jobs=648 wall=11.86s span=11.09s | setup 0.24ms ve 16.67ms (max 55.60) | gap ready n=647 avg 0.211ms (wq 0.112ms) | gap starved n=0 avg 0.00ms max 0.00ms fps: ve-only 60.0, ve+setup 59.2, pipeline(span) 58.4, wall 54.7 | idle share: setup 1.4% ready-gap 1.2% starved 0.0% 
+[f624q md5 vp9-p2-2160p60.webm] PASS 1e40c2b3f795ec2a9358631292644c85
+[f624q md5 hevc-main10-2160p60.mkv] PASS e57bc497604122d3b234a029d22ed5d9
+[f624q md5 avs2-8bit-2160p] PASS 3a3d5d7eb9a6f548042e160d9e461388
+[f624q md5 avs2-10bit-cctv4k] PASS be9985dea38abffc850d73024165c990
+== soak 900s at 624 MHz + port 4 QoS, GPU idle, temp 59435 59030 59840 59111 
+[soak] runs=9 fail=0 906s vdd-gpu-sys 900000 temp 62756 62027 64295 62027 
+restored pll-ve 0x28001800 = 600 MHz, port4 0x20000209
+[dmesg] [15510.961279] cedrus 1c0e000.video-codec: frame processing timed out!
+[dmesg] [15512.977496] cedrus 1c0e000.video-codec: frame processing timed out!
+[dmesg] [15514.993476] cedrus 1c0e000.video-codec: frame processing timed out!
+[dmesg] [15517.009498] cedrus 1c0e000.video-codec: frame processing timed out!
+[dmesg] [15519.025519] cedrus 1c0e000.video-codec: frame processing timed out!
+ROUND-DONE
+7.3.1-edge-sunxi64
+vmlinuz-7.3.1-edge-sunxi64

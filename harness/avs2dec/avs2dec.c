@@ -51,7 +51,7 @@
 #define MAX_RCS		32
 #define MAX_REFS	7
 #define MAX_BUFS	32
-#define NUM_OUT_BUFS	2
+#define NUM_OUT_BUFS	4	/* >= the request queue depth (AVS2_DEPTH) */
 
 static int verbose;
 
@@ -656,6 +656,8 @@ struct frame {
 	int32_t ref_poc[MAX_REFS];
 	uint64_t ts;
 	unsigned int out_index;	/* frame number in output order */
+	bool inflight;		/* its decode request has not completed yet */
+	bool out_pending;	/* chosen for output, readback not done yet */
 };
 
 struct v4l2_ctx;
@@ -679,9 +681,13 @@ struct decoder {
 	struct md5 frame_md5_ctx;
 	struct v4l2_ctx *v4l2;
 	uint8_t *rowbuf;
+	/* Output order FIFO of pictures whose readback waits for their decode. */
+	int outq[MAX_BUFS];
+	unsigned int outq_head, outq_len;
 };
 
 static void output_frame(struct decoder *d, int idx);
+static void flush_outputs(struct decoder *d, bool wait);
 
 static int find_ref(struct decoder *d, int64_t doi)
 {
@@ -723,7 +729,8 @@ static void release_unused(struct decoder *d)
 	for (i = 0; i < d->num_bufs; i++) {
 		struct frame *f = &d->frames[i];
 
-		if (f->used && !f->referenced && !f->scene && !f->needs_output)
+		if (f->used && !f->referenced && !f->scene && !f->needs_output &&
+		    !f->inflight && !f->out_pending)
 			f->used = false;
 	}
 }
@@ -758,6 +765,11 @@ static int get_free_frame(struct decoder *d)
 		for (i = 0; i < d->num_bufs; i++)
 			if (!d->frames[i].used)
 				return i;
+		/* Pictures waiting for readback free their buffers first. */
+		if (d->outq_len) {
+			flush_outputs(d, true);
+			continue;
+		}
 		/* No free buffer: output the earliest picture early. */
 		if (smallest_pending(d) < 0)
 			return -1;
@@ -783,6 +795,14 @@ struct v4l2_ctx {
 	unsigned int num_cap;
 	unsigned int next_out;
 	bool p010;
+	/*
+	 * Requests in flight, oldest first (AVS2_DEPTH, default 2): the next
+	 * picture is queued while the VE still decodes the previous one, so
+	 * the m2m core starts it straight from the completion interrupt.
+	 */
+	unsigned int depth;
+	unsigned int fifo_out[NUM_OUT_BUFS], fifo_cap[NUM_OUT_BUFS];
+	unsigned int fifo_head, fifo_len;
 };
 
 static void xioctl(int fd, unsigned long req, void *arg, const char *name)
@@ -974,14 +994,27 @@ static struct v4l2_ctx *v4l2_open(const char *video, const char *media,
 		v->p010 = false;
 		fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_NV12_32L32;
 	}
+	/* AVS2_CAP=AFBC: 10-bit AFBC (no readback), throughput runs only. */
+	if (getenv("AVS2_CAP") && !strcmp(getenv("AVS2_CAP"), "AFBC")) {
+		if (!getenv("AVS2_NOOUT"))
+			die("AVS2_CAP=AFBC needs AVS2_NOOUT=1");
+		v->p010 = false;
+		fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUV420_10_AFBC_16X16_SPLIT;
+	}
 	fmt.fmt.pix.width = s->width;
 	fmt.fmt.pix.height = s->height;
 	xioctl(v->video_fd, VIDIOC_S_FMT, &fmt, "VIDIOC_S_FMT(CAPTURE)");
-	if (fmt.fmt.pix.pixelformat !=
-	    (v->p010 ? V4L2_PIX_FMT_P010 :
-	     (getenv("AVS2_CAP") && !strcmp(getenv("AVS2_CAP"), "ST12")) ?
-	     V4L2_PIX_FMT_NV12_32L32 : V4L2_PIX_FMT_NV12))
-		die("capture format %s not available", v->p010 ? "P010" : "NV12");
+	{
+		const char *cap = getenv("AVS2_CAP") ? getenv("AVS2_CAP") : "";
+		uint32_t want = v->p010 ? V4L2_PIX_FMT_P010 :
+				!strcmp(cap, "ST12") ? V4L2_PIX_FMT_NV12_32L32 :
+				!strcmp(cap, "AFBC") ?
+				V4L2_PIX_FMT_YUV420_10_AFBC_16X16_SPLIT :
+				V4L2_PIX_FMT_NV12;
+
+		if (fmt.fmt.pix.pixelformat != want)
+			die("capture format %.4s not available", (char *)&want);
+	}
 	v->cap_fmt = fmt.fmt.pix;
 
 	rb.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
@@ -1015,6 +1048,9 @@ static struct v4l2_ctx *v4l2_open(const char *video, const char *media,
 	if (rb.count < num_cap)
 		die("only %u capture buffers", rb.count);
 	v->num_cap = num_cap;
+	v->depth = getenv("AVS2_DEPTH") ? atoi(getenv("AVS2_DEPTH")) : 2;
+	if (v->depth < 1 || v->depth > NUM_OUT_BUFS - 1)
+		die("AVS2_DEPTH must be 1..%d", NUM_OUT_BUFS - 1);
 	for (i = 0; i < num_cap; i++) {
 		struct v4l2_buffer buf = {
 			.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
@@ -1038,15 +1074,66 @@ static struct v4l2_ctx *v4l2_open(const char *video, const char *media,
 	return v;
 }
 
-static int v4l2_decode(struct v4l2_ctx *v, const uint8_t *data, size_t len,
-		       uint64_t ts, unsigned int cap_index,
-		       struct v4l2_ext_control *ctrls, unsigned int nctrls)
+/* Wait for the oldest request; returns its capture index, *error on failure. */
+static unsigned int v4l2_complete_oldest(struct v4l2_ctx *v, int *error)
 {
-	unsigned int out = v->next_out;
+	unsigned int out = v->fifo_out[v->fifo_head];
+	unsigned int cap = v->fifo_cap[v->fifo_head];
 	int req = v->req_fd[out];
 	struct v4l2_buffer buf = { 0 };
 	struct pollfd pfd = { .fd = req, .events = POLLPRI };
-	int ret, error = 0;
+	int ret;
+
+	ret = poll(&pfd, 1, 5000);
+	if (ret <= 0)
+		die("request timed out");
+
+	/* Completion is in queue order, so the oldest buffers come back. */
+	buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+	buf.memory = V4L2_MEMORY_MMAP;
+	xioctl(v->video_fd, VIDIOC_DQBUF, &buf, "VIDIOC_DQBUF(OUTPUT)");
+	if (buf.index != out)
+		die("dequeued output buffer %u, expected %u", buf.index, out);
+
+	memset(&buf, 0, sizeof(buf));
+	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	buf.memory = V4L2_MEMORY_MMAP;
+	xioctl(v->video_fd, VIDIOC_DQBUF, &buf, "VIDIOC_DQBUF(CAPTURE)");
+	if (buf.index != cap)
+		die("dequeued capture buffer %u, expected %u", buf.index, cap);
+	*error = (buf.flags & V4L2_BUF_FLAG_ERROR) ? -1 : 0;
+
+	xioctl(req, MEDIA_REQUEST_IOC_REINIT, NULL, "MEDIA_REQUEST_IOC_REINIT");
+
+	v->fifo_head = (v->fifo_head + 1) % NUM_OUT_BUFS;
+	v->fifo_len--;
+	return cap;
+}
+
+static void complete_oldest(struct decoder *d)
+{
+	int error;
+	unsigned int cap = v4l2_complete_oldest(d->v4l2, &error);
+	struct frame *f = &d->frames[cap];
+
+	f->inflight = false;
+	if (error)
+		fprintf(stderr, "picture doi %" PRId64 " poc %d: decode error\n",
+			f->doi, f->poc);
+}
+
+/* Queue one picture; at most v->depth requests stay in flight. */
+static void v4l2_submit(struct decoder *d, const uint8_t *data, size_t len,
+			uint64_t ts, unsigned int cap_index,
+			struct v4l2_ext_control *ctrls, unsigned int nctrls)
+{
+	struct v4l2_ctx *v = d->v4l2;
+	unsigned int out = v->next_out;
+	int req = v->req_fd[out];
+	struct v4l2_buffer buf = { 0 };
+
+	while (v->fifo_len >= v->depth)
+		complete_oldest(d);
 
 	v->next_out = (out + 1) % NUM_OUT_BUFS;
 
@@ -1075,28 +1162,10 @@ static int v4l2_decode(struct v4l2_ctx *v, const uint8_t *data, size_t len,
 
 	xioctl(req, MEDIA_REQUEST_IOC_QUEUE, NULL, "MEDIA_REQUEST_IOC_QUEUE");
 
-	ret = poll(&pfd, 1, 5000);
-	if (ret <= 0)
-		die("request timed out");
-
-	memset(&buf, 0, sizeof(buf));
-	buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-	buf.memory = V4L2_MEMORY_MMAP;
-	xioctl(v->video_fd, VIDIOC_DQBUF, &buf, "VIDIOC_DQBUF(OUTPUT)");
-
-	memset(&buf, 0, sizeof(buf));
-	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	buf.memory = V4L2_MEMORY_MMAP;
-	xioctl(v->video_fd, VIDIOC_DQBUF, &buf, "VIDIOC_DQBUF(CAPTURE)");
-	if (buf.index != cap_index)
-		die("dequeued capture buffer %u, expected %u", buf.index,
-		    cap_index);
-	if (buf.flags & V4L2_BUF_FLAG_ERROR)
-		error = -1;
-
-	xioctl(req, MEDIA_REQUEST_IOC_REINIT, NULL, "MEDIA_REQUEST_IOC_REINIT");
-
-	return error;
+	v->fifo_out[(v->fifo_head + v->fifo_len) % NUM_OUT_BUFS] = out;
+	v->fifo_cap[(v->fifo_head + v->fifo_len) % NUM_OUT_BUFS] = cap_index;
+	v->fifo_len++;
+	d->frames[cap_index].inflight = true;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1139,7 +1208,40 @@ static void put(struct decoder *d, const void *p, size_t n)
 		die("write: %s", strerror(errno));
 }
 
+static void readback_frame(struct decoder *d, int idx);
+
+/*
+ * Output in POC order is decided here; the readback (md5, file) of a
+ * picture still being decoded is deferred until its request completes,
+ * in the same order.
+ */
 static void output_frame(struct decoder *d, int idx)
+{
+	d->frames[idx].out_pending = true;
+	d->outq[(d->outq_head + d->outq_len) % MAX_BUFS] = idx;
+	d->outq_len++;
+	flush_outputs(d, false);
+}
+
+static void flush_outputs(struct decoder *d, bool wait)
+{
+	while (d->outq_len) {
+		int idx = d->outq[d->outq_head];
+
+		if (d->frames[idx].inflight) {
+			if (!wait)
+				return;
+			while (d->frames[idx].inflight)
+				complete_oldest(d);
+		}
+		d->outq_head = (d->outq_head + 1) % MAX_BUFS;
+		d->outq_len--;
+		d->frames[idx].out_pending = false;
+		readback_frame(d, idx);
+	}
+}
+
+static void readback_frame(struct decoder *d, int idx)
 {
 	struct frame *f = &d->frames[idx];
 	struct v4l2_ctx *v = d->v4l2;
@@ -1405,9 +1507,7 @@ static void decode_picture(struct decoder *d, const uint8_t *data, size_t len,
 		ctrls[3] = (struct v4l2_ext_control){
 			.id = V4L2_CID_STATELESS_AVS2_ALF,
 			.size = sizeof(alf), .ptr = &alf };
-		if (v4l2_decode(d->v4l2, data, len, cur->ts, idx, ctrls, 4))
-			fprintf(stderr, "picture doi %" PRId64 " poc %d: decode error\n",
-				doi, poc);
+		v4l2_submit(d, data, len, cur->ts, idx, ctrls, 4);
 	}
 
 	cur->used = true;
@@ -1612,6 +1712,11 @@ int main(int argc, char **argv)
 			       pic_hdr_end - pic_start, slice_off - pic_start,
 			       pic_intra);
 	bump(&d, true);
+	if (d.v4l2) {
+		while (d.v4l2->fifo_len)
+			complete_oldest(&d);
+		flush_outputs(&d, true);
+	}
 
 	md5_final(&d.md5, sum);
 	printf("%u pictures decoded, %u output", d.pic_count, d.out_count);

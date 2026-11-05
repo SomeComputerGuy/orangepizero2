@@ -390,3 +390,77 @@ Board restored afterwards: image kernel `7.3.1-edge-sunxi64 #8`, `/boot/vdec-tri
   reconstruction, only the format table entries are missing). Worth adding after A6 passes, for DE33 AFBC scanout and the
   extra headroom (H.265: 84 vs 60 fps).
 - Upstreaming: the uAPI would need a second user (Rockchip rkvdec2 or Amlogic) before it is acceptable upstream. Keep it downstream until then.
+
+## 8. 10-bit reference check, request queue, AFBC capture (2026-11-05)
+
+### 8.1 10-bit against a second decoder: davs2 with HIGH_BIT_DEPTH forced
+- Build (host only; davs2 is already approved, §5a): a copy of `build-src-davs2/davs2` at `b41cf117…` in
+  `kernel-check/avs2-build/davs2-10`. Changes:
+  - configure: the `--bit-depth=10` refusal is replaced by a message ("forced, untested upstream");
+  - two type fixes the 16-bit `pel_t` needs: `ALIGN_POINTER` casts to `__typeof__(p)` (osdep.h), and the three
+    `pic->planes[i] = (uint8_t *)frame->planes[i]` in decoder.cc.
+  Built with `--disable-asm` (no nasm). No other change to the decoding code.
+- Run: `davs2 -i cctv4k-10bit.avs2 -o fifo -t 8` (also `-t 1`, identical), per-frame md5 with `yuvtool.py md5 3840 2160 2`
+  (16-bit LE, 10-bit values, I420, output order; the same convention as avs2dec). Results in `kernel-check/avs2-build/run10/`.
+- **Result [M]: frames 0–290 (291 of 292) have the same md5 in davs2-10 and in the board's P010 output** (both earlier board
+  runs, `out10/cctv4k-10bit.p010-a/b.txt`). That is all 6 GOPs and every I, P and B picture type in the stream, through the AFBC
+  hidden reference. davs2-10's "Invalid cu_qp_delta" messages are its own range check (±40 at 10 bits). They clip only values
+  beyond the range, and every one of them belongs to the last picture.
+- **Frame 291 (POC 323, the last picture of the capture, a P picture referencing 315) differs.** Evidence that the picture
+  itself is damaged:
+  - It is a single slice. davs2 reports entropy-decoding errors (invalid intra luma mode 33, chroma mode errors,
+    cu_qp_delta out of range) in it, and only in it.
+  - Row-by-row comparison of the board dump (`kernel-check/avs2-build/run10/board-f291.yuv`, local only; avs2dec `AVS2_DUMP=291`) with davs2:
+    LCU rows 0–16 are identical. The first difference is at LCU row 17 (y 544+, small errors 2–11), then nearly every LCU in
+    rows 18+ differs.
+  - Two independent decoders that agree bit-exactly on 291 pictures, including 54 other P pictures, diverge in the middle of
+    one slice, which then fails syntax checks. That points to corrupt data (e.g. a transport packet lost in the broadcast
+    capture), not to a decoder difference. [I] The hardware raised no error interrupt for it.
+- So the 10-bit claim moves from "self-consistent" (§7.3) to **"bit-exact against an independent software decoder on all
+  undamaged pictures (291/291)"**, with two caveats:
+  - davs2's 10-bit path is not validated upstream. Agreement between two independent implementations is strong evidence,
+    not conformance.
+  - The stream exercises only PMVR and LCU 32: no SAO, ALF, WQ or background pictures at 10 bits. Those tools are bit-exact
+    at 8 bits (§7.2) only.
+
+### 8.2 avs2dec: two requests in flight
+- The old avs2dec queued one picture, waited for it, then parsed the next. Timeline (`vdec-perf/ve-timeline.sh`): the VE was
+  starved 1.2–1.6 ms per picture, pipeline 53 fps against 59 VE-bound.
+- New: `AVS2_DEPTH` (default 2, 1 = old behaviour, max 3; 4 OUTPUT buffers/requests). Picture N+1 is queued before N is
+  waited for; readback (md5/file) of a picture still in flight is deferred in output order. A capture buffer is reused only
+  when its request is done and its readback is complete. Parse-only (`-p -v`) output is byte-identical to the old binary
+  on all 9 local streams.
+- Board [M]: 4K Main10 P010 VE-bound 59.0 / pipeline 57.7 fps (depth 2), 59.5 / 58.2 (depth 3); ready gaps 0.11–0.13 ms,
+  no starvation.
+- md5 with depth 2: cctv4k 10-bit `be9985dea38abffc850d73024165c990` (= the earlier runs), main-2160p-ra `3a3d5d7e…` and
+  main-1080p-ra `13dbb783…` (= davs2-8 references).
+- Also new: `AVS2_CAP=AFBC` (10-bit AFBC capture, throughput only, needs `AVS2_NOOUT=1`, like ST12).
+
+### 8.3 4K Main10 speed: what limits it, and the changes
+- The limit is the VE itself (impl-vdec-main10-perf.md §9): 16.8–17.0 ms per picture with P010, setup 0.2 ms, handover
+  0.1 ms. The pipeline equals the VE rate once the client keeps two requests queued.
+- [M] VE 624 MHz (vendor policy, devmem PLL_VE on the image kernel): AVS2 P010 VE-bound 61.7 fps, pipeline 60.0 fps (+ MBUS
+  port 4 HIGHEST: 62.2 / 60.9). Bit-exact (10-bit `be9985de…`, 8-bit `3a3d5d7e…`), plus the 15 min soak of §9.3 there.
+- Kernel (branch `feat/sunxi-h616-vdec-60fps`, rebased on `test/cumulative` 67cef8768, for cumulative kernel c2):
+  - `ba5caad1e` `media-cedrus-offer-10-bit-AFBC-capture-for-AVS2.patch`: YUV420_10_AFBC_16X16_SPLIT as an opt-in capture
+    format for 10-bit AVS2 (after the plain formats; P010 stays the default). It is a format-table entry only: the AVS2 code
+    already programs the single-plane AFBC addresses (current and references), the AFBC VE_MODE bits and, without P010, the
+    vendor's HIGH10 10-bit config. **The AVS2 uAPI is unchanged** (it stays avs2-v5, now shared with the OPi5 project).
+  - `e6229e03c` `media-cedrus-run-the-H616-VE-at-624-MHz.patch`.
+  Build-checked on base b9df5096b (813/0, `W=1` clean). **Not board-tested yet**: under the cumulative-kernel rule, round 3
+  (`vdec-perf/board-queue-r3.sh`: AVS2 AFBC vs P010 rates at 624/600 MHz, md5 regression of the 10-bit paths, v4l2-compliance)
+  runs on c2.
+
+### 8.4 Spec row "AVS2 JiZhun 10-bit 4K@60"
+- P010 through avs2dec: 57.7–58.7 fps at 600 MHz; **60.0 fps at 624 MHz** (VE-only 61.7). Bit-exact against davs2-10 on
+  291/291 undamaged pictures.
+- AFBC10 capture: rate pending round 3 on c2. Expected near H.265/VP9 AFBC (84–86 fps), since the P010 write is what limits
+  P010. [I]
+
+### 8.5 Open
+- Round 3 on c2 (AFBC rate, the 624 MHz default, regression).
+- Native AFBC output cannot be md5-checked (no AFBC decompressor). The evidence stays the AFBC reference loop inside the
+  bit-exact P010 runs. Display of AFBC needs DE33 AFBC scanout (impl-vdec-main10-perf.md §6) and an HDMI 2.0 4K60 sink,
+  which we do not have.
+- 10-bit SAO/ALF/WQ/background: no stream. A real 10-bit encoder (xavs2 has none) or the AVS WG conformance suite is needed.
+- FFmpeg AVS2 hwaccel (status item 6), using the avs2dec request-queue scheme.

@@ -1,0 +1,72 @@
+kernel 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 ve=600000000 gov=ondemand cpu=1512000
+mbus tmr=0x0000018F bwcr=0x00010000
+mbus port 0 cfg0=0x0100000D cfg1=0x00640080
+mbus port 1 cfg0=0x06000009 cfg1=0x01000578
+mbus port 2 cfg0=0x0200000D cfg1=0x00600100
+mbus port 3 cfg0=0x01000009 cfg1=0x00500064
+mbus port 4 cfg0=0x20000209 cfg1=0x1388157C
+mbus port 5 cfg0=0x00640209 cfg1=0x00200040
+mbus port 6 cfg0=0x00640209 cfg1=0x00200040
+mbus port 8 cfg0=0x01000009 cfg1=0x00400080
+mbus port 11 cfg0=0x01000009 cfg1=0x00640080
+mbus port 14 cfg0=0x04000009 cfg1=0x00400100
+mbus port 16 cfg0=0x2000060D cfg1=0x09600AF0
+mbus port 21 cfg0=0x0800060D cfg1=0x02000300
+mbus port 22 cfg0=0x01000009 cfg1=0x00640080
+mbus port 25 cfg0=0x0064000F cfg1=0x00200040
+mbus port 26 cfg0=0x00000000 cfg1=0x00000000
+mbus port 37 cfg0=0x00000000 cfg1=0x00000000
+mbus port 38 cfg0=0x00000000 cfg1=0x00000000
+mbus port 39 cfg0=0x00000000 cfg1=0x00000000
+mbus port 40 cfg0=0x00640209 cfg1=0x00200040
+iommu gating=0x00000001 wbuf=0x00000039 ooo=0x0000007F 4kb=0x0000007F tlb=0x0003007F pf=0x0000003F
+== A: FFmpeg
+[base vp9p2-p010] rc=0 jobs=648 wall=12.63s span=11.20s | setup 0.22ms ve 17.17ms (max 57.79) | gap ready n=645 avg 0.125ms (wq 0.117ms) | gap starved n=2 avg 9.36ms max 15.35ms fps: ve-only 58.2, ve+setup 57.5, pipeline(span) 57.8, wall 51.3 | idle share: setup 1.3% ready-gap 0.7% starved 0.2% 
+[base h265m10-p010] rc=0 jobs=600 wall=10.66s span=9.89s | setup 0.25ms ve 16.37ms (max 18.37) | gap ready n=595 avg 0.091ms (wq 0.086ms) | gap starved n=4 avg 5.84ms max 12.27ms fps: ve-only 61.1, ve+setup 60.2, pipeline(span) 60.6, wall 56.3 | idle share: setup 1.5% ready-gap 0.5% starved 0.2% 
+[base vp9p2-p010 threads1] rc=0 jobs=648 wall=13.13s span=11.84s | setup 0.20ms ve 16.56ms (max 57.80) | gap ready n=48 avg 0.116ms (wq 0.109ms) | gap starved n=600 avg 1.30ms max 11.75ms fps: ve-only 60.4, ve+setup 59.6, pipeline(span) 54.7, wall 49.3 | idle share: setup 1.1% ready-gap 0.0% starved 6.6% 
+[base h265m10-p010 threads1] rc=0 jobs=600 wall=10.59s span=10.14s | setup 0.17ms ve 16.28ms (max 17.84) | gap ready n=449 avg 0.080ms (wq 0.074ms) | gap starved n=151 avg 0.58ms max 12.36ms fps: ve-only 61.4, ve+setup 60.8, pipeline(span) 59.1, wall 56.7 | idle share: setup 1.0% ready-gap 0.4% starved 0.9% 
+[base vp9p2-afbc] rc=0 jobs=648 wall=8.84s span=7.63s | setup 0.24ms ve 11.62ms (max 57.79) | gap ready n=646 avg 0.102ms (wq 0.100ms) | gap starved n=1 avg 3.14ms max 3.14ms fps: ve-only 86.1, ve+setup 84.4, pipeline(span) 85.0, wall 73.3 | idle share: setup 2.0% ready-gap 0.9% starved 0.0% 
+[perf vp9p2-p010] rc=0 jobs=648 wall=12.47s span=11.12s | setup 0.20ms ve 17.10ms (max 57.79) | gap ready n=646 avg 0.107ms (wq 0.097ms) | gap starved n=1 avg 3.46ms max 3.46ms fps: ve-only 58.5, ve+setup 57.8, pipeline(span) 58.3, wall 52.0 | idle share: setup 1.2% ready-gap 0.6% starved 0.0% 
+[perf h265m10-p010] rc=0 jobs=600 wall=10.47s span=10.02s | setup 0.21ms ve 16.38ms (max 18.51) | gap ready n=596 avg 0.080ms (wq 0.076ms) | gap starved n=3 avg 5.58ms max 13.34ms fps: ve-only 61.1, ve+setup 60.3, pipeline(span) 59.9, wall 57.3 | idle share: setup 1.3% ready-gap 0.5% starved 0.2% 
+== B: GStreamer
+[gst h265m10 fakesink] rc=0 jobs=600 wall=13.61s span=9.96s | setup 0.20ms ve 16.24ms (max 17.31) | gap ready n=599 avg 0.153ms (wq 0.107ms) | gap starved n=0 avg 0.00ms max 0.00ms fps: ve-only 61.6, ve+setup 60.8, pipeline(span) 60.2, wall 44.1 | idle share: setup 1.2% ready-gap 0.9% starved 0.0% 
+[gst h265m10 fakevideosink] rc=0 jobs=600 wall=10.38s span=9.94s | setup 0.21ms ve 16.24ms (max 17.33) | gap ready n=599 avg 0.114ms (wq 0.104ms) | gap starved n=0 avg 0.00ms max 0.00ms fps: ve-only 61.6, ve+setup 60.8, pipeline(span) 60.4, wall 57.8 | idle share: setup 1.2% ready-gap 0.7% starved 0.0% 
+[gst vp9p2 fakevideosink] rc=0 jobs=648 wall=12.01s span=11.13s | setup 0.23ms ve 16.69ms (max 57.82) | gap ready n=647 avg 0.254ms (wq 0.114ms) | gap starved n=0 avg 0.00ms max 0.00ms fps: ve-only 59.9, ve+setup 59.1, pipeline(span) 58.2, wall 54.0 | idle share: setup 1.4% ready-gap 1.5% starved 0.0% 
+[gst-dbg]       1 0:00:00.219869793     160666     160678 INFO      v4l2codecs-decoder gstv4l2decoder.c:743:gst_v4l2_decoder_select_src_format:<v4l2decoder1> Selected format P010_10LE DRM ....:0x00ffffffffffffff 3840x2160
+[gst-dbg]       1 0:00:00.218271123     160666     160678 INFO      v4l2codecs-h265dec gstv4l2codech265dec.c:1092:gst_v4l2_codec_h265_dec_new_sequence:<v4l2slh265dec0> Chroma format changed to 1
+[gst-dbg]       1 0:00:00.218239831     160666     160678 INFO      v4l2codecs-h265dec gstv4l2codech265dec.c:1086:gst_v4l2_codec_h265_dec_new_sequence:<v4l2slh265dec0> Bitdepth changed to 10
+[gst-dbg]       1 0:00:00.218145206     160666     160678 INFO      v4l2codecs-h265dec gstv4l2codech265dec.c:1078:gst_v4l2_codec_h265_dec_new_sequence:<v4l2slh265dec0> Resolution changed to 3840x2160 (3840x2160)
+[gst-dbg]       1 0:00:00.189616438     160666     160666 INFO      v4l2codecs-h265dec gstv4l2codech265dec.c:309:gst_v4l2_codec_h265_dec_open:<v4l2slh265dec0> Opened H265 slice based decoder without start-codes
+== C: MBUS knobs
+port25 cfg0 0x0064000F -> 0x0064000E
+[mbus25 vp9p2-p010] rc=0 jobs=648 wall=12.70s span=11.12s | setup 0.25ms ve 17.05ms (max 57.75) | gap ready n=646 avg 0.112ms (wq 0.108ms) | gap starved n=1 avg 15.60ms max 15.60ms fps: ve-only 58.7, ve+setup 57.8, pipeline(span) 58.3, wall 51.0 | idle share: setup 1.4% ready-gap 0.7% starved 0.1% 
+[mbus25 h265m10-p010] rc=0 jobs=600 wall=10.54s span=10.06s | setup 0.25ms ve 16.39ms (max 18.36) | gap ready n=594 avg 0.117ms (wq 0.103ms) | gap starved n=5 avg 2.08ms max 3.64ms fps: ve-only 61.0, ve+setup 60.1, pipeline(span) 59.6, wall 56.9 | idle share: setup 1.5% ready-gap 0.7% starved 0.1% 
+port4 0x20000209 -> 0x2000020F port26 0x00000000 -> 0x00000000
+[mbus25+ve vp9p2-p010] rc=0 jobs=648 wall=12.67s span=11.26s | setup 0.25ms ve 17.28ms (max 57.83) | gap ready n=646 avg 0.111ms (wq 0.106ms) | gap starved n=1 avg 3.08ms max 3.08ms fps: ve-only 57.9, ve+setup 57.1, pipeline(span) 57.5, wall 51.1 | idle share: setup 1.4% ready-gap 0.6% starved 0.0% 
+[mbus25+ve h265m10-p010] rc=0 jobs=600 wall=10.25s span=9.78s | setup 0.25ms ve 15.91ms (max 17.82) | gap ready n=599 avg 0.146ms (wq 0.112ms) | gap starved n=0 avg 0.00ms max 0.00ms fps: ve-only 62.8, ve+setup 61.9, pipeline(span) 61.3, wall 58.6 | idle share: setup 1.5% ready-gap 0.9% starved 0.0% 
+[mbusve vp9p2-p010] rc=0 jobs=648 wall=12.64s span=11.25s | setup 0.25ms ve 17.26ms (max 57.83) | gap ready n=646 avg 0.111ms (wq 0.108ms) | gap starved n=1 avg 4.21ms max 4.21ms fps: ve-only 58.0, ve+setup 57.1, pipeline(span) 57.6, wall 51.3 | idle share: setup 1.4% ready-gap 0.6% starved 0.0% 
+[mbusve h265m10-p010] rc=0 jobs=600 wall=10.23s span=9.77s | setup 0.24ms ve 15.90ms (max 17.93) | gap ready n=594 avg 0.110ms (wq 0.107ms) | gap starved n=5 avg 3.95ms max 5.38ms fps: ve-only 62.9, ve+setup 62.0, pipeline(span) 61.4, wall 58.6 | idle share: setup 1.5% ready-gap 0.7% starved 0.2% 
+== D: AVS2
+-rw-r--r-- 1 root root 25205483 Nov  5 08:12 /tmp/cc.avs2
+[avs2 p010 mbusve] rc=0 jobs=292 wall=6.72s span=5.51s | setup 0.15ms ve 16.63ms (max 17.17) | gap ready n=0 avg 0.000ms (wq 0.120ms) | gap starved n=292 avg 1.59ms max 7.85ms fps: ve-only 60.1, ve+setup 59.6, pipeline(span) 53.0, wall 43.5 | idle share: setup 0.8% ready-gap 0.0% starved 8.4%  292 pictures decoded, 292 output, md5 d41d8cd98f00b204e9800998ecf8427e
+[avs2 p010 base] rc=0 jobs=292 wall=6.51s span=5.46s | setup 0.17ms ve 16.83ms (max 17.68) | gap ready n=0 avg 0.000ms (wq 0.118ms) | gap starved n=292 avg 1.21ms max 4.96ms fps: ve-only 59.4, ve+setup 58.8, pipeline(span) 53.4, wall 44.8 | idle share: setup 0.9% ready-gap 0.0% starved 6.5%  292 pictures decoded, 292 output, md5 d41d8cd98f00b204e9800998ecf8427e
+[avs2 p010 mbus25+ve] rc=0 jobs=292 wall=6.36s span=5.38s | setup 0.16ms ve 16.64ms (max 17.03) | gap ready n=0 avg 0.000ms (wq 0.118ms) | gap starved n=292 avg 1.14ms max 4.54ms fps: ve-only 60.1, ve+setup 59.5, pipeline(span) 54.2, wall 45.9 | idle share: setup 0.9% ready-gap 0.0% starved 6.2%  292 pictures decoded, 292 output, md5 d41d8cd98f00b204e9800998ecf8427e
+restored port25=0x0064000F port4=0x20000209 port26=0x00000000
+[avs2q depth2 p010 base] rc=0 jobs=292 wall=5.95s span=5.06s | setup 0.24ms ve 16.95ms (max 17.93) | gap ready n=291 avg 0.130ms (wq 0.104ms) | gap starved n=0 avg 0.00ms max 0.00ms fps: ve-only 59.0, ve+setup 58.2, pipeline(span) 57.7, wall 49.1 | idle share: setup 1.4% ready-gap 0.7% starved 0.0%  292 pictures decoded, 292 output, md5 d41d8cd98f00b204e9800998ecf8427e
+[avs2q depth3 p010 base] rc=0 jobs=292 wall=6.06s span=5.02s | setup 0.26ms ve 16.81ms (max 17.52) | gap ready n=291 avg 0.112ms (wq 0.109ms) | gap starved n=0 avg 0.00ms max 0.00ms fps: ve-only 59.5, ve+setup 58.6, pipeline(span) 58.2, wall 48.2 | idle share: setup 1.5% ready-gap 0.6% starved 0.0%  292 pictures decoded, 292 output, md5 d41d8cd98f00b204e9800998ecf8427e
+[avs2q depth1 p010 base] rc=0 jobs=292 wall=6.12s span=5.10s | setup 0.14ms ve 16.81ms (max 17.28) | gap ready n=0 avg 0.000ms (wq 0.110ms) | gap starved n=292 avg 0.04ms max 0.84ms fps: ve-only 59.5, ve+setup 59.0, pipeline(span) 57.2, wall 47.7 | idle share: setup 0.8% ready-gap 0.0% starved 0.2%  292 pictures decoded, 292 output, md5 d41d8cd98f00b204e9800998ecf8427e
+[avs2q depth2 p010 mbus25+ve] rc=0 jobs=292 wall=5.89s span=4.96s | setup 0.22ms ve 16.66ms (max 17.05) | gap ready n=291 avg 0.113ms (wq 0.110ms) | gap starved n=0 avg 0.00ms max 0.00ms fps: ve-only 60.0, ve+setup 59.2, pipeline(span) 58.8, wall 49.5 | idle share: setup 1.3% ready-gap 0.7% starved 0.0%  292 pictures decoded, 292 output, md5 d41d8cd98f00b204e9800998ecf8427e
+[avs2q md5 cctv4k p010] 292 pictures decoded, 292 output, md5 be9985dea38abffc850d73024165c990 (222s) want be9985dea38abffc850d73024165c990
+[avs2q md5 main-2160p-ra] 20 pictures decoded, 20 output, md5 3a3d5d7eb9a6f548042e160d9e461388
+[avs2q md5 main-1080p-ra] 30 pictures decoded, 30 output, md5 13dbb783682495dd423b05f6decee8b2
+dump rc=0 292 pictures decoded, 292 output, md5 be9985dea38abffc850d73024165c990 -rw-r--r-- 1 root root 24883200 Nov  5 08:22 /tmp/f291.yuv
+== E: VE 624 MHz (pll-ve N+1 step via devmem, VE idle; restored after)
+pll-ve 0x28001800 n=24 m=0 p=0 -> 576 MHz, ve clk reg 0x00000000
+[dmesg] [10573.074642]  do_page_fault+0x260/0x7c8
+[dmesg] [10573.074651]  do_translation_fault+0x44/0x78
+[dmesg] [10573.074988] [  pid  ]   uid  tgid total_vm      rss rss_anon rss_file rss_shmem pgtables_bytes swapents oom_score_adj name
+[dmesg] [10573.075464] oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=/,mems_allowed=0,global_oom,task_memcg=/system.slice/oclfix-b2.service,task=python3,pid=155034,uid=0
+[dmesg] [10573.075655] Out of memory: Killed process 155034 (python3) total-vm:1536800kB, anon-rss:476kB, file-rss:268kB, shmem-rss:0kB, UID:0 pgtables:2248kB oom_score_adj:0
+ROUND-DONE
+7.3.1-edge-sunxi64
+vmlinuz-7.3.1-edge-sunxi64

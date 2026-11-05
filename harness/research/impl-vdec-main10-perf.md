@@ -189,3 +189,97 @@ Not ported, as instructed.
 - Single unexplained VE hang + IOMMU fault (§4).
 - The P010 IOMMU-passthrough A/B did not run (CMA fragmentation).
 - Tiled128 hidden recon md5 not run (the run was aborted for the reflash; the 15 s result in `md5-modes-run1.txt` is invalid).
+
+## 9. Queue depth and the real pipelines (2026-11-05)
+
+Brief: docs/status.md §3 item 3 "VP9: queue depth". Find where the 10-bit 4K pipelines lose time (client queue depth, m2m
+scheduling, cache maintenance/copies, VE clock) and fix it. Board: image 8546e5fc1 kernel `7.3.1-edge-sunxi64 #17`
+(contains patch 30 + AVS2), VDD-SYS at the 900 mV DT floor (GPU idle). Tags as above.
+
+### 9.1 Method: per-job timeline
+`vdec-perf/ve-timeline.sh <cmd>` (new): ftrace function events, mono clock. For each job it gives `setup` (cedrus_device_run
+→ codec trigger, CPU), `ve` (trigger → cedrus_irq), and the gap from cedrus_irq to the next device_run. A gap counts as
+**ready** if the next request was already queued (v4l2_m2m_request_queue) at IRQ time; then it is kernel latency
+(`wq` = IRQ → v4l2_m2m_device_run_work). Otherwise it counts as **starved**: the client had not queued it. "Pipeline" =
+jobs / (first device_run … last IRQ), the steady state. Wall time also includes open/allocation (≈1–1.5 s for 4K P010:
+8 × 42 MB buffers), so the old "pipeline fps" (wall) of §2.3 understated every client.
+Rounds: `vdec-perf/board-queue-r1.sh`, `board-queue-r2.sh`, sessions `session.sh` (lock held only for the session); logs
+`vdec-perf/logs/queue-r1/`, `queue-r2/`.
+
+### 9.2 Where the time goes [M]
+| 4K P010 run (600 MHz) | setup ms | VE ms | ready gap ms (n) | starved (n) | VE-only fps | pipeline fps | wall fps |
+|---|---|---|---|---|---|---|---|
+| FFmpeg VP9 P2, threads auto | 0.22 | 17.17 | 0.125 (645) | 2 | 58.2 | **57.8** | 51.3 |
+| FFmpeg VP9 P2, `-threads 1` | 0.20 | 16.56 | 0.12 (48) | **600, 1.30 ms** | 60.4 | 54.7 | 49.3 |
+| FFmpeg H.265 Main10, threads auto | 0.25 | 16.37 | 0.091 (595) | 4 | 61.1 | **60.6** | 56.3 |
+| FFmpeg H.265 Main10, `-threads 1` | 0.17 | 16.28 | 0.08 (449) | 151, 0.58 ms | 61.4 | 59.1 | 56.7 |
+| GStreamer H.265 Main10, `fakesink` | 0.20 | 16.24 | 0.153 (599) | 0 | 61.6 | **60.2** | 44.1 |
+| GStreamer H.265 Main10, `fakevideosink` | 0.21 | 16.24 | 0.114 (599) | 0 | 61.6 | **60.4** | 57.8 |
+| GStreamer VP9 P2, `fakevideosink` | 0.23 | 16.69 | 0.254 (647) | 0 | 59.9 | 58.2 | 54.0 |
+| VP9 P2 → AFBC10 (FFmpeg) | 0.24 | 11.62 | 0.10 | 1 | 86.1 | 85.0 | 73.3 |
+| avs2dec (old, 1 request in flight) AVS2 Main10 | 0.17 | 16.83 | – | **292, 1.21 ms** | 59.4 | 53.4 | 44.8 |
+| avs2dec `-q` (2 in flight, new) | 0.24 | 16.95 | 0.130 (291) | 0 | 59.0 | 57.7 | 49.1 |
+
+- **The queue is not the bottleneck.** With FFmpeg frame threads (default) and with GStreamer the next request is always queued
+  before the IRQ. The m2m handover (IRQ → worker → device_run) costs 0.09–0.25 ms per picture, and setup is 0.2 ms. The VE is
+  busy > 97 % of the steady state. The only real starvation: `-threads 1` (1.3 ms/picture for VP9, which has no reorder delay)
+  and the old single-request avs2dec (fixed, §9.4 / impl-avs2.md §8).
+- **GStreamer's 32.9 fps (§2.3) does not reproduce** on this image. During streaming the VE never starves (60.2 fps); the
+  `fakesink` wall-time loss (44.1 vs 57.8 with `fakevideosink`) lies outside the decode span (startup/teardown, not
+  investigated further). [M/U]
+- **Pipeline = VE-bound.** So the 4K60 P010 rows depend only on the VE time per picture: H.265 Main10 at 61 fps passes,
+  VP9 P2 at 58 fps does not.
+- No cache maintenance shows up: vb2-dma-contig capture buffers are coherent (no sync on QBUF/DQBUF), and `-f null` with
+  `drm_prime` copies nothing. [M by absence in the setup/gap numbers; I]
+
+### 9.3 Knobs on the VE side [M]
+MBUS master registers (0x047FA210 + 16·port) as programmed by U-Boot: port 4 (VE) cfg0 0x20000209 (BWL on, QoS HIGH, ACS 2,
+8192 MB/s), port 25 (IOMMU page-table walks) 0x0064000F (BWL on, **100 MB/s**, QoS HIGHEST + priority). Port 26 (the second
+VE port in the H6 table) is not programmed on H616 (0). Set with devmem.py, restored after each round.
+
+| VE-only fps (pipeline) | VP9 P2 P010 | H.265 Main10 P010 | AVS2 Main10 P010 (avs2dec -q) |
+|---|---|---|---|
+| 600 MHz, U-Boot MBUS | 58.2 (57.8) | 61.1 (60.6) | 59.0–59.9 (57.7–58.7) |
+| + port 25 BWL off | 58.7 (58.3) | 61.0 (59.6) | – |
+| + port 4 priority + QoS HIGHEST | 57.4–58.0 | 62.9 (61.3) | 59.9–60.1 |
+| **624 MHz** | **59.5 (59.0)** | **63.3 (61.8)** | **61.7 (60.0)** |
+| 624 MHz + port 4 HIGHEST | 58.4 (57.9) | 65.3 (63.7) | 62.2 (60.9) |
+| GStreamer at 624 MHz (VE-only / pipeline) | 61.0 / 59.4 | 64.0 / 62.7 | – |
+
+- The IOMMU walk-port bandwidth limit is not limiting (no change).
+- VE priority/QoS: +3 % for H.265, ~+1 % for AVS2, 0 or slightly negative for VP9. **Not proposed**: the VE at HIGHEST
+  would compete with the DE33 scanout (port 16 HIGHEST) at 4K. Reported only.
+- **624 MHz** (the vendor libVE policy rate for IP 0x33010; set here through PLL_VE N 24 → 25, reg 0x03001058, which
+  cedrus programs only at probe): +3.6 % for H.265 and AVS2, only +2.2 % for VP9. VP9's P010 write is bound by memory/IOMMU
+  latency (master-3 TLB hit rate 59 %, §3 item 4), not by the engine clock.
+- Bit-exactness at 624 MHz + port 4 HIGHEST: VP9 P2 P010 `1e40c2b3…`, H.265 Main10 P010 `e57bc497…`, AVS2 8-bit 4K
+  `3a3d5d7e…`, AVS2 10-bit P010 `be9985de…`: all PASS. Soak 15 min at 624 MHz + port 4 HIGHEST with VDD-SYS at its 900 mV
+  floor (GPU idle, 59 → 64 °C): 9 md5 runs, 0 failures. [M] 15 min is a short soak; the 810 mV failure of §9.2 in impl-vdec
+  shows the rail matters, so a longer soak on the cumulative kernel is listed as open.
+- dmesg on the board showed a burst of `cedrus: frame processing timed out!` after round 2. None of my traced jobs took longer
+  than 58 ms, and all md5s passed. They most likely come from another agent's session on the shared board. [I] Round 3 logs
+  uptime and the timeout count at its start and end to settle it.
+
+### 9.4 Changes
+- Kernel, branch `feat/sunxi-h616-vdec-60fps` (fork, rebased on `test/cumulative` 67cef8768; handed to the coordinator for
+  cumulative kernel c2):
+  - `ba5caad1e` patch `media-cedrus-offer-10-bit-AFBC-capture-for-AVS2.patch` (impl-avs2.md §8).
+  - `e6229e03c` patch `media-cedrus-run-the-H616-VE-at-624-MHz.patch`: H616 `mod_rate` 600 → 624 MHz.
+  - Both patch files carry `Assisted-by: LLM`. Checks on base b9df5096b: STAGE=patch 813 applied / 0 failed, sources
+    identical to the build tree, `W=1` cedrus clean, Image builds. No patch new in test/cumulative touches the two files.
+- Test tools: `vdec-perf/ve-timeline.sh`, rounds and sessions as above; avs2dec request queue (impl-avs2.md §8).
+- Not changed: FFmpeg/GStreamer (they already keep the VE fed), MBUS settings (U-Boot), the m2m core.
+
+### 9.5 Result against the spec rows
+| row | P010 (generic userspace), real pipeline | AFBC10 |
+|---|---|---|
+| H.265 Main10 4K@60 | **met**: FFmpeg 60.6 / GStreamer 60.4 at 600 MHz; 61.8 / 62.7 at 624 MHz | 83.9 fps |
+| VP9 Profile 2 4K@60 | **not met**: 57.8 FFmpeg / 58.2 GStreamer at 600, 59.0 / 59.4 at 624 MHz (VE-only 59.5 / 61.0) | 85.0 fps pipeline |
+
+### 9.6 Still open
+- VP9 P2 P010 is ~1–2 % short of 60 even at 624 MHz. What remains is the VP9 engine's P010 write order (TLB misses, §3 item
+  4), not the queue. Possible next steps: an IOMMU passthrough A/B for VP9 P010 with a larger CMA, and the VP9 secondary-output
+  write registers in the vendor library. 4K60 VP9 display goes through AFBC anyway (DE33 AFBC scanout, §6, needs an HDMI 2.0
+  sink we do not have).
+- Round 3 on cumulative kernel c2: confirm the 624 MHz default and the AVS2 AFBC capture, rerun the md5 regression, and a
+  longer 624 MHz soak.

@@ -773,3 +773,18 @@ Still needed:
 2. Hardware JPEG in GStreamer would need a stateless JPEG element (v4l2codecs has none), i.e. new userspace work.
    Hardware JPEG through cedrus is usable today only from our jpegtest tool / direct V4L2 users.
 3. Nothing for FFmpeg-based players (software JPEG, correct for every sampling).
+
+### DI300 / IEP2 control alignment, board results (2026-11-05, c3 = test-cumulative 0122ff6a7)
+
+`harness/di300test/std-ctrl-test.sh` (old on c2 with the previous di300test, new on c3), `std-ctrl-compare.sh`:
+0 failures. All 16 old items (576i/1080i x TFF/BFF x field/frame/bob/weave) plus 5 TNR and 3 FMD weave runs and the FMD
+stats are bit-identical between c2 and c3. "Bob, Field Rate": 2 outputs per input, out 2k = first field of in k, out 2k+1 =
+second field (TFF and BFF), timestamps +20 ms at 25 fps (not on the first job), 30.06 dB luma vs truth (MA field 33.2).
+Progressive pass-through exact in all 5 deinterlacing items, with and without TNR. Mid-stream method changes at the same
+rate (6 pairs, plus 2 with TNR) accepted, and after the change the output equals a fresh stream. Rate change and change to
+TNR-only give EBUSY and the stream is unchanged. di300err PASS.
+v4l2-compliance -s fails on c2 and c3 alike (Requests, blocking wait, MMAP; then a hang in a blocking DQBUF). A test
+module on c3 with CAPTURE field NONE, sequence numbers and the OUTPUT payload kept (branch commit da6184de5) gives 58/58 when
+the default item is "Bob, Frame Rate". With "Motion Adaptive, Frame Rate" it gives 56/58 (Requests: a held source keeps its
+request incomplete), and with the real default, "Motion Adaptive, Field Rate", it hangs: the second CAPTURE timestamp
+matches no source buffer, and two sources are held.

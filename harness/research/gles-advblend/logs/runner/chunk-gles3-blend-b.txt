@@ -1,0 +1,7 @@
+#17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026
+DMESG-START 693
+caselist /root/oclfix/advblend/caselists/gles3-blend-b.txt, 1152 cases, 37 s
+Pass                   1152
+
+CHUNK-RC 0
+ROUND-DONE

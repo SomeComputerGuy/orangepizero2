@@ -1,0 +1,2 @@
+caselist /root/oclfix/advblend/caselists/gles3-blend-b.txt, 1152 cases, 37 s
+Pass                   1152

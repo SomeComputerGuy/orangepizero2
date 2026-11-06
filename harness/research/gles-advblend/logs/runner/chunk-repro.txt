@@ -1,0 +1,35 @@
+#17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026
+DMESG-START 675
+TAG sys-mixed: renderer: Mali-G31 MC1 (Panfrost) | version: OpenGL ES 3.1 Mesa 26.2.4-1ubuntu1 | coherent ext: 1 | seq mixed x4, 1024x1024, barrier=0 first pixel: 32,32,32,255 ref 32,32,32,255 OK; distinct values: 2; pixels != first: 199056 of 1048576 RESULT FAIL 
+TAG sys-mixed-barrier: renderer: Mali-G31 MC1 (Panfrost) | version: OpenGL ES 3.1 Mesa 26.2.4-1ubuntu1 | coherent ext: 1 | seq mixed x4, 1024x1024, barrier=1 first pixel: 32,32,32,255 ref 32,32,32,255 OK; distinct values: 1; pixels != first: 0 of 1048576 RESULT PASS 
+TAG fork-mixed: renderer: Mali-G31 MC1 (Panfrost) | version: OpenGL ES 3.1 Mesa 26.2.4 (git-02df572101) | coherent ext: 1 | seq mixed x4, 1024x1024, barrier=0 first pixel: 32,32,32,255 ref 32,32,32,255 OK; distinct values: 2; pixels != first: 290432 of 1048576 RESULT FAIL 
+TAG fork-mixed-2: renderer: Mali-G31 MC1 (Panfrost) | version: OpenGL ES 3.1 Mesa 26.2.4 (git-02df572101) | coherent ext: 1 | seq mixed x4, 1024x1024, barrier=0 first pixel: 32,32,32,255 ref 32,32,32,255 OK; distinct values: 2; pixels != first: 303600 of 1048576 RESULT FAIL 
+TAG fork-mixed-3: renderer: Mali-G31 MC1 (Panfrost) | version: OpenGL ES 3.1 Mesa 26.2.4 (git-02df572101) | coherent ext: 1 | seq mixed x4, 1024x1024, barrier=0 first pixel: 32,32,32,255 ref 32,32,32,255 OK; distinct values: 2; pixels != first: 283312 of 1048576 RESULT FAIL 
+TAG fork-multiply: renderer: Mali-G31 MC1 (Panfrost) | version: OpenGL ES 3.1 Mesa 26.2.4 (git-02df572101) | coherent ext: 1 | seq multiply x1, 1024x1024, barrier=0 first pixel: 4,4,4,255 ref 4,4,4,255 OK; distinct values: 1; pixels != first: 0 of 1048576 RESULT PASS 
+TAG fork-mixed-barrier: renderer: Mali-G31 MC1 (Panfrost) | version: OpenGL ES 3.1 Mesa 26.2.4 (git-02df572101) | coherent ext: 1 | seq mixed x4, 1024x1024, barrier=1 first pixel: 32,32,32,255 ref 32,32,32,255 OK; distinct values: 1; pixels != first: 0 of 1048576 RESULT PASS 
+TAG fork-mixed-x8: renderer: Mali-G31 MC1 (Panfrost) | version: OpenGL ES 3.1 Mesa 26.2.4 (git-02df572101) | coherent ext: 1 | seq mixed x8, 1024x1024, barrier=0 first pixel: 32,32,32,255 ref 32,32,32,255 OK; distinct values: 2; pixels != first: 676544 of 1048576 RESULT FAIL 
+TAG fork-mixed-256: renderer: Mali-G31 MC1 (Panfrost) | version: OpenGL ES 3.1 Mesa 26.2.4 (git-02df572101) | coherent ext: 1 | seq mixed x4, 256x256, barrier=0 first pixel: 32,32,32,255 ref 32,32,32,255 OK; distinct values: 1; pixels != first: 0 of 65536 RESULT PASS 
+TAG knob-opaque: renderer: Mali-G31 MC1 (Panfrost) | version: OpenGL ES 3.1 Mesa 26.2.4 (git-02df572101) | coherent ext: 1 | seq mixed x4, 1024x1024, barrier=0 first pixel: 32,32,32,255 ref 32,32,32,255 OK; distinct values: 2; pixels != first: 298400 of 1048576 RESULT FAIL 
+TAG knob-overdraw: renderer: Mali-G31 MC1 (Panfrost) | version: OpenGL ES 3.1 Mesa 26.2.4 (git-02df572101) | coherent ext: 1 | seq mixed x4, 1024x1024, barrier=0 first pixel: 32,32,32,255 ref 32,32,32,255 OK; distinct values: 2; pixels != first: 287088 of 1048576 RESULT FAIL 
+TAG knob-persample: renderer: Mali-G31 MC1 (Panfrost) | version: OpenGL ES 3.1 Mesa 26.2.4 (git-02df572101) | coherent ext: 1 | seq mixed x4, 1024x1024, barrier=0 first pixel: 32,32,32,255 ref 32,32,32,255 OK; distinct values: 2; pixels != first: 285872 of 1048576 RESULT FAIL 
+TAG knob-opaque-overdraw: renderer: Mali-G31 MC1 (Panfrost) | version: OpenGL ES 3.1 Mesa 26.2.4 (git-02df572101) | coherent ext: 1 | seq mixed x4, 1024x1024, barrier=0 first pixel: 32,32,32,255 ref 32,32,32,255 OK; distinct values: 2; pixels != first: 285168 of 1048576 RESULT FAIL 
+TAG knob-opaque-persample: renderer: Mali-G31 MC1 (Panfrost) | version: OpenGL ES 3.1 Mesa 26.2.4 (git-02df572101) | coherent ext: 1 | seq mixed x4, 1024x1024, barrier=0 first pixel: 32,32,32,255 ref 32,32,32,255 OK; distinct values: 2; pixels != first: 285584 of 1048576 RESULT FAIL 
+TAG knob-overdraw-persample: renderer: Mali-G31 MC1 (Panfrost) | version: OpenGL ES 3.1 Mesa 26.2.4 (git-02df572101) | coherent ext: 1 | seq mixed x4, 1024x1024, barrier=0 first pixel: 32,32,32,255 ref 32,32,32,255 OK; distinct values: 2; pixels != first: 286736 of 1048576 RESULT FAIL 
+TAG knob-all: renderer: Mali-G31 MC1 (Panfrost) | version: OpenGL ES 3.1 Mesa 26.2.4 (git-02df572101) | coherent ext: 1 | seq mixed x4, 1024x1024, barrier=0 first pixel: 32,32,32,255 ref 32,32,32,255 OK; distinct values: 2; pixels != first: 287152 of 1048576 RESULT FAIL 
+TAG knob-all-2: renderer: Mali-G31 MC1 (Panfrost) | version: OpenGL ES 3.1 Mesa 26.2.4 (git-02df572101) | coherent ext: 1 | seq mixed x4, 1024x1024, barrier=0 first pixel: 32,32,32,255 ref 32,32,32,255 OK; distinct values: 2; pixels != first: 285136 of 1048576 RESULT FAIL 
+CHUNK-RC 0
+DMESG: [  118.269375] panfrost 1800000.gpu: gpu sched timeout, js=0, config=0x7b00, status=0x8, head=0xa0156c0, tail=0xa0156c0, sched_job=00000000eead4c02
+DMESG: [  118.327160] panfrost 1800000.gpu: Panfrost Dump: BO has no sgt, cannot dump
+DMESG: [  120.669368] panfrost 1800000.gpu: gpu sched timeout, js=0, config=0x7b00, status=0x8, head=0xa0156c0, tail=0xa0156c0, sched_job=00000000053c41a1
+DMESG: [  121.725313] panfrost 1800000.gpu: gpu sched timeout, js=0, config=0x7300, status=0x8, head=0xa0156c0, tail=0xa0156c0, sched_job=00000000a2a9ce37
+DMESG: [  122.749369] panfrost 1800000.gpu: gpu sched timeout, js=0, config=0x7b00, status=0x8, head=0xa0156c0, tail=0xa0156c0, sched_job=000000005d5a6a21
+DMESG: [  125.725291] panfrost 1800000.gpu: gpu sched timeout, js=0, config=0x7300, status=0x8, head=0xa02dac0, tail=0xa02dac0, sched_job=000000007b517b4c
+DMESG: [  127.101257] panfrost 1800000.gpu: gpu sched timeout, js=0, config=0x7300, status=0x8, head=0xa0156c0, tail=0xa0156c0, sched_job=00000000a5df9e5a
+DMESG: [  128.125296] panfrost 1800000.gpu: gpu sched timeout, js=0, config=0x7b00, status=0x8, head=0xa0156c0, tail=0xa0156c0, sched_job=00000000c38221e6
+DMESG: [  129.149255] panfrost 1800000.gpu: gpu sched timeout, js=0, config=0x7300, status=0x8, head=0xa0156c0, tail=0xa0156c0, sched_job=00000000c6b0dc22
+DMESG: [  130.173292] panfrost 1800000.gpu: gpu sched timeout, js=0, config=0x7b00, status=0x8, head=0xa0156c0, tail=0xa0156c0, sched_job=00000000053c41a1
+DMESG: [  131.197287] panfrost 1800000.gpu: gpu sched timeout, js=0, config=0x7300, status=0x8, head=0xa0156c0, tail=0xa0156c0, sched_job=000000000a3e8931
+DMESG: [  132.221244] panfrost 1800000.gpu: gpu sched timeout, js=0, config=0x7b00, status=0x8, head=0xa0156c0, tail=0xa0156c0, sched_job=000000002938db56
+DMESG: [  133.245238] panfrost 1800000.gpu: gpu sched timeout, js=0, config=0x7300, status=0x8, head=0xa0156c0, tail=0xa0156c0, sched_job=0000000055d5c561
+DMESG: [  134.269284] panfrost 1800000.gpu: gpu sched timeout, js=0, config=0x7b00, status=0x8, head=0xa0156c0, tail=0xa0156c0, sched_job=000000005a9171d9
+ROUND-DONE

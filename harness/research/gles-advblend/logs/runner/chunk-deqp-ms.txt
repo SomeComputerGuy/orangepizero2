@@ -1,0 +1,8 @@
+#17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026
+DMESG-START 690
+caselist /root/oclfix/advblend/caselists/deqp-ms.txt, 410 cases, 17 s
+NotSupported           2
+Pass                   408
+
+CHUNK-RC 0
+ROUND-DONE

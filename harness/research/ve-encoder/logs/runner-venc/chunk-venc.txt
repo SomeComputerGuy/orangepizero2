@@ -1,10 +1,86 @@
-DMESG-START 743
-[    0.200862] platform 1c0e000.video-codec: Adding to iommu group 0
-[    0.243980] cedrus 1c0e000.video-codec: Device registered as /dev/video0
-[    0.244219] cedrus 1c0e000.video-codec: Encoder registered as /dev/video1
-[    0.244654]  cedrus_probe+0x398/0x440
-[    0.244803]  cedrus_driver_init+0x28/0x38
-[    0.245279]  cedrus_probe+0x398/0x440
-[    0.245422]  cedrus_driver_init+0x28/0x38
+DMESG-START 661
+STEP probe
+[    0.200446] platform 1c0e000.video-codec: Adding to iommu group 0
+[    0.243126] cedrus 1c0e000.video-codec: Device registered as /dev/video0
+[    0.243372] cedrus 1c0e000.video-codec: Encoder registered as /dev/video1
+boot_warnings 0
+media /dev/media* model=cat: '/sys/class/media/media*/model': No such file or directory
 ENC /dev/video1 DEC /dev/video0 MEDIA 
-STALLED
+media_node none
+STEP topology
+media_info 1
+dec_D_rc 0
+STEP enc-info
+== formats
+	[0]: 'NV12' (Y/UV 4:2:0)
+	[0]: 'S264' (H.264 Parsed Slice Data, compressed)
+== controls 21
+STEP compliance
+== compliance: Total for cedrus device /dev/video1: 49, Succeeded: 45, Failed: 4, Warnings: 0
+		fail: v4l2-test-controls.cpp(1184): node->controls.find(V4L2_CID_MIN_BUFFERS_FOR_OUTPUT) != node->controls.end()
+	test VIDIOC_(UN)SUBSCRIBE_EVENT/DQEVENT: FAIL
+		fail: v4l2-test-formats.cpp(1445): node->is_m2m && !is_stateful_enc
+	test VIDIOC_G/S_PARM: FAIL
+		fail: v4l2-test-formats.cpp(519): !pix.sizeimage
+	test VIDIOC_TRY_FMT: FAIL
+		fail: v4l2-test-formats.cpp(519): !pix.sizeimage
+	test VIDIOC_S_FMT: FAIL
+STEP encode r1
+== r1 1280x720 n=30 gop=0 qp=26
+frame 0: timeout waiting for the encoder
+RESULT frames=0 bytes=0 keyframes=0 errors=0 ret=6 avg_us=0 max_us=0 fps=0.0
+RC 6
+DMESG: [   61.545794] sun50i-iommu 30f0000.iommu: Page fault for 0x0000000000000000 (master 3, dir rd, L1 page table, status 0x8)
+DMESG: [   63.550841] cedrus 1c0e000.video-codec: frame processing timed out!
+HWDEC r1 SKIP
+STEP encode r2
+== r2 1280x720 n=30 gop=10 qp=26
+frame 0: timeout waiting for the encoder
+RESULT frames=0 bytes=0 keyframes=0 errors=0 ret=6 avg_us=0 max_us=0 fps=0.0
+RC 6
+DMESG: [   63.735800] sun50i-iommu 30f0000.iommu: Page fault for 0x0000000000000000 (master 3, dir rd, L1 page table, status 0x8)
+DMESG: [   65.758880] cedrus 1c0e000.video-codec: frame processing timed out!
+HWDEC r2 SKIP
+STEP encode r3
+== r3 1920x1080 n=10 gop=0 qp=20
+frame 0: timeout waiting for the encoder
+RESULT frames=0 bytes=0 keyframes=0 errors=0 ret=6 avg_us=0 max_us=0 fps=0.0
+RC 6
+DMESG: [   66.092005] sun50i-iommu 30f0000.iommu: Page fault for 0x0000000000000000 (master 3, dir rd, L1 page table, status 0x8)
+DMESG: [   68.094795] cedrus 1c0e000.video-codec: frame processing timed out!
+HWDEC r3 SKIP
+STEP encode r4
+== r4 1920x1080 n=10 gop=10 qp=30
+frame 0: timeout waiting for the encoder
+RESULT frames=0 bytes=0 keyframes=0 errors=0 ret=6 avg_us=0 max_us=0 fps=0.0
+RC 6
+DMESG: [   68.341262] sun50i-iommu 30f0000.iommu: Page fault for 0x0000000000000000 (master 3, dir rd, L1 page table, status 0x8)
+DMESG: [   70.366880] cedrus 1c0e000.video-codec: frame processing timed out!
+HWDEC r4 SKIP
+STEP encode r5
+== r5 1366x768 n=5 gop=0 qp=26
+frame 0: timeout waiting for the encoder
+RESULT frames=0 bytes=0 keyframes=0 errors=0 ret=6 avg_us=0 max_us=0 fps=0.0
+RC 6
+DMESG: [   70.635662] sun50i-iommu 30f0000.iommu: Page fault for 0x0000000000000000 (master 3, dir rd, L1 page table, status 0x8)
+DMESG: [   72.638779] cedrus 1c0e000.video-codec: frame processing timed out!
+HWDEC r5 SKIP
+STEP dmesg
+DMESG: [   45.186151] cedrus 1c0e000.video-codec: Failed to setup encoding job: -22
+DMESG: [   45.186283] cedrus 1c0e000.video-codec: Failed to setup encoding job: -22
+DMESG: [   61.545794] sun50i-iommu 30f0000.iommu: Page fault for 0x0000000000000000 (master 3, dir rd, L1 page table, status 0x8)
+DMESG: [   63.550841] cedrus 1c0e000.video-codec: frame processing timed out!
+DMESG: [   63.735800] sun50i-iommu 30f0000.iommu: Page fault for 0x0000000000000000 (master 3, dir rd, L1 page table, status 0x8)
+DMESG: [   65.758880] cedrus 1c0e000.video-codec: frame processing timed out!
+DMESG: [   66.092005] sun50i-iommu 30f0000.iommu: Page fault for 0x0000000000000000 (master 3, dir rd, L1 page table, status 0x8)
+DMESG: [   68.094795] cedrus 1c0e000.video-codec: frame processing timed out!
+DMESG: [   68.341262] sun50i-iommu 30f0000.iommu: Page fault for 0x0000000000000000 (master 3, dir rd, L1 page table, status 0x8)
+DMESG: [   70.366880] cedrus 1c0e000.video-codec: frame processing timed out!
+DMESG: [   70.635662] sun50i-iommu 30f0000.iommu: Page fault for 0x0000000000000000 (master 3, dir rd, L1 page table, status 0x8)
+DMESG: [   72.638779] cedrus 1c0e000.video-codec: frame processing timed out!
+OUT: -rw-r--r-- 1 root root 0 Nov  6 07:05 r1.h264
+OUT: -rw-r--r-- 1 root root 0 Nov  6 07:05 r2.h264
+OUT: -rw-r--r-- 1 root root 0 Nov  6 07:05 r3.h264
+OUT: -rw-r--r-- 1 root root 0 Nov  6 07:05 r4.h264
+OUT: -rw-r--r-- 1 root root 0 Nov  6 07:05 r5.h264
+ROUND-DONE

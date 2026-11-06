@@ -22,3 +22,22 @@ kernel: #25 SMP PREEMPT Fri Nov  6 04:18:02 UTC 2026
 2026-11-06 05:16:17 BOARD UNREACHABLE after restore reboot
 released by runner-venc-venc-1793941529
 2026-11-06 05:16:17 job venc end: 0 of 1 chunks done; results in /home/aruni/orangepizero2/harness/research/ve-encoder/logs/runner-venc/results.txt
+2026-11-06 07:02:54 job venc start, kernel c29 (Image md5 b14ad47f470555cd8b2afdd782e81fe8), venc commit c307dd053, chunks: venc, done before: 
+2026-11-06 07:02:54 acquired by runner-venc-venc-1793948574
+2026-11-06 07:02:59 h264enc-test on the board is current (b06757d8cd45fbb58107268b777a0468413a1bfdb516c9b1f358a77153d868ab)
+2026-11-06 07:03:04 testsrc2-1280x720-30.nv12 on the board is current (72dda9782300bf7b1042774d33090fb0e1363a16cf3a817879a8deb68f722fd1)
+2026-11-06 07:03:06 testsrc2-1280x720-30.nv12 on the board is current (72dda9782300bf7b1042774d33090fb0e1363a16cf3a817879a8deb68f722fd1)
+2026-11-06 07:03:09 testsrc2-1920x1080-10.nv12 on the board is current (537faaf405ba9518d3ddfa755f2c994606156a545124b51e8d03fae173b7a23a)
+2026-11-06 07:03:11 testsrc2-1920x1080-10.nv12 on the board is current (537faaf405ba9518d3ddfa755f2c994606156a545124b51e8d03fae173b7a23a)
+shipped /root/venc/clips/testsrc2-1366x768-5.nv12 b4a1c536028945ed0f265f04cf6097a79c505073d9dac72dd365bb03b33c8a8c
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+dtb sun50i-h616-orangepi-zero2.dtb.vdec-c29 md5 fbb509889a4cba869d6985f4e549039a
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+kernel: #27 SMP PREEMPT Fri Nov  6 06:50:26 UTC 2026
+2026-11-06 07:05:13 kernel encoder: Encoder registered as /dev/video1
+2026-11-06 07:05:13 chunk venc start
+2026-11-06 07:05:57 OOPS during chunk venc (dmesg): [   61.545794] sun50i-iommu 30f0000.iommu: Page fault for 0x0000000000000000 (master 3, dir rd, L1 page table, status 0x8) [   63.550841] cedrus 1c0e000.video-codec: frame processing timed out! [   63.735800] sun50i-iommu 30f0000.iommu: Page fault for 0x0000000000000000 (master 3, dir rd, L1 page table, status 0x8) 
+restore: Image=vmlinuz-7.3.1-edge-sunxi64 dtb=sun50i-h616-orangepi-zero2.dtb.stock
+2026-11-06 07:06:44 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 sun50i-h616-orangepi-zero2.dtb.stock 
+released by runner-venc-venc-1793948574
+2026-11-06 07:06:44 job venc ABORTED (exit 3)

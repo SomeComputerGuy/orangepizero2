@@ -1,5 +1,184 @@
-DMESG-START 742
+DMESG-START 660
+STEP probe
 driver_lines 2
 iommu_group 1
 clk_rate 300000000
-STALLED
+boot_warnings 0
+device /dev/video2
+STEP formats
+formats_out 18
+formats_cap 36
+STEP cedrus-topology
+cedrus_D_rc 0
+STEP compliance
+COMPLIANCE: Total for sun50i-g2d device /dev/video2: 48, Succeeded: 48, Failed: 0, Warnings: 0
+STEP compliance-s
+COMPLIANCE-S: Total for sun50i-g2d device /dev/video2: 57, Succeeded: 51, Failed: 6, Warnings: 0
+STEP conv rgb-copy
+== rgb-copy: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv rgb-ar24
+== rgb-ar24: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv rgb-ba24
+== rgb-ba24: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv rgb-bx24
+== rgb-bx24: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv rgb-ab24
+== rgb-ab24: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv rgb-xb24
+== rgb-xb24: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv rgb-ra24
+== rgb-ra24: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv rgb-rx24
+== rgb-rx24: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv rgb-rgbp
+== rgb-rgbp: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv rgb-rgb3
+== rgb-rgb3: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv rgb-bgr3
+== rgb-bgr3: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv in-ar24
+== in-ar24: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv in-ba24
+== in-ba24: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv in-bx24
+== in-bx24: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv in-ab24
+== in-ab24: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv in-xb24
+== in-xb24: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv in-ra24
+== in-ra24: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv in-rx24
+== in-rx24: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv in-rgbp
+== in-rgbp: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv in-rgb3
+== in-rgb3: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv in-bgr3
+== in-bgr3: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv rgb2nv12
+== rgb2nv12: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv rgb2nv21
+== rgb2nv21: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv rgb2yu12
+== rgb2yu12: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv rgb2yv12
+== rgb2yv12: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv rgb2nv16
+== rgb2nv16: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv rgb2nv61
+== rgb2nv61: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv rgb2422p
+== rgb2422p: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv nv122rgb
+== nv122rgb: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv nv212rgb
+== nv212rgb: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv yu122rgb
+== yu122rgb: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv yv122rgb
+== yv122rgb: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv nv162rgb
+== nv162rgb: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv nv612rgb
+== nv612rgb: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv 422p2rgb
+== 422p2rgb: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv nv122yu12
+== nv122yu12: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv nv122nv16
+== nv122nv16: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv csc709
+== csc709: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv csc709-back
+== csc709-back: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv cscjpeg
+== cscjpeg: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv cscjpeg-back
+== cscjpeg-back: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv scale-down2
+== scale-down2: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv scale-up
+== scale-up: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv scale-down8
+== scale-down8: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv scale-down6
+== scale-down6: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv scale-odd
+== scale-odd: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv full-hd
+== full-hd: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv rgb-copy-hd
+== rgb-copy-hd: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP conv max-size
+== max-size: RESULT rc 1 reason BUFERR iteration 0 RC 1 
+STEP gst-inspect
+element 1
+device Device
+device_expected /dev/video2
+STEP gst gst-rgb2nv12
+== gst-rgb2nv12: RC 1 size 0 
+STEP gst gst-nv122rgb
+== gst-nv122rgb: RC 1 size 0 
+STEP dmesg
+DMESG: [   80.605476] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   81.117451] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   81.629449] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   82.141454] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   82.653505] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   83.165521] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   83.677505] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   84.189450] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   84.701508] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   85.213368] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   85.725470] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   86.365455] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   86.973463] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   87.581438] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   88.189440] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   88.797450] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   89.405519] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   90.013400] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   90.589347] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   91.165348] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   91.741474] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   92.349453] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   92.989373] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   93.565363] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   94.141315] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   94.717389] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   95.325470] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   95.901301] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   96.477345] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   97.053455] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   97.693374] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   98.269343] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   98.845329] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   99.421442] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  100.029391] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  100.605353] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  101.181363] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  101.757419] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  102.365408] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  103.005441] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  103.645419] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  104.285415] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  104.893403] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  105.501456] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  106.141341] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  106.717352] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  107.293330] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  107.869426] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  108.509327] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  109.085323] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  109.661334] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  110.237427] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  110.845416] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  111.453396] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  112.285310] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  113.277327] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  113.917335] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  114.525306] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  115.133257] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [  116.669319] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+ROUND-DONE

@@ -26,3 +26,19 @@ restore: Image=vmlinuz-7.3.1-edge-sunxi64 dtb=sun50i-h616-orangepi-zero2.dtb.sto
 2026-11-06 04:53:47 BOARD UNREACHABLE after restore reboot
 released by runner-g2d-g2d-1793940127
 2026-11-06 04:53:47 job g2d end: 0 of 1 chunks done; results in /home/aruni/orangepizero2/harness/research/g2d/logs/runner-g2d/results.txt
+2026-11-06 06:56:06 job g2d start, kernel c29 (Image md5 b14ad47f470555cd8b2afdd782e81fe8), G2D commit 04964f921, chunks: g2d, done before: 
+2026-11-06 06:56:06 references: 51 files
+2026-11-06 06:56:06 acquired by runner-g2d-g2d-1793948166
+2026-11-06 06:56:11 client on the board is current (30422755ce4e6ab2d9504b8683cba26738fda28d947a05bbafd7490d452dc590)
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+dtb sun50i-h616-orangepi-zero2.dtb.vdec-c29 md5 fbb509889a4cba869d6985f4e549039a
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+kernel: #27 SMP PREEMPT Fri Nov  6 06:50:26 UTC 2026
+2026-11-06 06:58:01 kernel dtb: c29 (fbb509889a4cba869d6985f4e549039a)
+2026-11-06 06:58:05 kernel g2d: bound ([   11.386270] sun50i-g2d 1480000.g2d: G2D IP version 01010100, module clock 300000000 Hz [   11.386951] sun50i-g2d 1480000.g2d: Device registered as /dev/video2 )
+2026-11-06 06:58:05 chunk g2d start
+2026-11-06 06:59:39 chunk g2d ended without ROUND-DONE
+restore: Image=vmlinuz-7.3.1-edge-sunxi64 dtb=sun50i-h616-orangepi-zero2.dtb.stock
+2026-11-06 07:00:26 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 sun50i-h616-orangepi-zero2.dtb.stock 
+released by runner-g2d-g2d-1793948166
+2026-11-06 07:00:26 job g2d end: 0 of 1 chunks done; results in /home/aruni/orangepizero2/harness/research/g2d/logs/runner-g2d/results.txt

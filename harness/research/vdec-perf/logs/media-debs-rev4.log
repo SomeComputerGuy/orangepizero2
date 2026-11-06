@@ -1,0 +1,30 @@
+2026-11-05T21:38:24+00:00 waiting for the REV 3 build (pid 748356) to finish
+2026-11-05T22:38:24+00:00 REV 3 build gone; keeping its debs in out/debs-media.rev3/
+2026-11-05T22:38:24+00:00 starting build-media-debs.sh ffmpeg (REV 4)
+apt cache: using http://127.0.0.1:3142
+ccache: build chroot uses /home/aruni/.cache/opiz2-media-ccache
+==> ffmpeg 7:8.1.2-2ubuntu2+opiz2.4 (log: /home/aruni/orangepizero2/build/media/ffmpeg.fbvOIy/build.log)
+    repository now has debs: 24
+Done: /home/aruni/orangepizero2/out/debs-media
+2026-11-05T23:19:49+00:00 rc=0
+out/debs-media/ffmpeg_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libavcodec62_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libavcodec-dev_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libavcodec-extra62_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libavcodec-extra_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libavdevice62_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libavdevice-dev_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libavfilter11_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libavfilter-dev_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libavfilter-extra11_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libavfilter-extra_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libavformat62_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libavformat-dev_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libavformat-extra62_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libavformat-extra_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libavutil60_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libavutil-dev_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libswresample6_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libswresample-dev_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libswscale9_8.1.2-2ubuntu2+opiz2.4_arm64.deb
+out/debs-media/libswscale-dev_8.1.2-2ubuntu2+opiz2.4_arm64.deb

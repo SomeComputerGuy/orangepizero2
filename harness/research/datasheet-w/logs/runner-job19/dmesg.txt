@@ -1,0 +1,12 @@
+[    0.001464] pid_max: default: 32768 minimum: 301
+[    0.125615] iommu: Default domain type: Translated
+[    0.125637] iommu: DMA domain TLB invalidation policy: strict mode
+[    0.129962] NetLabel:  unlabeled traffic allowed by default
+[    0.142508] PCI: CLS 0 bytes, default 64
+[    0.201609] platform 1420000.deinterlace: Adding to iommu group 0
+[    0.201701] platform 1c0e000.video-codec: Adding to iommu group 0
+[    0.270441] bridge: filtering via arp/ip/ip6tables is no longer available by default. Update your scripts to load br_netfilter if you need this.
+[    0.312071] platform 1100000.planes: Adding to iommu group 0
+[    1.559839]  ahub_dam-snd-soc-dummy-dai: ASoC error (-22): substream ahub_dam-snd-soc-dummy-dai has no playback, no capture
+[    1.560117] sunxi-snd-mach soc:ahub_dam_mach: probe with driver sunxi-snd-mach failed with error -22
+[    7.960201] systemd[1]: Queued start job for default target graphical.target.

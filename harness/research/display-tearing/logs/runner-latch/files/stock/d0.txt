@@ -1,0 +1,10 @@
+connector HDMI-A-1 (74) connected, 5 modes
+mode 1024x768 65000 kHz 1024x768 total 1344x806 -> 60.0038 Hz
+crtc 52, plane 35 (primary 42), format XR24 modifier 0x0000000000000000
+commit phase after previous vblank: mean 0.679 ms max 8.129 ms, 363 of 599 later than the 0.786 ms vertical blanking
+flips 600, 60.049 flips/s over 9.975 s, mode refresh 60.0038 Hz
+frame interval mean 16.653 ms, sd 0.310 ms
+vblank sequence gaps >1: 0 (0 vblanks repeated a frame)
+queue empty at flip (decoder late): 0
+dt histogram: [<15 ms] 1 [15-16.2 ms] 0 [16.2-17.2 ms] 598 [17.2-18 ms] 0 [18-34 ms] 0 [34-51 ms] 0 [>=51 ms] 0
+RC 0

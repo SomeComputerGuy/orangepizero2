@@ -1,0 +1,19 @@
+2026-11-05 23:17:25 job vp9-vectors start, kernel c17 (Image md5 22330a4caccc513b757e743934c2700f), chunks: u1 u2, done before: 
+2026-11-05 23:17:25 acquired by runner-vp9-1793920645
+shipped /root/stage/modules-c17.tgz 04c46b882d85bc5469051203bc0b2806d27a80da0e184736989df48621661731
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+kernel: #18 SMP PREEMPT Thu Nov  5 22:07:30 UTC 2026
+shipped /root/vp9/bundle.tar 748c2dad8d9d0dcbe97df017787966d8736527024f9c7c439883915b941f263f
+2026-11-05 23:19:24 unpacked: VP9-TEST-VECTORS VP9-TEST-VECTORS-HIGH libgstv4l2codecs.so 
+2026-11-05 23:19:25 pre-flight: vp90-2-00-quantizer-00.webm
+2026-11-05 23:20:09 chunk pre done in 44 s (1 vectors; Ran 1/1 tests)
+2026-11-05 23:20:09 pre-flight OK: vp90-2-00-quantizer-00.webm decodes bit-exact (1 checksum lines in pre.gst.txt)
+2026-11-05 23:20:09 chunk u1 start
+2026-11-05 23:21:34 chunk u1 done in 85 s (27 vectors; Ran 27/27 tests)
+2026-11-05 23:21:34 chunk u2 start
+2026-11-05 23:24:37 chunk u2 done in 183 s (25 vectors; Ran 25/25 tests)
+2026-11-05 23:25:22 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 
+released by runner-vp9-1793920645
+2026-11-05 23:25:22 check-results: VERDICT: PASS; upsize job 52/52 Success (of 52), svc_1280x720_3 Success
+2026-11-05 23:25:22 job end: 2 of 2 chunks done

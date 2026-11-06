@@ -1,0 +1,20 @@
+2026-11-05 20:17:47 job vp9-vectors start, kernel c13 (Image md5 9271a396edc3968e49059d2c8b6fe29e), chunks: c1 c2 c3 c4, done before: 
+2026-11-05 20:17:47 acquired by runner-vp9-1793909867
+shipped /root/stage/modules-c13.tgz 43eea98be96551d1c58e99fd3a7fb4a9da909f9b3623dbd86ac62a3b0c7d6088
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+kernel: #14 SMP PREEMPT Thu Nov  5 19:57:13 UTC 2026
+shipped /root/vp9/bundle.tar ee883ca9c55998edda53f1f22fe243af7949ef6cfac6c4e184aeab13c9c91a38
+VP9-TEST-VECTORS VP9-TEST-VECTORS-HIGH 2026-11-05 20:20:18 chunk c1 start
+2026-11-05 20:21:22 chunk c1 done
+2026-11-05 20:21:22 chunk c2 start
+2026-11-05 20:23:26 chunk c2 done
+2026-11-05 20:23:26 chunk c3 start
+2026-11-05 20:29:06 STALL: chunk c3 no output for 300 s, killing ssh 3351656
+2026-11-05 20:29:10 chunk c3 ended without ROUND-DONE or without c3.md
+2026-11-05 20:29:10 chunk c4 start
+2026-11-05 20:29:54 chunk c4 done
+2026-11-05 20:31:48 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 
+released by runner-vp9-1793909867
+2026-11-05 20:31:49 check-results: VERDICT: FAIL; VP9-TEST-VECTORS 0/305 Success, HIGH 0/6 Success
+2026-11-05 20:31:49 job end: 3 of 4 chunks done

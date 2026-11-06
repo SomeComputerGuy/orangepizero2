@@ -1,0 +1,18 @@
+[avs2 @ 0xaaaac9ca97c0] No hardware accelerator for AVS2 decoding is available.
+
+Enter command: <target>|all <time>|-1 <command>[ <argument>]
+
+Parse error, at least 3 arguments were expected, only 1 given in string 'ene_832x480_50_ra 53406eec8862d026cc8b452549763fe9'
+
+Enter command: <target>|all <time>|-1 <command>[ <argument>]
+
+Parse error, at least 3 arguments were expected, only 1 given in string 'eHorses_416x240_30_ai c9e2997073c1160fd07ddd5d93dd2679'
+
+Enter command: <target>|all <time>|-1 <command>[ <argument>]
+
+Parse error, at least 3 arguments were expected, only 1 given in string 'eHorses_416x240_30_ld a14aed1f60034e7e09389419140e2ce8'
+[avs2 @ 0xaaaab78497c0] No hardware accelerator for AVS2 decoding is available.
+
+Enter command: <target>|all <time>|-1 <command>[ <argument>]
+
+Queuing commands only on filters supporting the specific command is unsupported

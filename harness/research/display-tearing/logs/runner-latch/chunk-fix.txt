@@ -1,0 +1,22 @@
+DMESG-START 655
+/sys/class/drm/card0-HDMI-A-1 status=connected modes: 1024x768 800x600 800x600 848x480 640x480 
+== d0 (commit delay 0 us)
+mode 1024x768 65000 kHz 1024x768 total 1344x806 -> 60.0038 Hz
+commit phase after previous vblank: mean 0.725 ms max 16.476 ms, 385 of 599 later than the 0.786 ms vertical blanking
+flips 600, 59.900 flips/s over 10.000 s, mode refresh 60.0038 Hz
+vblank sequence gaps >1: 1 (1 vblanks repeated a frame)
+RC 0
+== d4 (commit delay 4000 us)
+mode 1024x768 65000 kHz 1024x768 total 1344x806 -> 60.0038 Hz
+commit phase after previous vblank: mean 4.949 ms max 12.209 ms, 599 of 599 later than the 0.786 ms vertical blanking
+flips 600, 60.004 flips/s over 9.983 s, mode refresh 60.0038 Hz
+vblank sequence gaps >1: 0 (0 vblanks repeated a frame)
+RC 0
+== d12 (commit delay 12000 us)
+mode 1024x768 65000 kHz 1024x768 total 1344x806 -> 60.0038 Hz
+commit phase after previous vblank: mean 12.758 ms max 20.182 ms, 599 of 599 later than the 0.786 ms vertical blanking
+flips 600, 59.904 flips/s over 9.999 s, mode refresh 60.0038 Hz
+vblank sequence gaps >1: 1 (1 vblanks repeated a frame)
+RC 0
+DMESG: [   49.580430] sun4i-drm display-engine: [drm] fb0: sun4i-drmdrmfb frame buffer device
+ROUND-DONE

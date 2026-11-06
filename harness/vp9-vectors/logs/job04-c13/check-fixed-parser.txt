@@ -1,0 +1,238 @@
+# kernel: 7.3.1 #14 SMP PREEMPT Thu Nov  5 19:57:13 UTC 2026
+# pre-flight vp90-2-00-quantizer-00.webm: None
+# c1: 71 vectors in harness/vp9-vectors/logs/job04-c13/out/c1.md (expected 71)
+# c2: 137 vectors in harness/vp9-vectors/logs/job04-c13/out/c2.md (expected 137)
+# c4: 6 vectors in harness/vp9-vectors/logs/job04-c13/out/c4.md (expected 6)
+vp90-2-00-quantizer-00.webm [quantizer] Success
+vp90-2-00-quantizer-01.webm [quantizer] Success
+vp90-2-00-quantizer-02.webm [quantizer] Success
+vp90-2-00-quantizer-03.webm [quantizer] Success
+vp90-2-00-quantizer-04.webm [quantizer] Success
+vp90-2-00-quantizer-05.webm [quantizer] Success
+vp90-2-00-quantizer-06.webm [quantizer] Success
+vp90-2-00-quantizer-07.webm [quantizer] Success
+vp90-2-00-quantizer-08.webm [quantizer] Success
+vp90-2-00-quantizer-09.webm [quantizer] Success
+vp90-2-00-quantizer-10.webm [quantizer] Success
+vp90-2-00-quantizer-11.webm [quantizer] Success
+vp90-2-00-quantizer-12.webm [quantizer] Success
+vp90-2-00-quantizer-13.webm [quantizer] Success
+vp90-2-00-quantizer-14.webm [quantizer] Success
+vp90-2-00-quantizer-15.webm [quantizer] Success
+vp90-2-00-quantizer-16.webm [quantizer] Success
+vp90-2-00-quantizer-17.webm [quantizer] Success
+vp90-2-00-quantizer-18.webm [quantizer] Success
+vp90-2-00-quantizer-19.webm [quantizer] Success
+vp90-2-00-quantizer-20.webm [quantizer] Success
+vp90-2-00-quantizer-21.webm [quantizer] Success
+vp90-2-00-quantizer-22.webm [quantizer] Success
+vp90-2-00-quantizer-23.webm [quantizer] Success
+vp90-2-00-quantizer-24.webm [quantizer] Success
+vp90-2-00-quantizer-25.webm [quantizer] Success
+vp90-2-00-quantizer-26.webm [quantizer] Success
+vp90-2-00-quantizer-27.webm [quantizer] Success
+vp90-2-00-quantizer-28.webm [quantizer] Success
+vp90-2-00-quantizer-29.webm [quantizer] Success
+vp90-2-00-quantizer-30.webm [quantizer] Success
+vp90-2-00-quantizer-31.webm [quantizer] Success
+vp90-2-00-quantizer-32.webm [quantizer] Success
+vp90-2-00-quantizer-33.webm [quantizer] Success
+vp90-2-00-quantizer-34.webm [quantizer] Success
+vp90-2-00-quantizer-35.webm [quantizer] Success
+vp90-2-00-quantizer-36.webm [quantizer] Success
+vp90-2-00-quantizer-37.webm [quantizer] Success
+vp90-2-00-quantizer-38.webm [quantizer] Success
+vp90-2-00-quantizer-39.webm [quantizer] Success
+vp90-2-00-quantizer-40.webm [quantizer] Success
+vp90-2-00-quantizer-41.webm [quantizer] Success
+vp90-2-00-quantizer-42.webm [quantizer] Success
+vp90-2-00-quantizer-43.webm [quantizer] Success
+vp90-2-00-quantizer-44.webm [quantizer] Success
+vp90-2-00-quantizer-45.webm [quantizer] Success
+vp90-2-00-quantizer-46.webm [quantizer] Success
+vp90-2-00-quantizer-47.webm [quantizer] Success
+vp90-2-00-quantizer-48.webm [quantizer] Success
+vp90-2-00-quantizer-49.webm [quantizer] Success
+vp90-2-00-quantizer-50.webm [quantizer] Success
+vp90-2-00-quantizer-51.webm [quantizer] Success
+vp90-2-00-quantizer-52.webm [quantizer] Success
+vp90-2-00-quantizer-53.webm [quantizer] Success
+vp90-2-00-quantizer-54.webm [quantizer] Success
+vp90-2-00-quantizer-55.webm [quantizer] Success
+vp90-2-00-quantizer-56.webm [quantizer] Success
+vp90-2-00-quantizer-57.webm [quantizer] Success
+vp90-2-00-quantizer-58.webm [quantizer] Success
+vp90-2-00-quantizer-59.webm [quantizer] Success
+vp90-2-00-quantizer-60.webm [quantizer] Success
+vp90-2-00-quantizer-61.webm [quantizer] Success
+vp90-2-00-quantizer-62.webm [quantizer] Success
+vp90-2-00-quantizer-63.webm [quantizer] Success
+vp90-2-01-sharpness-1.webm [sharpness] Success
+vp90-2-01-sharpness-2.webm [sharpness] Success
+vp90-2-01-sharpness-3.webm [sharpness] Success
+vp90-2-01-sharpness-4.webm [sharpness] Success
+vp90-2-01-sharpness-5.webm [sharpness] Success
+vp90-2-01-sharpness-6.webm [sharpness] Success
+vp90-2-01-sharpness-7.webm [sharpness] Success
+vp90-2-02-size-08x08.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-08x10.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-08x16.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-08x18.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-08x32.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-08x34.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-08x64.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-08x66.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-10x08.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-10x10.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-10x16.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-10x18.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-10x32.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-10x34.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-10x64.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-10x66.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-130x132.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-132x130.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-132x132.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-16x08.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-16x10.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-16x16.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-16x18.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-16x32.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-16x34.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-16x64.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-16x66.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-178x180.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-180x178.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-180x180.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-18x08.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-18x10.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-18x16.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-18x18.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-18x32.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-18x34.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-18x64.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-18x66.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-32x08.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-32x10.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-32x16.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-32x18.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-32x32.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-32x34.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-32x64.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-32x66.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-34x08.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-34x10.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-34x16.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-34x18.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-34x32.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-34x34.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-34x64.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-34x66.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-64x08.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-64x10.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-64x16.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-64x18.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-64x32.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-64x34.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-64x64.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-64x66.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-66x08.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-66x10.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-66x16.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-66x18.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-66x32.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-66x34.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-66x64.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-66x66.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-lf-1920x1080.webm [size-02 (8..66 px)] Success
+vp90-2-03-deltaq.webm [other] Success
+vp90-2-03-size-196x196.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-196x198.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-196x200.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-196x202.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-196x208.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-196x210.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-196x224.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-196x226.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-198x196.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-198x198.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-198x200.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-198x202.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-198x208.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-198x210.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-198x224.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-198x226.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-200x196.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-200x198.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-200x200.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-200x202.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-200x208.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-200x210.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-200x224.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-200x226.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-202x196.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-202x198.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-202x200.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-202x202.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-202x208.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-202x210.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-202x224.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-202x226.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-208x196.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-208x198.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-208x200.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-208x202.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-208x208.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-208x210.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-208x224.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-208x226.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-210x196.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-210x198.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-210x200.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-210x202.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-210x208.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-210x210.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-210x224.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-210x226.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-224x196.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-224x198.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-224x200.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-224x202.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-224x208.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-224x210.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-224x224.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-224x226.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-226x196.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-226x198.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-226x200.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-226x202.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-226x208.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-226x210.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-226x224.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-226x226.webm [size-03 (196..226 px)] Success
+vp90-2-03-size-352x288.webm [size-03 (196..226 px)] Success
+vp92-2-20-10bit-yuv420.webm [HIGH 10-bit 4:2:0] Success
+vp92-2-20-12bit-yuv420.webm [HIGH unsupported (12-bit, 4:2:2/4:4:0/4:4:4)] Error
+vp93-2-20-10bit-yuv422.webm [HIGH unsupported (12-bit, 4:2:2/4:4:0/4:4:4)] Error
+vp93-2-20-10bit-yuv444.webm [HIGH unsupported (12-bit, 4:2:2/4:4:0/4:4:4)] Error
+vp93-2-20-12bit-yuv422.webm [HIGH unsupported (12-bit, 4:2:2/4:4:0/4:4:4)] Error
+vp93-2-20-12bit-yuv444.webm [HIGH unsupported (12-bit, 4:2:2/4:4:0/4:4:4)] Error
+
+| group | success | total | failing |
+|---|---|---|---|
+| quantizer | 64 | 64 |  |
+| sharpness | 7 | 7 |  |
+| size-02 (8..66 px) | 71 | 71 |  |
+| size-03 (196..226 px) | 65 | 65 |  |
+| HIGH 10-bit 4:2:0 | 1 | 1 |  |
+| HIGH unsupported (12-bit, 4:2:2/4:4:0/4:4:4) | 0 | 5 | vp92-2-20-12bit-yuv420.webm vp93-2-20-10bit-yuv422.webm vp93-2-20-10bit-yuv444.webm vp93-2-20-12bit-yuv422.webm vp93-2-20-12bit-yuv444.webm |
+| other | 1 | 1 |  |
+
+CHECK 0 kernel is a cumulative kernel >= c10 (contains f8be54bac) and the pre-flight vector decoded: FAIL (kernel.txt: 7.3.1 #14 SMP PREEMPT Thu Nov  5 19:57:13 UTC 2026; pre-flight vp90-2-00-quantizer-00.webm: None)
+CHECK 1 all five chunks ran (c1 c2 c3 c5 c4.md present, 71/137/59/38/6 vectors): FAIL (missing chunks: ['c3', 'c5']; vectors seen: 214 of 311)
+CHECK 2 inter-frame resize vectors (24 x vp90-2-21-resize_inter_*, 05-resize, 18-resize) all Success: FAIL (0/0 Success; failing: )
+CHECK 3 every other decodable vector Success (302 of the 305 + 10-bit 4:2:0 of HIGH): PASS (0 failing: )
+CHECK 4 expected-unsupported vectors (2 x vp91, svc_1280x720_3, 12-bit, vp93) are not Success: PASS (as expected)
+CHECK 5 dmesg: no timeouts, IOMMU faults, Oops or WARNING: PASS (clean)
+CHECK 6 no fluster per-vector timeouts (90 s): PASS (none)
+VERDICT: FAIL; VP9-TEST-VECTORS 208/305 Success, HIGH 1/6 Success

@@ -1,0 +1,12 @@
+[    0.000000] cma: Reserved 64 MiB at 0x000000007bc00000
+[    0.001432] pid_max: default: 32768 minimum: 301
+[    0.011226] Memory: 892384K/1048576K available (18496K kernel code, 2866K rwdata, 12576K rodata, 2560K init, 744K bss, 84360K reserved, 65536K cma-reserved)
+[    0.124529] iommu: Default domain type: Translated
+[    0.124551] iommu: DMA domain TLB invalidation policy: strict mode
+[    0.129085] NetLabel:  unlabeled traffic allowed by default
+[    0.142343] PCI: CLS 0 bytes, default 64
+[    0.199539] platform 1420000.deinterlace: Adding to iommu group 0
+[    0.199635] platform 1c0e000.video-codec: Adding to iommu group 0
+[    0.266659] bridge: filtering via arp/ip/ip6tables is no longer available by default. Update your scripts to load br_netfilter if you need this.
+[    0.309090] platform 1100000.planes: Adding to iommu group 0
+[    8.261296] systemd[1]: Queued start job for default target graphical.target.

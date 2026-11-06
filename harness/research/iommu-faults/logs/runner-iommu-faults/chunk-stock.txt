@@ -1,0 +1,18 @@
+kernel 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 faults-at-start 0
+[connector] /sys/class/drm/card0-HDMI-A-1/status before: disconnected fb0  bpp 
+[scanout] status connected enabled disabled mode 1024x768 faults-new 0
+[decode] h264-high-2160p30 x3 rc=0 rc=0 rc=0 faults-new 214 timeouts 0
+[dmesg] [  163.314302] sun50i-iommu 30f0000.iommu: Page fault for 0x00000000f2300000 (master -1, dir rd)
+[dmesg] [  163.330917] sun50i-iommu 30f0000.iommu: Page fault for 0x00000000f2300000 (master -1, dir rd)
+[dmesg] [  163.430932] sun50i-iommu 30f0000.iommu: Page fault for 0x00000000f2300000 (master -1, dir rd)
+[dmesg] [  163.447700] sun50i-iommu 30f0000.iommu: Page fault for 0x00000000f2300000 (master -1, dir rd)
+[dmesg] [  163.464289] sun50i-iommu 30f0000.iommu: Page fault for 0x00000000f2300000 (master -1, dir rd)
+[dmesg] [  163.564307] sun50i-iommu 30f0000.iommu: Page fault for 0x00000000f2300000 (master -1, dir rd)
+[dmesg] [  163.580967] sun50i-iommu 30f0000.iommu: Page fault for 0x00000000f2300000 (master -1, dir rd)
+[dmesg] [  168.513862] sun50i_iommu_report_fault: 74 callbacks suppressed
+[dmesg] [  168.513892] sun50i-iommu 30f0000.iommu: Page fault for 0x00000000f2300000 (master -1, dir rd)
+[dmesg] [  168.530540] sun50i-iommu 30f0000.iommu: Page fault for 0x00000000f2300000 (master -1, dir rd)
+[dmesg] [  168.547205] sun50i-iommu 30f0000.iommu: Page fault for 0x00000000f2300000 (master -1, dir rd)
+[dmesg] [  168.563877] sun50i-iommu 30f0000.iommu: Page fault for 0x00000000f2300000 (master -1, dir rd)
+[connector] after: disconnected faults-at-end 214
+ROUND-DONE

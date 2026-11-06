@@ -1,0 +1,10 @@
+de33_latch_coalesced=0
+de33_latch_commits=602
+de33_latch_flushes=602
+de33_latch_flushes_late=0
+de33_latch_flushes_sync=0
+de33_latch_line_active=35
+de33_latch_line_max=7
+de33_latch_line_min=1
+de33_latch_ns_max=15584
+de33_latch_words_max=21

@@ -1,0 +1,10 @@
+2026-11-06 01:27:20 job wb start, kernel c24 (Image md5 3de93f5e0a45c26e1be069814cd313a7), writeback commit 6dbed6c18, chunks: wb, done before: 
+2026-11-06 01:27:20 acquired by runner-wb-wb-1793928440
+shipped /root/wb/kms-wb 4712f498241ac029a52810dd62bc652ae4a6bc67b94feeb113bead240fcdaf7b
+shipped /root/stage/modules-c24.tgz dc0a9d3e0954630c2c2b48f95be4ccf30a4bf256829c9f9f62cebc0182ca10ec
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+kernel: #23 SMP PREEMPT Fri Nov  6 00:46:05 UTC 2026
+2026-11-06 01:31:56 BLOCKED: kernel c24 has no Writeback-1 connector / de33_wb_* parameters (writeback not in this kernel)
+2026-11-06 01:32:43 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 
+released by runner-wb-wb-1793928440

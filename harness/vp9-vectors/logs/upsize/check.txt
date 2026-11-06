@@ -1,0 +1,79 @@
+# job upsize; kernel: cumulative c17 test-cumulative 7897dec08 2026-11-05 22:09:58 Image md5 22330a4caccc513b757e743934c2700f / 7.3.1 #18 SMP PREEMPT Thu Nov  5 22:07:30 UTC 2026; contains the upsize fix 7897dec08: True
+# pre-flight vp90-2-00-quantizer-00.webm: Success
+# u1: 27 vectors in /home/aruni/orangepizero2/harness/vp9-vectors/logs/upsize/out/u1.md (expected 27)
+# u2: 25 vectors in /home/aruni/orangepizero2/harness/vp9-vectors/logs/upsize/out/u2.md (expected 25)
+vp90-2-00-quantizer-00.webm [quantizer] Success
+vp90-2-00-quantizer-63.webm [quantizer] Success
+vp90-2-01-sharpness-1.webm [sharpness] Success
+vp90-2-02-size-08x08.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-66x66.webm [size-02 (8..66 px)] Success
+vp90-2-02-size-lf-1920x1080.webm [size-02 (8..66 px)] Success
+vp90-2-03-deltaq.webm [other] Success
+vp90-2-03-size-226x226.webm [size-03 (196..226 px)] Success
+vp90-2-05-resize.ivf [resize on inter frames (21, 05, 18)] Success
+vp90-2-06-bilinear.webm [other] Success
+vp90-2-07-frame_parallel.webm [other] Success
+vp90-2-08-tile-4x4.webm [other] Success
+vp90-2-08-tile_1x8_frame_parallel.webm [other] Success
+vp90-2-09-aq2.webm [other] Success
+vp90-2-09-lf_deltas.webm [other] Success
+vp90-2-10-show-existing-frame.webm [show-existing-frame] Success
+vp90-2-11-size-351x287.webm [size-11 (odd)] Success
+vp90-2-12-droppable_1.ivf [other] Success
+vp90-2-14-resize-10frames-fp-tiles-1-2-4-8.webm [resize on key frames (14)] Success
+vp90-2-14-resize-fp-tiles-1-16.webm [resize on key frames (14)] Success
+vp90-2-15-segkey.webm [other] Success
+vp90-2-16-intra-only.webm [intra-only] Success
+vp90-2-17-show-existing-frame.webm [show-existing-frame] Success
+vp90-2-18-resize.ivf [resize on inter frames (21, 05, 18)] Success
+vp90-2-19-skip.webm [other] Success
+vp90-2-20-big_superframe-01.webm [other] Success
+vp90-2-21-resize_inter_1280x720_5_1-2.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_1280x720_5_3-4.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_1280x720_7_1-2.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_1280x720_7_3-4.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_1920x1080_5_1-2.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_1920x1080_5_3-4.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_1920x1080_7_1-2.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_1920x1080_7_3-4.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_320x180_5_1-2.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_320x180_5_3-4.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_320x180_7_1-2.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_320x180_7_3-4.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_320x240_5_1-2.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_320x240_5_3-4.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_320x240_7_1-2.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_320x240_7_3-4.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_640x360_5_1-2.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_640x360_5_3-4.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_640x360_7_1-2.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_640x360_7_3-4.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_640x480_5_1-2.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_640x480_5_3-4.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_640x480_7_1-2.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-21-resize_inter_640x480_7_3-4.webm [resize on inter frames (21, 05, 18)] Success
+vp90-2-22-svc_1280x720_1.webm [svc] Success
+vp90-2-22-svc_1280x720_3.ivf [svc] Success
+
+| group | success | total | failing |
+|---|---|---|---|
+| quantizer | 2 | 2 |  |
+| sharpness | 1 | 1 |  |
+| size-02 (8..66 px) | 3 | 3 |  |
+| size-03 (196..226 px) | 1 | 1 |  |
+| size-11 (odd) | 1 | 1 |  |
+| resize on key frames (14) | 2 | 2 |  |
+| resize on inter frames (21, 05, 18) | 26 | 26 |  |
+| svc | 2 | 2 |  |
+| show-existing-frame | 2 | 2 |  |
+| intra-only | 1 | 1 |  |
+| other | 11 | 11 |  |
+
+CHECK 0 kernel contains the upsize fix 7897dec08 (fix/sunxi-cedrus-vp9-inter-upsize) and the pre-flight vector decoded: PASS (kernel.txt: cumulative c17 test-cumulative 7897dec08 2026-11-05 22:09:58 Image md5 22330a4caccc513b757e743934c2700f; contains fix: True; pre-flight vp90-2-00-quantizer-00.webm: Success)
+CHECK 1 all chunks ran (u1 u2.md present, 27/25 vectors): PASS (missing chunks: []; vectors seen: 52 of 52)
+CHECK 2 inter-frame UPSIZE vector vp90-2-22-svc_1280x720_3 Success: PASS (result: Success)
+CHECK 3 inter-frame downsize vectors (24 x vp90-2-21-resize_inter_*, 05-resize, 18-resize) all Success: PASS (26/26 Success; failing: )
+CHECK 4 regression subset (u2, 25 profile-0 vectors) all Success: PASS (0 failing: )
+CHECK 5 dmesg: no timeouts, IOMMU faults, Oops or WARNING: PASS (clean)
+CHECK 6 no fluster per-vector timeouts (90 s): PASS (none)
+VERDICT: PASS; upsize job 52/52 Success (of 52), svc_1280x720_3 Success

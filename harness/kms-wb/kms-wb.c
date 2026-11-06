@@ -11,6 +11,11 @@
  *   flips N        page-flip between two solid colours N times with a
  *                  capture per flip; a captured frame holding rows of both
  *                  colours is a torn frame
+ *   tear N         N page flips, a different full-screen picture every frame,
+ *                  a capture of every frame; each capture must hold exactly
+ *                  the picture of its own commit (cmd_tear())
+ *   selftest       the tear classifier on synthetic captures
+ *   memload S T MB DRAM/CPU load for the tear runs
  *
  * Every result is one "RESULT <key> <value>" line on stdout. Exit 0 = the
  * command's checks passed, 1 = a check failed, 2 = usage/setup error,
@@ -24,6 +29,7 @@
 #include <getopt.h>
 #include <inttypes.h>
 #include <poll.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -1071,6 +1077,466 @@ static int cmd_flips(int n)
 	return (f.torn || f.bad || f.ferr || f.wrong || full_bad || f.frames < n - 1) ? 1 : 0;
 }
 
+/* ------------------------------------------------- tear (per-frame unique) */
+
+/*
+ * tear N: N page flips, every frame a different full-screen picture, a
+ * writeback capture of every frame. Pixel (x, y) of frame i is
+ * (i & 0xff) << 16 | y: the red byte tags the commit, green/blue hold the
+ * row. A capture must hold exactly one tag, the one of its own commit, on
+ * every row, with every row at its place:
+ *   OK     one tag, the expected one
+ *   WRONG  one tag, another commit's (stale = i-1: captured before the
+ *          commit was latched; early = i+1: the next commit was latched
+ *          in its place, e.g. a client woken before the latch)
+ *   MIXED  rows of two or more commits: a frame scanned out while the
+ *          registers changed, i.e. a torn frame
+ *   BAD    a row whose samples disagree or sit at the wrong row (partial
+ *          row, shifted picture, unwritten buffer)
+ * No poisoning is needed: a capture buffer that was not written holds the
+ * tag of the frame RING flips earlier.
+ * Source buffers: a ring of TEAR_SRC; frame i+2 is drawn into its buffer
+ * right after commit i (that buffer last showed frame i-2, off screen
+ * since flip i-1 was reported).
+ */
+#define TEAR_SRC	4
+#define TEAR_MAX	20000
+
+enum { TEAR_OK, TEAR_WRONG, TEAR_MIXED, TEAR_BAD };
+static const char *const tear_name[] = { "OK", "WRONG", "MIXED", "BAD" };
+
+struct tear_cls {
+	int verdict, tag_top, tag_bottom, ntags, boundary, bad_rows, first_bad_row;
+	uint32_t first_bad_px;
+};
+
+static inline uint32_t tear_px(int frame, int y)
+{
+	return ((uint32_t)(frame & 0xff) << 16) | ((uint32_t)y & 0xffff);
+}
+
+static void tear_fill(uint8_t *map, uint32_t pitch, int w, int h, int frame)
+{
+	for (int y = 0; y < h; y++) {
+		uint32_t *row = (uint32_t *)(map + (size_t)y * pitch), v = tear_px(frame, y);
+
+		for (int x = 0; x < w; x++)
+			row[x] = v;
+	}
+}
+
+static inline void tear_px_check(uint32_t p, int y, int *tag, bool *bad, uint32_t *badpx)
+{
+	p &= 0xffffff;
+	if ((p & 0xffff) != ((uint32_t)y & 0xffff) ||
+	    (*tag >= 0 && (int)(p >> 16) != *tag)) {
+		if (!*bad)
+			*badpx = p;
+		*bad = true;
+		return;
+	}
+	*tag = p >> 16;
+}
+
+/* @step > 1: every step-th pixel of a row plus its last one (uncached reads, see classify()) */
+static void tear_classify(const uint8_t *map, uint32_t pitch, int w, int h, int step,
+			  int expect, struct tear_cls *r)
+{
+	int tags[8], prev = -1;
+
+	memset(r, 0, sizeof(*r));
+	r->tag_top = r->tag_bottom = r->boundary = r->first_bad_row = -1;
+	for (int y = 0; y < h; y++) {
+		const uint32_t *row = (const uint32_t *)(map + (size_t)y * pitch);
+		uint32_t badpx = 0;
+		bool bad = false;
+		int tag = -1, k;
+
+		for (int x = 0; x < w; x += step)
+			tear_px_check(row[x], y, &tag, &bad, &badpx);
+		if (step > 1 && (w - 1) % step)
+			tear_px_check(row[w - 1], y, &tag, &bad, &badpx);
+		if (bad || tag < 0) {
+			if (r->first_bad_row < 0) {
+				r->first_bad_row = y;
+				r->first_bad_px = badpx;
+			}
+			r->bad_rows++;
+			continue;
+		}
+		for (k = 0; k < r->ntags; k++)
+			if (tags[k] == tag)
+				break;
+		if (k == r->ntags && r->ntags < 8)
+			tags[r->ntags++] = tag;
+		if (r->tag_top < 0)
+			r->tag_top = tag;
+		r->tag_bottom = tag;
+		if (prev >= 0 && tag != prev && r->boundary < 0)
+			r->boundary = y;
+		prev = tag;
+	}
+	if (r->bad_rows || !r->ntags)
+		r->verdict = TEAR_BAD;
+	else if (r->ntags > 1)
+		r->verdict = TEAR_MIXED;
+	else
+		r->verdict = r->tag_top == (expect & 0xff) ? TEAR_OK : TEAR_WRONG;
+}
+
+/* the classifier on synthetic captures in normal memory: it must tell every case apart */
+static int cmd_selftest(void)
+{
+	const int w = 1024, h = 768, expect = 10;
+	const uint32_t pitch = w * 4;
+	uint8_t *m = malloc((size_t)pitch * h);
+	int fails = 0;
+
+	if (!m)
+		return 2;
+	for (int c = 0; c < 7; c++) {
+		static const char *const cname[] = { "pure", "stale", "torn300", "shift4",
+						     "poison", "halfrow400", "row500" };
+		static const int want[] = { TEAR_OK, TEAR_WRONG, TEAR_MIXED, TEAR_BAD,
+					    TEAR_BAD, TEAR_BAD, TEAR_MIXED };
+
+		tear_fill(m, pitch, w, h, c == 1 ? expect - 1 : expect);
+		if (c == 2)
+			tear_fill(m, pitch, w, 300, expect - 1);
+		if (c == 3)
+			for (int y = 0; y < h; y++)
+				for (int x = 0; x < w; x++)
+					((uint32_t *)(m + (size_t)y * pitch))[x] = tear_px(expect, y + 4);
+		if (c == 4)
+			memset(m, 0x5a, (size_t)pitch * h);
+		if (c == 5)
+			for (int x = w / 2; x < w; x++)
+				((uint32_t *)(m + 400 * pitch))[x] = tear_px(expect - 1, 400);
+		if (c == 6)
+			for (int x = 0; x < w; x++)
+				((uint32_t *)(m + 500 * pitch))[x] = tear_px(expect + 1, 500);
+		for (int s = 0; s < 2; s++) {
+			struct tear_cls r;
+			int step = s ? CHECK_STEP : 1;
+
+			tear_classify(m, pitch, w, h, step, expect, &r);
+			printf("RESULT selftest %s step %d verdict %s want %s boundary %d bad_rows %d\n",
+			       cname[c], step, tear_name[r.verdict], tear_name[want[c]], r.boundary,
+			       r.bad_rows);
+			if (r.verdict != want[c] || (c == 2 && r.boundary != 300))
+				fails++;
+		}
+	}
+	free(m);
+	printf("RESULT selftest %s fails %d\n", fails ? "fail" : "pass", fails);
+	return fails ? 1 : 0;
+}
+
+struct tear_rec {
+	uint32_t seq;
+	double t_vbl, t_commit;
+	int8_t verdict;
+	int16_t tag;
+};
+
+static int cmd_tear(int n)
+{
+	static struct dumb cap[RING], src[TEAR_SRC];
+	static int32_t fence[RING];
+	static struct tear_rec rec[TEAR_MAX];
+	int ret, w, h, cnt[4] = { 0 }, stale = 0, early = 0, ferr = 0, checked = 0;
+	int gaps = 0, gap_max = 0, first_gap = -1, full = 0, full_bad = 0, dumped = 0;
+	int phase_n = 0, phase_outside = 0;
+	drmEventContext ev = { .version = 3, .page_flip_handler2 = flip_handler };
+	struct flip_ev fe = { 0 };
+	uint32_t last_seq = 0, lcg = 12345;
+	double t_first = 0, t_last = 0, t_commit, phase_sum = 0, phase_max = 0, vbl_ms, frame_ms;
+	struct stat_ms ioctl_ms = { 0 }, fence_ms = { 0 }, check_ms = { 0 }, draw_ms = { 0 };
+
+	if (n < 3 || n > TEAR_MAX) {
+		fprintf(stderr, "tear: N must be 3..%d\n", TEAR_MAX);
+		return 2;
+	}
+	if (cmd_selftest())
+		return 2;
+	ret = kms_init(&K, false);
+	if (ret)
+		return ret;
+	if (o.wb_fmt != DRM_FORMAT_XRGB8888) {
+		fprintf(stderr, "tear needs XR24 capture\n");
+		return 2;
+	}
+	vbl_ms = (K.mode.vtotal - K.mode.vdisplay) * (double)K.mode.htotal /
+		 (K.mode.clock * 1e3) * 1e3;
+	frame_ms = K.mode.vtotal * (double)K.mode.htotal / (K.mode.clock * 1e3) * 1e3;
+	w = K.mode.hdisplay;
+	h = K.mode.vdisplay;
+	for (int i = 0; i < TEAR_SRC; i++) {
+		if (dumb_create(&K, &src[i], DRM_FORMAT_XRGB8888, w, h)) {
+			perror("dumb buffer");
+			return 2;
+		}
+		tear_fill(src[i].map, src[i].pitch, w, h, i);
+	}
+	for (int i = 0; i < RING; i++) {
+		if (dumb_create(&K, &cap[i], DRM_FORMAT_XRGB8888, w, h)) {
+			perror("dumb buffer");
+			return 2;
+		}
+		poison(&cap[i]);
+		fence[i] = -1;
+	}
+	/* modeset onto a picture no flip uses (tag 0xff), then settle */
+	{
+		struct dumb *b = &src[TEAR_SRC - 1];
+
+		tear_fill(b->map, b->pitch, w, h, 0xff);
+		if (commit(&K, b->fb_id, NULL, NULL, NULL)) {
+			printf("RESULT modeset_commit_error %d\n", commit_errno);
+			return 2;
+		}
+		usleep(100000);
+		tear_fill(b->map, b->pitch, w, h, TEAR_SRC - 1);
+	}
+
+	for (int i = 0; i < n && !quit; i++) {
+		int s = i % RING;
+		double t0;
+
+		if (i > 0) {
+			while (!fe.done && !quit) {
+				struct pollfd pfd = { .fd = K.fd, .events = POLLIN };
+
+				if (poll(&pfd, 1, 1000) <= 0) {
+					fprintf(stderr, "flip event timed out\n");
+					quit = 1;
+					break;
+				}
+				drmHandleEvent(K.fd, &ev);
+			}
+			if (!fe.done)
+				break;
+			if (!t_first)
+				t_first = fe.t;
+			if (last_seq && fe.seq - last_seq > 1) {
+				gaps++;
+				if ((int)(fe.seq - last_seq - 1) > gap_max)
+					gap_max = fe.seq - last_seq - 1;
+				if (first_gap < 0)
+					first_gap = i - 1;
+			}
+			last_seq = fe.seq;
+			t_last = fe.t;
+			rec[i - 1].seq = fe.seq;
+			rec[i - 1].t_vbl = fe.t;
+			if (o.commit_delay_us > 0) {
+				sleep_until(fe.t + o.commit_delay_us * 1e-6);
+			} else if (o.commit_delay_us < 0) {
+				/* random phase over the frame, minus 2 ms for the commit itself */
+				lcg = lcg * 1103515245 + 12345;
+				sleep_until(fe.t + ((lcg >> 8) % (int)((frame_ms - 2) * 1000)) * 1e-6);
+			}
+		}
+
+		t_commit = now_s();
+		rec[i].t_commit = t_commit;
+		fe.done = false;
+		if (commit(&K, src[i % TEAR_SRC].fb_id, &cap[s], &fence[s], &fe)) {
+			printf("RESULT flip %d commit_error %d\n", i, commit_errno);
+			ret = 2;
+			break;
+		}
+		stat_add(&ioctl_ms, (now_s() - t_commit) * 1e3);
+		if (i > 0) {
+			double ph = (t_commit - t_last) * 1e3;
+
+			if (ph >= 0) {
+				phase_n++;
+				phase_sum += ph;
+				if (ph > phase_max)
+					phase_max = ph;
+				if (ph > vbl_ms)
+					phase_outside++;
+			}
+		}
+
+		/* while flip i waits for its vblank: check capture i-2, draw frame i+2 */
+		for (int j = i - 2; j <= i - 2 + (i == n - 1 ? 2 : 0) && j >= 0 && j < n; j++) {
+			struct tear_cls r;
+			int st, sj = j % RING;
+
+			if (j > i - 2 && !fe.done) {
+				/* the last two: wait for the last flip first */
+				while (!fe.done && !quit) {
+					struct pollfd pfd = { .fd = K.fd, .events = POLLIN };
+
+					if (poll(&pfd, 1, 1000) <= 0)
+						break;
+					drmHandleEvent(K.fd, &ev);
+				}
+				if (fe.done) {
+					if (last_seq && fe.seq - last_seq > 1) {
+						gaps++;
+						if ((int)(fe.seq - last_seq - 1) > gap_max)
+							gap_max = fe.seq - last_seq - 1;
+						if (first_gap < 0)
+							first_gap = i;
+					}
+					last_seq = fe.seq;
+					t_last = fe.t;
+					rec[i].seq = fe.seq;
+					rec[i].t_vbl = fe.t;
+				}
+			}
+			t0 = now_s();
+			if (fence_wait(fence[sj], FENCE_TIMEOUT_MS, &st) || st < 0) {
+				printf("RESULT flip %d fence_error status=%d\n", j, st);
+				ferr++;
+				rec[j].verdict = -1;
+			} else {
+				stat_add(&fence_ms, (now_s() - t0) * 1e3);
+				t0 = now_s();
+				tear_classify(cap[sj].map, cap[sj].pitch, w, h, CHECK_STEP, j, &r);
+				stat_add(&check_ms, (now_s() - t0) * 1e3);
+				checked++;
+				cnt[r.verdict]++;
+				rec[j].verdict = r.verdict;
+				rec[j].tag = r.tag_top;
+				if (r.verdict == TEAR_WRONG) {
+					if (r.tag_top == ((j - 1) & 0xff))
+						stale++;
+					else if (r.tag_top == ((j + 1) & 0xff))
+						early++;
+				}
+				if (r.verdict != TEAR_OK) {
+					printf("RESULT flip %d %s tag_top %d tag_bottom %d ntags %d boundary_row %d bad_rows %d first_bad_row %d first_bad_px %06x expect %d\n",
+					       j, tear_name[r.verdict], r.tag_top, r.tag_bottom, r.ntags,
+					       r.boundary, r.bad_rows, r.first_bad_row, r.first_bad_px,
+					       j & 0xff);
+					if (dumped < 4) {
+						char name[32];
+
+						snprintf(name, sizeof(name), "tear-%s-%d",
+							 tear_name[r.verdict], j);
+						dump(&cap[sj], name);
+						dumped++;
+					}
+				}
+			}
+			close(fence[sj]);
+			fence[sj] = -1;
+		}
+		if (i + 2 < n && i >= 2) {
+			struct dumb *b = &src[(i + 2) % TEAR_SRC];
+
+			t0 = now_s();
+			tear_fill(b->map, b->pitch, w, h, i + 2);
+			stat_add(&draw_ms, (now_s() - t0) * 1e3);
+		}
+	}
+
+	/* the last RING captures, every pixel */
+	for (int j = n - RING < 0 ? 0 : n - RING; j < n && ret == 0 && !quit; j++) {
+		struct tear_cls r;
+
+		tear_classify(cap[j % RING].map, cap[j % RING].pitch, w, h, 1, j, &r);
+		full++;
+		if (r.verdict != TEAR_OK) {
+			full_bad++;
+			printf("RESULT flip %d FULL_%s tag_top %d boundary_row %d bad_rows %d\n",
+			       j, tear_name[r.verdict], r.tag_top, r.boundary, r.bad_rows);
+		}
+	}
+
+	if (o.dump_dir) {
+		char path[512];
+		FILE *f;
+
+		snprintf(path, sizeof(path), "%s/tear.csv", o.dump_dir);
+		f = fopen(path, "w");
+		if (f) {
+			fprintf(f, "# flip,seq,vblank_s,commit_s,commit_phase_ms,verdict,tag\n");
+			for (int j = 0; j < n; j++)
+				fprintf(f, "%d,%u,%.6f,%.6f,%.3f,%s,%d\n", j, rec[j].seq, rec[j].t_vbl,
+					rec[j].t_commit,
+					j ? (rec[j].t_commit - rec[j - 1].t_vbl) * 1e3 : 0.0,
+					rec[j].verdict < 0 ? "FENCE" : tear_name[rec[j].verdict],
+					rec[j].tag);
+			fclose(f);
+		}
+	}
+
+	printf("RESULT tear flips %d frames_checked %d ok %d wrong %d stale %d early %d mixed %d bad %d fence_errors %d\n",
+	       n, checked, cnt[TEAR_OK], cnt[TEAR_WRONG], stale, early, cnt[TEAR_MIXED],
+	       cnt[TEAR_BAD], ferr);
+	printf("RESULT tear_full full_checked %d full_bad %d check_step %d\n", full, full_bad,
+	       CHECK_STEP);
+	printf("RESULT flip_rate %.3f seq_gaps %d\n",
+	       t_last > t_first ? (n - 1) / (t_last - t_first) : 0.0, gaps);
+	printf("RESULT seq_gap_max %d first_gap_flip %d frame_ms %.3f\n", gap_max, first_gap,
+	       frame_ms);
+	if (phase_n)
+		printf("RESULT commit_phase mean_ms %.3f max_ms %.3f outside_blanking %d of %d blanking_ms %.3f\n",
+		       phase_sum / phase_n, phase_max, phase_outside, phase_n, vbl_ms);
+	stat_print("commit_ioctl", &ioctl_ms);
+	stat_print("fence_wait", &fence_ms);
+	stat_print("check", &check_ms);
+	stat_print("draw", &draw_ms);
+	if (ret)
+		return ret;
+	return (cnt[TEAR_WRONG] || cnt[TEAR_MIXED] || cnt[TEAR_BAD] || ferr || full_bad ||
+		checked < n) ? 1 : 0;
+}
+
+/* --------------------------------------------- memload (DRAM/CPU stress) */
+
+struct memload_arg {
+	size_t bytes;
+	double until;
+	double moved;
+};
+
+static void *memload_thread(void *p)
+{
+	struct memload_arg *a = p;
+	uint8_t *x = malloc(a->bytes), *y = malloc(a->bytes);
+
+	if (!x || !y)
+		return NULL;
+	memset(x, 1, a->bytes);
+	memset(y, 2, a->bytes);
+	while (!quit && now_s() < a->until) {
+		memcpy(y, x, a->bytes);
+		memcpy(x, y, a->bytes);
+		a->moved += 4.0 * a->bytes;	/* read + write, twice */
+	}
+	free(x);
+	free(y);
+	return NULL;
+}
+
+/* memload SECONDS THREADS MB: memcpy between two MB-MiB buffers per thread */
+static int cmd_memload(int secs, int threads, int mb)
+{
+	pthread_t t[16];
+	struct memload_arg a[16];
+	double t0 = now_s(), total = 0;
+
+	if (threads < 1 || threads > 16 || mb < 1 || secs < 1)
+		return 2;
+	for (int i = 0; i < threads; i++) {
+		a[i] = (struct memload_arg){ .bytes = (size_t)mb << 20, .until = t0 + secs };
+		pthread_create(&t[i], NULL, memload_thread, &a[i]);
+	}
+	for (int i = 0; i < threads; i++) {
+		pthread_join(t[i], NULL);
+		total += a[i].moved;
+	}
+	printf("RESULT memload threads %d mb %d secs %.1f GBps %.3f\n", threads, mb,
+	       now_s() - t0, total / (now_s() - t0) / 1e9);
+	return 0;
+}
+
 /* ------------------------------------------------------------- main */
 
 static void on_signal(int sig)
@@ -1082,7 +1548,8 @@ static void on_signal(int sig)
 static void usage(void)
 {
 	fprintf(stderr,
-"usage: kms-wb [options] probe | solid RRGGBB | bars | flips N\n"
+"usage: kms-wb [options] probe | solid RRGGBB | bars | flips N | tear N | selftest |\n"
+"       memload SECONDS THREADS MB\n"
 "  -d, --device PATH       DRM device (/dev/dri/card0)\n"
 "  -c, --connector NAME    display connector (HDMI-A-1)\n"
 "  -m, --mode WxH[@R]      mode (default: preferred)\n"
@@ -1091,6 +1558,7 @@ static void usage(void)
 "  -r, --repeat N          captures per static image (3)\n"
 "  -D, --commit-delay US   flips: commit US us after each flip event's vblank\n"
 "                          timestamp (puts the commit into the active video)\n"
+"                          tear: -1 = a random phase every frame\n"
 "  -o, --dump DIR          write mismatching captures as DIR/<name>.raw\n");
 	exit(2);
 }
@@ -1140,6 +1608,13 @@ int main(int argc, char **argv)
 		return cmd_static(true, 0);
 	if (!strcmp(argv[optind], "flips") && optind + 1 < argc)
 		return cmd_flips(atoi(argv[optind + 1]));
+	if (!strcmp(argv[optind], "tear") && optind + 1 < argc)
+		return cmd_tear(atoi(argv[optind + 1]));
+	if (!strcmp(argv[optind], "selftest"))
+		return cmd_selftest();
+	if (!strcmp(argv[optind], "memload") && optind + 3 < argc)
+		return cmd_memload(atoi(argv[optind + 1]), atoi(argv[optind + 2]),
+				   atoi(argv[optind + 3]));
 	usage();
 	return 2;
 }

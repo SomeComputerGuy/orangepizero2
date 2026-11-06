@@ -1028,11 +1028,20 @@ int main(int argc, char **argv)
 	if (o.pattern) {
 		w = o.mode_w ? o.mode_w : K.mode.hdisplay;
 		h = o.mode_h ? o.mode_h : K.mode.vdisplay;
-		for (int i = 0; i < 2; i++)
+		for (int i = 0; i < 2; i++) {
 			if (dumb_create(&K, &dumbs[i], fmt, w, h)) {
 				perror("dumb buffer");
 				return 1;
 			}
+			/*
+			 * Draw both buffers in full before the first commit:
+			 * drawing buffer 1 (a whole frame through the
+			 * write-combined map) after flip 0's event made flip 1
+			 * miss its vblank, the one seq gap of every job-19 run
+			 * on both kernels.
+			 */
+			pattern_cols(&dumbs[i], fmt, w, h, i, 0, w);
+		}
 	} else {
 		enum AVColorSpace cs = d.ctx->colorspace;
 
@@ -1067,9 +1076,7 @@ int main(int argc, char **argv)
 					/* this buffer last showed pat_frame - 2 */
 					int ob = ((pat_frame - 2) * 8) % w, nb = (pat_frame * 8) % w;
 
-					if (pat_frame < 2) {
-						pattern_cols(b, fmt, w, h, pat_frame, 0, w);
-					} else {
+					if (pat_frame >= 2) {
 						pattern_cols(b, fmt, w, h, pat_frame, ob, ob + 16);
 						pattern_cols(b, fmt, w, h, pat_frame, nb, nb + 16);
 					}

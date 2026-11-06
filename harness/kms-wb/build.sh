@@ -7,6 +7,6 @@ mkdir -p "$OUT"
 ccache aarch64-linux-gnu-gcc -O2 -g -Wall -Wextra -Wno-unused-parameter -std=gnu11 \
 	-I"$S/usr/include" -I"$S/usr/include/libdrm" -I"$S/kuapi/include" \
 	-o "$OUT/kms-wb" "$H/kms-wb.c" \
-	-L"$S/usr/lib/aarch64-linux-gnu" -Wl,-rpath-link,"$S/usr/lib/aarch64-linux-gnu" -ldrm
+	-L"$S/usr/lib/aarch64-linux-gnu" -Wl,-rpath-link,"$S/usr/lib/aarch64-linux-gnu" -ldrm -lpthread
 aarch64-linux-gnu-readelf -d "$OUT/kms-wb" | grep NEEDED
 ls -la "$OUT/kms-wb"; sha256sum "$OUT/kms-wb"

@@ -135,6 +135,10 @@ Patch `patches.armbian/drm-sun4i-de33-latch-the-mixer-and-plane-registers-at-vbl
 
 ## RESULTS (state for a fresh agent)
 
+2026-11-06 update: job 19 PASS on the latch checks (seq_gaps = client artefact); follow-up items (late flush = stale vblank
+status at IRQ enable, event-before-flush race, snapshot atomicity) fixed in 8af646391 (c43); writeback tearing check =
+runner job 58. Current state: harness/research/display-tearing/RESULTS.md (this section below is the 2026-11-05 state).
+
 - Root cause: section 2 (DE33 registers live on write; no GLB_DBUFF, RCQ unused; writes from the commit worker).
 - Fix: b04527be4 on fix/sunxi-h616-de33-vblank-latch (fork), host-build-checked, NOT merged, NOT board-tested.
 - Board check queued: harness/runner-queue/19-display-tearing.md (needs the fix in the next cumulative kernel, c20+).

@@ -189,6 +189,12 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
   ServerAliveInterval/CountMax + a timeout, and the stall watchdog must fire on it (killed PID by hand 2026-11-06 01:16).
 - Shared with OPi5 (2026-11-06): (1) MPEG-4 VOL LOW_DELAY flag (OPi5 drafts on k16-mpeg4): when final, cedrus refuses interlaced B-VOPs in try_ctrl and FFmpeg 0302 becomes per-device; (2) take OPi5 FFmpeg 0314 "mpegvideo_motion: mirror the 16x8 block of field qpel" (~/orangepi5/work/_out/media-debs/patches/ffmpeg/0314-*.patch, copy only).
 - AFBC (job 51, 2026-11-06): the H616 Mali-G31 has NO AFBC (AFBC_FEATURES 0x10001), so a GPU import is NOT TESTABLE. Next route for a bit-exact AFBC check: scan out the cedrus AFBC capture on a DE33 plane and capture it with the writeback connector (jobs 40-42 PASS), compared with the linear decode.
+- AFBC bit-exact DONE (job 54 PASS on c39, 2026-11-06): HEVC 8/10-bit + VP9 P0/P2 AFBC == linear (interior, 24/24 frames).
+  HEVC VE writes AFBC 4 lines down (hw property, vendor nTopCrop=4) -> kernel 8b1f787fe fix/sunxi-cedrus-h265-afbc-compose
+  (compose rect top=4) + FFmpeg hwcontext compose crop (harness/afbc-wb/ffmpeg-v4l2request-compose.diff).
+  TODO: cherry-pick 8b1f787fe into stonking AFTER the user's current build; add the FFmpeg diff to the desktop FFmpeg
+  package patches. Open: real-hevc8 linear-pass writeback -EIO (-5) on 2-3 of 12 frames (jobs 53+54); AVS2 AFBC offset
+  unverified (no host encoder).
   Package built 2026-11-06: harness/afbc-wb (client + lossless flat-chroma-tile synthetic streams), runner job 53-afbc-wb (c38, no kernel change); pass = AFBC captures bit-identical to linear away from chroma-tile edges (the DE33 scaler uses another chroma phase for AFBC). State: harness/research/afbc-wb/RESULTS.md.
 - Next items: stateful v4l2jpegdec hang (after job 11 gstdebug), remaining M/L datasheet items (W22 encoder SPEC, W26, W12, W24, W29, W25 G2D).
 

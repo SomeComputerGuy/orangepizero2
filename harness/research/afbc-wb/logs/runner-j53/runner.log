@@ -1,0 +1,38 @@
+2026-11-06 16:31:08 job j53 start, kernel c38 (Image md5 f7fc82bd55173cf0ddd56a15ff9a72d6), client sha a0129b60ff8e704d, done before: 
+2026-11-06 16:31:08 acquired by runner-afbcwb-j53-1793982668
+shipped /root/afbcwb/afbc-wb a0129b60ff8e704d538000c8a6698cf5dc069033b30aadcd765634ff88540a1f
+shipped /root/afbcwb/streams/syn-hevc8.mkv 7d905117b8e23131030866cf76e72670cf2b3d22e55db2b6bd563c8504d5cded
+shipped /root/afbcwb/streams/syn-hevc8.srcmd5 4a7e57ed955a93d13d3fd03f0e3cf0ce830af9eb0203cb99296efc786a23571e
+shipped /root/afbcwb/streams/syn-hevc10.mkv 6d5a82d599a3edba059b76ceae4e528cdeb3b25dc6bac2ef48597444c339c141
+shipped /root/afbcwb/streams/syn-hevc10.srcmd5 f928f3a15b04a34396fec27aae520afe5aaaf1ed9d3a8b467e950d555380f8db
+shipped /root/afbcwb/streams/syn-vp9p0.webm 2a502d42815e37551c548de6783832ad843911f4e981b3d450883fc220d5266b
+shipped /root/afbcwb/streams/syn-vp9p0.srcmd5 4a7e57ed955a93d13d3fd03f0e3cf0ce830af9eb0203cb99296efc786a23571e
+shipped /root/afbcwb/streams/syn-vp9p2.webm 23dc61ba40de1a451ebceec3cbc5c49c9d422423d151c010f1be33e302eb6a27
+shipped /root/afbcwb/streams/syn-vp9p2.srcmd5 f928f3a15b04a34396fec27aae520afe5aaaf1ed9d3a8b467e950d555380f8db
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+dtb sun50i-h616-orangepi-zero2.dtb.vdec-c38 md5 aa4d5bbb33e171e32c349e413c68f12c
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+kernel: #38 SMP PREEMPT Fri Nov  6 10:29:47 UTC 2026
+2026-11-06 16:34:25 kernel c38 dtb ok (aa4d5bbb33e171e32c349e413c68f12c), writeback present
+2026-11-06 16:34:25 case syn-hevc8 start: syn-hevc8.mkv NV12 AS12 24 XR30
+2026-11-06 16:34:49 case syn-hevc8 done
+2026-11-06 16:34:49 case syn-hevc10 start: syn-hevc10.mkv P010 AS01 24 XR30
+2026-11-06 16:35:12 case syn-hevc10 done
+2026-11-06 16:35:12 case syn-vp9p0 start: syn-vp9p0.webm NV12 AS12 24 XR30
+2026-11-06 16:35:36 case syn-vp9p0 done
+2026-11-06 16:35:36 case syn-vp9p2 start: syn-vp9p2.webm P010 AS01 24 XR30
+2026-11-06 16:36:00 case syn-vp9p2 done
+2026-11-06 16:36:00 case syn-hevc8-xr24 start: syn-hevc8.mkv NV12 AS12 24 XR24
+2026-11-06 16:36:23 case syn-hevc8-xr24 done
+2026-11-06 16:36:23 case real-hevc10 start: hevc-main10-2160p60.mkv P010 AS01 12 XR30
+2026-11-06 16:36:37 case real-hevc10 done
+2026-11-06 16:36:37 case real-hevc8 start: hevc-main-2160p60.mkv NV12 AS12 12 XR30
+2026-11-06 16:36:51 case real-hevc8 done
+2026-11-06 16:36:51 case real-vp9p2 start: vp9-p2-2160p60.webm P010 AS01 12 XR30
+2026-11-06 16:37:16 case real-vp9p2 done
+2026-11-06 16:37:16 case real-vp9p0 start: vp9-p0-2160p60.webm NV12 AS12 12 XR30
+2026-11-06 16:37:41 case real-vp9p0 done
+restore: Image=vmlinuz-7.3.1-edge-sunxi64 dtb=sun50i-h616-orangepi-zero2.dtb.stock
+2026-11-06 16:38:26 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 sun50i-h616-orangepi-zero2.dtb.stock 
+released by runner-afbcwb-j53-1793982668
+2026-11-06 16:38:26 job j53 end: 9 of 9 cases done; results in /home/aruni/orangepizero2/harness/research/afbc-wb/logs/runner-j53/results.txt

@@ -1,0 +1,42 @@
+[AVHWFramesContext @ 0xaaaac9a10c00] Using V4L2 media driver cedrus (7.3.1) for S265
+RESULT writeback_connector 77
+RESULT mode 1024x768 total 1344x806 clock 65000
+RESULT crtc 52 plane 35 primary 42 afbc8 1 afbc10 1 nv12 1 p010 1
+RESULT wb_formats XR24 AR24 XB24 AB24 RX24 RA24 BX24 BA24 RG24 BG24 XR30 NV12 NV21 YU12
+RESULT stream /root/vdec-streams/hevc-main-2160p60.mkv hevc 3840x2160 (null) pixfmt AS12 wb XR30 crop 1408,704 tile 0 band 0
+RESULT fb 85 format YU08 modifier 0x0800000000000061 planes 1 pitch 0 size 13057056 3840x2160
+RESULT frame 0 cap_md5 d004ac2f60ee4dcb4f336ec1fb8f8ece repeat same fbd_ctl 0xff000015 fence_ms 33.0 31.9
+RESULT frame 0 vs_linear mismatches 710558 max_dev 765 first 0,0 linear 3fdefc00 afbc 3ffef400
+RESULT dump /root/afbcwb/real-hevc8/dump/f000.{linear,afbc}.cap XR30 1024x768 packed
+RESULT fb 86 format YU08 modifier 0x0800000000000061 planes 1 pitch 0 size 13057056 3840x2160
+RESULT frame 1 cap_md5 740bd227acbe224ff2757a85fa6da52d repeat same fbd_ctl 0xff000015 fence_ms 33.4 22.0
+RESULT frame 1 vs_linear mismatches 694719 max_dev 717 first 0,0 linear 3fdefc00 afbc 3ffef400
+RESULT dump /root/afbcwb/real-hevc8/dump/f001.{linear,afbc}.cap XR30 1024x768 packed
+RESULT fb 87 format YU08 modifier 0x0800000000000061 planes 1 pitch 0 size 13057056 3840x2160
+RESULT frame 2 cap_md5 22643966906a1c053b1be19a6e704536 repeat same fbd_ctl 0xff000015 fence_ms 33.2 19.8
+RESULT frame 2 ref_missing
+RESULT fb 88 format YU08 modifier 0x0800000000000061 planes 1 pitch 0 size 13057056 3840x2160
+RESULT frame 3 cap_md5 cfd6dae154114c78059a37fe2865ef1c repeat same fbd_ctl 0xff000015 fence_ms 33.4 33.0
+RESULT frame 3 vs_linear mismatches 694281 max_dev 733 first 0,0 linear 3fdefc00 afbc 3ffef400
+RESULT fb 89 format YU08 modifier 0x0800000000000061 planes 1 pitch 0 size 13057056 3840x2160
+RESULT frame 4 cap_md5 cbe9bd73f9d3dacd4f61b25f58c7e4a9 repeat same fbd_ctl 0xff000015 fence_ms 33.2 21.2
+RESULT frame 4 vs_linear mismatches 711749 max_dev 790 first 0,0 linear 3fdefc00 afbc 3ffef400
+RESULT fb 90 format YU08 modifier 0x0800000000000061 planes 1 pitch 0 size 13057056 3840x2160
+RESULT frame 5 cap_md5 8ee6a4cae2544fd4f082a8c439f6c571 repeat same fbd_ctl 0xff000015 fence_ms 33.3 19.3
+RESULT frame 5 vs_linear mismatches 696540 max_dev 817 first 0,0 linear 3fdefc00 afbc 3ffef400
+RESULT frame 6 cap_md5 f5eca41f29c0b7e5d60bd457c79e5662 repeat same fbd_ctl 0xff000015 fence_ms 33.1 22.6
+RESULT frame 6 ref_missing
+RESULT frame 7 cap_md5 df467e87641d457a9e98de60ed787908 repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.7
+RESULT frame 7 vs_linear mismatches 698497 max_dev 760 first 0,0 linear 3fdefc00 afbc 3ffef400
+RESULT frame 8 cap_md5 62ad040b3a59b2b94200dba48cb6588d repeat same fbd_ctl 0xff000015 fence_ms 33.2 22.7
+RESULT frame 8 ref_missing
+RESULT frame 9 cap_md5 a62b2e0ce250d7f4736d49e1e365fdb6 repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.8
+RESULT frame 9 vs_linear mismatches 696979 max_dev 1023 first 0,0 linear 3fff1000 afbc 3fff0800
+RESULT frame 10 cap_md5 8ad048fa98108434d6c34e56f5d632dc repeat same fbd_ctl 0xff000015 fence_ms 33.2 22.8
+RESULT frame 10 vs_linear mismatches 704100 max_dev 1023 first 0,0 linear 3fff1000 afbc 3fdefc00
+RESULT frame 11 cap_md5 9022fde21f8851c5dde05dfcd10b6ec3 repeat same fbd_ctl 0xff000015 fence_ms 33.2 22.6
+RESULT frame 11 vs_linear mismatches 696740 max_dev 1023 first 0,0 linear 3fff1000 afbc 3ffef400
+RESULT summary pass afbc frames 12 wb_errors 0 repeat_differ 0 wrong_buffer_kind 0 fbd_state_wrong 0 fbd_readable 1 fence_ms_mean 28.4
+RESULT compare frames 9 exact 0 mismatches 6304163 max_dev 1023 ref_missing 3
+RESULT verdict pass_checks_failed
+RC 1

@@ -1,0 +1,68 @@
+[AVHWFramesContext @ 0xaaaad4340c00] Using V4L2 media driver cedrus (7.3.1) for S265
+RESULT writeback_connector 77
+RESULT mode 1024x768 total 1344x806 clock 65000
+RESULT crtc 52 plane 35 primary 42 afbc8 1 afbc10 1 nv12 1 p010 1
+RESULT wb_formats XR24 AR24 XB24 AB24 RX24 RA24 BX24 BA24 RG24 BG24 XR30 NV12 NV21 YU12
+RESULT stream /root/afbcwb/streams/syn-hevc8.mkv hevc 1024x768 (null) pixfmt AS12 wb XR30 crop 0,0 tile 64 band 10
+RESULT fb 86 format YU08 modifier 0x0800000000000061 planes 1 pitch 0 size 1255456 1024x768
+RESULT frame 0 cap_md5 060faebf6a34e80beb56855eaa446d07 repeat same fbd_ctl 0xff000015 fence_ms 33.0 19.4
+RESULT frame 0 vs_linear mismatches 765657 max_dev 1023 interior_pixels 371712 interior_mismatches 360924 interior_max_dev 275 first 61,0 linear 03bda804 afbc 039da415 first_interior 10,10
+RESULT dump /root/afbcwb/syn-hevc8/dump/f000.{linear,afbc}.cap XR30 1024x768 packed
+RESULT fb 83 format YU08 modifier 0x0800000000000061 planes 1 pitch 0 size 1255456 1024x768
+RESULT frame 1 cap_md5 3cb7e3589fb0e8ea6a339d7deebdf360 repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.6
+RESULT frame 1 vs_linear mismatches 763503 max_dev 1023 interior_pixels 371712 interior_mismatches 359913 interior_max_dev 275 first 61,0 linear 000d6a99 afbc 000d5e91 first_interior 10,10
+RESULT dump /root/afbcwb/syn-hevc8/dump/f001.{linear,afbc}.cap XR30 1024x768 packed
+RESULT fb 87 format YU08 modifier 0x0800000000000061 planes 1 pitch 0 size 1255456 1024x768
+RESULT frame 2 cap_md5 97610afa3db576187f76b8d0df40d9d2 repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.7
+RESULT frame 2 vs_linear mismatches 765603 max_dev 1023 interior_pixels 371712 interior_mismatches 360856 interior_max_dev 275 first 61,0 linear 0a8a03ff afbc 0b19f7ff first_interior 11,10
+RESULT fb 88 format YU08 modifier 0x0800000000000061 planes 1 pitch 0 size 1255456 1024x768
+RESULT frame 3 cap_md5 674dc99f0b4594d164efcecf0465f394 repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.6
+RESULT frame 3 vs_linear mismatches 765150 max_dev 1023 interior_pixels 371712 interior_mismatches 360667 interior_max_dev 275 first 61,0 linear 207aada2 afbc 20baa5a6 first_interior 10,10
+RESULT fb 89 format YU08 modifier 0x0800000000000061 planes 1 pitch 0 size 1255456 1024x768
+RESULT frame 4 cap_md5 27c037f3ecfd8ab450de2225619d0b8c repeat same fbd_ctl 0xff000015 fence_ms 33.4 22.1
+RESULT frame 4 vs_linear mismatches 766220 max_dev 1023 interior_pixels 371712 interior_mismatches 360958 interior_max_dev 275 first 61,0 linear 1ea8cb9e afbc 1e38d39e first_interior 10,10
+RESULT fb 90 format YU08 modifier 0x0800000000000061 planes 1 pitch 0 size 1255456 1024x768
+RESULT frame 5 cap_md5 80180155bfcada00c74b2e7e189abf0c repeat same fbd_ctl 0xff000015 fence_ms 33.3 20.4
+RESULT frame 5 vs_linear mismatches 766629 max_dev 1023 interior_pixels 371712 interior_mismatches 361021 interior_max_dev 275 first 61,0 linear 146aebff afbc 146ae7ff first_interior 10,10
+RESULT frame 6 cap_md5 bf8721d0169ce186cdc74746c98803b2 repeat same fbd_ctl 0xff000015 fence_ms 33.2 22.4
+RESULT frame 6 vs_linear mismatches 766920 max_dev 1023 interior_pixels 371712 interior_mismatches 361052 interior_max_dev 275 first 61,0 linear 000f6c96 afbc 000f7092 first_interior 10,10
+RESULT frame 7 cap_md5 dc1491aba3bc967c8d319f4332df82e2 repeat same fbd_ctl 0xff000015 fence_ms 33.3 19.3
+RESULT frame 7 vs_linear mismatches 766875 max_dev 1023 interior_pixels 371712 interior_mismatches 360440 interior_max_dev 275 first 61,0 linear 32db5ed8 afbc 32db56e5 first_interior 10,10
+RESULT frame 8 cap_md5 948b26eea283469a18a7f77e984dcef2 repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.2
+RESULT frame 8 vs_linear mismatches 766337 max_dev 1023 interior_pixels 371712 interior_mismatches 359824 interior_max_dev 275 first 61,0 linear 3ff85bfc afbc 3ff863ff first_interior 10,10
+RESULT frame 9 cap_md5 e70583b1c0f1f38f80e8e0f40420f41e repeat same fbd_ctl 0xff000015 fence_ms 33.3 20.4
+RESULT frame 9 vs_linear mismatches 767614 max_dev 1023 interior_pixels 371712 interior_mismatches 360106 interior_max_dev 279 first 61,0 linear 233d569a afbc 22fd5a98 first_interior 10,10
+RESULT frame 10 cap_md5 1823317cbe36eb06f91f3440effe53d6 repeat same fbd_ctl 0xff000015 fence_ms 33.5 20.9
+RESULT frame 10 vs_linear mismatches 766966 max_dev 1023 interior_pixels 371712 interior_mismatches 359472 interior_max_dev 279 first 61,0 linear 2a0d9041 afbc 2a5d8847 first_interior 10,10
+RESULT frame 11 cap_md5 f31762c388adf3a2bd56c201c57db0e1 repeat same fbd_ctl 0xff000015 fence_ms 33.3 19.9
+RESULT frame 11 vs_linear mismatches 766985 max_dev 1023 interior_pixels 371712 interior_mismatches 360069 interior_max_dev 280 first 61,0 linear 3ffab243 afbc 3ffab245 first_interior 10,10
+RESULT frame 12 cap_md5 5f675407605b3e7c255e7b60e9301efc repeat same fbd_ctl 0xff000015 fence_ms 33.4 22.4
+RESULT frame 12 vs_linear mismatches 766565 max_dev 1023 interior_pixels 371712 interior_mismatches 360475 interior_max_dev 280 first 61,0 linear 1c2de47a afbc 1c4de475 first_interior 10,10
+RESULT frame 13 cap_md5 b3a45753bb97d1ddc37441a510d57497 repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.2
+RESULT frame 13 vs_linear mismatches 766449 max_dev 1023 interior_pixels 371712 interior_mismatches 360824 interior_max_dev 280 first 61,0 linear 3ffb2841 afbc 3ffb1c52 first_interior 10,10
+RESULT frame 14 cap_md5 4225700728110b08ddc5afd39507b4b8 repeat same fbd_ctl 0xff000015 fence_ms 33.1 22.1
+RESULT frame 14 vs_linear mismatches 765668 max_dev 1023 interior_pixels 371712 interior_mismatches 360985 interior_max_dev 280 first 61,0 linear 271aa3ff afbc 27aa9bff first_interior 10,10
+RESULT frame 15 cap_md5 979003ac854c3723a2afcc8a4d457ae2 repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.6
+RESULT frame 15 vs_linear mismatches 765731 max_dev 1023 interior_pixels 371712 interior_mismatches 361025 interior_max_dev 280 first 61,0 linear 1dbc7977 afbc 1d9c7d73 first_interior 10,10
+RESULT frame 16 cap_md5 f20e7d134b5a9265b79b9a55cf23074d repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.8
+RESULT frame 16 vs_linear mismatches 765897 max_dev 1023 interior_pixels 371712 interior_mismatches 361181 interior_max_dev 279 first 61,0 linear 0d59f800 afbc 0da9ec00 first_interior 10,10
+RESULT frame 17 cap_md5 dca1b7003fe3b915c315f94c9f70725c repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.7
+RESULT frame 17 vs_linear mismatches 765878 max_dev 1023 interior_pixels 371712 interior_mismatches 361239 interior_max_dev 280 first 61,0 linear 0eda5cd9 afbc 0f4a54d9 first_interior 10,10
+RESULT frame 18 cap_md5 251bd1cc81d3ec986042f38bd7083b7d repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.6
+RESULT frame 18 vs_linear mismatches 765265 max_dev 1023 interior_pixels 371712 interior_mismatches 360989 interior_max_dev 280 first 61,0 linear 3ff6ca8f afbc 3ff6e295 first_interior 10,10
+RESULT frame 19 cap_md5 269f008e83d1ab5786b728623352ab64 repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.6
+RESULT frame 19 vs_linear mismatches 765974 max_dev 1023 interior_pixels 371712 interior_mismatches 361205 interior_max_dev 280 first 61,0 linear 221a97ff afbc 22ca87ff first_interior 10,10
+RESULT frame 20 cap_md5 f1787b0305fa161f5bff6137d6132621 repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.7
+RESULT frame 20 vs_linear mismatches 766493 max_dev 1023 interior_pixels 371712 interior_mismatches 361250 interior_max_dev 279 first 61,0 linear 30e9a815 afbc 30b9a42a first_interior 10,10
+RESULT frame 21 cap_md5 b6287ec04b9604fab9166330b8ed5c69 repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.6
+RESULT frame 21 vs_linear mismatches 766753 max_dev 1023 interior_pixels 371712 interior_mismatches 361215 interior_max_dev 280 first 61,0 linear 2ec8d7ce afbc 2e78dbd2 first_interior 10,10
+RESULT frame 22 cap_md5 6c16bb9808a2467fddcb9658a7435c03 repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.7
+RESULT frame 22 vs_linear mismatches 767083 max_dev 1023 interior_pixels 371712 interior_mismatches 361166 interior_max_dev 280 first 61,0 linear 16da4a98 afbc 17ba369e first_interior 10,10
+RESULT frame 23 cap_md5 080e4c62fdacc6ad25492408576d6870 repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.7
+RESULT frame 23 vs_linear mismatches 767265 max_dev 1023 interior_pixels 371712 interior_mismatches 360691 interior_max_dev 280 first 61,0 linear 13c947e9 afbc 14b93be0 first_interior 10,10
+RESULT summary pass afbc frames 24 wb_errors 0 repeat_differ 0 wrong_buffer_kind 0 fbd_state_wrong 0 fbd_readable 1 fence_ms_mean 27.6
+RESULT compare frames 24 exact 0 mismatches 18389480 max_dev 1023 ref_missing 0
+RESULT interior frames 24 exact 0 mismatches 8657547 max_dev 280
+RESULT edge_dist_hist 1136485 1120079 1076701 1027427 990616 953777 910462 874353 838732 803301 768202 732643 697790 662026 626713 591017 555311 519223 483161 447126 411016 375263 339472 303610 267948 232370 196780 161083 125432 89592 53802 17967 0
+RESULT verdict pass_ok
+RC 0

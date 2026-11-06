@@ -102,10 +102,11 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
    changes to either tree until the user approves.
 5. Vulkan dEQP: setup FIXED 2026-11-05 (a399a9f; impl-gpu-spec.md 4c): deqp-vk was built from the GLES CTS tag; now
    vulkan-cts-1.4.6.2 + Mesa CI backports (harness/analysis/gpu/build-deqp-vk.sh). API 1.0: subset 3332 pass / 5 fail /
-   0 crash, vk-main 1/100 6345 / 3 / 7. Open, real G31 bugs (not in Mesa's G52 lists): subgroup ops fault the GPU
-   (INSTR_INVALID_ENC; smallest repro dEQP-VK.subgroups.basic.compute.subgroupelect; suspect pan_subgroup_size()
-   assumes 8-wide on all v7, G31 may be 4) and 7 spirv_assembly small-int fragment hangs. Vulkan 1.1 needs: those
-   fixes, Mesa ba09d293e54 (version gate), PAN_I_WANT_A_BROKEN_VULKAN_DRIVER handling (user's call), full vk-main
+   0 crash, vk-main 1/100 6345 / 3 / 7. G31 subgroup INSTR_INVALID_ENC FIXED 2026-11-06 (job 52 ALL PASS on c38):
+   G31 cannot execute WMASK -> Mesa fork ab1caa7378f (ballot from 4 CLPER_OLD reads) + b7a705442bd; OpenCL CL_A
+   UNORM_INT8 1Dbuffer fault -> 0e274280595 (A8 texel buffers unsupported). subset REGRESSIONS 0, FIXED 16; 0 GPU faults.
+   The 7 spirv_assembly frag "hangs" were the 500 ms watchdog (kernel soft-stop series, in image). Vulkan 1.1 needs:
+   the fork fixes in the image, Mesa ba09d293e54 (version gate), PAN_I_WANT_A_BROKEN_VULKAN_DRIVER handling (user's call), full vk-main
    at 1.1 (~14 h). With the OpenCL compiler work (item 3).
 6. Desktop image variant (user: "ffmpeg goes into the desktop one"): OPIZ2_VARIANT=desktop (BUILD_DESKTOP=yes) in the
    shared config + build-all.sh; ship the v4l2-request FFmpeg (Jernej/Kwiboo fork + our drafts in

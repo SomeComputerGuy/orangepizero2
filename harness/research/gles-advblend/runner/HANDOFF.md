@@ -7,7 +7,7 @@ Purpose: validate the fork fix for KHR-GLES31.core.blend_equation_advanced.test_
 as opaque (v6/v7)") with the KHR blend_equation_advanced group, a minimal repro program, and a GLES 3.1 / GLES 3
 regression subset. Analysis: harness/research/gles-advblend/RESULTS.md. The build is already done (mesa-work/build-cl,
 cross, ccache); the script deploys it to the board as `/root/opiz2-mesa/gl1` (rsync of a stripped staging copy; the
-system Mesa and `/root/opiz2-mesa/cl*` are not touched) and checks the md5 of lib/dri/libgallium-26.2.4.so.
+system Mesa and `/root/opiz2-mesa/cl*` are not touched) and checks the md5 of lib/libgallium-26.2.4.so (meson installs it next to the other libs, not under dri/).
 
 Precondition: the board answers ssh and has the GLES CTS at /root/cts/deqp-gles (glcts/glcts, gles31/deqp-gles31,
 gles3/deqp-gles3, deqp-run.py; it does) and /root/cts/lib. Any booted kernel (newest cumulative or stock; the job does

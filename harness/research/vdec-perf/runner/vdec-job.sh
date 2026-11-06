@@ -1,15 +1,16 @@
 #!/bin/bash
 # Runner package for the vdec board jobs: vdec-job.sh <t1f9|afbc|soak3|t1fix|avs2q>
-# Self-contained: board lock (fresh owner name per acquire), install the cumulative kernel (c9 for the first three jobs,
-# the newest one for t1fix, which must contain fix/sunxi-avs2-poc-base fa73c3e5e) with the vdec fallback armed,
+# Self-contained: board lock (fresh owner name per acquire), install the newest cumulative kernel (all jobs; for t1fix it must contain fix/sunxi-avs2-poc-base fa73c3e5e) with the vdec fallback armed,
 # run the job's board script in chunks of at most ~15 min under a stall watchdog, copy the results off after every chunk,
 # restore the stock image kernel (vmlinuz-7.3.1-edge-sunxi64), release. Between chunks the lock is handed over (stock
 # kernel restored first) if another session waits. Resumable: re-running the same command skips chunks listed in
 # $OUT/state. Exit 0 = all chunks ran (pass/fail is judged from the results, see HANDOFF.md); 2 = blocked (reason in
 # $OUT/BLOCKED); 1 = setup error.
 set -u
-H=/home/aruni/orangepizero2; S=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh; J=${1:?job: t1f9|afbc|soak3|t1fix|avs2q}; T=c9
-CK=$H/kernel-check/cumulative-kernels.txt; FIX=fa73c3e5e80f5af2c77158bfa8d783ef6218a163
+H=/home/aruni/orangepizero2; S=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh; J=${1:?job: t1f9|afbc|soak3|t1fix|avs2q}
+# install-kernel.sh always installs the NEWEST cumulative tag for any c<N> (AGENT-RULES "Builds"), so the md5 check
+# must use that tag too (job 02 was blocked: it compared against the old c9 Image)
+CK=$H/kernel-check/cumulative-kernels.txt; T=$(tail -1 $CK | cut -d' ' -f1); FIX=fa73c3e5e80f5af2c77158bfa8d783ef6218a163
 K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
 OUT=$S/logs/runner-$J; mkdir -p $OUT; touch $OUT/state; rm -f $OUT/BLOCKED
 case $J in

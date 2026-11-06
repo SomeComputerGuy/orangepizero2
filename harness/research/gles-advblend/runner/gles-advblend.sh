@@ -49,8 +49,8 @@ setup() { # deploy the fork to /root/opiz2-mesa/gl1, the repro binary and the ca
   $SSH -n true || blocked "board does not answer ssh"
   $SSH -n 'uname -v' | sed 's/^/kernel: /' | tee -a $OUT/runner.log
   MESA_ENV=$MW/tools/env-cl.sh $MW/tools/deploy.sh build-cl gl1 2>&1 | tail -2 | tee -a $OUT/runner.log
-  want=$(md5sum < $MW/deploy/gl1/lib/dri/libgallium-26.2.4.so | cut -c1-32)
-  have=$($SSH -n 'md5sum < /root/opiz2-mesa/gl1/lib/dri/libgallium-26.2.4.so | cut -c1-32')
+  want=$(md5sum < $MW/deploy/gl1/lib/libgallium-26.2.4.so | cut -c1-32)
+  have=$($SSH -n 'md5sum < /root/opiz2-mesa/gl1/lib/libgallium-26.2.4.so | cut -c1-32')
   [ -n "$want" ] && [ "$want" = "$have" ] && log "deployed gl1 ok (libgallium md5 $have)" || blocked "gl1 deploy mismatch (host $want board $have)"
   $SSH -n "test -f /root/opiz2-mesa/gl1/env.sh && test -x $D/glcts/glcts && test -x $D/gles31/deqp-gles31 && test -x $D/gles3/deqp-gles3 && test -f $D/deqp-run.py && mkdir -p $R/caselists" || blocked "gl1 env.sh or the GLES CTS is missing on the board"
   scp -q "${K[@]}" $S/host/advblend-arm64 root@10.56.0.107:$R/advblend || blocked "cannot copy advblend to the board"

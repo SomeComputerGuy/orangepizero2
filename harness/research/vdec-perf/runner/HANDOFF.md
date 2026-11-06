@@ -1,8 +1,9 @@
 # vdec runner jobs (t1f9, afbc, soak3, t1fix): handoff
 
 One script runs all four: `harness/research/vdec-perf/runner/vdec-job.sh <job>`. It handles the board lock (a fresh
-owner `runner-<job>-<epoch>` per acquire), installs the cumulative kernel (**c9**, test-cumulative aa6e29312, Image md5
-c210a5b247cacdf366b38062385d3a3f, for t1f9/afbc/soak3; the **newest** cumulative kernel for t1fix, see below; all from
+owner `runner-<job>-<epoch>` per acquire), installs the **newest** cumulative kernel (last line of
+kernel-check/cumulative-kernels.txt, c38 or later on 2026-11-06; for every job, since install-kernel.sh always installs
+the newest tag; the Image md5 check uses that tag; t1fix additionally needs fa73c3e5e, see below; all from
 kernel-check/vdec-serve) with the vdec fallback armed, runs chunks of 15 min or
 less under a stall watchdog, copies the results off after every chunk, restores the stock kernel
 vmlinuz-7.3.1-edge-sunxi64 and releases the lock. It hands the lock over between chunks if another session is waiting.

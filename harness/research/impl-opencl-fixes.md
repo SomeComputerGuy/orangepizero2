@@ -22,6 +22,7 @@ gles31-khr-main 1 Fail (`mixedSequence`).
 | 45a7a7147d5, c6e6e63990b | drm-shim: GET_PARAMs for the kmod layer; signalled sync file for SYNCOBJ_HANDLE_TO_FD (host tooling only, not shipped) | ours (Generated-by: LLM) |
 | ec376a8ee7e | nir/lower_cl_images: record buffer textures in texture_buffers (Bifrost texel-buffer attributes for read_image(image1d_buffer_t)) | ours (Generated-by: LLM) |
 | a0a4534b14d | rusticl/mem: fix the whole-slice fast path of sw_copy and the rect copies (clEnqueueMapImage 3D etc.) | ours (Generated-by: LLM) |
+| 02df5721016 | pan/layout: leave a cache line of slack after 24/96-bit images (CL_RGB page faults; board A/B = job 46) | ours (Generated-by: LLM) |
 
 **Kernel** `fix/sunxi-panfrost-softstop-resume` (armbian-build fork, worktree `wt-panfrost-softstop`, commit e544ddb00,
 patch `patches.armbian/drm-panfrost-resume-a-still-active-job-after-a-timeout-instead-of-resetting.patch`): on the 500 ms
@@ -327,6 +328,56 @@ reg (19/19), no Oops, no `Soft-stop failed`. Open items:
   Fixed in ocl-job.sh (tdim uses the four 2D/3D names; job img3d has tdim2/tdim3 chunks).
 - **math-a / math-b**: FAILED 32/54 and 19/34 with stale-buffer lines and TIMEDOUT 0 = the rusticl multi-queue race of
   section 7 again (no kernel involvement); unchanged, left as is.
+
+### Job 45 / job 09 RGB faults and tdim (2026-11-06, agent opencl-rgb)
+
+Inputs: done/45-panfrost-img3d.summary.md (c38, fork /root/opiz2-mesa/cl = 9049a3c5f2c), done/09-opencl-mesa2.summary.md
+(stock #17, cl2 = dc7266d584b), logs runner-img3d/ and runner-mesa2/.
+- **Job 45**: the 8 image chunks (RGB32I x4, RGB32UI x2, RGB32F, RGBA32I) PASS with F = 0: the job-28 fault did not
+  reproduce (intermittent).
+- **Job 09 f2d-r2da** (no diagnostics kernel): `Unhandled Page fault in AS0 at VA 0x000000000A016000` x2 + JOB_BUS_FAULT
+  js=1. From the dmesg timestamps (sl chunk's INSTR_INVALID_ENC at 181.8 s fixes boot at 12:03:28-12:05:12) the faults
+  fall in the first ~70 s of f2d-r2da (started 12:39:28), i.e. the CL_RGB section, not the INTENSITY subtest where the
+  chunk was cut. The 4 FAILED subtests are the CL_RGB SNORM/UNORM_INT8 2Darray UNNORMALIZED reads. Correction to the
+  earlier "one lost 16-byte result" reading: the CTS reports only the FIRST mismatching sample, so a job killed in the
+  middle (first lost sample 1548-2632 of 9408) fits exactly.
+- **Over-fetch hypothesis (not proven on the hardware yet)**: both faulting VAs are page aligned; both faulting images
+  have data that ends exactly on a page boundary (21x32x14 RGB8: row 64, layer 2048, 28672 B; 25x128x32 RGB32I: row
+  320, slice 40960, 0x140000 B) with the last texel in the last 64 B cache line; the integer-coordinate tests clamp
+  random out-of-range coordinates to the edge, so the last texel is read often; RGBA and the other formats never fault.
+  A texture-unit read of the cache line after a 24/96-bit texel faults at exactly BO end (page aligned) when the
+  kernel's best-fit VA allocator left a hole there, and is harmless when the next BO is adjacent: intermittent. Mesa
+  sizes the BO as ALIGN(array_stride * layers, 4096) with no slack (pan_layout.c), the format table marks RGB8/RGB32 as
+  texturable while RGB8UI/RGB16 are not; no code or blob trace says anything about over-fetch (the kbase traces have
+  no RGB textures).
+- **Fix in the fork**: 02df5721016 "pan/layout: leave a cache line of slack after 24/96-bit images" (non-power-of-two
+  block size, not compressed, non-explicit layouts only: +64 B before the page round-up; costs one page only when the
+  data ends on a page boundary; applies to gallium and panvk). build-cl rebuilt.
+- **Deterministic repro**: runner/board/t_rgbedge.py (+ hostclk.py, the ICD-dispatch runner, works on the board too):
+  6 MiB linear RGB8 2Darray / RGB32I 3D images (rows exactly 3072 B, data = 3 x 2 MiB, so the noexec >= 2 MiB alignment
+  leaves no hole that a later small BO would prefer right after it), allocated last after a warm-up, 64 work-items reading
+  the last texel (sampled, clamped out-of-range, sampler-less); RGBA controls and the two CTS sizes. Checked on the
+  host shim (runs, nothing executes there).
+- **tdim2 FAIL** (job 45): one `gpu sched timeout, js=1, ..., status=0x0, head=tail=0xa0501c0` among 102 soft-stops:
+  the slot was idle with the job's fence unsignalled (status 0 = not active), so the timeout handler took the reset
+  path and e17629bba then fails the (earlier soft-stopped) job -> quick_2d_explicit_local FAILED. That is a lost job in
+  the kernel soft-stop/resume path (or a lost DONE interrupt), rare (job 28 passed the same test with 101 soft-stops). Not
+  found by reading panfrost_job.c (hw_submit skips the START while reset.pending, but those jobs are resubmitted; the
+  _NEXT NOP/soft-stop ordering looks right). Needs the job/fence trace.
+- **tdim3 TIMEDOUT 1201 in 800 s** with no error line: the slot was ACTIVE at every watchdog tick (otherwise the 'gpu
+  sched timeout' line would show) = jobs kept running; whether they progress (slow) or one job never ends (shader hang)
+  is not decidable from the counts.
+- **Runner job 46-rgb-tdim** (`ocl-job.sh rgbtdim`, HANDOFF-rgbtdim.md, results logs/runner-rgbtdim/): edge repro A
+  (cl2) / B (cl3 = 02df5721016) x2, CTS 2Darray RGB8 A/B x2, 3D RGB32I on B, then tdim 2D x3 and 3D explicit/implicit
+  (1800 s each) with gpu_scheduler drm_sched_job_run/done events + panfrost_job_timedout streamed to a file and a PROG
+  line per minute; full CTS logs kept. Next agent: RGB-OVERFETCH CONFIRMED + RGB-FIX PASS -> done (keep the fork commit,
+  note for shipping); NOT REPRODUCED -> read the `fault bo:` lines of any CTS fault (end+0x0 of the texture BO still
+  supports the fix; inside/far from a BO -> different cause). tdim: PROG done count rising = slow (re-chunk tdim3 with a
+  longer slot); flat done with TIMEDOUT rising = one never-ending job (dump that job: Mesa shader); a lost job = a
+  drm_sched_job_run without drm_sched_job_done before the `gpu sched timeout` line in tdim-trace.txt.gz -> kernel fix
+  in panfrost_job.c (soft-stop/resume path).
+- Out of scope, open for the next agent: the INSTR_INVALID_ENC js faults (job 14 subgroup cases d2-ballot, d3-elect,
+  d7-vote, d8-cts-elect; job 09 samplerless float 1Dbuffer, CL_A UNORM_INT8 1Dbuffer, 1 of 235).
 
 ## Full rerun on the fork (commit 9049a3c5f2c): PAUSED 2026-11-05 ~18:33 (user credit limit)
 

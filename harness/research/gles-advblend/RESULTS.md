@@ -62,3 +62,8 @@ required). Results: logs/runner/.
   If a knob run passes while fork-mixed fails, that knob's descriptor is not the culprit; drop nothing without data.
 - Job 09 (opencl-mesa2) deploys the same build-cl as cl2; it now also contains this commit (GL-only change).
 - Shipping needs the Ubuntu deb rebuild (user, root).
+
+2026-11-06 (agent opencl-rgb): job 15 was BLOCKED by a package bug (deploy check looked for
+lib/dri/libgallium-26.2.4.so; meson installs it as lib/libgallium-26.2.4.so). Fixed in runner/gles-advblend.sh,
+requeued as harness/runner-queue/48-gles-advblend.md (the build now also carries 02df5721016, the 24/96-bit image
+padding; no effect on the blend cases).

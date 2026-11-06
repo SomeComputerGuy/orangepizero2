@@ -147,22 +147,18 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
      rkvdec. Findings sent to the OPi5 session 2026-11-05. Open: AI trailer form (coding-assistants.rst).
 
 ### Code queue (next fresh agent when a slot frees, in order)
-- Runner results to analyse (2026-11-05 evening, harness/runner-queue/done/):
-  - 04-vp9-vectors: every vector ER, chunk c3 produced nothing. Package or env problem first (fluster bundle / plugin load), then rerun.
-  - 05-gst-jpeg-gaps: z4096x4096 not refused although the kernel has ENUM_FRAMESIZES (KSIZES=1).
-  - 06-gst-jpeg-oddsize: z33x17-422 and z15x15-444 c-ref FAIL, mj-z33x17 PSNR FAIL, norank dmesg +1055, check 1 found no v4l2sljpegdec in inspect.txt.
-- MPEG-1 MG1S coded format (OPi5 final: ~/orangepi5/work/_out/mpeg1-rk3588/UAPI-MPEG1-FOURCC.md, copy byte-for-byte; 0x5331474d,
-  after MPEG2_SLICE; flag iff MG1S, reject the flags with MG2S). Cedrus series + shared FFmpeg 0304. Notes from the paused desktop
-  agent: cedrus_video.c format table and switches, cedrus_dec.c:52, cedrus_hw.c:51, cedrus_mpeg2.c:79, v4l2-ioctl.c:1511.
-  D-pictures (OPi5 final, Addendum A of the same file): the hwaccel probes VIDIOC_TRY_EXT_CTRLS with picture coding type D at init;
-  cedrus must accept it, and the rejection also applies to TRY_EXT_CTRLS. Shared FFmpeg 0309 is in ffmpeg-shared branch final
-  b187e9c1e8, plus a kernel doc note (D optional). Take both byte-for-byte.
-- IOMMU faults at 0xfff00000 (master -1, c9, ~17:58, unidentified session): project-vdec.md.
-- AVS2 FFmpeg depth-2 queueing patch (aq1: gaps 151 -> 1, md5 PASS): landed as patches/ffmpeg 0313 + deb REV 4 (2026-11-05);
-  OPi5 adopts it from harness/research/ffmpeg-shared/HANDOFF-avs2-queue.md; board re-check = runner job 12-avs2-queue.
-- VP9 inter-frame upsize (svc_1280x720_3): REMOVE_BUFS + S_FMT while streaming (harness/vp9-vectors/RESULTS.md §5).
-- Vulkan subgroupelect hang: recheck on c13 (panfrost timeout fix), then root-cause.
-- GLES blend_equation_advanced mixedSequence (coherent); kbase insmod on c13+ (session2.sh) then GLES 3.2 traces.
+- Board PASS (harness/runner-queue/done/): 07 AVS2 test1 (c15 POC fix, 2096/2096 frames), 13 VP9 upsize (c17, 52/52),
+  17 IOMMU prefetch faults (c18: 0 new faults; stock scanout trigger did not fire, decode 214 faults on stock).
+- Runner failures to analyse (one fresh agent, all look like test or package problems first):
+  - 11-gst-jpeg-recheck: INSPECT tag FAIL(name) although KSIZES=1 and the sink range are right; norank case expected
+    v4l2jpegdec but autoplug picked v4l2sljpegdec (likely the expectation is wrong after 0104-0107).
+  - 12-avs2-queue: 4 'download failed' (stream fetch), md5 10 PASS / 4 FAIL (need 18): separate fetch failures from real md5 fails.
+  - 12-gst-mpeg1: check 1 (stock kernel, no MG1S: software fallback picked nothing, rc=1) and check 9 (dmesg match too broad?).
+  - 19-datasheet-w (ran on c19, before the ahub-dam overlay merged in c20): W18 no ahubdam card (rerun on c20+), W6 armhf
+    busybox `uname -m` = aarch64 (expected without linux32 personality: check is wrong), W31 autoneg restore read before link-up.
+- Merged, waiting for board: c19 panfrost oops fix (job 18; then release held 08/09/14/15), c21 DE33 vblank latch (job 19-display-tearing).
+- Open coding: SPI/I2C target mode (W33, agent running), DE33 writeback connector (W23, agent running).
+- Next items: stateful v4l2jpegdec hang (after job 11 gstdebug), remaining M/L datasheet items (W22 encoder SPEC, W26, W12, W24, W29, W25 G2D).
 
 ### C. Needs hardware from the user
 10. HDMI display (HDMI 4K60, HDMI audio, CEC, AFBC 4K60 output), TV (CVBS), 13-pin expansion board (IR, line-out,

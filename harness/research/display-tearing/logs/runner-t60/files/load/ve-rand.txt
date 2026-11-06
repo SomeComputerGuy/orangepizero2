@@ -1,0 +1,41 @@
+RESULT selftest pure step 1 verdict OK want OK boundary -1 bad_rows 0
+RESULT selftest pure step 32 verdict OK want OK boundary -1 bad_rows 0
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT writeback_cap 1
+RESULT writeback_connectors 1
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT wb_encoder id=76 possible_crtcs=0x3 possible_clones=0x3
+RESULT wb_reaches_crtc 1
+RESULT crtc 52 plane 42 wb_connector 77
+RESULT wb_props crtc=21 fb=78 fence=80
+RESULT wb_formats XR24 AR24 XB24 AB24 RX24 RA24 BX24 BA24 RG24 BG24 XR30 NV12 NV21 YU12
+RESULT wb_format_offered 1
+RESULT flip 17 WRONG tag_top 18 tag_bottom 18 ntags 1 boundary_row -1 bad_rows 0 first_bad_row -1 first_bad_px 000000 expect 17
+RESULT dump /root/tearwb/load/dump/ve-rand/tear-WRONG-17.raw XR24 1024x768 pitch 4096
+RESULT flip 18 fence_error status=-5
+RESULT flip 338 WRONG tag_top 83 tag_bottom 83 ntags 1 boundary_row -1 bad_rows 0 first_bad_row -1 first_bad_px 000000 expect 82
+RESULT dump /root/tearwb/load/dump/ve-rand/tear-WRONG-338.raw XR24 1024x768 pitch 4096
+RESULT flip 339 fence_error status=-5
+RESULT tear flips 600 frames_checked 598 ok 596 wrong 2 stale 0 early 2 mixed 0 bad 0 fence_errors 2
+RESULT event_order events_got 600 unheld 0 unflushed 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+RESULT flip_rate 46.258 seq_gaps 151
+RESULT seq_gap_max 15 first_gap_flip 8 frame_ms 16.666
+RESULT commit_phase mean_ms 13.133 max_ms 258.659 outside_blanking 597 of 599 blanking_ms 0.786
+RESULT commit_ioctl mean_ms 0.550 max_ms 1.965 n 600
+RESULT fence_wait mean_ms 0.109 max_ms 3.870 n 598
+RESULT check mean_ms 14.979 max_ms 24.810 n 598
+RESULT draw mean_ms 2.634 max_ms 4.478 n 596
+RC 1

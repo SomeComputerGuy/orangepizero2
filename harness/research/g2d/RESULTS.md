@@ -2,7 +2,13 @@
 
 State file of the task (datasheet item W25, docs/datasheet-checklist.md 2.5.3). Memory: project-g2d.md.
 
-## State (2026-11-06)
+## State (2026-11-06, after job 33)
+- **Now:** job 33 (c29) = probe/compliance PASS, every mixer job TIMEOUT (see "Job 33"). Follow-up patch 5 on
+  `fix/sunxi-h616-g2d-selftest` 3f6c487d3 (worktree wt-g2d, pushed to fork, merged (ff) into test-cumulative = **c31**):
+  BSP power-up order + both engines clocked + probe self-test. Runner job `harness/runner-queue/36-g2d.md` (c31+).
+  Next (fresh agent after job 36): read the two `selftest` dmesg lines, table in "What job 36 decides".
+- src/sun50i-g2d/* is now the state AFTER patch 5. Do not re-run src/mkpatches.py (it would fold patch 5 into patch 3);
+  further changes go into a new patch diffed against kernel-check/work-cumul (the post-series tree).
 - Kernel work: armbian-build branch `fix/sunxi-h616-g2d` (worktree `wt-g2d`, off `test-cumulative` eb446f8cb), pushed to
   `fork`, NOT merged (coordinator merges). Commit: see "Commits". Four patches in
   `patch/kernel/archive/sunxi-7.3/patches.media/h616-g2d/` (series.conf, end) and `CONFIG_VIDEO_SUN50I_G2D=m`:
@@ -130,3 +136,49 @@ YUV source and for every size change) -> blender pipe 0 in COPY mode, ROP pass-t
   on the PM-debug U-Boot, with rtcwake cycles at 04:44/04:45/05:08): its lines are not ours; the OOPS watch on that
   file can misfire.
 - Re-queued as harness/runner-queue/33-g2d.md. Next: a fresh agent judges job 33 with "What job 26 decides" above.
+
+## Job 33 (2026-11-06, c29): probe PASS, every mixer job TIMEOUT (kernel), plus two package count/parse bugs
+- Summary harness/runner-queue/done/33-g2d.summary.md, logs logs/runner-g2d/. PASS: bound, /dev/video2, iommu group,
+  300 MHz, boot_warnings 0, compliance 48/0, no IOMMU fault, no Oops. FAIL: 49/49 conversions `BUFERR` + no_output,
+  67x `job timed out, mixer status 00000000`, gst both no_output.
+- BUFERR = the client's DQBUF returned the buffers with V4L2_BUF_FLAG_ERROR: the 500 ms watchdog completes a job the
+  mixer never finished with VB2_BUF_STATE_ERROR. compliance -s (1280) buf.check(q,last_seq) / (1735) captureBufs x6 is
+  the same thing seen by v4l2-compliance (its streaming loop gets ERROR buffers). Not separate bugs.
+- The decisive value: at the timeout MIXER_INT reads 00000000. The driver wrote 0x10 (FINISH_EN) into it right before
+  the start bit, so even the enable bit did not stay: the mixer registers did not hold what was written and the engine
+  never ran (no finish flag, no interrupt, no DMA, hence no IOMMU fault). TOP responds (IP_VERSION 01010100 at probe),
+  so the bus clock, CCU reset (0x63c bit 16), MBUS gate (0x804 bit 10), the IRQ number (GIC 122 = SPI 90, manual) and the
+  IOMMU master (6) are not what fails. Register offsets/bits were re-checked against g2d_regs_v2.h/g2d_bsp_v2.c (the
+  sun50iw9 build of the BSP uses g2d_driver.c + g2d_bsp_v2.c, not g2d_rcq): MIXER 0x100 CTL bit31 / INT bit0 + en
+  bit4, V0 0x800, BLD 0x400 (CSC2 0x570), WB 0x3000, VSU 0x8000, ROT 0x28000: all identical.
+- Differences to the BSP that c31 removes: the BSP releases the reset before the clocks, writes 0x3 (mixer AND rotate)
+  into SCLK_GATE/HCLK_GATE/AHB_RESET in g2d_bsp_open(), pulses AHB_RESET 0 -> 0x3 (both engines) before every blit
+  (g2d_bsp_reset()), and sets the start bit by read-modify-write; the driver had gated/reset the mixer bit only.
+- Open hypothesis, decided by the c31 self-test: IP_VERSION 01010100 decoded with the field layout of the BSP's newer
+  RCQ header (g2d_top_type.h: gsu_no 1:0, vsu_no 3:2, rtmx_no 4, rot_no 8) says rtmx 0, vsu 0, rot 1, i.e. a
+  rotation-engine-only block; the H616 manual's G2D feature list (2.2.5.3 / 4.3) indeed names only formats, flip and
+  rotate (no scaling, no blending), while Allwinner's G2D guide lists H616 among the full-feature SoCs. If the mixer
+  is really absent the converter cannot exist on this SoC and W25 becomes rotate/flip through the ROT engine.
+- Package bugs (fixed): `formats_cap` counted from "Capture" to the end of formats.txt = Capture + Output (36; the file
+  has 18 + 18); now counted per `Type:` section. gst: the device parse printed the property blurb "Device", and the
+  generic `v4l2convert` element is the first m2m converter found (default device /dev/video3 on this kernel, not the
+  G2D): the package now lists the plugin's converter elements and uses the one whose default device is the G2D node
+  (gst-elements.txt, `element_name`). The gst `not-negotiated`/`can't handle caps` errors were that other device.
+- Kernel: patch 5 `media: sunxi: sun50i-g2d: clock both engines and self-test the hardware at probe`
+  (patches.media/h616-g2d/, series.conf after the DT patch), commit 3f6c487d3 on fix/sunxi-h616-g2d-selftest (off
+  test-cumulative 1d1c9e149), fast-forward merged = c31. W=1 clean, checkpatch clean. The self-test never fails the
+  probe; the timeout message now also prints CTL, TOP gates/reset, V0_ATTCTL, BLD_EN_CTL, WB_ATT and the IRQ count.
+
+## What job 36 decides (the two probe lines `selftest regs:` and `selftest: mixer ...`)
+- mixer_regs ok, mixer ok, conversions still failing -> a programming bug of the real job path (compare with the
+  self-test's sequence, which uses the same overlay/blender/write-back helpers); use "What job 26 decides".
+- mixer_regs ok, mixer ok, conversions pass -> the gating/reset order was the bug; go on with the W25 remainder.
+- mixer_regs bad, rot_regs ok, rot ok -> the mixer is not there (or fused off) on this H616: the IP capability bits
+  (rtmx 0 vsu 0) and the manual's feature list agree. Rework the driver into a ROT-engine m2m rotator/flipper (same
+  register layout as mainline sun8i-rotate: CTL 0x00 bit0 en / bits 4-5 angle / bit 6 vflip / bit 7 hflip / bit31
+  start, INT 0x04 bit0 flag / bit16 en), formats = what the ROT takes (same codes, no conversion), and record in the
+  datasheet checklist that H616 G2D has no colour conversion/scaling; ask the coordinator before dropping the converter.
+- mixer timeout/noirq with mixer_regs ok -> start bit or a missing enable (try MIXER_CTL bits / BLD_EN_CTL bit 0);
+  noirq = flag set but no interrupt: IRQ routing (DT interrupt) or the enable bit.
+- rot timeout too -> common cause (clock/reset/MBUS/IOMMU path): check the `top` values (expect 3/3/3).
+- baddata -> address/pitch or format code; out0 vs in0 in the line tells byte order.

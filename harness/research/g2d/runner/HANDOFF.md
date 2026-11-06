@@ -11,7 +11,8 @@ gradients + a sine) itself; the host generates the same pattern directly in each
 reference and compares the copied-back output channel by channel (tool/g2dcmp.py, numpy). All colour math is in the
 tool, none in the runner.
 
-Precondition (coordinator): merge `fix/sunxi-h616-g2d` into `test-cumulative`, build the next cumulative kernel and
+Kernel: c31 or later (fix/sunxi-h616-g2d-selftest 3f6c487d3 = FIX in the script, on top of fix/sunxi-h616-g2d 04964f921;
+the script BLOCKS on an older kernel). Precondition (coordinator): merge `fix/sunxi-h616-g2d` into `test-cumulative`, build the next cumulative kernel and
 serve it as kernel-check/vdec-serve/Image.<tag> + modules-<tag>.tgz (the kernel config gains
 `CONFIG_VIDEO_SUN50I_G2D=m`). The script installs the NEWEST cumulative tag (last line of
 kernel-check/cumulative-kernels.txt) via harness/research/vdec-perf/install-kernel.sh with the one-shot fallback armed;
@@ -56,7 +57,12 @@ and the last 10 lines of runner.log); 1 = setup or lock error.
 1. runner.log contains a `kernel: ` line, a `kernel dtb: ` line and `kernel g2d: bound`. Report all three.
 2. Probe: `g2d probe driver_lines` >= 1, `g2d probe iommu_group 1`, `g2d probe device /dev/videoN` (not `none`) ->
    PASS, else FAIL (report files/g2d/probe-dmesg.txt). Also report `g2d probe clk_rate` (expected 300000000),
-   `formats_out` and `formats_cap` (expected 18 each). If `device none`: every later check is FAIL (NO-DEVICE).
+   `formats_out` and `formats_cap` (expected 18 each; since job 36 each is counted inside its own `Type:` section, job
+   33's 36 was Capture + Output counted together). If `device none`: every later check is FAIL (NO-DEVICE).
+   Self-test (the driver's probe, since 3f6c487d3): `g2d probe selftest_mixer_regs`, `selftest_rot_regs`,
+   `selftest_mixer`, `selftest_rot`: each `ok` -> PASS, anything else (bad, timeout, noirq, baddata, empty) -> FAIL.
+   Always copy the two dmesg lines `selftest regs:` and `selftest: mixer` from files/g2d/probe-dmesg.txt exactly
+   into the summary (they carry the register values the next agent needs), pass or fail.
    `g2d probe boot_warnings 0` -> PASS, else FAIL (a kernel WARNING at boot; report the value and the first 40 lines
    of files/g2d/boot-warnings.txt, which holds every WARNING with its trace).
    `g2d probe cedrus_D_rc 0` -> PASS (the cedrus decoder's media topology answers; 124 or 137 = the c26/c27 hang is
@@ -70,8 +76,9 @@ and the last 10 lines of runner.log); 1 = setup or lock error.
    `max_dev`. `uvswap 1` on a failing YUV case means the output matches the reference with U and V swapped: report it
    as such (it is a plane-order bug, the next agent fixes a table entry). `alpha_min`/`alpha_max` (RGB outputs) are
    informational: report min and max once per case.
-5. GStreamer: `g2d gst element 1` and `g2d gst device` equal to `g2d gst device_expected` -> PASS (v4l2convert exists
-   and uses the G2D node), else FAIL (report files/g2d/gst-inspect.txt first 20 lines). `g2d gst-rgb2nv12 rc 0` +
+5. GStreamer: `g2d gst element 1` and `g2d gst device` equal to `g2d gst device_expected` -> PASS (a v4l2 converter
+   element whose default device is the G2D node exists: `g2d gst element_name`, e.g. v4l2video2convert; the
+   pipelines use it), else FAIL (report files/g2d/gst-elements.txt and files/g2d/gst-inspect.txt first 20 lines). `g2d gst-rgb2nv12 rc 0` +
    `pass 1`, `g2d gst-nv122rgb rc 0` + `pass 1` -> PASS, else FAIL with `max_dev`, `reason` and files/g2d/<case>.txt.
 6. dmesg: `g2d all dmesg_bad 0`, `g2d all iommu_faults 0`, `g2d all g2d_timeouts 0` -> PASS; else FAIL, copy the
    matching lines from files/g2d/dmesg-chunk.txt exactly. Report `g2d all g2d_dmesg_lines` and the `DMESG:` lines of

@@ -20,7 +20,7 @@ case $J in
 esac
 T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
 want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || exit 1
-FIX=04964f921                        # fix/sunxi-h616-g2d HEAD (armbian-build); the kernel must have it
+FIX=3f6c487d3                        # fix/sunxi-h616-g2d-selftest HEAD (armbian-build, on top of 04964f921): probe self-test (c31+)
 FIX_MC=c307dd053                     # fix/sunxi-h616-venc HEAD: cedrus media entities (+ series.conf entry). Before it (c26-c28) every
                                      # MEDIA_IOC_G_TOPOLOGY (v4l2-ctl -D on /dev/video0 or 1) spun forever: jobs 29/32 stalled on it (c29+)
 TOOL=$S/tool/out/g2dconv; HOSTTOOL=$S/tool/out/g2dconv-host; CMP=$S/tool/g2dcmp.py
@@ -149,13 +149,20 @@ dmesg | grep -i 'g2d' > probe-dmesg.txt; echo "driver_lines \$(grep -ci 'sun50i-
 echo "iommu_group \$(ls -d /sys/kernel/iommu_groups/*/devices/1480000.g2d 2>/dev/null | wc -l)" | tee -a probe.txt
 cat /sys/kernel/debug/clk/g2d/clk_rate 2>/dev/null | sed 's/^/clk_rate /' | tee -a probe.txt
 echo "boot_warnings \$(dmesg | grep -c 'WARNING:')" | tee -a probe.txt; dmesg | grep -B2 -A16 'WARNING:' > boot-warnings.txt
+# the driver's probe self-test (3f6c487d3): register read-back and one copy through the mixer and the rotation engine
+st=\$(grep 'selftest regs:' probe-dmesg.txt | tail -1); sm=\$(grep 'selftest: mixer' probe-dmesg.txt | tail -1)
+echo "selftest_mixer_regs \$(echo "\$st" | grep -oE 'mixer_regs [a-z]+' | cut -d' ' -f2)" | tee -a probe.txt
+echo "selftest_rot_regs \$(echo "\$st" | grep -oE 'rot_regs [a-z]+' | cut -d' ' -f2)" | tee -a probe.txt
+echo "selftest_mixer \$(echo "\$sm" | grep -oE 'mixer [a-z]+ ' | cut -d' ' -f2)" | tee -a probe.txt
+echo "selftest_rot \$(echo "\$sm" | grep -oE ' rot [a-z]+ ' | cut -d' ' -f3)" | tee -a probe.txt
 DEV=""; for v in /sys/class/video4linux/video*; do grep -qx 'sun50i-g2d' \$v/name 2>/dev/null && DEV=/dev/\$(basename \$v) && break; done
 echo "device \${DEV:-none}" | tee -a probe.txt
 [ -n "\$DEV" ] || { echo NO-DEVICE; dmesg | tail -n +\$((n1+1)) > dmesg-chunk.txt; echo ROUND-DONE; exit 0; }
 step formats
 timeout -k 5 20 v4l2-ctl -d \$DEV -D --list-formats-out --list-formats > formats.txt 2>&1
-echo "formats_out \$(sed -n '/Output/,/Capture/p' formats.txt | grep -c "^\s*\[")" | tee -a probe.txt
-echo "formats_cap \$(sed -n '/Capture/,\$p' formats.txt | grep -c "^\s*\[")" | tee -a probe.txt
+# count the entries per "Type:" section (v4l2-ctl prints Capture first; job 33 counted Capture + Output as 36)
+echo "formats_out \$(awk '/Type: Video Output/{s=1;next} /Type:/{s=0} s && /^[[:space:]]*\[/{n++} END{print n+0}' formats.txt)" | tee -a probe.txt
+echo "formats_cap \$(awk '/Type: Video Capture/{s=1;next} /Type:/{s=0} s && /^[[:space:]]*\[/{n++} END{print n+0}' formats.txt)" | tee -a probe.txt
 # the cedrus decoder node shares the board: its media topology must answer (the c26/c27 hang, fixed by ac009bb5b)
 step cedrus-topology
 echo "cedrus_D_rc \$(timeout -k 5 20 v4l2-ctl -d /dev/video0 -D > cedrus-D.txt 2>&1; echo \$?)" | tee -a probe.txt
@@ -179,15 +186,23 @@ CASES
 # --- GStreamer v4l2convert (fresh registry so the plugin probes this kernel's devices) ---
 step gst-inspect
 export GST_REGISTRY=/tmp/g2d-gstreg.bin; rm -f \$GST_REGISTRY
-timeout -k 5 120 gst-inspect-1.0 v4l2convert > gst-inspect.txt 2>&1; echo "RC \$?" >> gst-inspect.txt
-echo "element \$(grep -c 'Long-name' gst-inspect.txt)" | tee gst.txt
-echo "device \$(grep -E 'Device path|device  *:' gst-inspect.txt | head -1 | sed 's/.*: //;s/ .*//')" | tee -a gst.txt
+# the v4l2 plugin registers one converter element per m2m node (v4l2convert = the first one found, v4l2videoNconvert
+# for the others); use the one whose default device is the G2D node (job 33: v4l2convert was /dev/video3)
+: > gst-elements.txt; GSTEL=""
+for el in \$(timeout -k 5 120 gst-inspect-1.0 video4linux2 2>/dev/null | grep -oE 'v4l2[a-z0-9]*convert' | sort -u); do
+  d=\$(timeout -k 5 60 gst-inspect-1.0 \$el 2>/dev/null | grep -A3 -E '^[[:space:]]+device[[:space:]]+:' | grep -oE 'Default: "[^"]*"' | head -1 | cut -d'"' -f2)
+  echo "\$el \${d:-none}" >> gst-elements.txt; [ "\$d" = "\$DEV" ] && [ -z "\$GSTEL" ] && GSTEL=\$el
+done
+timeout -k 5 120 gst-inspect-1.0 \${GSTEL:-v4l2convert} > gst-inspect.txt 2>&1; echo "RC \$?" >> gst-inspect.txt
+echo "element \$([ -n "\$GSTEL" ] && echo 1 || echo 0)" | tee gst.txt
+echo "element_name \${GSTEL:-none}" | tee -a gst.txt
+echo "device \$(grep -A3 -E '^[[:space:]]+device[[:space:]]+:' gst-inspect.txt | grep -oE 'Default: "[^"]*"' | head -1 | cut -d'"' -f2)" | tee -a gst.txt
 echo "device_expected \$DEV" | tee -a gst.txt
 gstrun() { local name=\$1 gfi=\$2 fi=\$3 si=\$4 gfo=\$5 fo=\$6 so=\$7 in w h wo ho
   step gst \$name
   in=\$(gen \$fi \$si 601); w=\${si%x*}; h=\${si#*x}; wo=\${so%x*}; ho=\${so#*x}
   timeout -k 5 120 gst-launch-1.0 -q filesrc location=\$in ! rawvideoparse format=\$gfi width=\$w height=\$h framerate=1/1 ! \
-    v4l2convert ! video/x-raw,format=\$gfo,width=\$wo,height=\$ho ! filesink location=out/\$name.raw > \$name.txt 2>&1; echo "RC \$?" >> \$name.txt
+    \${GSTEL:-v4l2convert} ! video/x-raw,format=\$gfo,width=\$wo,height=\$ho ! filesink location=out/\$name.raw > \$name.txt 2>&1; echo "RC \$?" >> \$name.txt
   echo "size \$(stat -c %s out/\$name.raw 2>/dev/null || echo 0)" >> \$name.txt
   echo "== \$name: \$(grep -E '^(RC|size)' \$name.txt | tr '\n' ' ')"; }
 while read -r name gfi fi si gfo fo so tol border; do [ -n "\$name" ] || continue; gstrun \$name \$gfi \$fi \$si \$gfo \$fo \$so; done <<'GST'

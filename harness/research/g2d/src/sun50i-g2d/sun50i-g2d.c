@@ -306,10 +306,9 @@ static void g2d_write_csc(struct g2d_dev *dev, unsigned int unit,
 }
 
 /* The YCbCr encoding and range the job converts to or from */
-static void g2d_ctx_colorimetry(struct g2d_ctx *ctx, u8 *ycbcr_enc,
-				bool *full_range)
+static void g2d_pix_colorimetry(const struct v4l2_pix_format *pix,
+				u8 *ycbcr_enc, bool *full_range)
 {
-	const struct v4l2_pix_format *pix = &ctx->src_fmt;
 	u8 enc = pix->ycbcr_enc;
 	u8 quant = pix->quantization;
 
@@ -322,12 +321,11 @@ static void g2d_ctx_colorimetry(struct g2d_ctx *ctx, u8 *ycbcr_enc,
 	*full_range = quant == V4L2_QUANTIZATION_FULL_RANGE;
 }
 
-static void g2d_mixer_reset(struct g2d_dev *dev)
+/* Reset pulse of both engines, as the BSP gives before every blit */
+static void g2d_engines_reset(struct g2d_dev *dev)
 {
-	u32 val = g2d_read(dev, G2D_TOP_AHB_RESET);
-
-	g2d_write(dev, G2D_TOP_AHB_RESET, val & ~G2D_TOP_MIXER);
-	g2d_write(dev, G2D_TOP_AHB_RESET, val | G2D_TOP_MIXER);
+	g2d_write(dev, G2D_TOP_AHB_RESET, 0);
+	g2d_write(dev, G2D_TOP_AHB_RESET, G2D_TOP_MIXER | G2D_TOP_ROT);
 }
 
 static void g2d_setup_overlay(struct g2d_dev *dev, const struct g2d_fmt *fmt,
@@ -416,10 +414,12 @@ static void g2d_setup_scaler(struct g2d_dev *dev, const struct g2d_fmt *fmt,
 	g2d_write(dev, G2D_VSU_CTRL, ctrl);
 }
 
-static void g2d_setup_blender(struct g2d_dev *dev, struct g2d_ctx *ctx,
+static void g2d_setup_blender(struct g2d_dev *dev,
+			      const struct v4l2_pix_format *src_pix,
+			      const struct v4l2_pix_format *dst_pix,
 			      const struct g2d_fmt *src, const struct g2d_fmt *dst)
 {
-	u32 size = G2D_SIZE(ctx->dst_fmt.width, ctx->dst_fmt.height);
+	u32 size = G2D_SIZE(dst_pix->width, dst_pix->height);
 
 	g2d_write(dev, G2D_ROP_CTL, G2D_ROP_CTL_PASS);
 	g2d_write(dev, G2D_BLD_EN_CTL, G2D_BLD_EN_CTL_PIPE(0));
@@ -436,7 +436,7 @@ static void g2d_setup_blender(struct g2d_dev *dev, struct g2d_ctx *ctx,
 		bool full_range;
 		u8 enc;
 
-		g2d_ctx_colorimetry(ctx, &enc, &full_range);
+		g2d_pix_colorimetry(src_pix, &enc, &full_range);
 		g2d_csc_matrix(&csc, dst->yuv, enc, full_range);
 		g2d_write_csc(dev, G2D_CSC_WB, &csc);
 	}
@@ -476,8 +476,8 @@ static void g2d_device_run(void *priv)
 	sfmt = g2d_find_format(ctx->src_fmt.pixelformat);
 	dfmt = g2d_find_format(ctx->dst_fmt.pixelformat);
 
-	/* every job starts from the reset state of the mixer */
-	g2d_mixer_reset(dev);
+	/* every job starts from the reset state of the engines */
+	g2d_engines_reset(dev);
 
 	g2d_setup_overlay(dev, sfmt, &ctx->src_fmt,
 			  vb2_dma_contig_plane_dma_addr(&src->vb2_buf, 0));
@@ -492,7 +492,7 @@ static void g2d_device_run(void *priv)
 				 ctx->dst_fmt.height);
 	}
 
-	g2d_setup_blender(dev, ctx, sfmt, dfmt);
+	g2d_setup_blender(dev, &ctx->src_fmt, &ctx->dst_fmt, sfmt, dfmt);
 	g2d_setup_writeback(dev, dfmt, &ctx->dst_fmt,
 			    vb2_dma_contig_plane_dma_addr(&dst->vb2_buf, 0));
 
@@ -503,7 +503,8 @@ static void g2d_device_run(void *priv)
 			      msecs_to_jiffies(G2D_JOB_TIMEOUT_MS));
 
 	g2d_write(dev, G2D_MIXER_INT, G2D_MIXER_INT_FINISH_EN);
-	g2d_write(dev, G2D_MIXER_CTL, G2D_MIXER_CTL_START);
+	g2d_write(dev, G2D_MIXER_CTL,
+		  g2d_read(dev, G2D_MIXER_CTL) | G2D_MIXER_CTL_START);
 }
 
 /* Claim the running job; false when the irq or the watchdog took it */
@@ -542,15 +543,28 @@ static irqreturn_t g2d_irq(int irq, void *data)
 {
 	struct g2d_dev *dev = data;
 	u32 status = g2d_read(dev, G2D_MIXER_INT);
+	u32 rot = g2d_read(dev, G2D_ROT_INT);
 
-	if (!(status & G2D_MIXER_INT_FINISH))
+	if (!(status & G2D_MIXER_INT_FINISH) && !(rot & G2D_ROT_INT_FINISH))
 		return IRQ_NONE;
+
+	atomic_inc(&dev->irq_count);
+
+	/* only the probe self-test uses the rotation engine so far */
+	if (rot & G2D_ROT_INT_FINISH) {
+		g2d_write(dev, G2D_ROT_INT, G2D_ROT_INT_FINISH);
+		complete(&dev->selftest_done);
+	}
+	if (!(status & G2D_MIXER_INT_FINISH))
+		return IRQ_HANDLED;
 
 	/* clears the flag and leaves the interrupt disabled */
 	g2d_write(dev, G2D_MIXER_INT, G2D_MIXER_INT_FINISH);
 
-	if (!g2d_take_job(dev))
+	if (!g2d_take_job(dev)) {
+		complete(&dev->selftest_done);
 		return IRQ_HANDLED;
+	}
 
 	cancel_delayed_work(&dev->watchdog_work);
 	g2d_finish_job(dev, VB2_BUF_STATE_DONE);
@@ -566,10 +580,16 @@ static void g2d_watchdog(struct work_struct *work)
 	if (!g2d_take_job(dev))
 		return;
 
-	v4l2_err(&dev->v4l2_dev, "job timed out, mixer status %08x\n",
-		 g2d_read(dev, G2D_MIXER_INT));
+	v4l2_err(&dev->v4l2_dev,
+		 "job timed out, mixer status %08x ctl %08x top %x/%x/%x v0 %08x bld %08x wb %08x irqs %d\n",
+		 g2d_read(dev, G2D_MIXER_INT), g2d_read(dev, G2D_MIXER_CTL),
+		 g2d_read(dev, G2D_TOP_SCLK_GATE),
+		 g2d_read(dev, G2D_TOP_HCLK_GATE),
+		 g2d_read(dev, G2D_TOP_AHB_RESET),
+		 g2d_read(dev, G2D_V0_ATTCTL), g2d_read(dev, G2D_BLD_EN_CTL),
+		 g2d_read(dev, G2D_WB_ATT), atomic_read(&dev->irq_count));
 	g2d_write(dev, G2D_MIXER_INT, 0);
-	g2d_mixer_reset(dev);
+	g2d_engines_reset(dev);
 	g2d_finish_job(dev, VB2_BUF_STATE_ERROR);
 }
 
@@ -993,6 +1013,133 @@ static const struct video_device g2d_video_device = {
 	.device_caps	= V4L2_CAP_VIDEO_M2M | V4L2_CAP_STREAMING,
 };
 
+/*
+ * Probe-time self-test, for the kernel log only (it never fails the
+ * probe): register write/read-back in the mixer and the rotation engine,
+ * then one 16x16 copy through each engine, waited for on the finish
+ * interrupt. "noirq" = the finish flag is set but no interrupt came.
+ */
+static bool g2d_reg_holds(struct g2d_dev *dev, u32 reg, u32 val, u32 *got)
+{
+	g2d_write(dev, reg, val);
+	*got = g2d_read(dev, reg);
+
+	return *got == val;
+}
+
+static const char *g2d_selftest_wait(struct g2d_dev *dev, u32 int_reg,
+				     u32 flag, const u32 *in, const u32 *out,
+				     unsigned int n, u32 mask)
+{
+	unsigned int i;
+
+	if (!wait_for_completion_timeout(&dev->selftest_done,
+			msecs_to_jiffies(G2D_SELFTEST_TIMEOUT_MS)))
+		return (g2d_read(dev, int_reg) & flag) ? "noirq" : "timeout";
+
+	for (i = 0; i < n; i++)
+		if ((in[i] ^ out[i]) & mask)
+			return "baddata";
+
+	return "ok";
+}
+
+static void g2d_selftest(struct g2d_dev *dev)
+{
+	const unsigned int n = G2D_SELFTEST_SIZE * G2D_SELFTEST_SIZE;
+	const u32 size = G2D_SIZE(G2D_SELFTEST_SIZE, G2D_SELFTEST_SIZE);
+	const struct g2d_fmt *fmt = g2d_find_format(V4L2_PIX_FMT_XBGR32);
+	struct v4l2_pix_format pix = {
+		.width = G2D_SELFTEST_SIZE,
+		.height = G2D_SELFTEST_SIZE,
+		.pixelformat = V4L2_PIX_FMT_XBGR32,
+		.bytesperline = G2D_SELFTEST_SIZE * 4,
+		.colorspace = V4L2_COLORSPACE_SRGB,
+	};
+	u32 v_int, v_v0, v_wb, v_bld, v_rot, ver, m_ctl, m_int, r_ctl, r_int;
+	bool mixer_regs, rot_regs;
+	const char *mres, *rres;
+	dma_addr_t dma, dma_out;
+	u32 *in, *out, m_out0;
+	unsigned int i;
+
+	ver = g2d_read(dev, G2D_TOP_IP_VERSION);
+	g2d_engines_reset(dev);
+	mixer_regs = g2d_reg_holds(dev, G2D_MIXER_INT, G2D_MIXER_INT_FINISH_EN,
+				   &v_int);
+	mixer_regs &= g2d_reg_holds(dev, G2D_V0_SIZE, size, &v_v0);
+	mixer_regs &= g2d_reg_holds(dev, G2D_WB_SIZE, size, &v_wb);
+	mixer_regs &= g2d_reg_holds(dev, G2D_BLD_SIZE, size, &v_bld);
+	rot_regs = g2d_reg_holds(dev, G2D_ROT_ISIZE, size, &v_rot);
+	g2d_write(dev, G2D_MIXER_INT, 0);
+
+	dev_info(dev->dev,
+		 "selftest regs: top %x/%x/%x ip %08x (rtmx %u vsu %u gsu %u rot %u) mixer_regs %s (int %08x v0 %08x wb %08x bld %08x) rot_regs %s (%08x)\n",
+		 g2d_read(dev, G2D_TOP_SCLK_GATE),
+		 g2d_read(dev, G2D_TOP_HCLK_GATE),
+		 g2d_read(dev, G2D_TOP_AHB_RESET), ver, G2D_TOP_IP_RTMX(ver),
+		 G2D_TOP_IP_VSU(ver), G2D_TOP_IP_GSU(ver), G2D_TOP_IP_ROT(ver),
+		 mixer_regs ? "ok" : "bad", v_int, v_v0, v_wb, v_bld,
+		 rot_regs ? "ok" : "bad", v_rot);
+
+	in = dma_alloc_coherent(dev->dev, 2 * n * 4, &dma, GFP_KERNEL);
+	if (!in)
+		return;
+	out = in + n;
+	dma_out = dma + n * 4;
+	for (i = 0; i < n; i++)
+		in[i] = (i + 1) * 0x9e3779b1;
+
+	/* mixer: V0 -> blender pipe 0 (COPY) -> write-back, XRGB8888 */
+	memset(out, 0, n * 4);
+	reinit_completion(&dev->selftest_done);
+	g2d_engines_reset(dev);
+	g2d_setup_overlay(dev, fmt, &pix, dma);
+	g2d_setup_blender(dev, &pix, &pix, fmt, fmt);
+	g2d_setup_writeback(dev, fmt, &pix, dma_out);
+	g2d_write(dev, G2D_MIXER_INT, G2D_MIXER_INT_FINISH_EN);
+	g2d_write(dev, G2D_MIXER_CTL,
+		  g2d_read(dev, G2D_MIXER_CTL) | G2D_MIXER_CTL_START);
+	/* the X byte is not defined by the copy */
+	mres = g2d_selftest_wait(dev, G2D_MIXER_INT, G2D_MIXER_INT_FINISH,
+				 in, out, n, 0x00ffffff);
+	m_ctl = g2d_read(dev, G2D_MIXER_CTL);
+	m_int = g2d_read(dev, G2D_MIXER_INT);
+	m_out0 = out[0];
+	g2d_write(dev, G2D_MIXER_INT, 0);
+
+	/* rotation engine: plain copy (0 degrees, no flip), ARGB8888 */
+	memset(out, 0, n * 4);
+	reinit_completion(&dev->selftest_done);
+	g2d_engines_reset(dev);
+	g2d_write(dev, G2D_ROT_CTL, G2D_ROT_CTL_EN);
+	g2d_write(dev, G2D_ROT_IFMT, G2D_FMT_ARGB8888);
+	g2d_write(dev, G2D_ROT_ISIZE, size);
+	g2d_write(dev, G2D_ROT_IPITCH(0), pix.bytesperline);
+	g2d_write(dev, G2D_ROT_ILADD(0), lower_32_bits(dma));
+	g2d_write(dev, G2D_ROT_IHADD(0), upper_32_bits(dma) & 0xff);
+	g2d_write(dev, G2D_ROT_OSIZE, size);
+	g2d_write(dev, G2D_ROT_OPITCH(0), pix.bytesperline);
+	g2d_write(dev, G2D_ROT_OLADD(0), lower_32_bits(dma_out));
+	g2d_write(dev, G2D_ROT_OHADD(0), upper_32_bits(dma_out) & 0xff);
+	g2d_write(dev, G2D_ROT_INT, G2D_ROT_INT_FINISH_EN);
+	g2d_write(dev, G2D_ROT_CTL,
+		  g2d_read(dev, G2D_ROT_CTL) | G2D_ROT_CTL_START);
+	rres = g2d_selftest_wait(dev, G2D_ROT_INT, G2D_ROT_INT_FINISH,
+				 in, out, n, 0xffffffff);
+	r_ctl = g2d_read(dev, G2D_ROT_CTL);
+	r_int = g2d_read(dev, G2D_ROT_INT);
+	g2d_write(dev, G2D_ROT_INT, 0);
+
+	dev_info(dev->dev,
+		 "selftest: mixer %s (ctl %08x int %08x in0 %08x out0 %08x) rot %s (ctl %08x int %08x out0 %08x) irqs %d\n",
+		 mres, m_ctl, m_int, in[0], m_out0, rres, r_ctl, r_int, out[0],
+		 atomic_read(&dev->irq_count));
+
+	g2d_engines_reset(dev);
+	dma_free_coherent(dev->dev, 2 * n * 4, in, dma);
+}
+
 static const struct v4l2_m2m_ops g2d_m2m_ops = {
 	.device_run	= g2d_device_run,
 };
@@ -1002,10 +1149,17 @@ static int g2d_runtime_resume(struct device *device)
 	struct g2d_dev *dev = dev_get_drvdata(device);
 	int ret;
 
+	/* the BSP releases the reset before it enables the clocks */
+	ret = reset_control_deassert(dev->rstc);
+	if (ret) {
+		dev_err(dev->dev, "Failed to deassert reset\n");
+		return ret;
+	}
+
 	ret = clk_prepare_enable(dev->bus_clk);
 	if (ret) {
 		dev_err(dev->dev, "Failed to enable bus clock\n");
-		return ret;
+		goto err_reset;
 	}
 
 	ret = clk_prepare_enable(dev->mod_clk);
@@ -1020,26 +1174,20 @@ static int g2d_runtime_resume(struct device *device)
 		goto err_mod_clk;
 	}
 
-	ret = reset_control_deassert(dev->rstc);
-	if (ret) {
-		dev_err(dev->dev, "Failed to deassert reset\n");
-		goto err_mbus_clk;
-	}
-
-	/* clock and release the mixer; the rotation engine stays off */
-	g2d_write(dev, G2D_TOP_SCLK_GATE, G2D_TOP_MIXER);
-	g2d_write(dev, G2D_TOP_HCLK_GATE, G2D_TOP_MIXER);
-	g2d_write(dev, G2D_TOP_AHB_RESET, G2D_TOP_MIXER);
+	/* clock and release both engines, as the BSP's g2d_bsp_open() */
+	g2d_write(dev, G2D_TOP_SCLK_GATE, G2D_TOP_MIXER | G2D_TOP_ROT);
+	g2d_write(dev, G2D_TOP_HCLK_GATE, G2D_TOP_MIXER | G2D_TOP_ROT);
+	g2d_write(dev, G2D_TOP_AHB_RESET, G2D_TOP_MIXER | G2D_TOP_ROT);
 	g2d_write(dev, G2D_TOP_SCLK_DIV, 0);
 
 	return 0;
 
-err_mbus_clk:
-	clk_disable_unprepare(dev->mbus_clk);
 err_mod_clk:
 	clk_disable_unprepare(dev->mod_clk);
 err_bus_clk:
 	clk_disable_unprepare(dev->bus_clk);
+err_reset:
+	reset_control_assert(dev->rstc);
 
 	return ret;
 }
@@ -1075,6 +1223,8 @@ static int g2d_probe(struct platform_device *pdev)
 	mutex_init(&dev->dev_mutex);
 	spin_lock_init(&dev->job_lock);
 	INIT_DELAYED_WORK(&dev->watchdog_work, g2d_watchdog);
+	init_completion(&dev->selftest_done);
+	atomic_set(&dev->irq_count, 0);
 
 	ret = dma_set_mask_and_coherent(dev->dev, DMA_BIT_MASK(32));
 	if (ret)
@@ -1142,6 +1292,7 @@ static int g2d_probe(struct platform_device *pdev)
 		goto err_pm;
 	v4l2_info(&dev->v4l2_dev, "G2D IP version %08x, module clock %lu Hz\n",
 		  g2d_read(dev, G2D_TOP_IP_VERSION), clk_get_rate(dev->mod_clk));
+	g2d_selftest(dev);
 	pm_runtime_put(dev->dev);
 
 	ret = video_register_device(vfd, VFL_TYPE_VIDEO, 0);

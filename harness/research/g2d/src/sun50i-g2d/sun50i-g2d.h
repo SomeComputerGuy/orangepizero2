@@ -9,7 +9,9 @@
 #define _SUN50I_G2D_H_
 
 #include <linux/bits.h>
+#include <linux/atomic.h>
 #include <linux/clk.h>
+#include <linux/completion.h>
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
 #include <linux/reset.h>
@@ -38,6 +40,11 @@
 #define G2D_TOP_AHB_RESET		0x0008
 #define G2D_TOP_SCLK_DIV		0x000c
 #define G2D_TOP_IP_VERSION		0x0010
+/* capability fields of IP_VERSION as the BSP's RCQ-generation header names them */
+#define G2D_TOP_IP_GSU(v)		((v) & 0x3)
+#define G2D_TOP_IP_VSU(v)		(((v) >> 2) & 0x3)
+#define G2D_TOP_IP_RTMX(v)		(((v) >> 4) & 0x1)
+#define G2D_TOP_IP_ROT(v)		(((v) >> 8) & 0x1)
 #define G2D_TOP_MIXER			BIT(0)
 #define G2D_TOP_ROT			BIT(1)
 
@@ -96,6 +103,23 @@
 #define G2D_WB_LADD(p)			(0x3014 + 8 * (p))
 #define G2D_WB_HADD(p)			(0x3018 + 8 * (p))
 
+/* Rotation engine (same layout as the DE2 rotate block) */
+#define G2D_ROT_CTL			0x28000
+#define G2D_ROT_CTL_EN			BIT(0)
+#define G2D_ROT_CTL_START		BIT(31)
+#define G2D_ROT_INT			0x28004
+#define G2D_ROT_INT_FINISH		BIT(0)
+#define G2D_ROT_INT_FINISH_EN		BIT(16)
+#define G2D_ROT_IFMT			0x28020
+#define G2D_ROT_ISIZE			0x28024
+#define G2D_ROT_IPITCH(p)		(0x28030 + 4 * (p))
+#define G2D_ROT_ILADD(p)		(0x28040 + 8 * (p))
+#define G2D_ROT_IHADD(p)		(0x28044 + 8 * (p))
+#define G2D_ROT_OSIZE			0x28084
+#define G2D_ROT_OPITCH(p)		(0x28090 + 4 * (p))
+#define G2D_ROT_OLADD(p)		(0x280a0 + 8 * (p))
+#define G2D_ROT_OHADD(p)		(0x280a4 + 8 * (p))
+
 /* Video scaler */
 #define G2D_VSU_CTRL			0x8000
 #define G2D_VSU_CTRL_EN			BIT(0)
@@ -153,6 +177,9 @@
 #define G2D_PITCH_ALIGN			16
 #define G2D_CLK_RATE			300000000
 #define G2D_JOB_TIMEOUT_MS		500
+/* probe-time self-test: one 16x16 copy through the mixer and through ROT */
+#define G2D_SELFTEST_SIZE		16
+#define G2D_SELFTEST_TIMEOUT_MS		100
 
 /* above this input/output ratio the overlay decimates before the scaler */
 #define G2D_COARSE_H_RATIO		8
@@ -181,6 +208,9 @@ struct g2d_dev {
 	spinlock_t job_lock;
 	bool job_active;
 	struct delayed_work watchdog_work;
+	/* completed by finish interrupts that belong to no m2m job */
+	struct completion selftest_done;
+	atomic_t irq_count;
 
 	void __iomem *base;
 	struct clk *bus_clk;

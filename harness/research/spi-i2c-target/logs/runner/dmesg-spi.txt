@@ -1,0 +1,32 @@
+[    0.001446] pid_max: default: 32768 minimum: 301
+[    0.125742] iommu: Default domain type: Translated
+[    0.130197] NetLabel:  unlabeled traffic allowed by default
+[    0.143012] PCI: CLS 0 bytes, default 64
+[    0.233339] i2c_dev: i2c /dev entries driver
+[    0.267887] bridge: filtering via arp/ip/ip6tables is no longer available by default. Update your scripts to load br_netfilter if you need this.
+[    0.316762] sun50i-h616-r-pinctrl 7022000.pinctrl: initialized sunXi PIO driver
+[    0.332935] sun50i-h616-r-pinctrl 7022000.pinctrl: supply vcc-pl not found, using dummy regulator
+[    0.347098] sun50i-h616-pinctrl 300b000.pinctrl: initialized sunXi PIO driver
+[    0.376873] sun8i-dw-hdmi 6000000.hdmi: registered DesignWare HDMI I2C bus driver
+[    0.380581] spi_gpio spi-gpio: registered host spi2
+[    0.380927] spi spi2.0: spi_bitbang_setup, 2000 nsec/bit
+[    0.380958] spi spi2.0: setup mode 0, 8 bits/w, 500000 Hz max --> 0
+[    0.381542] spi_gpio spi-gpio: registered child spi2.0
+[    0.382762] sun6i-spi 5010000.spi: registered host spi3
+[    0.383177] spi spi3.0: setup mode 0, 8 bits/w, 40000000 Hz max --> 0
+[    1.525408] sun6i-spi 5010000.spi: registered child spi3.0
+[    1.526776] sun6i-spi 5011000.spi: registered target spi1
+[    1.527208] spi spi1.0: setup mode 0, 8 bits/w, 100000000 Hz max --> 0
+[    1.527794] sun6i-spi 5011000.spi: registered child spi1.0
+[    7.941661] systemd[1]: Queued start job for default target graphical.target.
+[   42.256898] spidev spi1.0: setup mode 0, 8 bits/w, 100000000 Hz max --> 0
+[   42.256929] spidev spi1.0: spi mode 0
+[   42.256980] spidev spi1.0: setup mode 0, 8 bits/w, 100000000 Hz max --> 0
+[   42.256989] spidev spi1.0: 8 bits per word
+[   42.257007] spidev spi1.0: setup mode 0, 8 bits/w, 500000 Hz max --> 0
+[   42.257015] spidev spi1.0: 500000 Hz (max)
+[   45.106168] spidev spi1.0: SPI transfer failed: -4
+[   45.106223] spi_slave spi1: failed to transfer one message from queue
+[   45.106240] spi_slave spi1: noqueue transfer failed
+[   46.712489] spi spi1.0: setup mode 0, 8 bits/w, 100000000 Hz max --> 0
+[   46.713193] sun6i-spi 5011000.spi: registered child spi1.0

@@ -1,0 +1,18 @@
+set: checks-i2c
+kernel: 7.3.1 #36 SMP PREEMPT Fri Nov  6 09:44:09 UTC 2026
+Image: vmlinuz-7.3.1-vdec-c37 dtb: sun50i-h616-orangepi-zero2.dtb.vdec-c37
+overlays: user_overlays=sit-i2c3-slave sit-i2c2-ph 
+INFO wired: I2C=0
+INFO adapters: i2c-2=mv64xxx_i2c adapter i2c-3=mv64xxx_i2c adapter i2c-6=DesignWare HDMI 
+INFO 5002c00.i2c driver: mv64xxx_i2c bus: 3; 5002800.i2c bus: 2
+CHECK W33-i2c-bus-number PASS TWI3 5002c00 = i2c-3, TWI2 5002800 = i2c-2 (i2c aliases)
+CHECK W33-i2c-target-func PASS i2c-3 funcs 0xeff002b has I2C_FUNC_SLAVE
+CHECK W33-i2c-slave-eeprom-bind PASS 3-1064 driver i2c-slave-eeprom, slave-eeprom 256 bytes
+CHECK W33-i2c-host-with-target PASS i2cdetect -y -r 3 rc 0 in 0s
+INFO i2cdetect 3 found: 
+CHECK W33-i2c-loopback-16 SKIP NOT TESTED: no jumpers pin 5 PH4<->pin 8 PH2, pin 3 PH5<->pin 10 PH3 detected
+CHECK W33-i2c-loopback-200 SKIP NOT TESTED: no jumpers pin 5 PH4<->pin 8 PH2, pin 3 PH5<->pin 10 PH3 detected
+CHECK W33-i2c-slave-eeprom-content SKIP NOT TESTED: no jumpers pin 5 PH4<->pin 8 PH2, pin 3 PH5<->pin 10 PH3 detected
+CHECK W33-i2c-loopback-i2cset SKIP NOT TESTED: no jumpers pin 5 PH4<->pin 8 PH2, pin 3 PH5<->pin 10 PH3 detected
+INFO dmesg i2c: [    0.234181] i2c_dev: i2c /dev entries driver|[    0.318384] sun50i-h616-r-pinctrl 7022000.pinctrl: initialized sunXi PIO driver|[    0.333364] sun50i-h616-r-pinctrl 7022000.pinctrl: supply vcc-pl not found, using dummy regulator|[    0.347721] sun50i-h616-pinctrl 300b000.pinctrl: initialized sunXi PIO driver|
+ROUND-DONE

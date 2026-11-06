@@ -1,0 +1,15 @@
+set: checks-spi
+kernel: 7.3.1 #36 SMP PREEMPT Fri Nov  6 09:44:09 UTC 2026
+Image: vmlinuz-7.3.1-vdec-c37 dtb: sun50i-h616-orangepi-zero2.dtb.vdec-c37
+overlays: user_overlays=sit-spi1-target sit-spi-gpio-pc 
+INFO wired: SPI=0
+CHECK W33-spi-target-probe PASS spi1 registered as a target, slave='spi-dev', 0 error lines
+CHECK W33-spi-target-spidev PASS /dev/spidev1.0 at boot from the overlay slave child (spidev)
+CHECK W33-spi-target-abort PASS blocked transfer ended on SIGINT in 4s (rc 124)
+CHECK W33-spi-loopback-16 SKIP NOT TESTED: no jumpers pin 13 PC5->23 PH6, 11 PC6->19 PH7, 22 PC7<-21 PH8, 15 PC8->3 PH5 detected
+CHECK W33-spi-loopback-100 SKIP NOT TESTED: no jumpers pin 13 PC5->23 PH6, 11 PC6->19 PH7, 22 PC7<-21 PH8, 15 PC8->3 PH5 detected
+CHECK W33-spi-target-unregister PASS spidev1.0 removed
+CHECK W33-spi-target-reregister PASS /dev/spidev1.0 back after 'echo spi-dev > slave' (slave='spi-dev')
+INFO spi-gpio host: spi2
+INFO dmesg spi: [   42.256989] spidev spi1.0: 8 bits per word|[   42.257007] spidev spi1.0: setup mode 0, 8 bits/w, 500000 Hz max --> 0|[   42.257015] spidev spi1.0: 500000 Hz (max)|[   45.106168] spidev spi1.0: SPI transfer failed: -4|[   45.106223] spi_slave spi1: failed to transfer one message from queue|[   45.106240] spi_slave spi1: noqueue transfer failed|[   46.712489] spi spi1.0: setup mode 0, 8 bits/w, 100000000 Hz max --> 0|[   46.713193] sun6i-spi 5011000.spi: registered child spi1.0|
+ROUND-DONE

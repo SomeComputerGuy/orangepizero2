@@ -14,8 +14,10 @@ curl -sS --fail $U/cctv4k-10bit.avs2 -o /dev/shm/c.avs2 || { echo "download fail
 to() { dmesg | grep -c "timed out"; }
 echo "kernel $(uname -rv) clk $(cat /sys/kernel/debug/clk/ve/clk_rate) timeouts $(to)"
 echo "[binary] sha256 $(sha256sum $D/ffmpeg | cut -c1-16) avs2-decoder $($D/ffmpeg -hide_banner -decoders 2>/dev/null | grep -c ' avs2 ')"
-F="$D/ffmpeg -hide_banner -nostats -loglevel error -hwaccel v4l2request"
-FB="-hide_banner -nostats -loglevel info -benchmark -hwaccel v4l2request -hwaccel_output_format drm_prime"
+# -nostdin: the md5 loop reads refs.md5 on stdin; without it ffmpeg's keyboard reader swallowed lines of the list
+# (job 12: 4 streams "download failed" with cut names, 3 never started).
+F="$D/ffmpeg -hide_banner -nostdin -nostats -loglevel error -hwaccel v4l2request"
+FB="-hide_banner -nostdin -nostats -loglevel info -benchmark -hwaccel v4l2request -hwaccel_output_format drm_prime"
 tl() { lbl=$1; shift; echo "[$lbl] $($TL "$@" | tr '\n' ' ') $(grep -o 'rtime=[0-9.]*s' /tmp/vtl.out | tail -1)"; }
 echo "== VE timelines (ve-timeline.sh): holdback = 0313 on, lowdelay = -flags low_delay (hold-back off, data only)"
 for rep in 1 2; do tl "gaps cctv4k-10bit holdback r$rep" $D/ffmpeg $FB -i /dev/shm/c.avs2 -f null -; done

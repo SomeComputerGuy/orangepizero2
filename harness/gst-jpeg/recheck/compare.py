@@ -3,7 +3,8 @@
 """Host side: mechanical checks of the recheck board-test.sh output (run with python3 -I; needs ffmpeg, numpy).
   compare.py OUTDIR VECDIR
 Prints an "INSPECT:" line, one line per case in VECDIR/cases.txt ending in PASS, FAIL(<checks>) or SKIPPED,
-"SUMMARY: P pass, F fail, S skipped", the "NORANK:" line (recorded, not judged) and "DMESG: clean|<n> lines".
+"SUMMARY: P pass, F fail, S skipped", the "NORANK:" line (judged), the "NORANK16:" line (recorded, not judged) and
+"DMESG: clean|<n> lines".
 
 Reference for every hardware output: ffmpeg (-idct int) decodes the image in its own chroma layout with the SOF
 size rounded up to whole MCUs, so the padding pixels the engine really averages are known, then the chroma is
@@ -11,8 +12,16 @@ resampled to 4:2:0 exactly as the hardware does it (4:2:2: rows averaged in pair
 rows; 4:1:1: the driver's cedrus_jpeg_post_process() formula) and cropped to the picture. Verified exact to +-1 on
 the 02 (1080p 4:2:2/4:4:4) and 06 (33x17 4:2:2, 15x15 4:4:4) dumps.
 Checks:
-  INSPECT  inspect.txt names v4l2sljpegdec, Rank primary + 1; with KSIZES=1 the SINK template width/height
-           ranges start at 1 (patch 0107), else "sink-range BAD".
+  INSPECT  `gst-inspect-1.0 --exists v4l2sljpegdec` succeeded (EXISTS=0; gst-inspect's "Name" line is the plugin's
+           name, v4l2codecs, so the element name is proven by --exists), Long-name "V4L2 Stateless JPEG Image
+           Decoder", Rank primary + 1; with KSIZES=1 the SINK template width/height ranges start at 1 (patch
+           0107), else "sink-range BAD".
+  NORANK   no rank override, odd-size picture (1921x1081) on a kernel with ENUM_FRAMESIZES: the stateful
+           v4l2jpegdec is tried first, its probed sink caps have the driver's 16-pixel step, so it returns EMPTY
+           sink caps (stateful-empty-caps >= 1 in the GST_DEBUG log) and decodebin picks v4l2sljpegdec: rc=0,
+           dmesg +0. (On the stock kernel without ENUM_FRAMESIZES the stateful decoder took the picture and hung.)
+  NORANK16 same with a 16-aligned picture (1920x1088): the stateful decoder takes it; recorded only (its hang on
+           this stateless device is the work-list item; the GST_DEBUG log is for that analysis).
   still    hw rc=0, one frame of the GStreamer I420 size for WxH; visible pixels equal the driver's own output
            (jpegtest, hw!=drv); vs the reference max|d| <= 3 on Y, U and V (y-ref, c-ref); db, pb, db3 rc=0,
            picked v4l2sljpegdec, pixels equal to hw; jpegparse caps WxH; sw rc=0; no kernel log line (dmesg).
@@ -149,8 +158,10 @@ ksizes = re.search(r'^KSIZES=(\d)', ins, re.M)
 ksizes = ksizes.group(1) if ksizes else '?'
 sink = ins.split('SRC template')[0] if 'SRC template' in ins else ''
 ibad, iinfo = [], [f'KSIZES={ksizes}']
-if not re.search(r'^\s*Name\s+v4l2sljpegdec\s*$', ins, re.M):
-    ibad.append('name')
+if not re.search(r'^EXISTS=0$', ins, re.M):
+    ibad.append('exists')
+if not re.search(r'Long-name\s+V4L2 Stateless JPEG Image Decoder', ins):
+    ibad.append('long-name')
 if not re.search(r'Rank\s+primary \+ 1 \(257\)', ins):
     ibad.append('rank')
 if ksizes == '1':
@@ -166,13 +177,13 @@ else:
 print('INSPECT: ' + ('PASS' if not ibad else 'FAIL(' + ','.join(ibad) + ')') + ' | ' + '; '.join(iinfo))
 
 # ---- results.txt
-res, norank, skipped = {}, '', set()
+res, norank, skipped = {}, {}, set()
 for line in open(f'{o}/results.txt'):
     p = line.split()
     if len(p) < 2:
         continue
-    if p[0] == 'norank':
-        norank = line.strip(); continue
+    if p[0] in ('norank', 'norank16'):
+        norank[p[0]] = line.strip(); continue
     if p[1] == 'SKIPPED':
         skipped.add(p[0]); continue
     r = {'line': line.strip()}
@@ -303,7 +314,18 @@ for line in open(f'{v}/cases.txt'):
     if bad: nfail += 1
     else: npass += 1
 print(f'SUMMARY: {npass} pass, {nfail} fail, {nskip} skipped')
-print('NORANK: ' + (norank or 'missing'))
+nr = norank.get('norank', '')
+nbad = []
+if 'rc=0' not in nr.split():
+    nbad.append('rc')
+if 'v4l2sljpegdec' not in nr.split('picked=[', 1)[-1].split(']')[0]:
+    nbad.append('picked')
+if not re.search(r'dmesg \+0\b', nr):
+    nbad.append('dmesg')
+if not re.search(r'stateful-empty-caps=[1-9]', nr):
+    nbad.append('stateful-empty-caps')
+print('NORANK: ' + ('PASS' if not nbad else 'FAIL(' + ','.join(nbad) + ')') + ' | ' + (nr or 'missing'))
+print('NORANK16: ' + (norank.get('norank16') or 'missing') + ' (recorded)')
 dm = [l.rstrip() for l in open(f'{o}/dmesg.txt') if re.search(r'cedrus|Oops|WARNING', l)] if os.path.exists(f'{o}/dmesg.txt') else ['no dmesg.txt']
 print('DMESG: ' + ('clean' if not dm else f'{len(dm)} lines'))
 for l in dm[:20]:

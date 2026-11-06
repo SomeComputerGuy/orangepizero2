@@ -32,6 +32,9 @@ boot_cumul() {
   on_stock || blocked "board not on the stock image kernel at start ($($SSH -n 'readlink /boot/Image'))"
   T=$(tail -1 $CK | cut -d' ' -f1); sha=$(tail -1 $CK | cut -d' ' -f3)
   git -C $H/wt-cumulative merge-base --is-ancestor 4c8c3f819 $sha 2>/dev/null || blocked "newest cumulative kernel $T ($sha) predates the UM-review merges (spdif clk fix)"
+  # W18: the ahub-dam overlay (821dfb5bd, c20) and the machine-driver fix that lets its controls-only card probe
+  # (fix/sunxi-h616-ahub-dam-aux-card 61fb5e0e2; job 19's "no ahubdam card" was "probe ... failed with error -22")
+  git -C $H/wt-cumulative merge-base --is-ancestor 61fb5e0e22dcf1aca221797fb69cf66e8d4530ea $sha 2>/dev/null || blocked "newest cumulative kernel $T ($sha) does not contain fix/sunxi-h616-ahub-dam-aux-card 61fb5e0e2 (ahubdam card, W18)"
   want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || blocked "no Image.$T in kernel-check/vdec-serve"
   for f in sun50i-h616-spdif-out sun50i-h616-i2s3-ph sun50i-h616-ahub-dam; do [ -s $DW/dtbo/$f.dtbo ] || blocked "missing $DW/dtbo/$f.dtbo"; done
   [ -x $DW/busybox-armhf ] || blocked "missing $DW/busybox-armhf"
@@ -61,16 +64,16 @@ run_checks() { local f=$OUT/checks.txt
   $SSH -n 'cat /root/dsw/hd.txt 2>/dev/null; cat /root/dsw/hd.err 2>/dev/null' > $OUT/hd.txt 2>&1
   awk '/^forced 100 half/{ s=($0 ~ /duplex Half/ && $0 !~ /ping-received 0\/5/) ? "PASS" : "FAIL"; print "CHECK W31-half-100 " s " " $0 }
        /^forced 10 half/{ s=($0 ~ /duplex Half/ && $0 !~ /ping-received 0\/5/) ? "PASS" : "FAIL"; print "CHECK W31-half-10 " s " " $0 }
-       /^autoneg on/{ s=($0 ~ /Link yes/ || $0 ~ /detected: yes/) ? "PASS" : "FAIL"; print "CHECK W31-autoneg-restored " s " " $0 }' $OUT/hd.txt >> $f
+       /^autoneg on/{ s=($0 ~ /Link detected: yes/ && $0 ~ /Auto-negotiation: on/) ? "PASS" : "FAIL"; print "CHECK W31-autoneg-restored " s " " $0 }' $OUT/hd.txt >> $f
   grep -q HD-DONE $OUT/hd.txt || echo "CHECK W31-half-duplex FAIL no HD-DONE in hd.txt (board link did not come back or ethtool missing): $(tr '\n' '|' < $OUT/hd.txt)" >> $f
   $SSH -n 'dmesg | grep -iE "iommu|fault|timed out|oops|bug:|warn|error" | grep -viE "ACPI|EFI" | tail -40' > $OUT/dmesg.txt 2>&1
   mkdir -p $OUT/board; scp -q "${K[@]}" 'root@10.56.0.107:/root/dsw/*.txt' $OUT/board/ 2>/dev/null
   echo cumul >> $OUT/state; log "chunk cumul done: $(grep -c 'CHECK .* PASS' $f) PASS, $(grep -c 'CHECK .* FAIL' $f) FAIL, $(grep -c 'CHECK .* SKIP' $f) SKIP"; }
-log "job 19-datasheet-w start, done before: $(tr '\n' ' ' < $OUT/state)"
+log "job datasheet-w start, done before: $(tr '\n' ' ' < $OUT/state)"
 trap 'release' EXIT
 acquire
 if ! grep -qx cumul $OUT/state; then boot_cumul; log "checks start"; run_checks; fi
 if ! grep -qx restore $OUT/state; then restore; fi
 release
-log "job 19-datasheet-w end: $(tr '\n' ' ' < $OUT/state)"
+log "job datasheet-w end: $(tr '\n' ' ' < $OUT/state)"
 [ -f $OUT/BLOCKED ] && exit 2; exit 0

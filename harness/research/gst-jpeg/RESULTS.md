@@ -1,4 +1,4 @@
-# GStreamer hardware JPEG decode on cedrus (v4l2sljpegdec): state 2026-11-05 night (05/06 run and analysed: test bugs + patch 0107, recheck job 11 queued)
+# GStreamer hardware JPEG decode on cedrus (v4l2sljpegdec): state 2026-11-06 (job 11 ran on c17: 8/8 cases PASS, the two FAILs were wrong expectations; rerun queued as job 22)
 
 ## Rounds so far
 - 02-gst-jpeg (done, build/gst-jpeg/results/, summary harness/runner-queue/done/02-gst-jpeg.summary.md): hardware path
@@ -11,6 +11,29 @@
   see below; compare.txt regenerated with the fixed reference: 12 of 12 PASS (original kept as compare.run1.txt).
 - 11-gst-jpeg-recheck (queued, harness/runner-queue/11-gst-jpeg-recheck.md): the failing cases of both on the newest
   cumulative kernel with patches 0101-0107. Package harness/gst-jpeg/recheck/, bundle build/gst-jpeg/bundle-recheck.
+
+## Job 11 analysed (2026-11-06): 8 of 8 cases PASS on c17, checks 1 and 8 had wrong expectations, no hardware fault
+Summary harness/runner-queue/done/11-gst-jpeg-recheck.summary.md, results kept in build/gst-jpeg/results-recheck-job11/.
+Every case PASS: z4096x4096 refused by the caps and decoded by jpegdec, 1x1/8x8/15x15 on the hardware (0107 effective),
+odd-size 4:2:2/4:4:4/4:1:1 stills and the 33x17 clip within max|d| 1 of the engine reference, hw == driver, `dmesg +0`
+everywhere, DMESG clean.
+1. **Check 1 `INSPECT: FAIL(name)`: wrong expectation.** compare.py wanted a line `Name v4l2sljpegdec`; gst-inspect-1.0
+   prints `Name` only under "Plugin Details" and that is the plugin's name (`v4l2codecs`), never the element's. The
+   element is now proven by `gst-inspect-1.0 --exists v4l2sljpegdec` (`EXISTS=0` in inspect.txt) plus the Long-name;
+   the Rank and sink-range checks are unchanged.
+2. **Check 8 `NORANK` picked v4l2sljpegdec, rc=0, dmesg +0: wrong expectation, and the explanation of the "hang".**
+   out/norank.gstdebug.txt (442 bytes) shows what happened without the rank override: decodebin tried the stateful
+   `v4l2jpegdec0` first (`Opening`), it answered `Returning sink caps EMPTY` and was closed, then v4l2sljpegdec decoded
+   the picture. Cause: the cumulative kernel enumerates frame sizes (c11+, media-cedrus-enumerate-the-coded-frame-sizes:
+   stepwise 16..4096 x 16..2304, **step 16**); gst-plugins-good's probe (gstv4l2object.c gst_v4l2_object_probe_caps_for_format,
+   `gst_value_set_int_range_step`) turns that into `width=[16,4096,16], height=[16,2304,16]` in the stateful decoder's
+   sink caps, so 1921x1081 does not intersect and the stateful decoder declines. On the stock kernel (no ENUM_FRAMESIZES)
+   it took the picture and hung (05/06). Consequence for the work-list item "stateful v4l2jpegdec hang": with c11+ it
+   only happens for pictures whose width and height are multiples of 16; the MARGINAL override stays. The norank check
+   now expects exactly this (rc=0, picked v4l2sljpegdec, dmesg +0, `stateful-empty-caps` >= 1 from the GST_DEBUG log),
+   and a second run `norank16` (new vector z1920x1088.jpg, 16-aligned) goes to the stateful decoder and is recorded
+   (rc, picked, dmesg +N, GST_DEBUG log) for the work-list analysis, not judged.
+Rerun: harness/runner-queue/22-gst-jpeg-recheck2.md (bundle-recheck rebuilt with the new vector and board-test.sh).
 
 ## Jobs 05 and 06 analysed on the host (2026-11-05 night): four test bugs, one real gap (patch 0107), no hardware fault
 1. **05 z4096x4096 "not refused" (KSIZES=1): test bug.** gaps/board-test.sh derived KSIZES from `grep '^ *width: \['`
@@ -167,9 +190,9 @@
   and z17x33-411 PASS, mjmix (pre-0106) FAIL(caps,sw-size) as expected.
 
 ## Next steps
-1. Runner: job 11 (recheck) on the newest cumulative kernel (c15+). Expected: INSPECT `KSIZES=1; sink-range ok
-   width=[1,4096] height=[1,2304]`, 8 of 8 PASS, every `dmesg +0`, NORANK a handful of rate-limited lines (c14+
-   quiet-refusals) and out/norank.gstdebug.txt for the work-list item.
+1. Runner: job 22 (recheck rerun). Expected: INSPECT PASS `KSIZES=1; sink-range ok width=[1,4096] height=[1,2304]`,
+   8 of 8 PASS, every `dmesg +0`, NORANK PASS (stateful declines 1921x1081), NORANK16 recorded (rc=124 and some dmesg
+   lines expected; out/norank16.gstdebug.txt is the log for the work-list item).
 2. If 11 fails: `sink-range BAD` = the bundle is not the 0107 build (BUILD.txt in the bundle names the commit);
    z4096x4096 `db/pb/db3` = the caps range did not exclude it (inspect.txt SINK template); z1x1/z8x8/z15x15 `db`
    with picked jpegdec = 0107 not effective; `hw!=drv` or `y-ref`/`c-ref` on a still = a real crop/stride problem

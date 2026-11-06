@@ -6,8 +6,9 @@
 # Per case (vec/cases.txt: NAME W H still SAMP | NAME W H size SAMP | NAME 0 0 clip SEQ): the caps jpegparse gives
 # (width x height on its src pad), a direct hardware decode, a jpegdec decode, decodebin/playbin autoplugging, the
 # driver's own output (stills, jpegtest) and the kernel log lines the case added. "size" cases (too large for the
-# hardware) are SKIPPED on a kernel without ENUM_FRAMESIZES. Last, the no-override run (stateful v4l2jpegdec,
-# expected to hang) with its own kernel log line count and a GStreamer debug log for the analysis of that hang.
+# hardware) are SKIPPED on a kernel without ENUM_FRAMESIZES. Last, the two no-override runs (norank: odd size, the
+# stateful v4l2jpegdec declines it; norank16: 16-aligned, the stateful decoder takes it and hangs), each with its own
+# kernel log line count and a GStreamer debug log.
 # Output in DIR/out; checked on the host by compare.py.
 set -u
 D=$1; O=$D/out; rm -rf "$O"; mkdir -p "$O"
@@ -23,7 +24,9 @@ dmesg > "$O/dmesg-before.txt"
 {
 uname -r; uname -v; gst-launch-1.0 --version | head -2
 cat "$D/BUILD.txt" 2>/dev/null
-gst-inspect-1.0 v4l2sljpegdec 2>&1 | grep -E 'Name|Rank|Long-name|image/jpeg|sof-marker|sampling|colorspace|interlace|scans|component-tables|width|height|SINK|SRC' | head -40
+# gst-inspect prints the PLUGIN's name under "Name" (v4l2codecs), never the element's: the element is proven by --exists
+gst-inspect-1.0 --exists v4l2sljpegdec; echo "EXISTS=$?"
+gst-inspect-1.0 v4l2sljpegdec 2>&1 | grep -E 'Name|Rank|Long-name|Klass|image/jpeg|sof-marker|sampling|colorspace|interlace|scans|component-tables|width|height|SINK|SRC' | head -40
 } > "$O/inspect.txt" 2>&1
 # a kernel that enumerates frame sizes gives the SINK caps a width/height range (the SRC template always has one)
 if sed -n '/SINK template/,/SRC template/p' "$O/inspect.txt" | grep -Eq '^ *width: \['; then KSIZES=1; else KSIZES=0; fi
@@ -88,17 +91,24 @@ while read -r n w h kind spec; do
 	fi
 	echo "$n dmesg +$(( $(dmesg_lines) - d0 ))" >> "$R"
 done < "$D/vec/cases.txt"
-# Without the shipped MARGINAL override the stateful v4l2jpegdec (gst-plugins-good) wins and hangs (rc=124 expected):
-# recorded with the kernel log lines it causes and a GStreamer debug log of its V4L2 traffic (work-list item, the cause
-# of its refused buffers is not known yet), so the log noise of the run is attributed, not judged.
-d0=$(dmesg_lines)
-GST_PLUGIN_FEATURE_RANK= GST_DEBUG=v4l2videodec:6,v4l2bufferpool:6,v4l2object:5 GST_DEBUG_NO_COLOR=1 \
-	GST_DEBUG_FILE=$O/norank.gstdebug.txt \
-	$T gst-launch-1.0 -v filesrc location="$D/vec/z1921x1081.jpg" ! decodebin ! fakesink > "$O/norank.log" 2>&1
-echo "norank rc=$? picked=[$(grep -o 'v4l2sljpegdec[0-9]*\|v4l2jpegdec[0-9]*\|[^a-z0-9]jpegdec[0-9]*' "$O/norank.log" | tr -d '/:.' | sort -u | tr '\n' ' ')] dmesg +$(( $(dmesg_lines) - d0 ))" >> "$R"
-if [ -f "$O/norank.gstdebug.txt" ]; then
-	head -c 8000000 "$O/norank.gstdebug.txt" > "$O/norank.gstdebug.tmp" && mv "$O/norank.gstdebug.tmp" "$O/norank.gstdebug.txt"
-fi
+# Without the shipped MARGINAL override the stateful v4l2jpegdec (gst-plugins-good, rank 257 like ours, first by name)
+# is tried first. On a kernel that enumerates frame sizes (c11+) its probed sink caps carry the driver's 16-pixel step
+# ([16, 4096, 16] x [16, 2304, 16]), so for a picture that is not a multiple of 16 (z1921x1081) it returns EMPTY sink caps
+# and decodebin moves on to v4l2sljpegdec: rc=0 expected, no kernel log line. A 16-aligned picture (z1920x1088) does go
+# to the stateful decoder, which hangs on this stateless device (rc=124 expected; work-list item): recorded with the
+# kernel log lines it causes and a GStreamer debug log of its V4L2 traffic, so the log noise of the run is attributed.
+norank() { # name file
+	d0=$(dmesg_lines)
+	GST_PLUGIN_FEATURE_RANK= GST_DEBUG=v4l2videodec:6,v4l2bufferpool:6,v4l2object:5 GST_DEBUG_NO_COLOR=1 \
+		GST_DEBUG_FILE=$O/$1.gstdebug.txt \
+		$T gst-launch-1.0 -v filesrc location="$2" ! decodebin ! fakesink > "$O/$1.log" 2>&1
+	echo "$1 rc=$? picked=[$(grep -o 'v4l2sljpegdec[0-9]*\|v4l2jpegdec[0-9]*\|[^a-z0-9]jpegdec[0-9]*' "$O/$1.log" | tr -d '/:.' | sort -u | tr '\n' ' ')] dmesg +$(( $(dmesg_lines) - d0 )) stateful-empty-caps=$(grep -c 'v4l2jpegdec[0-9]*> Returning sink caps EMPTY' "$O/$1.gstdebug.txt" 2>/dev/null)" >> "$R"
+	if [ -f "$O/$1.gstdebug.txt" ]; then
+		head -c 8000000 "$O/$1.gstdebug.txt" > "$O/$1.gstdebug.tmp" && mv "$O/$1.gstdebug.tmp" "$O/$1.gstdebug.txt"
+	fi
+}
+norank norank "$D/vec/z1921x1081.jpg"
+norank norank16 "$D/vec/z1920x1088.jpg"
 dmesg > "$O/dmesg-after.txt"
 tail -n +$(( $(wc -l < "$O/dmesg-before.txt") + 1 )) "$O/dmesg-after.txt" > "$O/dmesg.txt"
 rm -f "$O/dmesg-before.txt" "$O/dmesg-after.txt"

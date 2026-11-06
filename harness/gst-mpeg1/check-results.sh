@@ -1,18 +1,23 @@
 #!/bin/bash
 # Mechanical checks of a run-job.sh result directory: check-results.sh <build/gst-mpeg1/results>; prints CHECK n ...: PASS|FAIL|SKIP and VERDICT.
-R=${1:?dir}; ST=$R/out-stock; TE=$R/out-test; fail=0
-res() { echo "CHECK $1 $2: $3 ($4)"; [ "$3" = FAIL ] && fail=1; return 0; }
+R=${1:?dir}; ST=$R/out-stock; TE=$R/out-test; fail=0; nt=0
+res() { echo "CHECK $1 $2: $3 ($4)"; [ "$3" = FAIL ] && fail=1; [ "$3" = NOT-TESTABLE ] && nt=1; return 0; }
 rl() { grep -E "^$2 $3 " $1/results.txt 2>/dev/null | head -1; }   # rl <outdir> NAME TAG
 irqs() { grep -o 'irqs=[0-9-]*' <<< "$1" | cut -d= -f2; }
 # 0 kernels: stock phase on the image kernel, test phase on a cumulative kernel (run-job.sh refuses one without the MG1S commit)
 k=$(head -1 $R/kernel.txt 2>/dev/null); s=$(cat $R/kernel-stock.txt 2>/dev/null)
 [[ $k == cumulative\ c* ]] && [[ $s == stock\ 7.3.1* ]] && res 0 "kernels" PASS "$s | $k $(sed -n 2p $R/kernel.txt)" || res 0 "kernels" FAIL "kernel-stock.txt: ${s:-missing}; kernel.txt: ${k:-missing}"
-# 1 stock kernel without MG1S: the plugin must not offer mpegversion=1 ("MPEG-1 not supported") and decodebin must pick a software decoder for ccm1
-smg=$(grep -c MG1S $ST/fmts.txt 2>/dev/null); db=$(rl $ST ccm1 db)
-if [ "$smg" = 0 ]; then
-  if grep -q 'MPEG-1 not supported' $ST/inspect.txt && ! grep -qE 'mpegversion: *(1|\{[^}]*\(int\)1)' $ST/inspect.txt && grep -q 'rc=0' <<< "$db" && ! grep -q v4l2slmpeg2dec <<< "$db" && [ "$(irqs "$db")" = 0 ]; then
-    res 1 "software fallback without MG1S" PASS "stock: no MG1S, 'MPEG-1 not supported', no mpegversion=1 caps; ccm1 db: $db"
-  else res 1 "software fallback without MG1S" FAIL "stock MG1S lines=$smg; inspect: $(grep -E 'MPEG-1|mpegversion' $ST/inspect.txt 2>/dev/null | tr -s ' ' | tr '\n' ';'); ccm1 db: ${db:-missing}"; fi
+# 1 stock kernel without MG1S: the plugin must not offer mpegversion=1 ("MPEG-1 not supported") and decodebin must pick a software decoder for ccm1.
+#   The software decoder is gst-libav's avdec_mpeg2video (image: userpatches/config-opiz2-printserver.conf, every variant since 2026-11-06;
+#   job 12 ran on an image without it: "Missing element: MPEG-1 Video decoder"). Without any software MPEG-1 decoder on the board the
+#   fallback cannot be tested on this image: NOT-TESTABLE (names the reflash), neither PASS nor FAIL.
+smg=$(grep -c MG1S $ST/fmts.txt 2>/dev/null); db=$(rl $ST ccm1 db); sw=$(grep -o '^SWDEC=[a-z0-9_]*' $ST/inspect.txt 2>/dev/null | cut -d= -f2 | tr '\n' ' ')
+if [ "$smg" = 0 ] && [ -z "$sw" ] && grep -q 'SWDEC-PROBE-DONE' $ST/inspect.txt 2>/dev/null; then
+  res 1 "software fallback without MG1S" NOT-TESTABLE "no software MPEG-1 decoder on the board image ($(grep '^PKG' $ST/inspect.txt | tr '\n' ';')); the image fix (gstreamer1.0-libav in every variant) needs a rebuild + reflash, then rerun; ccm1 db: ${db:-missing}"
+elif [ "$smg" = 0 ]; then
+  if grep -q 'MPEG-1 not supported' $ST/inspect.txt && ! grep -qE 'mpegversion: *(1|\{[^}]*\(int\)1)' $ST/inspect.txt && grep -q 'rc=0' <<< "$db" && ! grep -q v4l2slmpeg2dec <<< "$db" && grep -qE 'picked=\[[^]]*(avdec_mpeg|mpeg2dec)' <<< "$db" && [ "$(irqs "$db")" = 0 ]; then
+    res 1 "software fallback without MG1S" PASS "stock: no MG1S, 'MPEG-1 not supported', no mpegversion=1 caps; sw decoders: $sw; ccm1 db: $db"
+  else res 1 "software fallback without MG1S" FAIL "stock MG1S lines=$smg; sw decoders: ${sw:-none}; inspect: $(grep -E 'MPEG-1|mpegversion' $ST/inspect.txt 2>/dev/null | tr -s ' ' | tr '\n' ';'); ccm1 db: ${db:-missing}"; fi
 elif [ -n "$smg" ]; then res 1 "software fallback without MG1S" SKIP "stock kernel $s already enumerates MG1S; ccm1 db: $db"
 else res 1 "software fallback without MG1S" FAIL "out-stock/fmts.txt missing"; fi
 # 2 test kernel: MG1S on cedrus, plugin says "MPEG-1 supported" and offers mpegversion=1
@@ -64,7 +69,7 @@ for c in "ccm1 db" "tcela-18 db" "tcela-15 db" "ccm1 pb3"; do set -- $c; l=$(rl 
 [ $ok = 1 ] && res 7 "autoplug picks v4l2slmpeg2dec" PASS "${d# | }" || res 7 "autoplug picks v4l2slmpeg2dec" FAIL "${d# | }"
 # 8 no hangs: no gst run hit the timeout (rc 124/137) in either phase
 t=$(grep -hE 'rc=(124|137)' $ST/results.txt $TE/results.txt 2>/dev/null); [ -z "$t" ] && res 8 "no hangs" PASS "no rc=124/137 in results.txt" || res 8 "no hangs" FAIL "$t"
-# 9 dmesg clean in both phases
-dm=$(cat $ST/dmesg.txt $TE/dmesg.txt 2>/dev/null | grep -iE 'timed out|oops|warning|fault|bug:' | grep -v 'Default' | head -5)
+# 9 dmesg clean in both phases (\bfault\b as a word: job 12 matched "default" in the boot lines pid_max/NetLabel/PCI/bridge)
+dm=$(cat $ST/dmesg.txt $TE/dmesg.txt 2>/dev/null | grep -iE 'timed out|oops|warning|\bfault\b|bug:' | head -5)
 [ -z "$dm" ] && res 9 "dmesg" PASS "no timeout/fault/Oops/WARNING in out-*/dmesg.txt" || res 9 "dmesg" FAIL "$dm"
-[ $fail = 0 ] && echo "VERDICT: PASS" || echo "VERDICT: FAIL"
+if [ $fail != 0 ]; then echo "VERDICT: FAIL"; elif [ $nt != 0 ]; then echo "VERDICT: INCOMPLETE (a NOT-TESTABLE check: rerun after the image reflash; everything else PASS)"; else echo "VERDICT: PASS"; fi

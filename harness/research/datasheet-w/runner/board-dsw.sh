@@ -16,10 +16,14 @@ cs=$(cat /sys/devices/system/clocksource/clocksource0/available_clocksource 2>/d
 case " $cs " in *" hstimer "*) res W3-hstimer PASS "$cs";; *) res W3-hstimer FAIL "available_clocksource='$cs'";; esac
 info "current_clocksource $(cat /sys/devices/system/clocksource/clocksource0/current_clocksource)"
 
-# W6: AArch32 execution state (CONFIG_COMPAT): a static armhf busybox runs
-if [ -x $D/busybox-armhf ]; then m=$($D/busybox-armhf uname -m 2>&1 | head -1)
-  [ "$m" = armv8l ] && res W6-compat PASS "$m" || res W6-compat FAIL "uname -m='$m'"
-  info "compat32 cat: $($D/busybox-armhf cat /proc/version 2>&1 | cut -c1-40)"
+# W6: AArch32 execution state (CONFIG_COMPAT): a static armhf busybox (ELF32 ARM) runs at all, and `linux32 uname -m`
+# from it says armv8l. uname -m of a compat task is the native "aarch64" unless the PER_LINUX32 personality is set, which
+# arm64 does not do for compat tasks (job 19 expected armv8l without linux32: wrong expectation).
+if [ -x $D/busybox-armhf ]; then ok=$($D/busybox-armhf echo compat-ok 2>&1 | head -1); m=$($D/busybox-armhf uname -m 2>&1 | head -1)
+  if command -v linux32 > /dev/null; then L32="linux32"; elif command -v setarch > /dev/null; then L32="setarch linux32"; else L32="$D/busybox-armhf linux32"; fi
+  m32=$($L32 $D/busybox-armhf uname -m 2>&1 | head -1)
+  [ "$ok" = compat-ok ] && [ "$m32" = armv8l ] && res W6-compat PASS "armhf busybox runs; uname -m '$m' native, '$m32' under $L32" || res W6-compat FAIL "run='$ok' uname -m='$m' $L32 uname -m='$m32'"
+  info "compat32 maps: $($D/busybox-armhf cat /proc/self/maps 2>/dev/null | grep -oE '\[(vectors|sigpage|vdso)\]' | sort -u | tr '\n' ' ')"
 else res W6-compat SKIP "no $D/busybox-armhf"; fi
 
 # W5: SPI NOR dual read (1S-1S-2S), data intact (eGON.BT0 magic, two identical reads)
@@ -121,7 +125,10 @@ for s in 100 10; do
   rx=$(ping -c 5 -W 2 -i 0.3 10.56.0.1 2>/dev/null | awk -F'[ ,]+' '/received/{for(i=1;i<=NF;i++) if($i=="received") print $(i-1)}')
   echo "forced $s half: speed $sp duplex $du link $li ping-received ${rx:-0}/5" >> $D/hd.txt
 done
-restore; sleep 10; echo "autoneg on: $(ethtool end0 | awk '/Speed:|Duplex:|Link detected:/{printf "%s %s ", $1, $2}')" >> $D/hd.txt; echo HD-DONE >> $D/hd.txt
+# autoneg restored: wait for the link to come back up (up to 40 s; it took > 10 s in job 19), then print the whole
+# Speed/Duplex/Auto-negotiation/Link lines (job 19 printed only two awk fields, so "Link detected: yes" lost its value)
+restore; for i in $(seq 1 20); do sleep 2; ethtool end0 2>/dev/null | grep -q 'Link detected: yes' && break; done
+echo "autoneg on: $(ethtool end0 | awk '/Speed:|Duplex:|Auto-negotiation:|Link detected:/{sub(/^[ \t]+/, ""); printf "%s ", $0}')after $((i * 2))s" >> $D/hd.txt; echo HD-DONE >> $D/hd.txt
 HD
 chmod +x $D/hd.sh; setsid nohup bash $D/hd.sh > $D/hd.log 2>&1 < /dev/null &
 echo "INFO half-duplex test started detached (hd.sh), results in $D/hd.txt"

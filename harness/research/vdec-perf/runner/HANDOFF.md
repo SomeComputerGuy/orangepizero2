@@ -109,7 +109,8 @@ Checks, all on `chunk-1.txt`:
   `[gaps cctv4k-10bit lowdelay r1]` line is data (aq1: n=151); report its X too.
 - PASS if the `[md5 cctv4k-10bit]` line contains ` PASS ` (Main10 P010, ref be9985dea38abffc850d73024165c990).
 - PASS if `grep -c '^\[md5 .*\] PASS '` = 18 (cctv4k + 17 8-bit streams) and `grep -c '^\[md5 .*\] FAIL'` = 0. Each
-  FAIL line is a regression; copy it.
+  FAIL line is a regression; copy it. (Job 12's 4 `download failed` lines with cut stream names were ffmpeg reading
+  the stream list from the loop's stdin; fixed with -nostdin, 10 of the 10 streams that ran passed.)
 - PASS if the first line (`kernel ... timeouts N`) and the last `timeouts N` line both show 0, and every `[md5 ...]`
   line shows `new-timeouts 0`.
 - PASS if dmesg-1.txt has no `timed out` line. IOMMU `Page fault` lines are reported, not a FAIL of this job (open item 4).

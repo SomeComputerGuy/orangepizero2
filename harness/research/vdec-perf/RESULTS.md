@@ -81,7 +81,12 @@ The board jobs are packaged in runner/ (vdec-job.sh + HANDOFF.md). Job files: ha
   impl-avs2.md §8.8. On FAIL: see the last bullet of open item 1.
 - **02-afbc:** if blocked on Mesa, put "deploy Mesa fork to board" on the work list. If it ran, write §10.2 (per-codec
   F/C/M table) and commit logs/runner-afbc.
-- **12-avs2-queue (avs2q):** pass = 18 `[md5 ...] PASS`, both holdback `gap starved n=` <= 3, 0 timeouts. On PASS: close
+- **12-avs2-queue (avs2q) ran 2026-11-05 on c17 (logs/runner-avs2q-job12/): script bug, no decode failure.** Gaps
+  holdback n=1/n=1 (PASS), lowdelay n=152 (data), cctv4k Main10 md5 PASS, 10 of the 10 8-bit streams that ran PASS,
+  0 timeouts, dmesg clean. The 4 `download failed` lines with cut names (`uare_416x240_60_ai`, `-ra`, `n-1080p-tid`,
+  `-2160p-ra`) and the 3 streams that never ran (PartyScene, RaceHorses x3 partly) were ffmpeg reading the `while read`
+  loop's stdin (refs.md5): fixed with `-nostdin` in board-queue-avs2q.sh. Rerun = job 23-avs2-queue2 (fresh state).
+- **23-avs2-queue2 (avs2q):** pass = 18 `[md5 ...] PASS`, both holdback `gap starved n=` <= 3, 0 timeouts. On PASS: close
   the "AVS2 FFmpeg depth-2 queueing" work-list line in docs/status.md and tell the OPi5 session (HANDOFF-avs2-queue.md).
   On FAIL: an md5 FAIL = 0313 regression (compare files/<stream>.framemd5 with the aq1 lists in logs/queue-aq1/out);
   a gap count back at ~150 = the hold-back is not active (check the `[binary]` sha256 line first).

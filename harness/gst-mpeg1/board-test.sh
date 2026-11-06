@@ -24,6 +24,11 @@ uname -r; gst-launch-1.0 --version | head -2
 ldd "$P/libgstv4l2codecs.so" | grep -E 'libgstcodecs|libgstcodecparsers'
 # first use of the registry: the plugin logs "MPEG-1 supported" / "MPEG-1 not supported" at registration
 GST_REGISTRY_FORK=no GST_DEBUG=v4l2codecs-mpeg2dec:4 gst-inspect-1.0 v4l2slmpeg2dec 2>&1 | grep -E 'MPEG-1|Rank|Long-name|mpegversion|systemstream|profile|width|height|SINK|SRC|format:' | head -60
+# software MPEG-1 decoders on this image (the fallback decodebin must take when the hardware has no MG1S):
+# gst-libav's avdec_mpeg2video (video/mpeg mpegversion={1,2}) or gst-plugins-ugly's mpeg2dec
+for e in avdec_mpeg2video avdec_mpeg1video mpeg2dec; do gst-inspect-1.0 --exists $e && echo "SWDEC=$e $(gst-inspect-1.0 $e | grep -m1 Rank | tr -s ' ')"; done
+echo "SWDEC-PROBE-DONE"
+dpkg-query -W -f='PKG ${Package} ${Version} ${db:Status-Status}\n' gstreamer1.0-libav gstreamer1.0-plugins-ugly 2>&1
 } > "$O/inspect.txt" 2>&1
 T="timeout -k 5 120"
 dec() { # name file tag chain : explicit hardware pipeline, I420 dump, cedrus IRQ delta, mpeg2dec INFO log
@@ -57,7 +62,7 @@ for n in ccm1 tcela-18 tcela-15; do
 	auto "$n" "$D/vec/$n" decodebin db
 done
 auto ccm1 "$D/vec/ccm1" playbin3 pb3
-dmesg | grep -iE "cedrus|timed out|iommu|fault|oops|bug:|warning|alloc fail" | tail -40 > "$O/dmesg.txt"
+dmesg | grep -iE "cedrus|timed out|iommu|\bfault\b|oops|bug:|warning|alloc fail" | tail -40 > "$O/dmesg.txt"   # \bfault\b: not "default"
 dmesg | tail -40 > "$O/dmesg-tail.txt"
 rm -rf "$P" "$GST_REGISTRY"
 cat "$O/results.txt"

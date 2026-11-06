@@ -1,10 +1,15 @@
-# Runner job 19-datasheet-w: handoff (DEV, about 12 min incl. two reboots)
+# Runner job datasheet-w (19, rerun as 24): handoff (DEV, about 12 min incl. two reboots)
 
 Command: `bash harness/research/datasheet-w/runner/dsw-job.sh`
 
 What it does: one DEV chunk on the newest cumulative kernel (last line of kernel-check/cumulative-kernels.txt, installed by
-harness/research/vdec-perf/install-kernel.sh with the vdec fallback armed; it must be c19 or newer, i.e. contain the UM-review
-merges, else the script exits 2 with `BLOCKED`: report "not ready", not FAIL). Before the reboot it puts three host-built
+harness/research/vdec-perf/install-kernel.sh with the vdec fallback armed; it must contain the UM-review merges (c19) AND
+armbian-build commit 61fb5e0e2 `fix/sunxi-h616-ahub-dam-aux-card` (the ahubdam card fix, merged by the coordinator after
+c22), else the script exits 2 with `BLOCKED`: report "not ready", not FAIL).
+Job 19 (c19) failed W6, W18 and W31; analysed 2026-11-06 (RESULTS.md "Job 19 analysed"): W6 and W31 were test bugs (uname -m
+of a compat task is "aarch64" without the linux32 personality; the autoneg line was read before link-up and printed without the
+"yes"), W18 is a real bug: the overlay applied and the card's probe failed with -22 ("has no playback, no capture"), fixed in
+61fb5e0e2. The job runs with a fresh `logs/runner/` (job 19's is `logs/runner-job19/`). Before the reboot it puts three host-built
 overlays into `/boot/overlay-user/` (`dsw-spdif-out`, `dsw-i2s3-ph`, `dsw-ahub-dam`, from kernel-check/datasheet-w/dtbo) and
 adds a `user_overlays=` line to `/boot/armbianEnv.txt`; nothing under `/boot/dtb` is touched. On the board,
 `board-dsw.sh` runs the mechanical checks of the datasheet W-items that need no extra hardware (hstimer, COMPAT, SPI dual

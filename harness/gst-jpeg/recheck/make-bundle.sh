@@ -3,18 +3,20 @@
 # Assemble build/gst-jpeg/bundle-recheck for harness/gst-jpeg/recheck/run-job.sh: the dev plugins from
 # build/gst-jpeg/out (harness/gst-jpeg/build-dev.sh of build/gst-jpeg/src branch opiz2 = patches 0101-0107),
 # jpegtest, board-test.sh and the vectors of the failing cases of jobs 05 and 06 (from build/gst-jpeg/vec-gaps and
-# vec-oddsize, which gaps/gen-vectors.sh and oddsize/gen-vectors.sh wrote).
+# vec-oddsize, which gaps/gen-vectors.sh and oddsize/gen-vectors.sh wrote; z1920x1088.jpg for the norank16 run was
+# added 2026-11-06: ffmpeg testsrc2+noise, 1920x1088 yuvj420p -q:v 3).
 set -euo pipefail
 H=/home/aruni/orangepizero2; W=$H/build/gst-jpeg; B=$W/bundle-recheck
 for f in "$W/out/libgstv4l2codecs.so" "$W/out/libgstjpegformat.so" "$H/harness/jpegtest/jpegtest" \
-	"$W/vec-gaps/s420.jpg" "$W/vec-gaps/z4096x4096.jpg" "$W/vec-oddsize/z1921x1081.jpg" "$W/vec-oddsize/mj-z33x17.mkv"; do
+	"$W/vec-gaps/s420.jpg" "$W/vec-gaps/z4096x4096.jpg" "$W/vec-oddsize/z1921x1081.jpg" "$W/vec-oddsize/z1920x1088.jpg" \
+	"$W/vec-oddsize/mj-z33x17.mkv"; do
 	[ -f "$f" ] || { echo "missing: $f"; exit 1; }
 done
 rm -rf "${B:?}"; mkdir -p "$B/plugins" "$B/vec"
 cp "$W/out/libgstv4l2codecs.so" "$W/out/libgstjpegformat.so" "$B/plugins/"
 cp "$H/harness/jpegtest/jpegtest" "$H/harness/gst-jpeg/recheck/board-test.sh" "$B/"
 cp "$W/vec-gaps/s420.jpg" "$W/vec-gaps/z4096x4096.jpg" "$B/vec/"
-cp "$W"/vec-oddsize/{z17x33-411,z33x17-422,z15x15-444,z1x1,z8x8,z1921x1081}.jpg "$W/vec-oddsize/mj-z33x17.mkv" "$B/vec/"
+cp "$W"/vec-oddsize/{z17x33-411,z33x17-422,z15x15-444,z1x1,z8x8,z1921x1081,z1920x1088}.jpg "$W/vec-oddsize/mj-z33x17.mkv" "$B/vec/"
 cat > "$B/vec/cases.txt" <<'EOF'
 # NAME W H KIND SPEC   (still: SAMP, hardware path; size: SAMP, must fall back to jpegdec; clip: SEQ of WxH*N)
 s420 1920 1080 still 420

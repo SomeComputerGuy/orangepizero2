@@ -149,13 +149,19 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
 ### Code queue (next fresh agent when a slot frees, in order)
 - Board PASS (harness/runner-queue/done/): 07 AVS2 test1 (c15 POC fix, 2096/2096 frames), 13 VP9 upsize (c17, 52/52),
   17 IOMMU prefetch faults (c18: 0 new faults; stock scanout trigger did not fire, decode 214 faults on stock).
-- Runner failures to analyse (one fresh agent, all look like test or package problems first):
-  - 11-gst-jpeg-recheck: INSPECT tag FAIL(name) although KSIZES=1 and the sink range are right; norank case expected
-    v4l2jpegdec but autoplug picked v4l2sljpegdec (likely the expectation is wrong after 0104-0107).
-  - 12-avs2-queue: 4 'download failed' (stream fetch), md5 10 PASS / 4 FAIL (need 18): separate fetch failures from real md5 fails.
-  - 12-gst-mpeg1: check 1 (stock kernel, no MG1S: software fallback picked nothing, rc=1) and check 9 (dmesg match too broad?).
-  - 19-datasheet-w (ran on c19, before the ahub-dam overlay merged in c20): W18 no ahubdam card (rerun on c20+), W6 armhf
-    busybox `uname -m` = aarch64 (expected without linux32 personality: check is wrong), W31 autoneg restore read before link-up.
+- Runner failures analysed 2026-11-06 (reruns queued as jobs 22-25; details in each task's RESULTS.md):
+  - 11-gst-jpeg-recheck: both FAILs were wrong expectations (gst-inspect `Name` = plugin name; without the rank override the
+    stateful v4l2jpegdec declines odd sizes on c11+ because the kernel's 16-pixel frame-size step lands in its caps, so
+    v4l2sljpegdec decoded, rc=0). 8/8 cases PASS on c17. Rerun job 22 adds a 16-aligned `norank16` log for the stateful-hang item.
+  - 12-avs2-queue: script bug (ffmpeg without -nostdin ate the stream list in the md5 loop); 10/10 streams that ran PASS,
+    0 timeouts. Fixed, rerun job 23.
+  - 12-gst-mpeg1: check 9 matched "default" (fixed, word match). Check 1 is REAL: the print-server image has no software
+    MPEG-1/2 (or H.264/H.265) GStreamer decoder at all ("Missing element: MPEG-1 Video decoder"). Fix: gstreamer1.0-libav in
+    every image variant (userpatches/config-opiz2-printserver.conf) -> **image rebuild + reflash needed**; until then the
+    rerun (job 24) reports check 1 NOT-TESTABLE / VERDICT INCOMPLETE. MG1S hardware checks 2-8 passed on c19.
+  - 19-datasheet-w: W6 and W31 were test bugs (fixed). W18 "no ahubdam card" is REAL and not the kernel version (c19 = c20
+    Image): the overlay applied, the card's probe failed with -22 (stream-less DAM DAI refused by soc_new_pcm). Kernel fix
+    `fix/sunxi-h616-ahub-dam-aux-card` 61fb5e0e2 (fork, **to merge into test-cumulative**); rerun job 25 blocks until merged.
 - Merged, waiting for board: c19 panfrost oops fix (job 18; then release held 08/09/14/15), c21 DE33 vblank latch (job 19-display-tearing).
 - Open coding: SPI/I2C target mode (W33, agent running), DE33 writeback connector (W23, agent running).
 - Next items: stateful v4l2jpegdec hang (after job 11 gstdebug), remaining M/L datasheet items (W22 encoder SPEC, W26, W12, W24, W29, W25 G2D).

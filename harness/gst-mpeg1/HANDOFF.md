@@ -39,7 +39,7 @@ line into the summary verbatim. The checks:
 | # | check | PASS if |
 |---|---|---|
 | 0 | kernels | `kernel-stock.txt` is `stock 7.3.1 ...`, `kernel.txt` names a cumulative kernel (`cumulative cN ...`) |
-| 1 | **software fallback without MG1S** | stock phase, no MG1S in `out-stock/fmts.txt`: `inspect.txt` has `MPEG-1 not supported` and no `mpegversion: 1`; `ccm1 db` line rc=0, picked without v4l2slmpeg2dec, irqs=0. SKIP if the stock kernel already enumerates MG1S |
+| 1 | **software fallback without MG1S** | stock phase, no MG1S in `out-stock/fmts.txt`: `inspect.txt` has `MPEG-1 not supported` and no `mpegversion: 1`; `ccm1 db` line rc=0, picked a software decoder (avdec_mpeg2video or mpeg2dec, not v4l2slmpeg2dec), irqs=0. SKIP if the stock kernel already enumerates MG1S. **NOT-TESTABLE** if `inspect.txt` has no `SWDEC=` line: the board image has no software MPEG-1 decoder (job 12: "Missing element: MPEG-1 Video decoder"; the image fix adds gstreamer1.0-libav to every variant, userpatches/config-opiz2-printserver.conf, and needs an image rebuild + reflash). Report the line as printed; it is neither PASS nor FAIL |
 | 2 | **MG1S caps on the test kernel** | `out-test/fmts.txt` one MG1S line; `inspect.txt` has `MPEG-1 supported` and `mpegversion: 1` |
 | 3 | **ccm1 hw** | `ccm1 hw` rc=0 irqs=129; `compare.tsv` ccm1 `simple: frames=129 exact=129` |
 | 4 | **tcela-18 D-pictures in hardware** | `tcela-18 hw` rc=0 irqs=31; `compare.tsv` tcela-18 `frames=31 exact=31` vs the DC reference; `tcela-18.hw.log` has `D-pictures are decoded by the device` |
@@ -47,7 +47,9 @@ line into the summary verbatim. The checks:
 | 6 | MPEG-2 regression | test: `tcela-15 hw` rc=0 irqs=61 `frames=61 exact=61`, `mcp10ccett hw` rc=0 irqs=4 `frames=4 exact=4`; tcela-15 hw md5 equal on stock and test kernel |
 | 7 | autoplug | test: `ccm1 db`, `tcela-18 db`, `tcela-15 db`, `ccm1 pb3`: rc=0, picked contains v4l2slmpeg2dec, md5 equal to the stream's `hw` line |
 | 8 | no hangs | no rc=124 or rc=137 in either `results.txt` |
-| 9 | dmesg | no `timed out`, fault, Oops, WARNING, `bug:` in `out-*/dmesg.txt` |
+| 9 | dmesg | no `timed out`, `fault` (as a word; "default" in the boot lines does not count, job 12's FAIL), Oops, WARNING, `bug:` in `out-*/dmesg.txt` |
+
+`VERDICT:` is `PASS` (all PASS/SKIP), `INCOMPLETE (...)` (no FAIL, but check 1 NOT-TESTABLE on this image) or `FAIL`.
 
 Reference (FFmpeg path, job 11 / impl-legacy-decode.md 6.1): ccm1 129/129 bit-exact, tcela-18 31/31 bit-exact,
 MEI/tcela-16/19 max 2 within envelope 2-3. OPi5 (Hantro): GStreamer MPEG-1 md5s bit-identical to the FFmpeg HW md5s.

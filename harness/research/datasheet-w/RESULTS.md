@@ -18,7 +18,7 @@ round) · **N/A** (not possible or removed upstream, with the reason).
 | W3 | High-speed timer | done (c82a0745c small-gaps, merged) + **board** | `CONFIG_SUN5I_HSTIMER=y`, `hstimer@3005000` in the c17 .config/DT. Driver uses 32 of 56 counter bits (optional small driver change) | **job 19**: `available_clocksource` lists `hstimer` |
 | W4 | CE PRNG | **N/A** (closed) | mainline 7.3 has no `sun8i-ce-prng.c`/`CRYPTO_DEV_SUN8I_CE_PRNG` (removed, CVE-2026-80834); TRNG hwrng OK (`CRYPTO_DEV_SUN8I_CE_TRNG=y`) | row set to closed |
 | W5 | SPI dual I/O | done (b01cc7712 + sample mode 5b15a201b, merged) + **board** | c17 DT: `spi-rx-bus-width = <2>` on the Zero2 flash | **job 19**: params `1S-1S-2S`, eGON.BT0 magic, two identical reads |
-| W6 | CONFIG_COMPAT | done (400c85da1, merged) + **board** | c17 .config: COMPAT, KUSER_HELPERS, ARMV8_DEPRECATED, SWP/CP15/SETEND emulation all y. COMPAT_VDSO off (Armbian passes no CROSS_COMPILE_COMPAT) | **job 19**: static armhf busybox `uname -m` = armv8l (kernel-check/datasheet-w/busybox-armhf, Ubuntu stonking 1:1.38.0-3ubuntu4, sha256 d18300e7…) |
+| W6 | CONFIG_COMPAT | done (400c85da1, merged) + **board** | c17 .config: COMPAT, KUSER_HELPERS, ARMV8_DEPRECATED, SWP/CP15/SETEND emulation all y. COMPAT_VDSO off (Armbian passes no CROSS_COMPILE_COMPAT) | **job 19**: the static armhf busybox ran (`uname -m` = aarch64: a compat task reports the native machine unless the PER_LINUX32 personality is set, which arm64 does not do by itself: the check's expectation was wrong). **Job 25**: binary runs + `linux32 busybox uname -m` = armv8l (kernel-check/datasheet-w/busybox-armhf, Ubuntu stonking 1:1.38.0-3ubuntu4, sha256 d18300e7…) |
 | W9 | USB-C FEL / gadget / OTG host | **hardware** | config present (musb dual-role, `USB_CONFIGFS*`, `USB_F_PRINTER`, `USB_G_*` as modules), overlay `usb-otg-host`, host has `/usr/local/bin/sunxi-fel` | user: a USB-C **data** cable |
 | W10 | SDIO UHS | done (37a01e7b3, merged) + **board** | c17 Zero2 DT: 150 MHz, sdr50/ddr50/sdr104 | **job 19**: mmc1 `ios` timing, no mmc1 errors, WiFi scan |
 | W11 | DE33 planes / Porter-Duff | **board** (count) + **hardware** (visual) | `pixel blend mode` property in sun4i-drm (blend-mode patch) | **job 19**: `modetest -p` plane count + blend property, no monitor; visual check needs an HDMI monitor (user) |
@@ -28,7 +28,7 @@ round) · **N/A** (not possible or removed upstream, with the reason).
 | W15 | TVE plug detection | done (TVE patch merged, "Composite disconnected" verified) + **hardware** | the connect transition needs a 75 Ω load / CVBS display (user) | user hardware |
 | W16 | HDMI IEC 61937 passthrough | **hardware** | AVR needed | user hardware |
 | W17 | Codec DRC controls | done (28e0e7bbd, merged) + **board** + hardware (listening) | | **job 19**: `amixer` lists ≥ 7 DRC controls; listening needs the 13-pin board (user) |
-| W18 | I2S3 overlay + DAM path | done (79ef2101f merged) + **host now: done** (ahub-dam overlay, this task) + **board** + hardware (loopback) | **New overlay `sun50i-h616-ahub-dam`** on `fix/sunxi-h616-datasheet-w` 821dfb5bd (fork): `ahub_dam_mach` → control-only card `ahubdam` with the 13 `Src Select` routing/mixing controls (the datasheet's two DAMs). dtc (kernel flags) clean, fdtoverlay OK alone and with spdif-out + i2s3-ph on the c17 Zero2 DTB | **job 19**: cards `ahubi2s3` (play + capture) and `ahubdam` (13 controls), card order and `aplay -D default`. Loopback pin 21→24 / I2S DAC: user wiring |
+| W18 | I2S3 overlay + DAM path | done (79ef2101f merged; ahub-dam overlay 821dfb5bd merged as c20) + **kernel fix `fix/sunxi-h616-ahub-dam-aux-card` 61fb5e0e2 (fork, to merge)** + **board (job 25)** + hardware (loopback) | Overlay `sun50i-h616-ahub-dam` (821dfb5bd): `ahub_dam_mach` → control-only card `ahubdam`. **Job 19 (c19): I2S3 card plays and captures (PASS); "no ahubdam card" was a real bug, not the kernel version** (c19 and c20 have the same Image, the commit only adds the overlay): dmesg `ahub_dam-snd-soc-dummy-dai: ASoC error (-22): substream ... has no playback, no capture` / `sunxi-snd-mach soc:ahub_dam_mach: probe ... failed with error -22`. The DAM DAI has no streams; current ASoC's soc_new_pcm() refuses such a link (the 5.4 BSP made an empty PCM). Fix 61fb5e0e2 (patches.armbian/sound-soc-sunxi_v2-mach-bind-a-dai-without-streams-as-an-aux-device.patch): the machine driver binds a stream-less CPU DAI's component as the card's aux device and registers the card with no DAI link, so `ahubdam` carries the 13 controls and no PCM; compiled with the kernel flags (-Wall -Wextra clean), STAGE=patch 844/0 | **job 25**: `ahubdam` card with 13 `Src Select` controls, card order and `aplay -D default`. Loopback pin 21→24 / I2S DAC: user wiring |
 | W19 | S/PDIF overlay + clock fix | done (79ef2101f + e11e400f6 642752bdc, merged) + **board** + hardware (receiver) | | **job 19**: card `SPDIF`, `spdif` clk = 24576000/22579200 Hz under `aplay` 48/44.1 kHz |
 | W20 | AVS/AVS+ | done | board-verified 11-03 | — |
 | W21 | JPEG decode | done (patches.media/h616-jpeg merged, 125.8 MPPS) + open | greyscale/4:1:1 refused to software; greyscale probe result to fold in (status.md 9) | gst-jpeg task |
@@ -41,7 +41,7 @@ round) · **N/A** (not possible or removed upstream, with the reason).
 | W28 | HDCP 1.4/2.2 | **blocked** (keys + ESM firmware) | | — |
 | W29 | CE CTR/XTS/HMAC/RSA/ECC | **larger** (L) | sun8i-ce has none for any variant | — |
 | W30 | USB2 standby wake | **hardware** | needs the 13-pin expansion board + a USB keyboard (user) | user hardware |
-| W31 | Jumbo + half duplex | done (jumbo merged, MTU 2018 tested, `OPIZ2_ETH_MTU` knob) + **board** (half duplex) + larger (16 KB) | | **job 19**: forced 100/10 half duplex, ping the host, autoneg restored |
+| W31 | Jumbo + half duplex | done (jumbo merged, MTU 2018 tested, `OPIZ2_ETH_MTU` knob) + **board** (half duplex: job 19 PASS) + larger (16 KB) | Job 19: forced 100 half and 10 half both `link yes ping-received 5/5` (PASS); "autoneg restored" FAIL was the test: the line was read ~10 s after `autoneg on` and printed only two awk fields (`Link detected: ` without the value) although speed/duplex were already 1000/Full. hd.sh now waits for `Link detected: yes` (up to 40 s) and prints the whole lines; the check wants `Auto-negotiation: on` and `Link detected: yes` | **job 25**: the autoneg line |
 | W32 | UART 4 Mbit/s / RS-485 / IrDA | done (RS-485/DLF fix 48491b60d merged) + **N/A** (4 Mbit/s: APB2 24 MHz → 1.5 Mbit/s max; IrDA removed from Linux) + **hardware** (loopback, em485 analyser) | rows updated | user: header jumpers (pins 8/10 ↔ UART2 PH5/PH6) + analyser |
 | W33 | SPI / I2C slave modes | **larger** (M, driver) | spi-sun6i has no target mode, i2c-mv64xxx no slave | — |
 | W34 | PWM pair / capture | **hardware + decision** (pair) + **larger** (capture) | Row corrected: pairs are 01/23/45; header PH2 = pwm2, PH3 = pwm1 (not a pair); pwm3 = PH0 (debug UART TX). Mainline pwm-sun8i v10 has no capture either | user decision (give up the console for a PH0+PH2 pair test) |
@@ -62,7 +62,14 @@ var is the user's decision.
 - docs/datasheet-checklist.md: stale rows fixed (UM-review branches merged, JPEG/DI/MPEG-1 done, PWM pair pins, UART
   4 Mbit/s and IrDA N/A, W4 closed, W table).
 
-## Open after job 19
+## Job 19 analysed (2026-11-06; summary harness/runner-queue/done/19-datasheet-w.summary.md, logs/runner-job19/)
+25 of 28 CHECK PASS on c19. The three FAILs: W6-compat and W31-autoneg-restored were test bugs (rows above), W18-dam-controls
+a real bug fixed in the machine driver (row above; branch `fix/sunxi-h616-ahub-dam-aux-card` 61fb5e0e2 off test-cumulative
+03961fad0, pushed to fork, NOT merged). dsw-job.sh now blocks unless the newest cumulative kernel contains 61fb5e0e2.
+Card order on c19 with the overlays: `0=Codec 1=SPDIF 2=ahubi2s3 3=HDMI`, `aplay -D default rc 0`; the ahubdam card's index
+comes with job 25. Rerun = harness/runner-queue/25-datasheet-w2.md.
+
+## Open after job 25
 - Read `logs/runner/checks.txt`: any FAIL names the item. `INFO asound cards` + `aplay -D default` decide whether
   `ahub_dam_mach` can go into the base DT (vendor parity) or must stay an overlay.
 - Hardware the user must provide for the remaining S items: USB-C data cable (W9), HDMI monitor (W11/W12), AVR (W16),

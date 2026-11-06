@@ -1,0 +1,193 @@
+#!/bin/bash
+# Runner package for the H616 VE H.264 encoder (cedrus stateless encoder): venc-job.sh venc
+# Self-contained: board lock (fresh owner name), one chunk "venc" on the newest cumulative kernel (installed with the
+# one-shot fallback armed through harness/research/vdec-perf/install-kernel.sh; it must contain the venc commit, else
+# BLOCKED). On the board: the encoder node probes (dmesg, v4l2-ctl), v4l2-compliance on it, five encodes of raw NV12
+# test clips with harness/research/ve-encoder/tools/out/h264enc-test (all-intra and I+P, 720p, 1080p and 1366x768),
+# a hardware decode of each stream with GStreamer v4l2slh264dec (if present), dmesg. On the host: every stream is
+# decoded with ffmpeg (errors, frame count) and compared with its source clip (PSNR), the hardware decode is compared
+# with ffmpeg's (md5). Results are copied off; the stock image kernel (vmlinuz-7.3.1-edge-sunxi64) is restored at the
+# end and before every lock hand-over. Resumable: re-running skips the chunks listed in $OUT/state.
+# Exit 0 = chunk ran (judge with HANDOFF.md "Checks"); 2 = blocked ($OUT/BLOCKED); 3 = Oops/WARN/IOMMU fault on the
+# serial log or in dmesg (lines in $OUT/OOPS); 1 = setup or lock error.
+set -u
+H=/home/aruni/orangepizero2; S=$H/harness/research/ve-encoder; V=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh
+J=${1:?job: venc}
+K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+OUT=$S/logs/runner-$J; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED $OUT/OOPS
+case $J in
+  venc) CHUNKS="venc"; CT=900; STALL=180 ;;
+  *) echo "unknown job $J"; exit 1 ;;
+esac
+T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
+want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || exit 1
+FIX=f35cdf390                              # fix/sunxi-h616-venc HEAD (armbian-build); the kernel must have it
+TOOL=$S/tools/out/h264enc-test             # built by harness/research/ve-encoder/tools/build.sh
+CLIPS=$S/runner/clips                      # generated here with the host ffmpeg (testsrc2, raw NV12)
+P=/root/venc/h264enc-test
+R=/root/venc                               # board dir: clips/, out/
+OOPS='Unable to handle|Oops|WARNING:|workqueue lockup|iommu.*fault|Page fault|frame processing timed out'
+SER=$H/harness/serial.log
+PSNR_AVG_MIN=30; PSNR_MIN_MIN=28           # dB, luma; a wrong encode is below 20
+OWN=""
+# run name, width, height, frames, gop (0 = all IDR), qp, clip
+RUNS="r1 1280 720 30 0 26 testsrc2-1280x720-30
+r2 1280 720 30 10 26 testsrc2-1280x720-30
+r3 1920 1080 10 0 20 testsrc2-1920x1080-10
+r4 1920 1080 10 10 30 testsrc2-1920x1080-10
+r5 1366 768 5 0 26 testsrc2-1366x768-5"
+log() { echo "$(date '+%F %T') $*" | tee -a $OUT/runner.log; }
+waitup() { for i in $(seq 1 60); do sleep 5; $SSH -n true 2>/dev/null && return 0; done; return 1; }
+acquire() { OWN=runner-venc-$J-$(date +%s); out=$($H/harness/board-lock.sh acquire $OWN) || { log "lock: $out"; exit 1; }
+  case $out in *"already held"*) log "lock already held by $OWN"; exit 1;; esac; log "$out"; }
+release() { [ -n "$OWN" ] && $H/harness/board-lock.sh release $OWN | tee -a $OUT/runner.log; OWN=""; }
+restore() { $SSH -n 'ln -sfn vmlinuz-7.3.1-edge-sunxi64 /boot/Image; rm -f /boot/vdec-trial; sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'
+  sleep 15; if waitup; then log "restored: $($SSH -n 'uname -rv; readlink /boot/Image' | tr '\n' ' ')"
+  else log "BOARD UNREACHABLE after restore reboot"; echo "board unreachable after restore" > $OUT/BLOCKED; fi; }
+blocked() { log "BLOCKED: $*"; echo "$*" > $OUT/BLOCKED; restore; release; exit 2; }
+on_stock() { [ "$($SSH -n 'readlink /boot/Image')" = vmlinuz-7.3.1-edge-sunxi64 ] || blocked "board not on the stock image kernel at start"; }
+gen_clips() { # host: raw NV12 test clips (testsrc2: moving bars, text and a counter), generated once
+  mkdir -p $CLIPS
+  while read -r r w h n g q c; do
+    [ -s $CLIPS/$c.nv12 ] && continue
+    ffmpeg -v error -y -f lavfi -i "testsrc2=size=${w}x${h}:rate=30" -frames:v $n -pix_fmt nv12 -f rawvideo $CLIPS/$c.nv12 \
+      || { log "clip $c: ffmpeg failed"; exit 1; }
+  done <<< "$RUNS"; }
+ship_file() { # ship_file <host file> <board path>: only when the board copy differs
+  local want_sha have_sha; want_sha=$(sha256sum < "$1" | cut -d' ' -f1)
+  have_sha=$($SSH -n "sha256sum < $2 2>/dev/null | cut -d' ' -f1")
+  [ "$want_sha" = "$have_sha" ] && { log "$(basename $2) on the board is current ($want_sha)"; return; }
+  $V/ship.sh "$1" "$2" 2>&1 | tail -1 | tee -a $OUT/runner.log
+  have_sha=$($SSH -n "sha256sum < $2 | cut -d' ' -f1"); [ "$want_sha" = "$have_sha" ] || blocked "ship of $2 failed"; }
+ship_all() { $SSH -n "mkdir -p $R/clips $R/out"; ship_file $TOOL $P; $SSH -n "chmod +x $P"
+  while read -r r w h n g q c; do ship_file $CLIPS/$c.nv12 $R/clips/$c.nv12; done <<< "$RUNS"; }
+boot_trial() { # install the newest cumulative kernel with the fallback armed; it must contain the venc commit
+  local c; c=$(awk -v t=$T '$1==t{print $3}' $H/kernel-check/cumulative-kernels.txt)
+  git -C $H/wt-cumulative merge-base --is-ancestor $FIX "$c" 2>/dev/null || blocked "kernel $T ($c) lacks the venc commit $FIX"
+  on_stock
+  $V/install-kernel.sh $T 2>&1 | tail -3 | tee -a $OUT/runner.log
+  $SSH -n 'sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'; sleep 15
+  waitup || { log "trial kernel did not come up (the fallback reverts on the next boot)"; echo "trial boot failed" > $OUT/BLOCKED; release; exit 2; }
+  [ "$($SSH -n 'md5sum < /boot/$(readlink /boot/Image) | cut -c1-32')" = "$want" ] || blocked "$T Image md5 mismatch after install"
+  $SSH -n 'touch /run/vdec-ok; uname -v' | sed 's/^/kernel: /' | tee -a $OUT/runner.log
+  $SSH -n 'dmesg | grep -q "cedrus.*Encoder registered"' || blocked "kernel $T has no cedrus encoder device (encoder not in this kernel)"
+  log "kernel encoder: $($SSH -n 'dmesg | grep -o "Encoder registered as /dev/video[0-9]*"')"; }
+others_waiting() { ls $H/harness/queue/board.wait 2>/dev/null | grep -v "\.$OWN\." | grep -q .; }
+chunk_script() { # board script of a chunk ($1 = chunk name); ends with ROUND-DONE
+  cat <<EOS
+set -u; D=$R/out; rm -rf \$D; mkdir -p \$D; cd \$D
+uname -v > kernel.txt; cat /proc/cmdline > cmdline.txt
+n1=\$(dmesg | wc -l); echo DMESG-START \$n1
+dmesg | grep -i 'cedrus\|sun50i-iommu\|video-codec' > dmesg-probe.txt; cat dmesg-probe.txt
+ENC=\$(dmesg | grep -o 'Encoder registered as /dev/video[0-9]*' | tail -1 | grep -o '/dev/video[0-9]*')
+DEC=\$(dmesg | grep -o 'cedrus.*Device registered as /dev/video[0-9]*' | tail -1 | grep -o '/dev/video[0-9]*')
+MED=\$(for m in /dev/media*; do grep -q cedrus /sys/class/media/\$(basename \$m)/model 2>/dev/null && echo \$m && break; done)
+echo "ENC \$ENC DEC \$DEC MEDIA \$MED" | tee nodes.txt
+[ -n "\$ENC" ] || { echo "NO-ENCODER-NODE"; echo ROUND-DONE; exit 0; }
+v4l2-ctl -d \$ENC --all > enc-all.txt 2>&1; v4l2-ctl -d \$ENC --list-ctrls > enc-ctrls.txt 2>&1
+v4l2-ctl -d \$ENC --list-formats-out > enc-fmt-out.txt 2>&1; v4l2-ctl -d \$ENC --list-formats > enc-fmt-cap.txt 2>&1
+echo "== formats"; cat enc-fmt-out.txt enc-fmt-cap.txt | grep -E "\[|Pixel"
+echo "== controls \$(grep -c ' 0x' enc-ctrls.txt)"
+if command -v v4l2-compliance >/dev/null; then
+  timeout 300 v4l2-compliance -d \$ENC \${MED:+-m \$MED} > compliance.txt 2>&1; echo "RC \$?" >> compliance.txt
+  echo "== compliance: \$(grep -E '^Total' compliance.txt)"; grep -E 'fail:|FAIL' compliance.txt | head -20
+else echo "COMPLIANCE-SKIP (no v4l2-compliance)" | tee compliance.txt; fi
+run() { local name=\$1 w=\$2 h=\$3 n=\$4 g=\$5 q=\$6 c=\$7
+  echo "== \$name \${w}x\${h} n=\$n gop=\$g qp=\$q"
+  m1=\$(dmesg | wc -l)
+  timeout 120 $P -v -w \$w -h \$h -n \$n -g \$g -q \$q -i $R/clips/\$c.nv12 -o \$name.h264 > \$name.txt 2>&1; echo "RC \$?" >> \$name.txt
+  grep -E '^RESULT|^RC|ERROR|error|timeout' \$name.txt | head -8
+  dmesg | tail -n +\$((m1+1)) | grep -iE 'cedrus|iommu|timed out' | head -5 | sed 's/^/DMESG: /'
+  if command -v gst-launch-1.0 >/dev/null && [ -s \$name.h264 ]; then
+    timeout 120 gst-launch-1.0 -q filesrc location=\$name.h264 ! h264parse ! v4l2slh264dec ! videoconvert ! video/x-raw,format=NV12 ! filesink location=\$name.hwdec.nv12 > \$name.hwdec.txt 2>&1; echo "RC \$?" >> \$name.hwdec.txt
+    echo "HWDEC \$name bytes \$(stat -c %s \$name.hwdec.nv12 2>/dev/null || echo 0) md5 \$(md5sum < \$name.hwdec.nv12 2>/dev/null | cut -c1-32) \$(tail -1 \$name.hwdec.txt)" | tee -a \$name.hwdec.txt
+    rm -f \$name.hwdec.nv12
+  else echo "HWDEC \$name SKIP" | tee \$name.hwdec.txt; fi
+}
+while read -r r w h n g q c; do run \$r \$w \$h \$n \$g \$q \$c; done <<'RUNS'
+$RUNS
+RUNS
+dmesg | tail -n +\$((n1+1)) > dmesg-chunk.txt
+grep -E 'cedrus|iommu|$OOPS' dmesg-chunk.txt | tail -60 | sed 's/^/DMESG: /'
+ls -la *.h264 | sed 's/^/OUT: /'
+echo ROUND-DONE
+EOS
+}
+extract() { # host side: decode every stream with ffmpeg, PSNR against the clip, one line per key into results.txt
+  local c=$1 d=$OUT/files/$1 r w h n g q clip fs dec frames
+  grep -q NO-ENCODER-NODE $OUT/chunk-$c.txt 2>/dev/null && echo "$c all encoder_node 0" >> $OUT/results.txt || echo "$c all encoder_node 1" >> $OUT/results.txt
+  grep -q "Encoder registered" $d/dmesg-probe.txt 2>/dev/null && echo "$c all probe_registered 1" >> $OUT/results.txt || echo "$c all probe_registered 0" >> $OUT/results.txt
+  echo "$c all controls $(grep -c ' 0x' $d/enc-ctrls.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
+  if grep -q COMPLIANCE-SKIP $d/compliance.txt 2>/dev/null; then echo "$c all compliance SKIP" >> $OUT/results.txt
+  else
+    local tot; tot=$(grep -E '^Total' $d/compliance.txt 2>/dev/null | tail -1)
+    echo "$c all compliance_failed $(echo "$tot" | grep -o 'Failed: [0-9]*' | grep -o '[0-9]*' || echo missing)" >> $OUT/results.txt
+    echo "$c all compliance_warnings $(echo "$tot" | grep -o 'Warnings: [0-9]*' | grep -o '[0-9]*' || echo missing)" >> $OUT/results.txt
+  fi
+  while read -r r w h n g q clip; do
+    fs=$((w * h * 3 / 2))
+    if [ ! -f $d/$r.txt ]; then echo "$c $r missing 1" >> $OUT/results.txt; continue; fi
+    awk -v c=$c -v r=$r '/^RESULT/ { for (i = 2; i <= NF; i++) { split($i, kv, "="); print c, r, kv[1], kv[2] } }
+                         /^RC / { print c, r, "rc", $2 }' $d/$r.txt >> $OUT/results.txt
+    echo "$c $r stream_bytes $(stat -c %s $d/$r.h264 2>/dev/null || echo 0)" >> $OUT/results.txt
+    if [ -s $d/$r.h264 ]; then
+      dec=$d/$r.dec.nv12
+      ffmpeg -v error -y -i $d/$r.h264 -f rawvideo -pix_fmt nv12 $dec > $d/$r.ffmpeg-err.txt 2>&1
+      echo "$c $r ffmpeg_errors $(grep -c . $d/$r.ffmpeg-err.txt)" >> $OUT/results.txt
+      frames=$(( $(stat -c %s $dec 2>/dev/null || echo 0) / fs ))
+      echo "$c $r decoded $frames" >> $OUT/results.txt
+      echo "$c $r hwdec_md5_ffmpeg $(head -c $((frames * fs)) $dec | md5sum | cut -c1-32)" >> $OUT/results.txt
+      if [ $frames -gt 0 ]; then
+        ffmpeg -v error -f rawvideo -pix_fmt nv12 -s ${w}x${h} -i $dec -f rawvideo -pix_fmt nv12 -s ${w}x${h} -i $CLIPS/$clip.nv12 \
+          -frames:v $frames -lavfi "psnr=stats_file=$d/$r.psnr.txt" -f null - > /dev/null 2>&1
+        awk -v c=$c -v r=$r '{ for (i = 1; i <= NF; i++) if ($i ~ /^psnr_y:/) { split($i, kv, ":"); y = kv[2] + 0; if (y > 999) y = 999; s += y; if (m == "" || y < m) m = y; k++ } }
+                             END { if (k) { printf "%s %s psnr_avg %.2f\n%s %s psnr_min %.2f\n%s %s psnr_frames %d\n", c, r, s / k, c, r, m, c, r, k } else print c, r, "psnr_avg 0" }' $d/$r.psnr.txt >> $OUT/results.txt
+      fi
+      rm -f $dec
+    fi
+    local hw; hw=$(grep '^HWDEC' $d/$r.hwdec.txt 2>/dev/null | tail -1)
+    if echo "$hw" | grep -q SKIP; then echo "$c $r hwdec SKIP" >> $OUT/results.txt
+    else echo "$c $r hwdec_frames $(( $(echo "$hw" | awk '{print $4}') / fs ))" >> $OUT/results.txt
+         echo "$c $r hwdec_md5 $(echo "$hw" | awk '{print $6}')" >> $OUT/results.txt
+         a=$(echo "$hw" | awk '{print $6}'); b=$(grep "^$c $r hwdec_md5_ffmpeg" $OUT/results.txt | awk '{print $4}')
+         [ -n "$a" ] && [ "$a" = "$b" ] && echo "$c $r hwdec_md5_match 1" >> $OUT/results.txt || echo "$c $r hwdec_md5_match 0" >> $OUT/results.txt; fi
+  done <<< "$RUNS"
+  echo "$c all dmesg_bad $(grep -cE "$OOPS" $d/dmesg-chunk.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
+  echo "$c all dmesg_iommu $(grep -ciE 'iommu.*fault|Page fault' $d/dmesg-chunk.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
+  echo "$c all dmesg_timeout $(grep -ciE 'timed out' $d/dmesg-chunk.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
+  echo "$c all dmesg_encode_failed $(grep -ciE 'encode failed|Failed to setup encoding|invalid coded size' $d/dmesg-chunk.txt 2>/dev/null || echo 0)" >> $OUT/results.txt; }
+oops_fail() { log "OOPS during chunk $1 ($2): $(head -3 $OUT/OOPS | tr '\n' ' ')"; restore; release; log "job $J ABORTED (exit 3)"; exit 3; }
+run_chunk() { # run_chunk <chunk>: remote script under timeout + stall watchdog; output to $OUT/chunk-<c>.txt
+  local c=$1 f=$OUT/chunk-$1.txt oops=""
+  chunk_script $c | $SSH "mkdir -p $R; cat > $R/chunk-$c.sh" || { log "chunk $c: cannot write the board script"; return; }
+  local soff=$(stat -c %s $SER 2>/dev/null || echo 0)
+  $SSH -n "timeout $CT bash $R/chunk-$c.sh" > $f 2>&1 & local p=$!
+  local last=$(date +%s) sz=0
+  while kill -0 $p 2>/dev/null; do sleep 10
+    n=$(stat -c %s $f); [ "$n" != "$sz" ] && { sz=$n; last=$(date +%s); }
+    if [ -f $SER ] && tail -c +$((soff+1)) $SER | grep -qE "$OOPS"; then
+      tail -c +$((soff+1)) $SER | grep -E "$OOPS|Call trace|pc :|lr :" | head -40 > $OUT/OOPS
+      log "OOPS on the serial log during chunk $c, killing ssh $p"; kill $p; echo OOPS >> $f; oops=serial; break; fi
+    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill $p; echo STALLED >> $f; break; fi
+  done; wait $p 2>/dev/null
+  mkdir -p $OUT/files/$c; scp -q -r "${K[@]}" root@10.56.0.107:$R/out/. $OUT/files/$c/ 2>/dev/null
+  if [ -z "$oops" ] && grep -qE "$OOPS" $OUT/files/$c/dmesg-chunk.txt 2>/dev/null; then grep -E "$OOPS|Call trace|pc :|lr :" $OUT/files/$c/dmesg-chunk.txt | head -40 > $OUT/OOPS; oops=dmesg; fi
+  extract $c
+  [ -n "$oops" ] && oops_fail $c $oops
+  grep -q ROUND-DONE $f && { echo $c >> $OUT/state; log "chunk $c done"; } || log "chunk $c ended without ROUND-DONE"; }
+: > $OUT/results.txt
+[ -x $TOOL ] || { log "missing $TOOL (run tools/build.sh)"; exit 1; }
+log "job $J start, kernel $T (Image md5 $want), venc commit $FIX, chunks: $CHUNKS, done before: $(tr '\n' ' ' < $OUT/state)"
+gen_clips
+trap 'release' EXIT
+acquire; on_stock; ship_all
+for c in $CHUNKS; do
+  grep -qx "$c" $OUT/state && continue
+  if others_waiting; then log "another session waits: handing over the lock"; restore; release; acquire; on_stock; fi
+  boot_trial
+  log "chunk $c start"; run_chunk $c
+  restore
+done
+release
+log "job $J end: $(wc -l < $OUT/state) of $(echo $CHUNKS | wc -w) chunks done; results in $OUT/results.txt"
+[ -f $OUT/BLOCKED ] && exit 2; exit 0

@@ -1,9 +1,10 @@
-# Allwinner H616 Video Engine H.264 encoder on mainline Linux — Phase 1 research and plan
+# Allwinner H616 Video Engine H.264 encoder on mainline Linux: plan
 
-Date: 2026-11-01. Board: Orange Pi Zero2 (H616), Armbian mainline 7.3.1
-(`/home/aruni/orangepizero2/kernel-check/work/linux-7.3.1`). Host-only research;
-the board was not touched. Downloads are under `dl/` (one directory per source);
-helper scripts under `tools/`.
+Re-planned 2026-11-06 for the **stateless H.264 encode uAPI** (user decision 2026-11-05: build on Paul
+Kocialkowski's 2026-05 `[PATCH 00/14] media: Add V4L2 H.264 stateless encode and VC8000E support`, as the
+OPi5 project does, not a stateful cedrus encoder). Sections 1-3 are the Phase 1 research of 2026-11-01
+(prior art, blobs, hardware facts) and still hold; section 4 is the plan, section 5 the risks. State and
+results: `RESULTS.md` (same directory); runner package: `runner/`; test tool: `tools/h264enc-test.c`.
 
 ## 0. Approach and legal framing (stated once)
 
@@ -116,14 +117,17 @@ GPL-3.0 code into a GPL-2.0 kernel driver).
 * **Stateful encoder uAPI: stable and documented**
   (`Documentation/userspace-api/media/v4l/dev-encoder.rst`), used by mtk-vcodec-enc,
   amphion, wave5, etc. GStreamer `v4l2h264enc` and FFmpeg `h264_v4l2m2m` consume it.
-* Judgement: for the Cedrus VE the kernel must compose headers (hardware bit writer)
-  and choose per-frame QP anyway, so a **stateful M2M encoder with in-kernel rate
-  control is the mergeable route today**, and the RC/header code is exactly what the
-  envisaged hybrid stateless API would also need in-kernel. Design the engine layer
-  (Bootlin's `cedrus_engine` split) so the uAPI front end can be swapped later. Expect
-  maintainers (Hans Verkuil, Nicolas Dufresne, Paul Kocialkowski — Cedrus co-maintainer)
-  to ask that question; have the answer ready. Note the two independent 2025-2026
-  stateful implementations for this very engine family (1.6, 1.7) as evidence of demand.
+* Judgement of 2026-11-01 (superseded 2026-11-05): a stateful M2M encoder looked like the
+  mergeable route. **Decision 2026-11-05: the stateless uAPI.** Paul's 2026-05 series is
+  kernel-driven (headers, rate control and the DPB in a shared `v4l2-h264-enc*` core; userspace
+  sends SPS/PPS/encode params per picture in a request), so a cedrus encoder on it is a thin
+  register layer, shares one copy of the RC/header code with every other driver, is the
+  "second implementation, not just a variant of the same brand" Nicolas Dufresne asked for
+  (2026-09-24), and is what Paul hopes to add for Allwinner himself. The OPi5 project already
+  carries the series (patches 0801-0809, with two fixes) for its Rockchip encoders; both
+  projects use the same files. The uAPI is unmerged (v2 pending, spec required), so this
+  lives in our kernels until it lands; the driver-side API (`v4l2_h264_enc_init/step/complete`,
+  `state_constrain`, `rec_buffer_alloc/free`, rbsp ops) is what we would have to track.
 
 ### 1.5 Allwinner's own published sources
 
@@ -392,166 +396,125 @@ vendor composite `0x3301000012011` (BliKVM on H616; rgsp-cast on H700). H6 is
 
 ---
 
-## 4. Engineering plan
+## 4. Plan (stateless uAPI, 2026-11-06)
 
-### 4.0 Guiding acceptance gate: parity with the vendor blob
+### 4.0 What is built (branch `fix/sunxi-h616-venc`, armbian-build, f35cdf390)
 
-Every phase from B onwards is measured against the vendor encoder **on the same board**
-(section 4.6). The driver is "done" only when, for each row below, it is as good or
-better; where it is not, we must identify the cause (register setting, RC algorithm,
-missing feature, clock) and fix it, or document a hardware reason.
+`patch/kernel/archive/sunxi-7.3/patches.media/h616-venc/`:
 
-| Dimension | Metric | Method | Pass |
-| --- | --- | --- | --- |
-| Quality | PSNR-Y, SSIM, VMAF vs source at matched bitrate (±3 %), per sequence | 4+ sequences (synthetic: `smptebars`/`testsrc2` scroll; real: xiph derf 1080p `crowd_run`, `park_joy`, `in_to_tree`; 720p `four_people`/`johnny`; a desktop-scroll capture), 300 frames, at 1.5/2.5/5/8 Mbit/s and CQP 22/28/34, GOP structures the blob supports (IPPP… with IDR period 30/60/∞; "smart P"/long-term-ref if the blob exposes them; B frames only if the blob does) | ≥ blob VMAF and ≥ blob PSNR − 0.1 dB on every sequence/rate; investigate any miss |
-| Performance | encode fps (sustained), per-frame latency trigger→IRQ and queue→dequeue (p50/p99), CPU % during encode | 1080p30 live loop for 10 min; 720p; and the blob's maximum (4K@25 per brief, if the blob accepts it) | fps ≥ blob; p99 latency ≤ blob; CPU ≤ blob |
-| Features | profiles BP/MP/HP (CABAC), levels, RC modes CQP/CBR/VBR(AVBR), intra-refresh (0xb28), ROI (0xbcc-0xbdc, 8 regions per `vencoder.h`), ISP input (NV12/NV21/YUV420P/YUV422/YUYV/ARGB, scale, rotate, crop), JPEG encode (STARTTRIG mode 1) | feature matrix enumerated with the blob via `VideoEncSetParameter` and `v4l2-ctl --list-ctrls` for ours | every blob feature that the hardware implements is present (software-only blob features may be matched in userspace) |
-| Stability | 12 h soak at 1080p30 with periodic IDR, resolution changes, start/stop 1000x, decode+encode interleaving with Cedrus, timeout/reset recovery | `v4l2-ctl`/GStreamer loop + dmesg watch | zero errors, no leaks (`/sys/kernel/debug/dma_buf`, CMA free), no IRQ storms |
+| File | Origin | Content |
+| --- | --- | --- |
+| `0801-media-h264-Add-a-more-generic-reflist-builder-init.patch` | series 1/14 | `v4l2_h264_init_reflist_builder_gen()` |
+| `0802-media-uapi-Add-H.264-stateless-encode-support.patch` | series 2/14 | `V4L2_CID_STATELESS_H264_ENCODE_PARAMS`, `struct v4l2_ctrl_h264_encode_params`, ctrl type 0x0206 |
+| `0803-media-h264-Add-SPS-video-definitions.patch` | series 3/14 | `struct v4l2_h264_sps_video` (crop, VUI timing/SAR/colour) |
+| `0804-media-h264-Add-stateless-encode-core.patch` | series 4/14 | `v4l2-h264-enc.c`: state from controls, `state_constrain`, commit back to the controls |
+| `0805-media-h264-Add-stateless-encode-rbsp.patch` | series 5/14 | AUD/SPS/PPS/slice header writer with driver ops (`bits_raw`, `bits`, `ue`, `se`, `align`) |
+| `0806-media-h264-Add-stateless-encode-reference-management.patch` | series 6/14 | sliding-window DPB, L0/L1, driver-owned reconstruction buffers |
+| `0807-media-h264-Add-stateless-encode-rate-control.patch` | series 7/14 | direct QP, CQ, CBR (size budget + QP estimate from statistics) |
+| `0808-...Only-write-the-SPS-and-PPS...` | OPi5 fix (Arun, 2026-10-29) | SPS/PPS on the first picture and on change only |
+| `0809-...Support-picture-order-count-type-2...` | OPi5 fix (Arun, 2026-10-29) | POC type 2 (FrameNumOffset tracking) |
+| `media-cedrus-add-a-stateless-H-264-encoder.patch` | ours | `cedrus_enc.c` (V4L2: formats, controls, queues, job), `cedrus_enc_h264.c` (engine), `cedrus_regs.h` (ISP 0xa00 + AVC 0xb00 map), second video device, m2m dispatch |
+| `media-cedrus-enable-H-264-encoding-on-the-H616.patch` | ours | `CEDRUS_CAPABILITY_H264_ENC` + `CEDRUS_ENC_FLAG_ADDR_SHIFT_8 \| ISP_SIZE_8PX \| H6_PARAMS` on the H616 variant |
 
-Blob-side steps known to be **software** (so we must match/beat them algorithmically,
-not by register copying): SPS/PPS/slice-header syntax (library composes, hardware bit
-writer emits), per-frame QP / rate control (library; hardware only provides MAD
-statistics and thresholds), GOP decisions and IDR insertion, reference management
-(one or two refs), ROI → QP-map preparation, scene-change/"motion detect" heuristics
-(`H264EncMotionDetect`), temporal-filter/dynamic-ME parameter selection
-(`init_temporalfilter`, `init_dynamicMe`), VUI/SEI generation. Hardware does: intra/
-inter prediction and search within its window, transform/quant, CAVLC/CABAC entropy
-coding of slice data, deblocking, reconstruction, sub-pixel planes, ISP CSC/scale/
-rotate, statistics.
+The nine `08xx` files are byte for byte `~/orangepi5/patches/linux/0801-0809` (sha256 identical), so a fix
+in either project is a copy. Patches 8-14 of the series (Hantro VC8000E/H1) are not carried. The OPi5
+VEPU2 patch (`0825`) was the model for the driver side (`enc->flags`, `ref_slots_count_init = 1`,
+`state_constrain`, `rec_buffer_*`, `v4l2_h264_enc_step()` in the run, `v4l2_h264_enc_complete()` when done).
 
-### 4.1 Phase A — userspace/lab PoC on H616 (2-4 weeks)
+Driver design (`drivers/staging/media/sunxi/cedrus/`):
 
-Goal: prove the full register sequence encodes decodable I and P frames on *our*
-board, and capture vendor traces for everything the V3s map does not explain.
+* **Device model.** One `v4l2_m2m_dev`, two video nodes: `cedrus` (decoder, unchanged) and `cedrus-enc`.
+  Both use `cedrus_open()`; `ctx->is_enc` selects the queue init, the format reset, the control table and
+  `cedrus_enc_device_run()`. Jobs of both nodes are serialised by the m2m job queue (half-duplex engine),
+  the IRQ handler and the watchdog are unchanged: the encoder is a `cedrus_dec_ops` (`cedrus_enc_ops_h264`:
+  setup/trigger/irq_status/irq_clear/irq_disable/start/stop/post_process). Decode paths are untouched except
+  the VE-reset-on-engine-switch helper (`cedrus_engine_switch_reset()`, same logic, now shared). The MC
+  helper is called for both nodes (encoder entities `MEDIA_ENT_F_PROC_VIDEO_ENCODER`); its single-set
+  bookkeeping means the decoder's entities are released with the media device, an upstream-cleanliness
+  item (4.3).
+* **Formats.** OUTPUT `NV12` only (ISP format 0; NV21/YUV420/YVU420 codes are in the V3s map, untraced on
+  H616), stride 16-aligned, `sizeimage` for the 16-aligned height, visible size kept so the core writes the
+  SPS crop. CAPTURE `V4L2_PIX_FMT_H264_SLICE` (the series' coded format; the summit's `H264_SL` rename is
+  not in v1), one access unit per buffer, size defaulting to the raw picture, 256-byte granularity, 64 KiB
+  minimum (0xb8c counts in 64 Kibit units on the 0x12011). Sizes 16x16 .. 2048x2048 step 2 (>2048 needs the
+  0xbc4 line buffer, 4.2). `S_PARM` OUTPUT = frame rate for the VUI.
+* **Controls.** SPS, PPS, ENCODE_PARAMS (compound, per request), START_CODE, AU_DELIMITER,
+  PREPEND_SPSPPS_TO_IDR, H264_PROFILE/LEVEL (informative), VUI SAR x4, FRAME_RC_ENABLE, MIN/MAX_QP,
+  I/P_FRAME_QP, BITRATE_MODE (CBR/CQ; VBR skipped, the core has none), CONSTANT_QUALITY, BITRATE,
+  MIN_BUFFERS_FOR_OUTPUT: 21 controls, all read by the core.
+* **state_constrain** (what the hardware can do): profile 66/77/100, 8-bit 4:2:0 frames, one reference,
+  **CAVLC** (CABAC bit exists but "fix mode num" is unresolved, 4.2), no 8x8 transform, no constrained intra
+  pred, deblocking per slice (PARA0 idc/alpha/beta), chroma QP offset 3-bit on V3s and 0 on H616, POC type
+  0 or 2, P pictures of frames < 13 MBs wide become I.
+* **Job** (`cedrus_enc_h264_setup`, per picture, vendor order): mode register (DDR bits + decoder field 7),
+  encoder reset pulse (0x004 bit 24), enable bits 7+6; ISP 0xa00/0xa2c (8-px units on H616, MBs on V3s),
+  0xa04 (+0xa14 on H616) stride, 0xa08 = NV12/BT.601, 0xa78/7c/80 input (byte addresses); status clear;
+  stream 0xb88 = 0, 0xb80/0xb84 (>>8 on H616), 0xb8c = bits, 0xb90/54/58 = 0; `v4l2_h264_enc_step()` (state,
+  QP, references, then the headers through our rbsp ops: `bits_raw` with EPTB off, `bits` with EPTB on,
+  switched at byte boundaries only; `align` pads with raw zeros; `ue`/`se` left to the core); PARA0
+  (slice type, P = 0x410 as the vendor, deblock fields, CABAC bit) which also re-enables EPTB; wait for sync
+  idle (0x004 bits 8/9); buffers 0xbc0 MB info, 0xb60 = 0, 0xbb0/b4 recon (the core's `buffer_current`),
+  0xba0/a4 ref (l0[0] or itself for I), 0xbb8/bc sub-pixel (ref's, current's), 0xbc4 = 0xb28 = 0; PARA1
+  (QP from `enc->rc.qp`, stride/48, on H616 dynamic ME + bit 27, on V3s chroma offset), 0xb48/4c thresholds
+  (H616: vendor formula from the stride), 0xb10 = 0x11000 (H616) / 0x10004 (V3s), RC regs 0; statistics 0;
+  trigger: INT_EN 0x7, STARTTRIG 8. IRQ: status bit 0 = OK, stall/overtime = error; `post_process` sets the
+  payload (0xb90/8) and calls `v4l2_h264_enc_complete()`.
+* **Buffers** (V3s sizes, which the vendor also requests on H616): recon luma `ALIGN(W,2)*16 * ALIGN(H+1,4)*16`
+  + chroma `ALIGN(W,2)*16 * ALIGN(ceil(H/2),4)*16` (4 KiB aligned), sub-pixel
+  `(ALIGN_DOWN((W+47)*2/3,32) + ALIGN(W,32)*2) * ((H*16+72)/8)`, MB info `ceil(W/32)*4 KiB`; one recon set
+  per core slot (`ref_slots_count_init = 1`: current + one reference). All through `dma_alloc_attrs` on the
+  VE device = IOMMU addresses; every master stays translated, the IOMMU stays on.
 
-1. Kernel side for the lab: a minimal GPL-2.0 lab module bound to the VE node after
-   unbinding Cedrus (clocks/reset/SRAM/IRQ as `cedrus_hw.c`; ioctls: alloc dma-buf from
-   CMA/dma-heap, read/write register, wait IRQ; log `0xe0/0xe4`). Alternatively
-   `uio_pdrv_genirq` + `/dev/dma_heap/linux,cma` — simplest, but UIO cannot ack the
-   level IRQ in the encoder's 0xb1c/0xb14 registers, so a tiny module is preferred.
-   Keep the BliKVM/T527 lesson: **never** let Cedrus and the lab module both hold the
-   IRQ.
-2. Host-side encoder tool in C (`ve-h264-poc`): implements the H616 hypothesis from
-   BliKVM's "register description" (select via bits 7/6 + reset bit 24; ISP 0xa00/
-   0xa04/0xa14/0xa2c/0xa08/0xa78-80; stream 0xb88/0xb80/0xb84/0xb8c with `>>8`;
-   buffers 0xba0-0xbc4 `>>8`; headers via bit writer with status bit 9 polling;
-   PARA0 0 / 0x410; PARA1 QP | bit 8 | stride/48 | bit 27; ME 0x00011000; trigger 8;
-   read 0xb90/0xb1c/0xb50-58). Our own SPS/PPS/slice-header writer (constrained
-   baseline → main/high), NV12 input, 2 ping-pong recon sets, sub-pixel buffers of the
-   V3s sizes, MB-info buffer.
-3. MMIO tracer (`ve-trace`) per 2.3, run against the aodzip glibc `libvencoder.so`
-   with H6 identity (0x12010) and, if the user approves the TrimUI firmware, the
-   sun50iw9 build with the true 0x12011. Trace matrix: CQP vs CBR vs VBR, ROI on, intra
-   refresh on, each `VENC_PIXEL_FMT` the H616 accepts (which reveals ISP format codes
-   and the RGB CSC path), scaler ratios, rotation, 4K input, GOP/long-term-ref modes,
-   JPEG. Output: `docs/h616-ve-encoder-registers.md` (our words, with per-run diffs).
-4. Validation: decode PoC output with host ffmpeg and the JM reference decoder
-   (`ldecod`), check `ffprobe -show_frames`, PSNR against source; then decode with the
-   board's own Cedrus (GStreamer `v4l2slh264dec`/ffmpeg v4l2-request) to prove
-   hardware-decodability.
-   Exit criterion: 1080p I+P at CQP decodes everywhere, timing ≈ 7 ms/frame, no
-   IRQ/watchdog errors, trace-derived register table covers all blob features.
+### 4.1 Verification (runner job 27, `runner/HANDOFF.md`)
 
-### 4.2 Phase B — kernel V4L2 M2M stateful encoder (6-10 weeks)
+Probe, v4l2-compliance, five encodes (720p all-IDR and I+P, 1080p all-IDR QP 20 and I+P QP 30, 1366x768
+all-IDR for the crop/8-px path), host ffmpeg decode (errors, frame count), PSNR against the source (>= 30 dB
+average, >= 28 minimum), the board's own `v4l2slh264dec` decoding the streams bit-exactly, dmesg clean
+(no IOMMU fault, timeout or encode error). The tool `tools/h264enc-test` drives the uAPI directly (requests,
+SPS/PPS/encode params per picture, reads the adapted parameters back).
 
-* Placement: `drivers/staging/media/sunxi/cedrus/` on top of a rebased Bootlin rework
-  (`cedrus_proc.c`/`cedrus_engine.c` split) — files `cedrus_enc.c`, `cedrus_enc_h264.c`
-  (new H616 engine variant alongside V3s), later `cedrus_enc_jpeg.c`. Capability
-  `CEDRUS_CAPABILITY_H264_ENC` (+ `_JPEG_ENC`) on the H616 variant; variant data for
-  address shift (`>>8`), size units (8 px vs MB), ME default, MAD-threshold count. Keep
-  the V3s path working (we can't test it; Bootlin/piernov can).
-* Device model: second video node (`/dev/videoN`, "cedrus-enc"), OUTPUT queue
-  `V4L2_PIX_FMT_NV12`/`NV21`/`YUV420`/`YVU420` (+ `YUYV`/`UYVY`/`RGB32` once the ISP
-  codes are traced), CAPTURE `V4L2_PIX_FMT_H264`; `S_SELECTION` crop; stepwise
-  framesizes 256x64 … 1920x1088 initially, 4K after the 0xbc4 line-buffer experiment;
-  `V4L2_CID_MIN_BUFFERS_FOR_OUTPUT`.
-* Controls (stateful encoder class): `V4L2_CID_MPEG_VIDEO_H264_PROFILE` (BP/CBP/MP/HP),
-  `_H264_LEVEL`, `_H264_ENTROPY_MODE`, `_BITRATE`, `_BITRATE_MODE` (CQ/CBR/VBR),
-  `_BITRATE_PEAK`, `_GOP_SIZE`, `_H264_I_PERIOD`, `_FORCE_KEY_FRAME`,
-  `_H264_MIN_QP`/`_MAX_QP`, `_H264_I_FRAME_QP`/`_P_FRAME_QP`, `_CONSTANT_QUALITY`,
-  `_H264_LOOP_FILTER_MODE`/`_ALPHA`/`_BETA`, `_H264_CHROMA_QP_INDEX_OFFSET`,
-  `_CYCLIC_INTRA_REFRESH_MB` (0xb28), `_PREPEND_SPSPPS_TO_IDR`, `_HEADER_MODE`,
-  `_FRAME_RC_ENABLE`, `_MB_RC_ENABLE` (if the MAD thresholds prove usable), VUI
-  SAR/timing controls, `V4L2_CID_ROTATE`/`HFLIP` (ISP), ROI via the standard
-  `V4L2_CID_MPEG_VIDEO_…` lacks ROI — propose a compound control or defer to the
-  stateless-hybrid API.
-* In-kernel rate control: start with a proper frame-level RC (e.g. a simplified x264
-  ABR/VBV model: complexity from 0xb50 MAD + previous frame bits, QP clamp, VBV
-  buffer), optionally **two-pass per frame** (re-encode against the same reference
-  when the first pass misses the budget by > X %, cheap at 7 ms/pass) which is how
-  BliKVM beats the blob's RC. Expose the hardware MAD thresholds (0xb2c-0xb38) once
-  the trace tells us how the blob uses them.
-* IRQ/job model: one handler; mode-reg bit 7 → encoder status 0xb1c; watchdog +
-  `reset_control_reset` recovery (T527 saw VE wedges on decode↔encode mode switches;
-  budget a per-switch encoder reset pulse via 0x004 bit 24 as the vendor does).
-* DMA: with the 7.4 DT (`iommus`) use `vb2_dma_contig` behind the IOMMU; recon/
-  sub-pixel/MB-info/RC buffers allocated per context with the V3s sizes (BliKVM
-  confirms the H616 stays within them).
-* Deliverables: driver, dt-bindings update (none needed beyond the 7.4 series), tests
-  (`v4l2-compliance -d /dev/videoN` must pass), documentation in `Documentation/`.
+### 4.2 Next steps, in order (each a fresh agent after the board result)
 
-### 4.3 Phase C — userspace integration (2-3 weeks)
+1. **Board result of job 27.** Likely first-run issues, with the diagnostic for each: no IRQ / timeout ->
+   the mode register or the enable sequence (BliKVM read 0xc00000c7 with the encoder selected: compare
+   the DDR bits), or 0xb8c granularity; stall -> the end address shift; garbage but decodable -> ISP size
+   units or stride; headers but no slice data -> EPTB mode switching or the sync-idle wait; P frames fail
+   while I frames pass -> reference/sub-pixel addresses (the `>>8` of the ref regs) or PARA0 0x410.
+2. **CABAC** (main/high): A/B on the board with `fix_mode_num` = `cabac_init_idc` vs always 1 for P (the
+   vendor writes 0x410 with CAVLC; what it writes with CABAC and which `cabac_init_idc` it codes is
+   unknown). Then lift the CAVLC constraint and allow `V4L2_H264_PPS_FLAG_ENTROPY_CODING_MODE` per profile.
+3. **Input formats**: NV21 (format code 4), YUV420/YVU420 (24/26, third plane at 0xa80) as the V3s map says;
+   verify colours on the board; later YUYV/RGB via the ISP (needs the vendor trace, 2.3).
+4. **Rate control on hardware**: the core's CBR/CQ already work (software, per picture). Feed the engine's
+   statistics (0xb50 MAD, 0xb54 residual bits, 0xb58 header bits) to the core through `rc_ops` when the
+   core grows that interface; the hardware RC assist (0xb2c/0xb30-38, 0xb9c buffer) after a trace.
+5. **4096x4096 (W22)**: the 0xbc4 external deblocking line buffer for widths > 2048 (T527 driver as the
+   reference; size to be established), `VE_MODE_PIC_WIDTH_*` bits for the encoder, then 4K@25 timing.
+6. **Features from the datasheet (W22)**: cyclic intra refresh (0xb28, `V4L2_CID_MPEG_VIDEO_CYCLIC_INTRA_REFRESH_MB`),
+   8 ROIs (0xbcc-0xbdc; needs a uAPI, Qualcomm's ROI control series v10 2026-10 as the candidate),
+   JPEG/MJPEG encode (STARTTRIG mode 1; separate `V4L2_PIX_FMT_JPEG` capture format on the same node or a
+   third node), multi-slice when the core gets it.
+7. **Userspace**: GStreamer `v4l2codecs/h264enc` from Paul's branch (github.com/paulkocialkowski/gstreamer,
+   1.26-based, `rate-control=cbr`) built for the board image; an FFmpeg `h264_v4l2request` encoder does not
+   exist yet (both are the OPi5 project's problem too: share).
+8. **Parity with the vendor blob** (the old 4.0 gate, kept as the acceptance bar with `SPEC.md`): quality
+   (PSNR/VMAF at matched bitrate), speed (4K@25, 1080p60), soak; the vendor reference harness of the old
+   plan (4.6) when the blob is run on this board.
+9. **Upstream**: nothing until Paul's v2 lands; then the two cedrus patches, with the register documentation
+   (our words: V3s map + 0x12011 differences, provenance per fact), as the second implementation of the uAPI.
 
-* GStreamer `v4l2h264enc` (needs `V4L2_PIX_FMT_H264` + stateful controls; verify
-  `extra-controls`, `capture-io-mode=dmabuf`, zero-copy from `v4l2src`), FFmpeg
-  `h264_v4l2m2m` (check its buffer-count and `-b:v`/`-qp` mapping), libcamera/
-  pipewire consumers; a `ve-enc-bench` tool for the parity matrix (4.6).
-* Carry fixes upstream to GStreamer/FFmpeg if their stateful encoder clients
-  mis-handle our control set (common: `H264_LEVEL` enumeration, `MIN_BUFFERS`).
+### 4.3 Open items in the code (not blockers)
 
-### 4.4 Phase D — upstreaming (3-6 months of review cycles, part time)
+* MC entities: `v4l2_m2m_register_media_controller()` twice on one m2m_dev; the decoder's three entities are
+  only freed by `media_device_unregister()`. Clean fix: a helper that takes a per-node entity set, or
+  Bootlin's proc/engine split.
+* `ENCODE_PARAMS` default (zero) is a P slice; the core rejects a stream that does not start with I, so
+  userspace must set it (fine, but a documented default would be better).
+* `PARA1` bit 27, `PARA0` bit 10 for P, `ME_PARA` bit 12 (quant threshold off, costs bits at the same QP per
+  BliKVM): vendor values carried as is; each is an A/B experiment once the encoder works.
+* Sub-pixel "last" register for I pictures points at the picture's own buffer (Bootlin did the same).
 
-1. Post the Cedrus rework (rebased Bootlin series, co-developed/acked by Paul
-   Kocialkowski) first — low-controversy.
-2. Post the encoder infrastructure + H616 H.264 engine with the parity numbers from
-   4.6 and the register documentation (`Documentation/userspace-api/media/drivers/`
-   or in-tree comments as Cedrus does). Cc linux-media, linux-sunxi, Hans Verkuil,
-   Nicolas Dufresne, Paul Kocialkowski, Chen-Yu Tsai, Jernej Skrabec, Andre Przywara.
-3. Expect the "why stateful?" discussion; answer with 1.4 and offer to port the engine
-   layer to the hybrid stateless API when it lands (the in-kernel RC is reusable).
-4. Documentation to produce: register map (ours, from traces + experiments), buffer
-   layout table, encode sequence, IRQ/status semantics, variant differences (V3s vs
-   H616 vs T527), limits (P-frame min width, size units, stream-end behaviour), and the
-   RE-provenance statement for each fact (source: open code / trace / experiment).
-
-### 4.5 Test method on our board (future phase; not now)
-
-1. Second SD card A (mainline + our driver) and card B (vendor reference, 4.6). Same
-   board, same power, same clock settings where controllable.
-2. Inputs: raw YUV sequences in NV12 on tmpfs/eMMC (ffmpeg `-pix_fmt nv12 -f rawvideo`,
-   width/height multiples of 16 plus cropped odd sizes like 1366x768 and 1280x719 to
-   test cropping), plus a live `videotestsrc`/`v4l2src` loop for latency.
-3. Encode with `v4l2-ctl --stream-mmap`/`gst-launch-1.0 … v4l2h264enc` (ours) and
-   `vencoderDemo`/`cedar-probe`-style tool (blob). Record per-frame bytes, type, QP (parse
-   slice headers), trigger→IRQ time (driver tracepoint/`debugfs`), `perf stat`/`top`
-   CPU, `/proc/interrupts`.
-4. Decode outputs on the host with ffmpeg (`-c:v h264` software) and the JM reference
-   decoder; compute PSNR/SSIM/VMAF (`ffmpeg -lavfi "[0:v][1:v]libvmaf=…;psnr;ssim"`),
-   bitrate accuracy, VBV compliance (`ffprobe -show_packets`), syntax conformance
-   (`h264_analyze`/JM trace). Also decode with the board's Cedrus to prove hardware
-   interop.
-5. Soak per 4.0 with `dmesg -w` and CMA/dma-buf accounting.
-
-### 4.6 Running the vendor blob as the A/B reference on the same board
-
-Option 1 (preferred, no proprietary kernel): mainline kernel with our **lab module
-exposing a `/dev/cedar_dev`-compatible ioctl/mmap ABI** (the vendor ABI is GPL and
-small: ENGINE_REQ/REL, WAIT_VE_EN/DE, RESET_VE, SET_VE_FREQ, MAP_DMA_BUF, FLUSH_CACHE
-+ register mmap) plus a `libMemAdapter`-compatible dma-heap shim; run the vendor
-`libvencoder.so` stack and Allwinner's `demo/vencoderDemo/EncoderTest.c` (source in the
-libcedarc mirrors) against it. Same kernel, same clocks → cleanest A/B. uboborov/
-sunxi-cedar-mainline and aodzip/cedar are prior art for such a shim.
-Option 2: vendor card — orangepi-build `BOARD=orangepizero2 BRANCH=current` (kernel
-`orange-pi-5.4-sun50iw9`, includes `drivers/media/cedar-ve` and ION/dma-heap), with
-the sun50iw9 CedarC libs (TrimUI firmware extraction, user decision) and `EncoderTest`.
-Record VE clock (`IOCTL_SET_VE_FREQ`), library version string, and the exact
-`VencH264Param` used, so the comparison is reproducible.
-Either way the blob is used locally as a measurement reference only; nothing of it is
-redistributed or read.
-
-### 4.7 Effort summary
-
-| Phase | Calendar | Notes |
+ | Notes |
 | --- | --- | --- |
 | A PoC + traces + register doc | 2-4 weeks | de-risked by BliKVM/T527: expect first decodable frame in the first week |
 | B kernel driver (H.264, CQP+RC, ISP formats) | 6-10 weeks | includes Cedrus rework rebase, compliance, IOMMU DT |
@@ -622,4 +585,7 @@ dl/sunxi-A10_VE.txt, *.archive.html  linux-sunxi register tables (Wayback copies
 dl/slides/                           Kocialkowski FOSDEM 2024, Media Summit 2025/2026 PDFs (text not extractable here)
 dl/armbian-sasa-cedrus-enc/          login-wall placeholders; patches need a forum login
 tools/html2txt.py, tools/pdftext.py  helpers used above
+tools/h264enc-test.c, tools/build.sh   stateless-uAPI test encoder for the board (static aarch64, out/h264enc-test)
+runner/venc-job.sh, runner/HANDOFF.md  runner job 27 package; results in logs/runner-venc/
+RESULTS.md                           task state (what is built, what the board run must answer, next step)
 ```

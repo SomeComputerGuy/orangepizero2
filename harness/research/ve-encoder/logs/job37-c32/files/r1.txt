@@ -1,0 +1,64 @@
+device /dev/video1 media /dev/media0
+output 1280x720 stride 1280 size 1382400, capture 1280x720 S264 size 1382400
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 0: I IDR 32336 bytes, 3236 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 1: I IDR 32624 bytes, 3237 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 2: I IDR 32887 bytes, 3233 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 3: I IDR 32966 bytes, 3223 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 4: I IDR 33067 bytes, 3228 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 5: I IDR 33109 bytes, 3226 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 6: I IDR 33473 bytes, 3234 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 7: I IDR 33527 bytes, 3201 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 8: I IDR 32935 bytes, 3229 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 9: I IDR 33535 bytes, 3212 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 10: I IDR 33690 bytes, 3226 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 11: I IDR 33681 bytes, 3233 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 12: I IDR 33697 bytes, 3231 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 13: I IDR 33752 bytes, 3233 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 14: I IDR 33659 bytes, 3200 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 15: I IDR 33199 bytes, 3211 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 16: I IDR 33232 bytes, 3238 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 17: I IDR 33138 bytes, 3239 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 18: I IDR 32958 bytes, 3243 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 19: I IDR 32888 bytes, 3242 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 20: I IDR 32928 bytes, 3229 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 21: I IDR 33047 bytes, 3240 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 22: I IDR 32914 bytes, 3241 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 23: I IDR 33116 bytes, 3243 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 24: I IDR 33213 bytes, 3207 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 25: I IDR 32982 bytes, 3238 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 26: I IDR 32917 bytes, 3242 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 27: I IDR 32939 bytes, 3242 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 28: I IDR 33075 bytes, 3237 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 29: I IDR 32655 bytes, 3225 us keyframe
+RESULT frames=30 bytes=994139 keyframes=30 errors=0 ret=0 avg_us=3229 max_us=3243 fps=17.2
+RC 0

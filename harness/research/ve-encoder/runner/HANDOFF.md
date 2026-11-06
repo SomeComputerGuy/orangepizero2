@@ -11,23 +11,26 @@ encoder probes, passes v4l2-compliance, encodes raw NV12 test clips (all-intra a
 H.264 that the host ffmpeg decodes without errors with the right frame count and a sane PSNR, that the board's own
 hardware decoder decodes the same streams bit-exactly, and that no IOMMU fault or engine timeout happens.
 
-Precondition (coordinator): `fix/sunxi-h616-venc` at 4727ed447 (f35cdf390 encoder + ac009bb5b/c307dd053 "register
+Precondition (coordinator): `fix/sunxi-h616-venc` at d6d2ce09b (f35cdf390 encoder + ac009bb5b/c307dd053 "register
 the encoder's own media entities" + 201516cc5 "give every encoder address register a buffer" (the job 34 IOMMU page
 fault for address 0 at the start of every picture) + 4d9a200e8 v4l2-compliance fixes + 4727ed447 (job 35: puts of at
 most 24 bits, so the start codes and the SPS VUI timing fields reach the stream; a picture-sized macroblock info
-buffer, the 1366x768 fault at 0xfff83000; SPS/PPS with nal_ref_idc 3)) merged into `test-cumulative` and built: c32
-is the first such kernel (c31 = job 35: undecodable streams + the r5 fault; c29 = job 34 faulted on every picture;
+buffer; SPS/PPS with nal_ref_idc 3) + d6d2ce09b (job 37: the NV12 source buffer gets one more macroblock row, because
+the engine reads past the end of the picture: the 1366x768 fault at 0xfff83000 of jobs 35 and 37; the IOVA and size of
+every encoder buffer in /sys/kernel/debug/cedrus/encoder-buffers and in dmesg after an encode timeout)) merged into
+`test-cumulative` and built: c33 is the first such kernel (c32 = job 37: r1-r4 PASS, r5 fault; c31 = job 35:
+undecodable streams + the r5 fault; c29 = job 34 faulted on every picture;
 c26-c28 hang in every MEDIA_IOC_G_TOPOLOGY, job 32). Served as kernel-check/vdec-serve/Image.<tag> + modules-<tag>.tgz + DTB. The script installs the NEWEST
 cumulative tag (last line of kernel-check/cumulative-kernels.txt) via harness/research/vdec-perf/install-kernel.sh
 with the one-shot fallback armed; the HTTP server on 10.56.0.1:8643 must be up. It checks that 4727ed447 is an
 ancestor of the tag's commit and that the booted kernel logged `cedrus ... Encoder registered as /dev/videoN`;
-otherwise it writes BLOCKED and exits 2 (report that, not a FAIL). The test tool
+otherwise it writes BLOCKED and exits 2 (report that, not a FAIL). FIX in the script is d6d2ce09b. The test tool
 (harness/research/ve-encoder/tools/out/h264enc-test, static aarch64, built by tools/build.sh) and the raw clips
 (generated on the host by the script with ffmpeg testsrc2, 41 + 31 + 8 MB, xz-compressed for the transfer) are shipped
 only when the board copies differ. The board must start on the stock image kernel. Host ffmpeg: /usr/local/bin/ffmpeg.
 
 DEV or TEST: DEV-length, about 10 min: clip generation + shipping (~2 min the first time), install + reboot (~3 min),
-compliance + five encodes + hardware decodes (~2 min), restore (~1 min). Resumable: re-running skips chunks listed in
+compliance + seven encodes + hardware decodes (~2 min), restore (~1 min). Resumable: re-running skips chunks listed in
 logs/runner-venc/state. The stock kernel vmlinuz-7.3.1-edge-sunxi64 is restored at the end and before every lock
 hand-over.
 
@@ -46,13 +49,15 @@ read or wrote through an unmapped address: report the lines verbatim (they name 
 
 Results: harness/research/ve-encoder/logs/runner-venc/: runner.log, results.txt (one line per value: `venc <run> <key>
 <value>`), chunk-venc.txt, files/venc/{kernel.txt,nodes.txt,probe.txt,dmesg-probe.txt,enc-D.txt,dec-D.txt,enc-all.txt,enc-ctrls.txt,enc-fmt-*.txt,
-compliance.txt,compliance-enc.txt (the encoder node's section),compliance-dec-fails.txt,r1..r5.txt (encoder log),
-r1..r5.h264 (the streams),r1..r5.dmesg.txt (dmesg of that run),r1..r5.ffmpeg-err.txt,r1..r5.psnr.txt,r1..r5.hwdec.txt,
-dmesg-chunk.txt}, OOPS / BLOCKED only when they happened.
+compliance.txt,compliance-enc.txt (the encoder node's section),compliance-dec-fails.txt,r1..r7.txt (encoder log),
+r1..r7.h264 (the streams),r1..r7.dmesg.txt (dmesg of that run),r1..r7.buffers.txt (IOVA start, end, size of every
+encoder buffer of the run's last picture),r1..r7.ffmpeg-err.txt,r1..r7.psnr.txt,r1..r7.hwdec.txt,dmesg-chunk.txt}, OOPS / BLOCKED only when they happened.
 
 Runs (all QP fixed, CAVLC, constrained baseline): r1 1280x720 30 frames all IDR QP 26; r2 1280x720 30 frames IDR every
 10 + P QP 26; r3 1920x1080 10 frames all IDR QP 20; r4 1920x1080 10 frames IDR every 10 + P QP 30; r5 1366x768 5 frames
-all IDR QP 26 (a size that is not a multiple of 16: cropping and the 8-pixel ISP units).
+all IDR QP 26 (a size that is not a multiple of 16: cropping and the 8-pixel ISP units; its NV12 picture fills its last
+page to the byte, so a read past the end faults: jobs 35 and 37); r6 720x480 10 frames IDR every 5 + P QP 26; r7
+854x480 10 frames IDR every 5 + P QP 26 (a width that is not a multiple of 16, with P pictures).
 
 Exit codes: 0 = chunk ran, judge with the checks below; 3 = Oops/WARN/IOMMU fault, FAIL; 2 = blocked (report BLOCKED
 and the last 10 lines of runner.log); 1 = setup or lock error.
@@ -76,9 +81,9 @@ and the last 10 lines of runner.log); 1 = setup or lock error.
    `fail: v4l2-test-formats.cpp(1445)`, is justified: v4l2-compliance 1.32 allows the frame-rate ioctls only on
    stateful encoders and predates the stateless encode uAPI, which needs them; the OPi5 Hantro/VEPU580 encoders fail
    the same test; `compliance_unexpected` counts the other `fail:` lines) and `venc all compliance_warnings`.
-3. Encode, for each of r1..r5: `rc 0`, `errors 0`, `frames` equal to the run's frame count (30, 30, 10, 10, 5) and
+3. Encode, for each of r1..r7: `rc 0`, `errors 0`, `frames` equal to the run's frame count (30, 30, 10, 10, 5, 10, 10) and
    `stream_bytes` > 0 -> PASS, else FAIL with the `RESULT` line and the `ERROR`/`error` lines of files/venc/<run>.txt.
-   Report `bytes`, `keyframes` (expected 30, 3, 10, 1, 5), `avg_us` and `max_us` (the engine takes about 3 ms at
+   Report `bytes`, `keyframes` (expected 30, 3, 10, 1, 5, 2, 2), `avg_us` and `max_us` (the engine takes about 3 ms at
    720p and 7 ms at 1080p; the figure includes the request round trip).
 4. Decode on the host, for each run: `ffmpeg_errors 0` and `decoded` equal to the run's frame count -> PASS, else FAIL
    with files/venc/<run>.ffmpeg-err.txt (first 10 lines).
@@ -97,11 +102,18 @@ and the last 10 lines of runner.log); 1 = setup or lock error.
 8. Stream framing, for each run (job 35's streams had no start codes): `start_first 1`, `sps_ref_idc 3`,
    `nal_idr` equal to `keyframes`, `nal_sps` equal to `nal_idr` (SPS and PPS before every IDR), `nal_pps` equal to
    `nal_sps`, and `nal_idr` + `nal_p` equal to the frame count -> PASS, else FAIL with the values and `head_hex`.
-   Expected: r1 30/30/0 (sps/idr/p), r2 3/3/27, r3 10/10/0, r4 1/1/9, r5 5/5/0. Report `head_hex` of r1 (should begin
+   Expected: r1 30/30/0 (sps/idr/p), r2 3/3/27, r3 10/10/0, r4 1/1/9, r5 5/5/0, r6 2/2/8, r7 2/2/8. Report `head_hex` of r1 (should begin
    `000000016742c028`).
+
+9. Encoder buffers, for each run: `buffers_file 4` and `source_room 1` (the `source_bytes` value is at least its `want`
+   value: the source buffer has the macroblock row of room past the picture) -> PASS, else FAIL with the
+   `source_bytes` line and files/venc/<run>.buffers.txt. `buffers_file 0` with buffers.txt saying "No such file" = the
+   kernel lacks d6d2ce09b or debugfs is not mounted. On any IOMMU fault (check 7), copy the run's buffers.txt verbatim
+   next to the fault line, and also the dmesg lines that follow `frame processing timed out!` (`encoder buffers: ...`
+   and one line per buffer): together they name the buffer the faulting address belongs to.
 
 The summary must list: the kernel line, check 1 and 2 values (compliance_failed, compliance_unexpected, warnings,
 compliance_dec_fail), the per-run table (run, size, frames, keyframes, bytes, avg_us, decoded, ffmpeg_errors,
-psnr_avg, psnr_min, hwdec_frames, hwdec_md5_match, start_first, nal_sps/nal_idr/nal_p, dmesg_iommu, PASS/FAIL per
-check), r1's head_hex, the dmesg
+psnr_avg, psnr_min, hwdec_frames, hwdec_md5_match, start_first, nal_sps/nal_idr/nal_p, dmesg_iommu, source_bytes,
+source_room, PASS/FAIL per check), r1's head_hex, the dmesg
 counts, the state file content, and OOPS/BLOCKED verbatim if they exist.

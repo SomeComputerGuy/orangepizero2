@@ -1,0 +1,5 @@
+frame 0: timeout waiting for the encoder
+device /dev/video1 media /dev/media0
+output 1366x768 stride 1376 size 1585152, capture 1366x768 S264 size 1585152
+RESULT frames=0 bytes=0 keyframes=0 errors=0 ret=6 avg_us=0 max_us=0 fps=0.0
+RC 6

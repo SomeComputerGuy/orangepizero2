@@ -1,0 +1,4 @@
+[   56.563776] cedrus 1c0e000.video-codec: Failed to setup encoding job: -22
+[   56.563882] cedrus 1c0e000.video-codec: Failed to setup encoding job: -22
+[   97.158212] sun50i-iommu 30f0000.iommu: Page fault for 0x00000000fff83000 (master 3, dir rd, L2 page table, status 0x8)
+[   99.183443] cedrus 1c0e000.video-codec: frame processing timed out!

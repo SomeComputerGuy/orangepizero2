@@ -3,7 +3,14 @@
 Task state file (AGENT-RULES "Budget"). Plan: `PLAN.md` section 4. Acceptance: `SPEC.md`, docs/datasheet-checklist.md W22.
 Memory: project-ve-encoder.md. Updated 2026-11-06 by the ve-encoder agent (first implementation task).
 
-## State: ENGINE ENCODES CORRECTLY (job 35, c31: slice data decodes at 44-54 dB once the headers are repaired); header bug + r5 fault fixed in c32, runner job 37 queued
+## State: r1-r4 PASS on c32 (job 37); the 1366x768 fault is a read past the NV12 source buffer, fixed in c33, runner job 38 queued
+
+- 2026-11-06 (job 37 fix agent): job 37 on c32 passed r1-r4 (720p/1080p, I and I+P, 44-54 dB, framing right, hw
+  decode md5 = ffmpeg's, compliance only the justified G/S_PARM fail); r5 (1366x768) faulted at 0xfff83000 again, so
+  the c32 macroblock-info change was not the fix. Root cause: the input stage reads past the end of the NV12 source
+  buffer (see "Job 37" at the end). Fix **d6d2ce09b** on fix/sunxi-h616-venc (merged into test-cumulative
+  **342cfa31c = c33**, Image md5 866f3ca37c446a2d200e90c53221b82b). Runner job 38 (harness/runner-queue/38-ve-encoder.md) re-runs the package
+  on c33 with r6 720x480 and r7 854x480 (I+P) and check 9 (debugfs buffer list, source room).
 
 - 2026-11-06 (job 35 fix agent): job 35 on c31 completed r1-r4 (rc 0, 3 ms/7 ms per picture) but no stream decoded,
   and r5 (1366x768) faulted. Root causes and fixes: **4727ed447** on fix/sunxi-h616-venc (merged into test-cumulative
@@ -67,7 +74,7 @@ Diagnostics by symptom are in PLAN.md 4.2 step 1.
 
 ## Open items / next step
 
-- **Next step: the runner runs job 37 (harness/runner-queue/37-ve-encoder.md) on c32 or later.**
+- **Next step: the runner runs job 38 (harness/runner-queue/38-ve-encoder.md) on c33 or later.**
   Then a fresh agent reads `logs/runner-venc/results.txt` + the summary and fixes what failed (PLAN 4.2 step 1), or,
   on PASS, continues with PLAN 4.2 steps 2-4 (CABAC A/B, NV21/YUV420 input, RC statistics).
   Copy 0810 (SPS/PPS nal_ref_idc) to ~/orangepi5/patches/linux/ (the 08xx core series is shared byte for byte). If an IOMMU fault remains,
@@ -187,3 +194,37 @@ Diagnostics by symptom are in PLAN.md 4.2 step 1.
   "matched" two empty outputs), HANDOFF exit-3 reporting clarified.
 - Build: c32 = test-cumulative 91b91f9dc, kernel-check/run-cumul-c32.log: 868 patches applied, 0 failed, build exit 0, 0 C warnings, 0 dtc warnings; Image md5 5521e882b85f511947ced0996eb2c3bb. The two cedrus/core objects rebuilt with the fixes.
 
+
+## Job 37 (2026-11-06, c32): r1-r4 PASS; r5 1366x768 faults on the page after the NV12 source buffer (fixed, c33)
+- Summary harness/runner-queue/done/37-ve-encoder.summary.md; evidence archived in logs/job37-c32/ (results.txt, OOPS,
+  files/r5.txt, r5.dmesg.txt, compliance, ...). Checks 1, 2 PASS; r1-r4 PASS on checks 3-6 and 8 (PSNR-Y 49.2, 47.6,
+  53.9, 44.5 dB, hwdec md5 match, framing right); r5 frame 0 "timeout waiting for the encoder" after
+  `Page fault for 0x00000000fff83000 (master 3, dir rd, L2 page table, status 0x8)`, the same address as job 35 on c31.
+- Root cause (**inferred from the IOVA arithmetic, not proven by an IOVA dump**; job 38's debugfs list and the timeout
+  report will prove or refute it). dma-iommu allocates top down and aligns every range to its size rounded up to a power
+  of two (ranges < 32 pages are also rounded up in size). The test tool allocates OUTPUT, then CAPTURE, then
+  start_streaming allocates MB info, aux, rec/subpix. At 1366x768 the first OUTPUT buffer is 1376 x 768 x 3/2 =
+  1585152 bytes = exactly 387 pages (r5.txt: "output 1366x768 stride 1376 size 1585152"): it lands in the topmost
+  2 MiB slot, 0xffe00000-0xfff82fff, so 0xfff83000 is the first page after it; frame 0 uses it. No other buffer of the
+  run can end at 0xfff83000 (coded and, on c32, MB info are also 387 pages but are allocated later, lower; on c31 MB info
+  was 3 pages and the address was the same, which rules MB info out). The "L2 page table" type (L1 entry valid) fits a
+  mapped buffer just below. So the input stage reads past the end of the NV12 picture. 1366x768 is the only tested size
+  whose macroblock-aligned picture fills its last page to the byte: 1280x720 has 20 KiB of slack in its last page
+  (16 chroma lines; chroma at stride x 720, buffer sized for 736 lines), 1920x1080 15 KiB (8 lines), so the overread is
+  shorter than 15 KiB. The BliKVM lab encoded 1366x768 correctly with stride 1376 (W16), so the engine does use the
+  stride register (not a 64-aligned stride); the overread is either extra chroma lines or a burst rounded past the last
+  line (1366 is the only tested width that is not a multiple of 64). Without an IOMMU (vendor stack, lab) the read is
+  invisible. Not width-in-MBs or recon/ref: an I picture's first read past a buffer, and recon/subpix sizes have slack.
+- Fix (kernel) `patches.media/h616-venc/media-cedrus-enc-give-the-source-buffer-room-for-the-engine-s-read-past-its-end.patch`
+  (d6d2ce09b + series.conf line): raw format sizeimage = bytesperline x (ALIGN(h,16) x 3/2 + 16), one more macroblock
+  row of luma (22 KiB at 1366), so odd widths work rather than being refused; NV12 layout (chroma at bytesperline x
+  height) unchanged; IOMMU on. Diagnostics: the IOVA and size of every buffer of the last encode job (source, coded,
+  mb-info, mv, rc, line, tfcnt, rec, rec-subpix, ref, ref-subpix) in /sys/kernel/debug/cedrus/encoder-buffers and as
+  dev_err lines after an encode `frame processing timed out!`. The MB info buffer keeps a picture's size (T527), its
+  comment no longer blames the fault on it. W=1 clean (cedrus dir).
+- Package: FIX=d6d2ce09b; debugfs mounted if needed, rN.buffers.txt per run, results buffers_file / source_bytes /
+  source_room (check 9); runs r6 720x480 and r7 854x480 (10 frames, IDR every 5 + P, QP 26); `cnt` helper fixes the
+  "dmesg_iommu 0\n0" double value (grep -c prints 0 and fails, then `|| echo 0` printed another 0).
+- If r5 still faults on c33: the dump names the buffer. A fault past the source buffer's new end = the overread is
+  longer than one MB row (then size it by the dump's distance); a fault elsewhere = another buffer, same arithmetic.
+- Build: c33 = test-cumulative 342cfa31c, kernel-check/run-cumul-c33.log: 869 patches applied, 0 failed, build exit 0, 0 C warnings; the 17 dtc warnings are the pre-existing pine64-7inch-lcd overlay and nanopi-r1s-h5 ones (as c30; c32 rebuilt no DTBs); Image md5 866f3ca37c446a2d200e90c53221b82b.

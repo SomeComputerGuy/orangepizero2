@@ -21,11 +21,12 @@ case $J in
 esac
 T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
 want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || exit 1
-FIX=4727ed447                              # fix/sunxi-h616-venc HEAD (armbian-build); the kernel must have it: f35cdf390 (encoder) +
+FIX=d6d2ce09b                              # fix/sunxi-h616-venc HEAD (armbian-build); the kernel must have it: f35cdf390 (encoder) +
                                            # ac009bb5b/c307dd053 (own media entities, job 32 hang) + 201516cc5 (every encoder address register
                                            # gets a buffer: the IOMMU fault for address 0 of job 34) + 4d9a200e8 (v4l2-compliance fixes) +
-                                           # 4727ed447 (job 35: 24-bit puts = start codes and VUI timing back, picture-sized MB info buffer =
-                                           # the 1366x768 fault at 0xfff83000, SPS/PPS nal_ref_idc 3). c32 is the first kernel with all of it.
+                                           # 4727ed447 (job 35: 24-bit puts = start codes and VUI timing back, SPS/PPS nal_ref_idc 3) +
+                                           # d6d2ce09b (job 37: the source buffer gets one more macroblock row, the 1366x768 fault at 0xfff83000;
+                                           # debugfs cedrus/encoder-buffers). c33 is the first kernel with all of it.
 COMPLIANCE_EXPECTED='v4l2-test-formats.cpp(1445)'   # the one justified fail: G/S_PARM on a stateless encoder (v4l2-compliance 1.32 predates the uAPI)
 # compliance_unexpected counts only the ENCODER node's section of compliance.txt: with -m the tool also tests the decoder node,
 # whose `v4l2-test-codecs.cpp(161)` fail (job 35) is the known stock-1.32 limitation (unknown cedrus fourccs -> no codec mask,
@@ -43,7 +44,10 @@ RUNS="r1 1280 720 30 0 26 testsrc2-1280x720-30
 r2 1280 720 30 10 26 testsrc2-1280x720-30
 r3 1920 1080 10 0 20 testsrc2-1920x1080-10
 r4 1920 1080 10 10 30 testsrc2-1920x1080-10
-r5 1366 768 5 0 26 testsrc2-1366x768-5"
+r5 1366 768 5 0 26 testsrc2-1366x768-5
+r6 720 480 10 5 26 testsrc2-720x480-10
+r7 854 480 10 5 26 testsrc2-854x480-10"
+cnt() { local n; n=$(grep -c "$@" 2>/dev/null); echo "${n:-0}"; }   # match count, 0 for none or no file (grep -c || echo 0 gave "0\n0")
 log() { echo "$(date '+%F %T') $*" | tee -a $OUT/runner.log; }
 waitup() { for i in $(seq 1 ${1:-60}); do sleep 5; $SSH -n true 2>/dev/null && return 0; done; return 1; }   # waitup [tries of 5 s]
 acquire() { OWN=runner-venc-$J-$(date +%s); out=$($H/harness/board-lock.sh acquire $OWN) || { log "lock: $out"; exit 1; }
@@ -89,6 +93,7 @@ V="timeout -k 5 20 v4l2-ctl"
 uname -v > kernel.txt; cat /proc/cmdline > cmdline.txt
 n1=\$(dmesg | wc -l); echo DMESG-START \$n1
 step probe
+mountpoint -q /sys/kernel/debug || mount -t debugfs none /sys/kernel/debug   # for cedrus/encoder-buffers
 dmesg | grep -i 'cedrus\|sun50i-iommu\|video-codec' > dmesg-probe.txt; cat dmesg-probe.txt
 echo "boot_warnings \$(dmesg | grep -c 'WARNING:')" | tee probe.txt; dmesg | grep -B2 -A16 'WARNING:' > boot-warnings.txt
 # nodes from sysfs (no ioctl before the nodes are known): the encoder vdev is named cedrus-enc, the decoder cedrus
@@ -123,6 +128,8 @@ run() { local name=\$1 w=\$2 h=\$3 n=\$4 g=\$5 q=\$6 c=\$7
   timeout -k 5 120 $P -v -w \$w -h \$h -n \$n -g \$g -q \$q -i $R/clips/\$c.nv12 -o \$name.h264 > \$name.txt 2>&1; echo "RC \$?" >> \$name.txt
   grep -E '^RESULT|^RC|ERROR|error|timeout' \$name.txt | head -8
   dmesg | tail -n +\$((m1+1)) > \$name.dmesg.txt   # per run: which run a fault belongs to (job 35's fault was r5's, not r1's)
+  cat /sys/kernel/debug/cedrus/encoder-buffers > \$name.buffers.txt 2>&1   # IOVA + size of every buffer of the run's last picture (c33+)
+  sed 's/^/BUFFERS: /' \$name.buffers.txt | head -14
   grep -iE 'cedrus|iommu|timed out' \$name.dmesg.txt | head -5 | sed 's/^/DMESG: /'
   if command -v gst-launch-1.0 >/dev/null && [ -s \$name.h264 ]; then
     step hwdec \$name
@@ -146,7 +153,7 @@ extract() { # host side: decode every stream with ffmpeg, PSNR against the clip,
   local c=$1 d=$OUT/files/$1 r w h n g q clip fs dec frames
   grep -q NO-ENCODER-NODE $OUT/chunk-$c.txt 2>/dev/null && echo "$c all encoder_node 0" >> $OUT/results.txt || echo "$c all encoder_node 1" >> $OUT/results.txt
   grep -q "Encoder registered" $d/dmesg-probe.txt 2>/dev/null && echo "$c all probe_registered 1" >> $OUT/results.txt || echo "$c all probe_registered 0" >> $OUT/results.txt
-  echo "$c all controls $(grep -c ' 0x' $d/enc-ctrls.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
+  echo "$c all controls $(cnt ' 0x' $d/enc-ctrls.txt)" >> $OUT/results.txt
   for k in boot_warnings media_node media_info dec_D_rc; do echo "$c all $k $(awk -v k=$k '$1==k {print $2; f=1} END {if (!f) print "missing"}' $d/probe.txt 2>/dev/null || echo missing)" >> $OUT/results.txt; done
   grep '^media ' $d/probe.txt 2>/dev/null | sed "s/^/$c all /" >> $OUT/results.txt
   if grep -q COMPLIANCE-SKIP $d/compliance.txt 2>/dev/null; then echo "$c all compliance SKIP" >> $OUT/results.txt
@@ -159,7 +166,7 @@ extract() { # host side: decode every stream with ffmpeg, PSNR against the clip,
     echo "$c all compliance_failed $(echo "$tot" | grep -o 'Failed: [0-9]*' | grep -o '[0-9]*' || echo missing)" >> $OUT/results.txt
     echo "$c all compliance_warnings $(echo "$tot" | grep -o 'Warnings: [0-9]*' | grep -o '[0-9]*' || echo missing)" >> $OUT/results.txt
     echo "$c all compliance_unexpected $(grep 'fail:' $d/compliance-enc.txt 2>/dev/null | grep -vcF "$COMPLIANCE_EXPECTED" || true)" >> $OUT/results.txt
-    echo "$c all compliance_dec_fail $(grep -c . $d/compliance-dec-fails.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
+    echo "$c all compliance_dec_fail $(cnt . $d/compliance-dec-fails.txt)" >> $OUT/results.txt
   fi
   while read -r r w h n g q clip; do
     fs=$((w * h * 3 / 2))
@@ -175,8 +182,15 @@ t = [x[0] & 31 for x in n if x]; r = sys.argv[2]
 print(r, "start_first", int(d[:4] == b"\x00\x00\x00\x01")); print(r, "start_codes", len(n))
 print(r, "nal_sps", t.count(7)); print(r, "nal_pps", t.count(8)); print(r, "nal_idr", t.count(5)); print(r, "nal_p", t.count(1))
 print(r, "sps_ref_idc", next(((x[0] >> 5) & 3 for x in n if x and x[0] & 31 == 7), -1))' $d/$r.h264 "$c $r" >> $OUT/results.txt
-    echo "$c $r dmesg_iommu $(grep -ciE 'iommu.*fault|Page fault' $d/$r.dmesg.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
-    echo "$c $r dmesg_timeout $(grep -ciE 'timed out' $d/$r.dmesg.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
+    echo "$c $r dmesg_iommu $(cnt -iE 'iommu.*fault|Page fault' $d/$r.dmesg.txt)" >> $OUT/results.txt
+    # debugfs buffer list (d6d2ce09b): the source buffer must hold stride x (ALIGN(h,16) x 3/2 + 16) bytes (one macroblock row past
+    # the NV12 picture: the engine reads past its end, job 37's 1366x768 fault)
+    local bpl want_src have_src; bpl=$(( (w + 15) / 16 * 16 )); want_src=$(( bpl * ((h + 15) / 16 * 16 * 3 / 2 + 16) ))
+    have_src=$(awk '$1=="source" {print strtonum($4)}' $d/$r.buffers.txt 2>/dev/null | tail -1)
+    echo "$c $r buffers_file $(cnt -E '^(source|coded|mb-info|rec) ' $d/$r.buffers.txt)" >> $OUT/results.txt
+    echo "$c $r source_bytes ${have_src:-missing} want $want_src" >> $OUT/results.txt
+    [ -n "$have_src" ] && [ "$have_src" -ge "$want_src" ] && echo "$c $r source_room 1" >> $OUT/results.txt || echo "$c $r source_room 0" >> $OUT/results.txt
+    echo "$c $r dmesg_timeout $(cnt -iE 'timed out' $d/$r.dmesg.txt)" >> $OUT/results.txt
     if [ -s $d/$r.h264 ]; then
       dec=$d/$r.dec.nv12
       ffmpeg -v error -y -i $d/$r.h264 -f rawvideo -pix_fmt nv12 $dec > $d/$r.ffmpeg-err.txt 2>&1
@@ -199,10 +213,10 @@ print(r, "sps_ref_idc", next(((x[0] >> 5) & 3 for x in n if x and x[0] & 31 == 7
          a=$(echo "$hw" | awk '{print $6}'); b=$(grep "^$c $r hwdec_md5_ffmpeg" $OUT/results.txt | awk '{print $4}')
          [ -n "$a" ] && [ "$a" = "$b" ] && [ "$(echo "$hw" | awk '{print $4}')" -gt 0 ] 2>/dev/null && echo "$c $r hwdec_md5_match 1" >> $OUT/results.txt || echo "$c $r hwdec_md5_match 0" >> $OUT/results.txt; fi
   done <<< "$RUNS"
-  echo "$c all dmesg_bad $(grep -cE "$OOPS" $d/dmesg-chunk.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
-  echo "$c all dmesg_iommu $(grep -ciE 'iommu.*fault|Page fault' $d/dmesg-chunk.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
-  echo "$c all dmesg_timeout $(grep -ciE 'timed out' $d/dmesg-chunk.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
-  echo "$c all dmesg_encode_failed $(grep -ciE 'encode failed|Failed to setup encoding|invalid coded size' $d/dmesg-encodes.txt 2>/dev/null || echo 0)" >> $OUT/results.txt; }
+  echo "$c all dmesg_bad $(cnt -E "$OOPS" $d/dmesg-chunk.txt)" >> $OUT/results.txt
+  echo "$c all dmesg_iommu $(cnt -iE 'iommu.*fault|Page fault' $d/dmesg-chunk.txt)" >> $OUT/results.txt
+  echo "$c all dmesg_timeout $(cnt -iE 'timed out' $d/dmesg-chunk.txt)" >> $OUT/results.txt
+  echo "$c all dmesg_encode_failed $(cnt -iE 'encode failed|Failed to setup encoding|invalid coded size' $d/dmesg-encodes.txt)" >> $OUT/results.txt; }
 stall_diag() { # a fresh ssh session (ConnectTimeout) after a stall: which tasks are stuck and where, for the next agent
   local d=$OUT/files/stall-diag-$1.txt; mkdir -p $OUT/files
   timeout 120 $SSH -n 'echo "== uptime"; uptime; echo "== D/R tasks"; ps -eo pid,stat,etime,wchan:32,comm | awk "NR==1 || (\$2 ~ /^[DR]/ && \$5 != \"ps\")"

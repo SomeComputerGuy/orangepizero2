@@ -1,5 +1,6 @@
 #!/bin/bash
 # Runner package: bit-exact check of the cedrus AFBC capture through the DE33 (job 53, rerun 54). afbc-wb-job.sh j54
+# j55 (wb-eio, harness/research/wb-eio/): real-hevc8 x5 (writeback -EIO repeat check) + syn regression, needs FIX3.
 # The H616 Mali-G31 has no AFBC (job 51), so each decoded frame is shown 1:1 on the DE33 VI plane (FBD = the AFBC
 # decompressor) and the composed frame is captured with the DE33 writeback connector (XR30), once from the linear
 # decode (NV12/P010) and once from the AFBC decode (AS12/AS01) of the same stream, same plane setup; harness/afbc-wb
@@ -14,17 +15,20 @@
 # 1 = setup or lock error.
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/afbc-wb; V=$H/harness/research/vdec-perf; SSH="timeout 120 $H/harness/ssh.sh"
-J=${1:?job: j53 or j54}
+J=${1:?job: j53, j54 or j55}
 K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR
    -o ConnectTimeout=8 -o ServerAliveInterval=15 -o ServerAliveCountMax=8)
 OUT=$S/logs/runner-$J; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED $OUT/OOPS
 # case: name stream linear-fmt afbc-fmt frames wb-fmt extra-options (synthetic = syn-*: tile 64 band 10 + source md5s)
 CASES="syn-hevc8 syn-hevc10 syn-vp9p0 syn-vp9p2 syn-hevc8-xr24 real-hevc10 real-hevc8 real-vp9p2 real-vp9p0"
 FIX2=""                                    # j54: also the cedrus H.265 AFBC compose-offset commit
+FIX3=""                                    # j55: also the DE33 writeback capture-repeat commit
 case $J in
   j53) ;;
   j54) FIX2=8b1f787fe                     # fix/sunxi-cedrus-h265-afbc-compose
        CASES="$CASES real-vp9p0-y4" ;;     # + a window at a 4-line (not 16-aligned) plane offset, informational
+  j55) FIX2=8b1f787fe; FIX3=20e682fc2        # fix/sunxi-h616-de33-wb-retry
+       CASES="syn-hevc8 syn-hevc10 syn-vp9p0 syn-hevc8-xr24 real-hevc8-r1 real-hevc8-r2 real-hevc8-r3 real-hevc8-r4 real-hevc8-r5 real-hevc10" ;;
   *) echo "unknown job $J"; exit 1 ;;
 esac
 spec() { case $1 in
@@ -34,7 +38,7 @@ spec() { case $1 in
   syn-vp9p2)      echo "syn-vp9p2.webm P010 AS01 24 XR30" ;;
   syn-hevc8-xr24) echo "syn-hevc8.mkv NV12 AS12 24 XR24" ;;
   real-hevc10)    echo "hevc-main10-2160p60.mkv P010 AS01 12 XR30" ;;
-  real-hevc8)     echo "hevc-main-2160p60.mkv NV12 AS12 12 XR30" ;;
+  real-hevc8|real-hevc8-r[1-9]) echo "hevc-main-2160p60.mkv NV12 AS12 12 XR30" ;;
   real-vp9p2)     echo "vp9-p2-2160p60.webm P010 AS01 12 XR30" ;;
   real-vp9p0)     echo "vp9-p0-2160p60.webm NV12 AS12 12 XR30" ;;
   real-vp9p0-y4)  echo "vp9-p0-2160p60.webm NV12 AS12 12 XR30 1408,708" ;;
@@ -77,6 +81,7 @@ boot_trial() { # install the newest cumulative kernel with the fallback armed; i
   local c; c=$(awk -v t=$T '$1==t{print $3}' $H/kernel-check/cumulative-kernels.txt)
   git -C $H/wt-cumulative merge-base --is-ancestor $FIX "$c" 2>/dev/null || blocked "kernel $T ($c) lacks the DE33 writeback commit $FIX"
   [ -z "$FIX2" ] || git -C $H/wt-cumulative merge-base --is-ancestor $FIX2 "$c" 2>/dev/null || blocked "kernel $T ($c) lacks the cedrus H.265 AFBC compose commit $FIX2"
+  [ -z "$FIX3" ] || git -C $H/wt-cumulative merge-base --is-ancestor $FIX3 "$c" 2>/dev/null || blocked "kernel $T ($c) lacks the DE33 writeback capture-repeat commit $FIX3"
   on_stock
   timeout 900 $V/install-kernel.sh $T 2>&1 | tail -3 | tee -a $OUT/runner.log; BOOTED=1
   $SSH -n 'sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'; sleep 15
@@ -99,7 +104,7 @@ case_script() { # board script of one case ($1); ends with ROUND-DONE
 set -u; D=$R/$c; REF=/dev/shm/afbcwb-ref; rm -rf \$D \$REF; mkdir -p \$D/dump \$REF; cd \$D
 uname -v > kernel.txt; free -m > mem.txt
 n1=\$(dmesg | wc -l)
-params() { for f in /sys/module/sun8i_mixer/parameters/de33_wb_*; do [ -f "\$f" ] && echo "\$(basename \$f)=\$(cat \$f)"; done; true; }
+params() { for f in /sys/module/sun8i_mixer/parameters/de33_wb_* /sys/module/sun8i_mixer/parameters/de33_latch_flushes_late; do [ -f "\$f" ] && echo "\$(basename \$f)=\$(cat \$f)"; done; true; }
 params > params.before
 for k in /sys/class/drm/card*-HDMI-A-1; do echo on > \$k/status; done; sleep 2
 for k in /sys/class/drm/card*-HDMI-A-1; do echo "\$k status=\$(cat \$k/status) modes: \$(tr '\n' ' ' < \$k/modes)"; done > connector.txt
@@ -137,9 +142,13 @@ extract() { # host side: "case pass key value" lines into $OUT/results.txt
       /^RESULT frame [0-9]+ pic_offset / { po = po (po == "" ? "" : ";") $5 }
       END { print c, p, "pic_offset", (po == "" ? "none" : po) }' $d/$p.txt | sort -u -k1,3 >> $OUT/results.txt
   done
-  for k in jobs done failed; do
-    a=$(grep "^de33_wb_$k=" $d/params.after 2>/dev/null | cut -d= -f2); b=$(grep "^de33_wb_$k=" $d/params.before 2>/dev/null | cut -d= -f2)
-    [ -n "$a" ] && [ -n "$b" ] && echo "$c all wb_${k}_delta $((a - b))" >> $OUT/results.txt
+  for k in jobs done failed busy_frames overflow timeout retries deferred lost latch_flushes_late; do
+    n=de33_wb_$k; [ $k = latch_flushes_late ] && n=de33_$k
+    a=$(grep "^$n=" $d/params.after 2>/dev/null | cut -d= -f2); b=$(grep "^$n=" $d/params.before 2>/dev/null | cut -d= -f2)
+    [ -n "$a" ] && [ -n "$b" ] && echo "$c all ${n#de33_}_delta $((a - b))" >> $OUT/results.txt
+  done
+  for k in status_fail start_line_max; do   # absolute values after the case (kernels with the capture-repeat commit)
+    a=$(grep "^de33_wb_$k=" $d/params.after 2>/dev/null | cut -d= -f2); [ -n "$a" ] && echo "$c all wb_$k $a" >> $OUT/results.txt
   done
   grep -q MODE-UNAVAILABLE $d/connector.txt 2>/dev/null && echo "$c all mode_unavailable 1" >> $OUT/results.txt
   k=$(grep -cE "$OOPS" $d/dmesg-chunk.txt 2>/dev/null); echo "$c all dmesg_bad ${k:-0}" >> $OUT/results.txt

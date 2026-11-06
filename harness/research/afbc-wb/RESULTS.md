@@ -74,6 +74,9 @@ differs) / INCONCLUSIVE (linear reference wrong) / FAIL (kernel) / NOT TESTED. L
 - Separate item (not fixed): real-hevc8 LINEAR pass (4K H.265 8-bit NV12) had writeback wb_error -5 on frames 2, 6, 8
   (wb_jobs 48 vs done 45, dmesg clean). Only that case; likely the writeback missing its frame under 4K NV12 VE+DE
   memory load. On the work list; rerun shows whether it repeats.
+  2026-11-06: repeated in job 54 (frames 2, 6). Taken on as task wb-eio: harness/research/wb-eio/RESULTS.md (RT-WB
+  OVERFLOW/TIMEOUT under the async 4K decode; kernel fix 20e682fc2 repeats the capture on the next frame, c40, job 55
+  = afbc-wb-job.sh j55).
 - Open: AVS2 AFBC picture offset (vendor says 4; avs2dec-afbc path, not covered by this job).
 
 ## Next (fresh agent, after done/54-afbc-wb-rerun.summary.md)

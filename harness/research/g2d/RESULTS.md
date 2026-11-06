@@ -87,3 +87,20 @@ YUV source and for every size change) -> blender pipe 0 in COPY mode, ROP pass-t
 ## Commits
 - armbian-build fix/sunxi-h616-g2d: 04964f921 `sunxi-7.3: H616 G2D as a V4L2 m2m colour converter and scaler (W25)` (off test-cumulative eb446f8cb, pushed to fork, unmerged).
 - project repo: this file, runner/, tool/, src/, harness/runner-queue/26-g2d.md, .gitignore lines.
+
+## Job 26 (2026-11-06, c25): BLOCKED, root cause = DTB never installed (package/harness bug, not the driver)
+- Summary harness/runner-queue/done/26-g2d.summary.md: "no bound sun50i-g2d driver at 1480000.g2d". files/ was empty (the
+  package collected nothing when blocked).
+- Evidence: harness/serial.log 01:52:42 (the c25 trial boot): `Load fdt: /boot/dtb/allwinner/sun50i-h616-orangepi-zero2.dtb`,
+  `53821 bytes read` = the image's stock DTB (c22 = 53965, c25 = 54481 bytes in kernel-check/vdec-serve). The g2d@1480000
+  node exists only in the new DTB; harness/research/vdec-perf/install-kernel.sh installed Image + modules only (cumul-build.sh
+  stages sun50i-h616-orangepi-zero2.dtb.<tag> but nothing used it), so there was no 1480000.g2d platform device at all.
+  sun50i-g2d.ko was in modules-c25.tgz and has MODULE_DEVICE_TABLE(of); the IOMMU is untouched.
+- Fix (project repo): install-kernel.sh installs the tag's DTB (stock copy kept as <dtb>.stock, the path becomes a symlink
+  like /boot/Image; U-Boot follows it), new harness/research/vdec-perf/restore-kernel.sh (Image, DTB, modules .good,
+  fallback disarmed, reboot) used by the packages' restore(), harness/research/vdec/vdec-fallback.sh re-points the DTB to
+  .stock on the fallback and on every boot of a non-trial Image (safety net for older packages that only flip /boot/Image).
+  g2d-job.sh verifies the DTB md5 after the boot and, when blocked, collects files/blocked-<tag>/{dmesg.txt,state.txt}
+  (DT node status, devices_deferred, modinfo, lsmod, platform drivers).
+- Re-queued as harness/runner-queue/29-g2d.md (kernel 04964f921 unchanged; c26 has it). Next: a fresh agent judges job 29
+  with "What job 26 decides" above.

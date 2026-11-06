@@ -15,10 +15,14 @@ Precondition (coordinator): merge `fix/sunxi-h616-g2d` into `test-cumulative`, b
 serve it as kernel-check/vdec-serve/Image.<tag> + modules-<tag>.tgz (the kernel config gains
 `CONFIG_VIDEO_SUN50I_G2D=m`). The script installs the NEWEST cumulative tag (last line of
 kernel-check/cumulative-kernels.txt) via harness/research/vdec-perf/install-kernel.sh with the one-shot fallback armed;
-the HTTP server on 10.56.0.1:8643 must be up (ship.sh). It checks that the branch head (FIX in the script) is an
-ancestor of the tag's commit and that the booted kernel has the driver bound at
-/sys/bus/platform/drivers/sun50i-g2d/1480000.g2d; otherwise it writes BLOCKED and exits 2 (report that, not a FAIL,
-with files/g2d/probe-dmesg.txt if it exists). The client is shipped to /root/g2d/g2dconv when the board copy differs.
+the HTTP server on 10.56.0.1:8643 must be up (ship.sh). install-kernel.sh also installs the tag's Zero2 DTB
+(kernel-check/vdec-serve/sun50i-h616-orangepi-zero2.dtb.<tag>, staged by cumul-build.sh): job 26 was BLOCKED because
+the stock DTB has no g2d@1480000 node and only Image + modules were installed. The script checks that the branch head
+(FIX in the script) is an ancestor of the tag's commit, that the booted DTB has the tag's md5, and that the booted
+kernel has the driver bound at /sys/bus/platform/drivers/sun50i-g2d/1480000.g2d; otherwise it writes BLOCKED and
+exits 2 (report that, not a FAIL, with the first 30 lines of files/blocked-<tag>/state.txt: DT node, devices_deferred,
+modinfo; files/blocked-<tag>/dmesg.txt is the full dmesg). The restore goes through
+harness/research/vdec-perf/restore-kernel.sh (Image, DTB, modules). The client is shipped to /root/g2d/g2dconv when the board copy differs.
 The board must start on the stock image kernel.
 
 DEV or TEST: DEV-length, about 12 min: install + reboot (~3 min), compliance (~1 min), 49 conversion cases incl. a
@@ -40,7 +44,7 @@ Exit codes: 0 = chunk ran, judge with the checks below; 3 = Oops/WARN/IOMMU faul
 and the last 10 lines of runner.log); 1 = setup or lock error.
 
 ## Checks (mechanical, all on results.txt unless stated)
-1. runner.log contains a `kernel: ` line and `kernel g2d: bound`. Report both.
+1. runner.log contains a `kernel: ` line, a `kernel dtb: ` line and `kernel g2d: bound`. Report all three.
 2. Probe: `g2d probe driver_lines` >= 1, `g2d probe iommu_group 1`, `g2d probe device /dev/videoN` (not `none`) ->
    PASS, else FAIL (report files/g2d/probe-dmesg.txt). Also report `g2d probe clk_rate` (expected 300000000),
    `formats_out` and `formats_cap` (expected 18 each). If `device none`: every later check is FAIL (NO-DEVICE).

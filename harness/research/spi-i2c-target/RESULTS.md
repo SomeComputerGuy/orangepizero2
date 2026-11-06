@@ -53,3 +53,25 @@ Without jumpers those are `SKIP NOT TESTED`, never FAIL.
 - Not done (out of W33's scope): mv64xxx host-mode DMA; SPI target DMA; general-call address (no Linux consumer).
 - Risk notes for the board run: the slave-mode module-clock margin (4x) and the RF_RDY level semantics (assumed level,
   re-checked after re-arming) are from the manual, not vendor code; the loopback test is what verifies them.
+
+## Job 20 (2026-11-06, c24): 4 FAIL, two root causes, both outside the drivers (logs/job20/)
+- I2C (3 FAILs: no /dev/i2c-3, no 3-1064, i2cdetect): dmesg `sun50i-h616-pinctrl 300b000.pinctrl: pin PH5 already requested
+  by 5011000.spi; cannot claim for 5002c00.i2c` -> `mv64xxx_i2c 5002c00.i2c: error -EINVAL: Error applying setting`. The job
+  applied all four overlays in ONE boot, but spi1-target (CS0 = PH5) and i2c3-ph-slave-eeprom (SDA = PH5) share header pin 3
+  (documented as "one set of jumpers at a time", yet the package booted both). spi1 probed first and i2c3 lost the pin. Fix:
+  sit-job.sh boots the SPI set (sit-spi1-target + sit-spi-gpio-pc) and the I2C set (sit-i2c3-slave + sit-i2c2-ph) separately
+  (chunks `spi`, `i2c`); board-sit.sh has `checks-spi` / `checks-i2c` and prints `INFO evidence` lines (dmesg, DT status,
+  devices_deferred) when a controller is missing.
+- SPI (1 FAIL: no /dev/spidev1.0 after `echo spidev > slave`; spi1.0 was registered, dmesg "registered child spi1.0", no
+  error): spi_match_device() uses the driver's spi_device_id table when it has one and never falls back to the driver name;
+  spidev_spi_ids has no "spidev" entry (Armbian's is "spi-dev"), so nothing bound. Fix: armbian-build commit **85e6dcb38**
+  (branch fix/sunxi-h616-spi1-target-spidev off test-cumulative c26 e64ca7aa2, pushed to fork, NOT merged): the spi1-target
+  overlay carries a `slave { compatible = "armbian,spi-dev"; }` child (spi-controller.yaml form for spi-slave controllers;
+  the SPI core registers it without reg) so /dev/spidev1.0 exists at boot; the unnecessary #address-cells/#size-cells of the
+  fragment dropped; header documents `echo spi-dev` for the sysfs path. dtc default and strict sets clean, fdtoverlay with
+  the c26 Zero2 DTB + spi-gpio-pc + the two I2C overlays OK. kernel-check/spi-i2c-target/dtbo/sun50i-h616-spi1-target.dtbo
+  rebuilt with the kernel dtc (`scripts/dtc/dtc -@ -I dts -O dtb`, byte-identical method to the kernel build).
+  board-sit.sh now checks: spidev1.0 at boot, abort, loopback (or SKIP), `(null)` removes it, `echo spi-dev` brings it back.
+- Also: install-kernel.sh now installs the tag's DTB (found by jobs 21/26) and the restore goes through restore-kernel.sh;
+  the two sets each verify the DTB md5.
+- Re-queued as harness/runner-queue/31-spi-i2c-target.md: requires 03961fad0 AND 85e6dcb38 in the newest cumulative kernel.

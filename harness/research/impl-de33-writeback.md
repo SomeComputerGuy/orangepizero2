@@ -96,3 +96,17 @@ frames_torn == frames_bad == fence_errors == 0, wb_jobs_delta == wb_done_delta, 
   capture window (SIZE/CROP); if NV12 alone fails: CSC/chroma path (vendor de_csc_table.c not fetched). If every fence
   times out: the FINISH status is not set at the next vblank; read de33_wb_status_last. An IOMMU fault line = the unit's
   writes did not go through master 0 as assumed; stop and report.
+
+### Job 21 (2026-11-06, c24): BLOCKED, root cause = DTB never installed (harness bug, not the driver)
+- Summary harness/runner-queue/done/21-de33-writeback.summary.md: "no Writeback-1 connector / de33_wb_* parameters" although
+  c24 contains 6dbed6c18. files/ was empty (nothing collected when blocked).
+- Evidence: the writeback is a DT node (writeback@10000 in sun50i-h616.dtsi + the de33 clock syscon range), and
+  harness/research/vdec-perf/install-kernel.sh installed only Image + modules; harness/serial.log shows every trial boot
+  loading the image's stock DTB (`Load fdt: /boot/dtb/allwinner/sun50i-h616-orangepi-zero2.dtb`, 53821 bytes; c24's is 54221).
+  Without the node sun50i_wb has nothing to bind and the mixer keeps the display up without a connector (6dbed6c18 behaviour).
+  The de33_wb_* parameters (built-in sun8i-mixer) were probably present; the check tested both in one `&&` so it cannot say.
+- Fix (project repo, shared with jobs 26/20): install-kernel.sh installs the tag's DTB (symlink, .stock kept), new
+  restore-kernel.sh, fallback script re-points the DTB on non-trial boots; wb-job.sh verifies the DTB md5, checks the
+  parameters and the connector separately and collects files/blocked-<tag>/ (dmesg, DT nodes, devices_deferred, DRM classes).
+- Re-queued as harness/runner-queue/30-de33-writeback.md (kernel 6dbed6c18 unchanged; c26 has it). Next: fresh agent judges
+  job 30 with HANDOFF checks 0-8.

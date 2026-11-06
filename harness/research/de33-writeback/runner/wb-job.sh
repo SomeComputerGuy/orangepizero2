@@ -33,9 +33,17 @@ waitup() { for i in $(seq 1 60); do sleep 5; $SSH -n true 2>/dev/null && return 
 acquire() { OWN=runner-wb-$J-$(date +%s); out=$($H/harness/board-lock.sh acquire $OWN) || { log "lock: $out"; exit 1; }
   case $out in *"already held"*) log "lock already held by $OWN"; exit 1;; esac; log "$out"; }
 release() { [ -n "$OWN" ] && $H/harness/board-lock.sh release $OWN | tee -a $OUT/runner.log; OWN=""; }
-restore() { $SSH -n 'ln -sfn vmlinuz-7.3.1-edge-sunxi64 /boot/Image; rm -f /boot/vdec-trial; sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'
-  sleep 15; if waitup; then log "restored: $($SSH -n 'uname -rv; readlink /boot/Image' | tr '\n' ' ')"
+restore() { $V/restore-kernel.sh | tee -a $OUT/runner.log   # Image, DTB (.stock), modules (.good), reboot
+  sleep 15; if waitup; then log "restored: $($SSH -n 'uname -rv; readlink /boot/Image; readlink /boot/dtb/allwinner/sun50i-h616-orangepi-zero2.dtb' | tr '\n' ' ')"
   else log "BOARD UNREACHABLE after restore reboot"; echo "board unreachable after restore" > $OUT/BLOCKED; fi; }
+evidence() { # evidence <tag> <dt-node regex> <unused> <module> <lsmod regex> <driver glob>: what a blocked kernel looks like, into files/blocked-$1/
+  local d=$OUT/files/blocked-$1; mkdir -p $d
+  $SSH -n 'dmesg' > $d/dmesg.txt 2>&1
+  $SSH -n "uname -rv; echo Image=\$(readlink /boot/Image); echo dtb=\$(readlink /boot/dtb/allwinner/sun50i-h616-orangepi-zero2.dtb 2>/dev/null || echo file) md5=\$(md5sum < /boot/dtb/allwinner/sun50i-h616-orangepi-zero2.dtb | cut -c1-32)
+    echo '--- DT nodes (path status compatible):'; find /proc/device-tree -maxdepth 4 -type d | grep -iE '$2' | while read n; do echo \$n \$(tr -d '\\0' < \$n/status 2>/dev/null || echo no-status) \$(tr -d '\\0' < \$n/compatible 2>/dev/null); done
+    echo '--- devices_deferred:'; mount -t debugfs none /sys/kernel/debug 2>/dev/null; cat /sys/kernel/debug/devices_deferred 2>&1
+    echo '--- modinfo:'; modinfo $4 2>&1 | head -12; echo '--- lsmod:'; lsmod | grep -iE '$5'; echo '--- platform drivers:'; ls -d /sys/bus/platform/drivers/*$6* 2>&1; ls /sys/bus/platform/drivers/*$6*/ 2>&1" > $d/state.txt 2>&1
+  log "evidence in $d"; }
 blocked() { log "BLOCKED: $*"; echo "$*" > $OUT/BLOCKED; restore; release; exit 2; }
 on_stock() { [ "$($SSH -n 'readlink /boot/Image')" = vmlinuz-7.3.1-edge-sunxi64 ] || blocked "board not on the stock image kernel at start"; }
 ship_client() { # the test client: ship it only when the board copy differs
@@ -53,8 +61,14 @@ boot_trial() { # install the newest cumulative kernel with the fallback armed; i
   waitup || { log "trial kernel did not come up (the fallback reverts on the next boot)"; echo "trial boot failed" > $OUT/BLOCKED; release; exit 2; }
   [ "$($SSH -n 'md5sum < /boot/$(readlink /boot/Image) | cut -c1-32')" = "$want" ] || blocked "$T Image md5 mismatch after install"
   $SSH -n 'touch /run/vdec-ok; uname -v' | sed 's/^/kernel: /' | tee -a $OUT/runner.log
-  $SSH -n 'ls -d /sys/class/drm/card*-Writeback-1 >/dev/null 2>&1 && ls /sys/module/sun8i_mixer/parameters/ | grep -q de33_wb_jobs' \
-    || blocked "kernel $T has no Writeback-1 connector / de33_wb_* parameters (writeback not in this kernel)"
+  dtbwant=$(md5sum < $H/kernel-check/vdec-serve/sun50i-h616-orangepi-zero2.dtb.$T | cut -c1-32)
+  dtbhave=$($SSH -n 'md5sum < /boot/dtb/allwinner/sun50i-h616-orangepi-zero2.dtb | cut -c1-32')
+  [ "$dtbhave" = "$dtbwant" ] || { evidence dtb "display-engine|writeback|de33" "writeback@|display-engine" "sun8i-mixer" "sun8i|sun4i" "sun8i-mixer"; blocked "$T DTB not installed: board md5 $dtbhave, want $dtbwant (install-kernel.sh DTB step)"; }
+  log "kernel dtb: $T ($dtbhave)"
+  $SSH -n 'ls /sys/module/sun8i_mixer/parameters/ | grep -q de33_wb_jobs' \
+    || { evidence params "display-engine|writeback|de33" "writeback@|display-engine" "sun8i-mixer" "sun8i|sun4i" "sun8i-mixer"; blocked "kernel $T has no /sys/module/sun8i_mixer/parameters/de33_wb_* (writeback code not in this kernel; see files/blocked-params/)"; }
+  $SSH -n 'ls -d /sys/class/drm/card*-Writeback-1 >/dev/null 2>&1' \
+    || { evidence connector "display-engine|writeback|de33" "writeback@|display-engine" "sun8i-mixer" "sun8i|sun4i" "sun8i-mixer"; $SSH -n 'ls /sys/class/drm/' > $OUT/files/blocked-connector/drm-classes.txt 2>&1; blocked "kernel $T has no Writeback-1 connector (DT node missing or sun50i_wb bind failed; see files/blocked-connector/)"; }
   log "kernel writeback: present ($($SSH -n 'ls -d /sys/class/drm/card*-Writeback-1' | tr '\n' ' '))"; }
 others_waiting() { ls $H/harness/queue/board.wait 2>/dev/null | grep -v "\.$OWN\." | grep -q .; }
 chunk_script() { # board script of a chunk ($1 = chunk name); ends with ROUND-DONE

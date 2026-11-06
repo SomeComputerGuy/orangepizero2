@@ -13,9 +13,14 @@ never capture a frame with rows of both colours (a torn frame), which complement
 Precondition (coordinator): merge `fix/sunxi-h616-de33-writeback` at 6dbed6c18 into `test-cumulative`, build the next
 cumulative kernel (c23 or later) and serve it as kernel-check/vdec-serve/Image.<tag> + modules-<tag>.tgz. The script installs
 the NEWEST cumulative tag (last line of kernel-check/cumulative-kernels.txt) via harness/research/vdec-perf/install-kernel.sh
-with the one-shot fallback armed; the HTTP server on 10.56.0.1:8643 must be up. It checks that 6dbed6c18 is an ancestor of the
-tag's commit and that the booted kernel has /sys/class/drm/card*-Writeback-1 and
-/sys/module/sun8i_mixer/parameters/de33_wb_jobs; otherwise it writes BLOCKED and exits 2 (report that, not a FAIL). The client
+with the one-shot fallback armed; the HTTP server on 10.56.0.1:8643 must be up. install-kernel.sh also installs the tag's
+Zero2 DTB (kernel-check/vdec-serve/sun50i-h616-orangepi-zero2.dtb.<tag>): job 21 was BLOCKED because the stock DTB has no
+writeback@10000 node (no connector) and only Image + modules were installed. It checks that 6dbed6c18 is an ancestor of
+the tag's commit, that the booted DTB has the tag's md5, that /sys/module/sun8i_mixer/parameters/de33_wb_jobs exists and
+that /sys/class/drm/card*-Writeback-1 exists; otherwise it writes BLOCKED and exits 2 (report that, not a FAIL, with the
+first 30 lines of files/blocked-<tag>/state.txt: DT nodes, devices_deferred; files/blocked-<tag>/dmesg.txt is the full
+dmesg, files/blocked-connector/drm-classes.txt the DRM class list). The restore goes through
+harness/research/vdec-perf/restore-kernel.sh (Image, DTB, modules). The client
 is shipped to /root/wb/kms-wb if the board copy differs. The board must start on the stock image kernel.
 
 DEV or TEST: DEV-length, about 7 min: install + reboot (~3 min), 11 short runs (~1.5 min), restore (~1 min). Runs: probe;
@@ -40,7 +45,7 @@ the last 10 lines of runner.log); 1 = setup or lock error.
 ## Checks (mechanical, all on results.txt unless stated)
 0. Display rule: if results.txt has `wb all mode_unavailable 1` or `wb probe mode_unavailable 1`, the chunk is NOT TESTED
    (the forced connector offered no 1024x768 mode), never FAIL; report files/wb/connectors.txt and skip the other checks.
-1. runner.log contains a `kernel: ` line and `kernel writeback: present`. Report both.
+1. runner.log contains a `kernel: ` line, a `kernel dtb: ` line and `kernel writeback: present`. Report all three.
 2. Connector present: `wb probe writeback_connectors` >= 1, `wb probe wb_reaches_crtc 1`, `wb probe wb_format_offered 1`,
    `wb probe probe ok`, `wb probe rc 0` -> PASS, else FAIL (report files/wb/probe.txt). Also report `wb probe wb_formats`.
 3. Exact captures: for each of solid1..solid4 and bars: `rc` is 0, `captures_failed` is 0 and every `capture<N>_mismatches`

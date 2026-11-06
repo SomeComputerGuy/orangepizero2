@@ -89,9 +89,17 @@ waitup() { for i in $(seq 1 60); do sleep 5; $SSH -n true 2>/dev/null && return 
 acquire() { OWN=runner-g2d-$J-$(date +%s); out=$($H/harness/board-lock.sh acquire $OWN) || { log "lock: $out"; exit 1; }
   case $out in *"already held"*) log "lock already held by $OWN"; exit 1;; esac; log "$out"; }
 release() { [ -n "$OWN" ] && $H/harness/board-lock.sh release $OWN | tee -a $OUT/runner.log; OWN=""; }
-restore() { $SSH -n 'ln -sfn vmlinuz-7.3.1-edge-sunxi64 /boot/Image; rm -f /boot/vdec-trial; sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'
-  sleep 15; if waitup; then log "restored: $($SSH -n 'uname -rv; readlink /boot/Image' | tr '\n' ' ')"
+restore() { $V/restore-kernel.sh | tee -a $OUT/runner.log   # Image, DTB (.stock), modules (.good), reboot
+  sleep 15; if waitup; then log "restored: $($SSH -n 'uname -rv; readlink /boot/Image; readlink /boot/dtb/allwinner/sun50i-h616-orangepi-zero2.dtb' | tr '\n' ' ')"
   else log "BOARD UNREACHABLE after restore reboot"; echo "board unreachable after restore" > $OUT/BLOCKED; fi; }
+evidence() { # evidence <tag> <dt-node regex> <unused> <module> <lsmod regex> <driver glob>: what a blocked kernel looks like, into files/blocked-$1/
+  local d=$OUT/files/blocked-$1; mkdir -p $d
+  $SSH -n 'dmesg' > $d/dmesg.txt 2>&1
+  $SSH -n "uname -rv; echo Image=\$(readlink /boot/Image); echo dtb=\$(readlink /boot/dtb/allwinner/sun50i-h616-orangepi-zero2.dtb 2>/dev/null || echo file) md5=\$(md5sum < /boot/dtb/allwinner/sun50i-h616-orangepi-zero2.dtb | cut -c1-32)
+    echo '--- DT nodes (path status compatible):'; find /proc/device-tree -maxdepth 4 -type d | grep -iE '$2' | while read n; do echo \$n \$(tr -d '\\0' < \$n/status 2>/dev/null || echo no-status) \$(tr -d '\\0' < \$n/compatible 2>/dev/null); done
+    echo '--- devices_deferred:'; mount -t debugfs none /sys/kernel/debug 2>/dev/null; cat /sys/kernel/debug/devices_deferred 2>&1
+    echo '--- modinfo:'; modinfo $4 2>&1 | head -12; echo '--- lsmod:'; lsmod | grep -iE '$5'; echo '--- platform drivers:'; ls -d /sys/bus/platform/drivers/*$6* 2>&1; ls /sys/bus/platform/drivers/*$6*/ 2>&1" > $d/state.txt 2>&1
+  log "evidence in $d"; }
 blocked() { log "BLOCKED: $*"; echo "$*" > $OUT/BLOCKED; restore; release; exit 2; }
 on_stock() { [ "$($SSH -n 'readlink /boot/Image')" = vmlinuz-7.3.1-edge-sunxi64 ] || blocked "board not on the stock image kernel at start"; }
 ship_client() { # the test client: ship it only when the board copy differs
@@ -109,8 +117,12 @@ boot_trial() { # install the newest cumulative kernel with the fallback armed; i
   waitup || { log "trial kernel did not come up (the fallback reverts on the next boot)"; echo "trial boot failed" > $OUT/BLOCKED; release; exit 2; }
   [ "$($SSH -n 'md5sum < /boot/$(readlink /boot/Image) | cut -c1-32')" = "$want" ] || blocked "$T Image md5 mismatch after install"
   $SSH -n 'touch /run/vdec-ok; uname -v' | sed 's/^/kernel: /' | tee -a $OUT/runner.log
+  dtbwant=$(md5sum < $H/kernel-check/vdec-serve/sun50i-h616-orangepi-zero2.dtb.$T | cut -c1-32)
+  dtbhave=$($SSH -n 'md5sum < /boot/dtb/allwinner/sun50i-h616-orangepi-zero2.dtb | cut -c1-32')
+  [ "$dtbhave" = "$dtbwant" ] || { evidence dtb "g2d" "g2d@" "sun50i-g2d" "g2d" "g2d"; blocked "$T DTB not installed: board md5 $dtbhave, want $dtbwant (install-kernel.sh DTB step)"; }
+  log "kernel dtb: $T ($dtbhave)"
   $SSH -n 'modprobe sun50i-g2d 2>/dev/null; sleep 1; ls -d /sys/bus/platform/drivers/sun50i-g2d/1480000.g2d >/dev/null 2>&1' \
-    || blocked "kernel $T has no bound sun50i-g2d driver at 1480000.g2d (G2D not in this kernel or probe failed; see dmesg in files/)"
+    || { evidence probe "g2d" "g2d@" "sun50i-g2d" "g2d" "g2d"; blocked "kernel $T has no bound sun50i-g2d driver at 1480000.g2d (probe failed; see files/blocked-probe/)"; }
   log "kernel g2d: bound ($($SSH -n 'dmesg | grep -i "sun50i-g2d\|g2d:" | tail -2' | tr '\n' ' '))"; }
 others_waiting() { ls $H/harness/queue/board.wait 2>/dev/null | grep -v "\.$OWN\." | grep -q .; }
 make_refs() { # host side: the destination-format reference of every case (same pattern code as the board input)

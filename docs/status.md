@@ -164,6 +164,7 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
     `fix/sunxi-h616-ahub-dam-aux-card` 61fb5e0e2 (fork, **to merge into test-cumulative**); rerun job 25 blocks until merged.
 - Merged, waiting for board: c19 panfrost oops fix (job 18; then release held 08/09/14/15), c21 DE33 vblank latch (job 19-display-tearing).
 - Open coding: SPI/I2C target mode (W33, agent running), DE33 writeback connector (W23, agent running).
+- NEXT after the writeback agent: merge the board-PASS fixes from test-cumulative (42 commits ahead; the encoder alone conflicts in series.conf and likely depends on other cedrus patches) into stonking-orangepizero2, build-check, push fork; then the user runs ./build-all.sh OPIZ2_WIFI_REGDOM=US and the runner reflashes via harness/REFLASH.md.
 - Kernel package versions: follow Armbian (26.11.0-trunk REVISION); the OPi5 "+board.N" scheme does not apply here (user 2026-11-06).
 - Runner failures 2026-11-06 (next code agent, one at a time):
   - G2D PARKED (user 2026-11-06, until more credits): job 36 on c31 shows the mixer registers dead (ip 01010100: rtmx 0 vsu 0), ROT engine works. Next: one research agent over other vendor repos/BSPs on how they use the H616 G2D, if any vendor code drives the mixer on H616, fix our driver to match; otherwise ship what the HW can do (ROT rotate/flip) - no user decision needed. harness/research/g2d/RESULTS.md.

@@ -165,7 +165,7 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
 - Merged, waiting for board: c19 panfrost oops fix (job 18; then release held 08/09/14/15), c21 DE33 vblank latch (job 19-display-tearing).
 - Open coding: SPI/I2C target mode (W33, agent running), DE33 writeback connector (W23, agent running).
 - Runner failures 2026-11-06 (next code agent, one at a time):
-  - G2D PARKED (user 2026-11-06, until more credits): job 36 on c31 shows the mixer registers dead (ip 01010100: rtmx 0 vsu 0), ROT engine works. Next: one research agent over other vendor repos/BSPs on how they use the H616 G2D, then the user decides (fix mixer path vs ROT-only rotator). harness/research/g2d/RESULTS.md.
+  - G2D PARKED (user 2026-11-06, until more credits): job 36 on c31 shows the mixer registers dead (ip 01010100: rtmx 0 vsu 0), ROT engine works. Next: one research agent over other vendor repos/BSPs on how they use the H616 G2D, if any vendor code drives the mixer on H616, fix our driver to match; otherwise ship what the HW can do (ROT rotate/flip) - no user decision needed. harness/research/g2d/RESULTS.md.
   - c27 jobs 28-32 (2026-11-06): 29-g2d STALLED (first conversion step, board unreachable ~2 min); 32-ve-encoder STALLED (first step after probe, board unreachable ~5 min); c27 boot WARN mc-device.c:619 media_device_register_entity from cedrus_probe+0x398 (encoder registration) -> code agent "m2m stalls" running.
   - 30-de33-writeback (c27): every flip+writeback atomic commit -EINVAL, nothing captured; xr30 dumb buffer -EINVAL.
   - 31-spi-i2c-target (c27): SPI set PASS (spidev1.0 present); I2C set: i2c3 does not probe with sit-i2c3-slave overlay (status okay, overlay applied, not deferred, no dmesg).

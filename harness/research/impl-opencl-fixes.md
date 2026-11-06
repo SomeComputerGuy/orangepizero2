@@ -218,6 +218,75 @@ is on the board. Note for the subgroup commit 55fb9c9c4d3: `panfrost_compile` pa
 the precompiled libpan shaders for every v7 GPU are now built for 4-wide subgroups; right for the G31, wrong for a G52
 image if those shaders ever use subgroup ops (none do today).
 
+### Job 18 on c25: why the soft-stop failed (2026-11-06, agent panfrost-softstop2)
+
+Summary harness/runner-queue/done/18-panfrost-softstop.summary.md, logs logs/runner-timeout-fix/. No Oops. What the logs
+show (dmesg line counts via the chunk's `DMESG-START` values: stress 655 -> intops 1633 -> tdim 1673 -> math-a 1674 ->
+img3d 1674):
+- **stress**: the compute long jobs passed, twice: INTOPS quick_long_math + quick_ulong_math `PASSED 2 of 2` (t=76 s,
+  22 s), TDIM quick_2d_explicit_local `PASSED test.` (156 s); 5 of the 7 Vulkan fragment long jobs passed in 4-28 s. So a
+  soft-stopped job *is* resumed correctly from JS_TAIL, compute and fragment alike. The chunk failed its 870 s limit
+  because the two `count64` fragment cases (i8 bit_field_insert_offset16_count64_frag, u64 ..._offset8_count64_frag) hit
+  their 200 s limit, twice, and the chunk was cut off before its dmesg step: the ~978 dmesg lines of the stress period
+  (655 -> 1633) were never captured. The cut-off also orphaned the running `timeout 200 ./deqp-vk` (the inner `timeout`
+  makes its own process group, the chunk's SIGTERM does not reach it).
+- **intops**: the 39 `Soft-stop failed` lines (uptime 931-954 s, one every 0.6 s = 500 ms watchdog + 100 ms wait) are
+  the tail of that orphaned deqp-vk case, which died at its own 200 s limit at ~02:41:45: every 600 ms the fragment job
+  failed to reach a task boundary within the 100 ms budget, the GPU was reset and the job restarted from its head, so it
+  never progressed (that is why the count64 cases never finish: ~3 x 330 lines = the 978 uncaptured ones). Integer Ops
+  itself then ran to `integer_divideAssign` and hung there until the 800 s CTS limit with **zero** kernel messages; its
+  jobs were either silently soft-stopped/resumed many times or never timed out: not distinguishable without a counter
+  (fixed in the package: ftrace count of panfrost_job_timedout per chunk).
+- **math-a**: FAILED 34 of 54 with zero kernel messages (no timeout, no reset, no soft-stop failure), 3 stale-buffer
+  lines (`0xffffdead`/`at index: 0`, atan2/fdim/fmax) and the rest huge-ULP / NaN errors of whole wrong buffers. With no
+  watchdog hit in the chunk this is the rusticl multi-queue race of section 7 (proven there with
+  `CL_TEST_SINGLE_THREADED=1`: PASSED), not the kernel. The brief's "0xffffdead = wrong result from a resumed job or a
+  killed job?" is therefore: neither on c25; the stale buffers came without any soft-stop. The *potential* kernel path for
+  stale data did exist, though: a job soft-stopped on one slot (jc = JS_TAIL) while another slot's job failed to stop ->
+  GPU reset -> the stopped job resumed from JS_TAIL with its header/L2 state gone -> completes with stale data and no
+  error. Closed by e17629bba (below).
+- **math-b**: `'recip' did not match any test names`: the CTS registers it as `half_recip` (HALF_ENTRY). Package bug.
+- **tdim / img3d**: Timeout at 800 s with 1 / 0 kernel messages; the full quick* set is 6 jobs of 64 M items each
+  (quick_2d_explicit_local alone took 156 s with resume), so the 800 s budget is simply too small; same for Images
+  (Kernel 3D int), which never finished before either.
+- **reg**: 19/19 PASS, no regression from the resume path.
+
+Root cause of `Soft-stop failed`: the 100 ms soft-stop budget. A soft-stop takes effect at a task boundary only, after
+the tasks already issued (a compute job's work-groups, a fragment job's tiles) have completed, and a heavy fragment shader
+(64-bit bit-field emulation per fragment) needs seconds for that. Arm's kbase (kernel-check/kbase-trial/src, bifrost
+mali_kbase_config_defaults.h + backend/gpu/mali_kbase_js_backend.c): soft-stop after JS_SOFT_STOP_TICKS = 1 tick (100 ms
+scheduling period), hard-stop at JS_HARD_STOP_TICKS_SS = 50 ticks (5 s) if the job has not stopped, GPU reset at
+JS_RESET_TICKS_SS = 55 (5.5 s); on STOPPED the atom's jc is set to JS_TAIL and it is requeued (mali_kbase_jm_rb.c
+kbase_gpu_complete_hw); every atom that was on the hardware at a reset is failed with BASE_JD_EVENT_JOB_CANCELLED, never
+resumed (kbase_backend_reset). The JS_COMMAND is right (plain SOFT_STOP stops the current chain unconditionally; kbase
+uses the _0/_1 variants only because it targets one atom of two), JS_CONFIG needs no flag, and the hard-stop fallback
+was missing.
+
+Fix: branch `fix/sunxi-panfrost-softstop-budget` from test-cumulative (04964f921), commit e17629bba, pushed to fork,
+unmerged (worktree wt-panfrost-softstop2; patch
+patches.armbian/drm-panfrost-hard-stop-a-job-that-does-not-soft-stop-and-never-resume-across-a-reset.patch, third in the
+series): an active slot gets JOB_SOFT_STOP_TIMEOUT_MS = 5000 to go idle (idle/faulted slots keep 10 ms); slots still
+ACTIVE are hard-stopped (plain JS_COMMAND_HARD_STOP, the job ends TERMINATED -> -ECANCELED, nothing is reset, the other
+stopped jobs resume); the GPU is reset only if the hard stop has not taken effect after JOB_HARD_STOP_TIMEOUT_MS = 500,
+and the job still running on that slot is failed (finished fence -ECANCELED) instead of restarted from scratch (the
+600 ms reset loop of job 18); `pfdev->reset.count` is bumped by every reset, a job records it when soft-stopped
+(`job->stopped`, `job->stop_reset_count`) and panfrost_job_run() fails it with -ECANCELED instead of resuming it when the
+count moved; the no-reset path now calls panfrost_mmu_as_put() for the jobs that were waiting in _NEXT (the reset path
+has panfrost_mmu_reset() wipe those refs; without a reset they leaked one as_count per cycle, WARN_ON at 4 and the AS
+could never be reassigned); the failure messages carry all three slot statuses. Compiled with the c25 tree's own W=1
+-Werror flags (`.panfrost_job.o.cmd`), checkpatch --strict clean, applies to the c25 tree. Deferred (notes): the 5 s
+wait blocks the reset worker, so the stopped jobs on the other slots idle for up to 5 s while one job refuses to stop;
+kbase stops only the one slot. A redesign that returns NO_HANG from timedout_job and resumes from the IRQ handler would
+remove that and the drm_sched_resubmit_jobs dependency.
+
+Package (runner job harness/runner-queue/28-panfrost-softstop2.md, same dir, job name `softstop2`, results
+logs/runner-softstop2/, board dir /root/oclfix/softstop2 so clcts-run.py does not resume from job 18's rows): stress is
+compute only; the Vulkan cases are their own chunks (vk: 5 short cases x2 at 80 s; vklong: the 2 count64 cases x1 at
+400 s); inner timeouts use `--foreground` so the chunk limit reaches them, and every chunk kills the previous chunk's
+process group (exact pgid file); the host collects dmesg (from the chunk's DMESG-START) and the ftrace count of
+panfrost_job_timedout after the chunk, cut off or not; tdim runs `quick_2d quick_3d` directly; math-b says half_recip;
+math verdicts separate the Mesa race (stale lines with TIMEDOUT = 0) from a kernel suspect (stale lines with TIMEDOUT > 0).
+
 ## Full rerun on the fork (commit 9049a3c5f2c): PAUSED 2026-11-05 ~18:33 (user credit limit)
 
 Fork Mesa 9049a3c5f2c is deployed at `/root/opiz2-mesa/cl`. Results are on the board in `/root/oclfix/full-9049a3c/`

@@ -1,6 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-2.0-only
-# Host side of runner job 56: mechanical checks of build/gst-jpeg/results-stateful/out/results.txt.
+# Host side of runner jobs 56/57: mechanical checks of build/gst-jpeg/results-stateful*/out/results.txt.
 #   check.sh OUTDIR VECDIR      prints one line per check (PASS/FAIL), then VERDICT
 set -u
 O=$1; V=$2; R=$O/results.txt
@@ -38,6 +38,12 @@ s=ok; [ "$(f h264 rc)" = 0 ] && [ "$(f h264 size)" = $((30*460800)) ] && [ "$(f 
 ref=$(cat "$V/h264-640x480.i420.md5" 2>/dev/null)
 if [ "$(f h264 md5)" = "$ref" ]; then m="md5 == ffmpeg"; else m="md5 != ffmpeg $ref (info)"; fi
 chk C6-h264 $s "$(line h264) | $m"
+# C8: stateless resolution change (H.264 640x480 -> 320x240, v4l2slh264dec): all 30 frames, no kernel lines (the
+# kernel refused the S_FMT of the new size with -EBUSY before c42); md5 vs host ffmpeg is info
+s=ok; [ "$(f h264mix rc)" = 0 ] && [ "$(f h264mix size)" = $MJ ] && [ "$(f h264mix dmesg)" = +0 ] || s=bad
+ref=$(cat "$V/h264mix.i420.md5" 2>/dev/null)
+if [ "$(f h264mix md5)" = "$ref" ]; then m="md5 == ffmpeg"; else m="md5 != ffmpeg $ref (info)"; fi
+chk C8-h264mix $s "$(line h264mix) | $m"
 # C7: the whole run left no cedrus error and no kernel warning in the log
 n=$(grep -Ec 'Failed to setup decoding job|cedrus.*(rror|timed out)|WARNING:|Oops|BUG:|Unable to handle' "$O/dmesg.txt" 2>/dev/null)
 [ "${n:-0}" = 0 ] && s=ok || s=bad

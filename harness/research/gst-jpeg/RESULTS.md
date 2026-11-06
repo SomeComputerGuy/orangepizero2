@@ -1,4 +1,4 @@
-# GStreamer hardware JPEG decode on cedrus (v4l2sljpegdec + stateful v4l2jpegdec): state 2026-11-06 (job 22 PASS on c24; stateful v4l2jpegdec hang root-caused = cedrus refused V4L2_DEC_CMD_STOP, kernel fix in c41, runner job 56 queued)
+# GStreamer hardware JPEG decode on cedrus (v4l2sljpegdec + stateful v4l2jpegdec): state 2026-11-06 (job 56 on c41: STOP drain works; resolution-change EBUSY = kernel bug fixed in c42, stateful caps bugs = gst-plugins-good 0101-0102; rerun job 57)
 
 ## Rounds so far
 - 02-gst-jpeg (done, build/gst-jpeg/results/, summary harness/runner-queue/done/02-gst-jpeg.summary.md): hardware path
@@ -48,6 +48,52 @@ Evidence: job 22 out/norank16.gstdebug.txt (build/gst-jpeg/results-recheck/out/)
   out/sf-*.gstdebug.txt for "Waiting for decoder stop" without a following "Done draining" (LAST never delivered: check
   out/dmesg.txt and the drain path in cedrus_job_finish). md5 != v4l2sljpegdec at equal size: compare the NV12
   format/stride both negotiated (out/*.log caps lines).
+
+## Job 56 analysed (2026-11-06, c41): STOP drain works; three real bugs behind the FAILs, fixed; rerun job 57
+Summary harness/runner-queue/done/56-gst-jpeg-stateful.summary.md, logs done/56-logs/, results build/gst-jpeg/results-stateful/.
+C1/C2 PASS (STOP accepted, md5 == v4l2sljpegdec), C5-C7 PASS. None of the FAILs is the clip or the test pipeline.
+1. **C0/C3 reference sl-mjmix/sl-mjmixup rc=1: kernel bug (ours, since c10).** The log says
+   `gst_v4l2_decoder_set_sink_fmt() failed: Device or resource busy` at the first 320x240 image. The VP9 resize patch
+   (media-cedrus-VP9-resize-the-CAPTURE-queue-while-streaming, c10+) wired VIDIOC_REMOVE_BUFS for every codec, so
+   CREATE_BUFS reports V4L2_BUF_CAP_SUPPORTS_REMOVE_BUFS; GStreamer's v4l2codecs allocator then detaches by removing
+   only the CAPTURE buffers it has back (gst_v4l2_codec_allocator_detach), the ones in the base class pool stay, and
+   cedrus still refused S_FMT(OUTPUT/CAPTURE) while the CAPTURE queue had buffers (VP9 excepted). Job 06 passed the
+   same clips on the stock kernel (no REMOVE_BUFS). Hits every v4l2sl* decoder on a resolution change (H.264 new SPS
+   too). Hantro (the reference driver for this path) accepts the change. **Fix: fix/sunxi-cedrus-jpeg-stop-drain
+   fbba781aa** (patches.media/h616-vdec/media-cedrus-change-formats-with-CAPTURE-buffers-left-while-stopped.patch,
+   after the drain patch in series.conf): S_FMT on either queue with CAPTURE buffers left is accepted when both queues
+   are stopped and the coded format stays (codec stop() has freed the per-buffer aux buffers, buf_prepare re-checks a
+   requeued buffer); streaming rules unchanged. Same patch: the codec stop() loops (H.264, H.265, MPEG-4, AVS, AVS2)
+   walked `i < vb2_get_num_buffers()`, which misses buffers above holes left by REMOVE_BUFS (stale small MV buffers
+   on the next, larger size), now `i < vq->max_num_buffers`. checkpatch --strict clean; build-check 878 patches,
+   0 failed, 0 C warnings. Merged as **c42 = test-cumulative 2658acbe4, Image md5 a33675cabd5e04a667475be57e51586c**
+   (kernel-check/vdec-serve/Image.c42). Pushed to fork (fix branch + test-cumulative).
+2. **C3 stateful sf-mjmix rc=1 before any frame: gst-plugins-good bug (upstream too, 1.28.7 and main).** gstdebug:
+   `Returning sink caps EMPTY`. matroskademux/jpegparse carry colorimetry 1:4:0:0 (the MKV colour elements FFmpeg
+   writes for yuvj420p); v4l2object's probed colorimetry list only has values a V4L2 colorspace maps back to (cedrus
+   echoes all, incl. 1:4:7:1), never unknown primaries, although gst_v4l2_video_colorimetry_matches() and set_format()
+   already treat 1:4:0:0 as JPEG. **Fix: patches/gst-plugins-good1.0/0101** (v4l2object: offer 1:4:0:0 wherever
+   1:4:7:1 is offered). The clip is fine (the stateless decoder and jpegdec take it).
+3. **C4 nr16-db rc=0, size 0: gst-plugins-good bug.** decodebin's not-yet-exposed pad answers the caps query with
+   ANY; v4l2videodec_negotiate() then prefers the acquired DMA_DRM caps, decodebin exposes DMA_DRM, the link to
+   videoconvert fails and the output thread ends `not-negotiated` on the first frame; the error is swallowed and EOS
+   comes with no frame. Not a drain/job-order problem (STOP and LAST worked, `Waiting for decoder stop` then
+   `Done draining`). v4l2sljpegdec gets it right because v4l2codecs offers system memory to an ANY peer.
+   **Fix: patches/gst-plugins-good1.0/0102** (v4l2videodec: same rule, unless the device has no system-memory format).
+   Source: build/gst-jpeg/good/src (gst-plugins-good 1.28.7 tarball, git branch opiz2, commits f786c8d 5f3bcdb),
+   dev build harness/gst-jpeg/build-dev-good.sh -> build/gst-jpeg/good/out/libgstvideo4linux2.so.
+   Work list (not fixed, upstream): v4l2videodec swallows a not-negotiated from the output loop when it happens on the
+   last frame (EOS, rc 0, no error message).
+- Package (harness/gst-jpeg/stateful/, now job 57): bundle adds the dev libgstvideo4linux2.so (scratch plugin dir
+  only), board-test.sh records `dmabuf=N` and adds `h264mix` (Annex B 640x480*15 + 320x240*15, v4l2slh264dec:
+  stateless resolution-change regression of the kernel fix, check C8), GST_DEBUG adds v4l2codecs*:4; results in
+  build/gst-jpeg/results-stateful2/; run-job.sh needs c42+. Rerun: harness/runner-queue/57-gst-jpeg-stateful2.md.
+  If C0/C3/C8 still EBUSY: kernel.txt not c42. If C3 sf-* EMPTY sink caps: bundle without the dev v4l2 plugin
+  (BUILD.txt). If C4 size 0: nr16-db.log src caps DMABuf = 0102 not effective.
+- Integration after PASS: gst-plugins-good1.0 joins scripts/build-media-debs.sh with patches/gst-plugins-good1.0;
+  cherry-pick both kernel patches into stonking. MARGINAL override for v4l2jpegdec stays (caps routing, see above).
+- Note: plain ssh to 10.56.0.107 reports a changed host key while harness/ssh.sh works (job 56 runner); recorded only,
+  not investigated.
 
 ## Job 11 analysed (2026-11-06): 8 of 8 cases PASS on c17, checks 1 and 8 had wrong expectations, no hardware fault
 Summary harness/runner-queue/done/11-gst-jpeg-recheck.summary.md, results kept in build/gst-jpeg/results-recheck-job11/.

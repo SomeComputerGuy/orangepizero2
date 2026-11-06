@@ -1,0 +1,69 @@
+From f786c8d098a9d0fa1b8e592847aa5437b709e697 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 6 Nov 2026 18:04:20 +0000
+Subject: [PATCH 101/102] v4l2object: Offer 1:4:0:0 where the device takes the
+ JPEG colorspace
+
+gst_v4l2_video_colorimetry_matches() accepts the colorimetry 1:4:0:0
+(full range BT.601, transfer and primaries unknown) for a device that
+reports V4L2_COLORSPACE_JPEG, and set_format() maps it to that
+colorspace, but the probed caps only list colorimetries that a V4L2
+colorspace maps back to, and none has unknown primaries. jpegdec
+outputs 1:4:0:0, and matroskademux puts it on MJPEG tracks that carry
+full range BT.601 colour elements (as FFmpeg writes them), followed by
+jpegparse: the sink caps of a stateful v4l2jpegdec then do not
+intersect ("Returning sink caps EMPTY") and the pipeline fails with
+not-negotiated before the first frame.
+
+Add 1:4:0:0 to the probed colorimetries whenever 1:4:7:1 is among
+them.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2/gstv4l2object.c | 29 +++++++++++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+diff --git a/sys/v4l2/gstv4l2object.c b/sys/v4l2/gstv4l2object.c
+index 53f4e08..8131a07 100644
+--- a/sys/v4l2/gstv4l2object.c
++++ b/sys/v4l2/gstv4l2object.c
+@@ -2722,6 +2722,35 @@ gst_v4l2_object_add_colorspace (GstV4l2Object * v4l2object, GstStructure * s,
+     }
+   }
+ 
++  /* gst_v4l2_video_colorimetry_matches() takes 1:4:0:0 (full range BT.601
++   * with unknown transfer and primaries, which jpegdec produces and
++   * matroskademux and qtdemux put on MJPEG) for JPEG, and set_format() maps
++   * it to V4L2_COLORSPACE_JPEG: offer it wherever the device takes the JPEG
++   * colorspace, or the caps of such a stream do not intersect. */
++  if (gst_value_list_get_size (&list) > 0) {
++    GstVideoColorimetry ci_jpeg = {
++      GST_VIDEO_COLOR_RANGE_0_255, GST_VIDEO_COLOR_MATRIX_BT601,
++      GST_VIDEO_TRANSFER_SRGB, GST_VIDEO_COLOR_PRIMARIES_BT709
++    };
++    GstVideoColorimetry ci_likely_jpeg = {
++      GST_VIDEO_COLOR_RANGE_0_255, GST_VIDEO_COLOR_MATRIX_BT601,
++      GST_VIDEO_TRANSFER_UNKNOWN, GST_VIDEO_COLOR_PRIMARIES_UNKNOWN
++    };
++    GValue jpeg = G_VALUE_INIT;
++    guint i;
++
++    g_value_init (&jpeg, G_TYPE_STRING);
++    g_value_take_string (&jpeg, gst_video_colorimetry_to_string (&ci_jpeg));
++    for (i = 0; i < gst_value_list_get_size (&list); i++) {
++      if (gst_value_compare (&jpeg, gst_value_list_get_value (&list,
++                  i)) == GST_VALUE_EQUAL) {
++        gst_v4l2_object_fill_colorimetry_list (&list, &ci_likely_jpeg);
++        break;
++      }
++    }
++    g_value_unset (&jpeg);
++  }
++
+   if (gst_value_list_get_size (&list) > 0)
+     gst_structure_take_value (s, "colorimetry", &list);
+   else
+-- 
+2.55.0
+

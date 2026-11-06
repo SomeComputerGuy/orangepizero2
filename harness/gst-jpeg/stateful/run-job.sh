@@ -1,20 +1,20 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-2.0-only
-# Runner job 56-gst-jpeg-stateful (HANDOFF.md beside this file). Pattern of harness/gst-jpeg/recheck/run-job.sh:
-# board lock, install the NEWEST CUMULATIVE kernel (must be c41+ = "media: cedrus: jpeg: drain on V4L2_DEC_CMD_STOP")
+# Runner job 57-gst-jpeg-stateful2 (was 56) (HANDOFF.md beside this file). Pattern of harness/gst-jpeg/recheck/run-job.sh:
+# board lock, install the NEWEST CUMULATIVE kernel (must be c42+ = STOP drain + "change formats with CAPTURE buffers left while stopped")
 # with the vdec fallback armed, reboot, Image md5 check, ship build/gst-jpeg/bundle-stateful to /root/gstjpeg-stateful,
-# run board-test.sh (11 gst runs, each under timeout 60; step capped at 600 s), copy the results to
-# build/gst-jpeg/results-stateful/, restore the stock image kernel (restore-kernel.sh: Image, DTB, modules), reboot, release the lock, run check.sh on the host.
-# Resumable: steps are recorded in results-stateful/state; a rerun continues (RESET=1 starts over). Pause: touch
-# results-stateful/PAUSE; the script stops at the next step boundary, restores the stock kernel, releases the lock and
+# run board-test.sh (12 gst runs, each under timeout 60; step capped at 600 s), copy the results to
+# build/gst-jpeg/results-stateful2/, restore the stock image kernel (restore-kernel.sh: Image, DTB, modules), reboot, release the lock, run check.sh on the host.
+# Resumable: steps are recorded in results-stateful2/state; a rerun continues (RESET=1 starts over). Pause: touch
+# results-stateful2/PAUSE; the script stops at the next step boundary, restores the stock kernel, releases the lock and
 # exits 3; rm PAUSE and rerun to resume. Stall watchdog: no runner.log line for 900 s -> STALL, restore, exit 2.
 # Exit 0 = ran (verdict in compare.txt); 2 = blocked (BLOCKED says why); 3 = paused.
 set -u
 H=/home/aruni/orangepizero2; P=$H/harness/gst-jpeg/stateful; B=$H/build/gst-jpeg/bundle-stateful
-R=$H/build/gst-jpeg/results-stateful; SSH=$H/harness/ssh.sh; VP=$H/harness/research/vdec-perf; BD=/root/gstjpeg-stateful
+R=$H/build/gst-jpeg/results-stateful2; SSH=$H/harness/ssh.sh; VP=$H/harness/research/vdec-perf; BD=/root/gstjpeg-stateful
 [ -d "$B/plugins" ] && [ -x "$B/board-test.sh" ] && [ -f "$B/vec/h264-640x480.mkv" ] || { echo "bundle missing: $B (run $P/make-bundle.sh)"; exit 1; }
 TL=$(tail -1 $H/kernel-check/cumulative-kernels.txt); T=$(cut -d' ' -f1 <<< "$TL")
-[ "${T#c}" -ge 41 ] 2>/dev/null || { echo "newest cumulative kernel $T is older than c41 (no STOP drain fix)"; exit 1; }
+[ "${T#c}" -ge 42 ] 2>/dev/null || { echo "newest cumulative kernel $T is older than c42 (no S_FMT fix for resolution changes)"; exit 1; }
 want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || exit 1
 [ "${RESET:-0}" = 1 ] && rm -rf "${R:?}"
 mkdir -p "$R"; touch "$R/state"
@@ -40,7 +40,7 @@ serve() { curl -s -m 5 -o /dev/null http://10.56.0.1:8643/ && return 0
   sleep 2; curl -s -m 5 -o /dev/null http://10.56.0.1:8643/ || return 1; }
 
 rm -f $R/BLOCKED
-log "job 56 gst-jpeg-stateful start, kernel $T (Image md5 $want), state: $(tr '\n' ' ' < $R/state)"
+log "job 57 gst-jpeg-stateful2 start, kernel $T (Image md5 $want), state: $(tr '\n' ' ' < $R/state)"
 serve || { echo "no HTTP server on 10.56.0.1:8643" > $R/BLOCKED; exit 2; }
 trap 'stopwd; release' EXIT
 trap 'log "STALL/TERM"; echo "stall watchdog or TERM" > $R/BLOCKED; stopwd; restore; release; exit 2' TERM

@@ -1,0 +1,90 @@
+From 5f3bcdb29eebaa249f720c321b38f3f2de64c4c5 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 6 Nov 2026 18:04:56 +0000
+Subject: [PATCH 102/102] v4l2videodec: Offer system memory to a peer that
+ answers ANY
+
+negotiate() prefers the acquired DMA_DRM caps whenever the peer
+accepts them. The pad of a decodebin that is not exposed yet answers
+the caps query with ANY, so with `decodebin ! videoconvert` the decoder
+picks DMA_DRM, decodebin exposes that, the link to videoconvert fails,
+and the first frame ends the output thread with not-negotiated: the
+pipeline reaches EOS with no frame at all (exit 0, empty output). The
+v4l2codecs decoders handle the same case by offering system memory
+only when the peer answers ANY.
+
+Do the same: when the peer caps are ANY, drop the DMABuf structures
+from the available caps and the acquired DMA_DRM caps, unless the
+device offers nothing else.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2/gstv4l2videodec.c | 30 +++++++++++++++++++++++++++++-
+ 1 file changed, 29 insertions(+), 1 deletion(-)
+
+diff --git a/sys/v4l2/gstv4l2videodec.c b/sys/v4l2/gstv4l2videodec.c
+index e300d9b..98e7af1 100644
+--- a/sys/v4l2/gstv4l2videodec.c
++++ b/sys/v4l2/gstv4l2videodec.c
+@@ -43,6 +43,7 @@
+ 
+ #include <string.h>
+ #include <glib/gi18n-lib.h>
++#include <gst/allocators/gstdmabuf.h>
+ 
+ GST_DEBUG_CATEGORY_STATIC (gst_v4l2_video_dec_debug);
+ #define GST_CAT_DEFAULT gst_v4l2_video_dec_debug
+@@ -407,6 +408,14 @@ gst_v4l2_video_remove_padding (GstCapsFeatures * features,
+   return TRUE;
+ }
+ 
++static gboolean
++gst_v4l2_video_is_sysmem (GstCapsFeatures * features,
++    GstStructure * structure, gpointer user_data)
++{
++  return !features || !gst_caps_features_contains (features,
++      GST_CAPS_FEATURE_MEMORY_DMABUF);
++}
++
+ static gboolean
+ gst_v4l2_video_dec_negotiate (GstVideoDecoder * decoder)
+ {
+@@ -415,7 +424,7 @@ gst_v4l2_video_dec_negotiate (GstVideoDecoder * decoder)
+   GstVideoInfoDmaDrm info;
+   GstVideoCodecState *output_state;
+   GstCaps *acquired_caps, *acquired_drm_caps;
+-  GstCaps *fixation_caps, *available_caps, *caps, *filter;
++  GstCaps *fixation_caps, *available_caps, *caps, *filter, *peer_caps;
+   gboolean active;
+   GstBufferPool *cpool;
+   gboolean ret;
+@@ -478,6 +487,25 @@ gst_v4l2_video_dec_negotiate (GstVideoDecoder * decoder)
+   available_caps = gst_caps_copy (self->probed_srccaps);
+   GST_DEBUG_OBJECT (self, "Available caps: %" GST_PTR_FORMAT, available_caps);
+ 
++  /* A peer that answers ANY has not said that it takes DMABuf: this is
++   * what the pad of a decodebin that is not exposed yet answers, and the
++   * element linked to it later may handle system memory only. Like the
++   * v4l2codecs decoders, offer system memory then, if the device has it. */
++  peer_caps = gst_pad_peer_query_caps (decoder->srcpad, NULL);
++  if (gst_caps_is_any (peer_caps)) {
++    GstCaps *sysmem_caps = gst_caps_copy (available_caps);
++
++    gst_caps_filter_and_map_in_place (sysmem_caps, gst_v4l2_video_is_sysmem,
++        NULL);
++    if (!gst_caps_is_empty (sysmem_caps)) {
++      GST_DEBUG_OBJECT (self, "Peer caps are ANY, offering system memory");
++      gst_caps_replace (&available_caps, sysmem_caps);
++      gst_clear_caps (&acquired_drm_caps);
++    }
++    gst_caps_unref (sysmem_caps);
++  }
++  gst_caps_unref (peer_caps);
++
+   /* Replace coded size with visible size, we want to negotiate visible size
+    * with downstream, not coded size. */
+   gst_caps_map_in_place (available_caps, gst_v4l2_video_remove_padding, self);
+-- 
+2.55.0
+

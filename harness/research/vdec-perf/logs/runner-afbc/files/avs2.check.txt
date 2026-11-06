@@ -1,0 +1,8 @@
+GL_RENDERER Mali-G31 MC1 (Panfrost), OpenGL ES 3.1 Mesa 26.2.4-1ubuntu1
+input: 3840x2160 YU10 modifier 0x0800000000000441 size 17234976, 10-bit, layout yuv420p10le, 293 reference md5s
+import with pitch 7200 failed: EGL 0x3009
+import with pitch 7680 failed: EGL 0x3009
+import with pitch 5760 failed: EGL 0x3009
+import with pitch 3840 failed: EGL 0x3009
+import with pitch 15360 failed: EGL 0x3009
+afbc-gpu-check: dma-buf import failed for every pitch

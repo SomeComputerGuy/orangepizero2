@@ -1,0 +1,1 @@
+[env] BLOCKED: Mesa fork missing (/root/opiz2-mesa/main/env.sh); system Mesa cannot import AFBC YUV

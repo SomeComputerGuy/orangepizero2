@@ -50,6 +50,8 @@ harness/research/arm-blob/
 harness/research/kbase-trace/kbtrace.so
 harness/research/kbase-trace/gles32probe
 harness/research/kbase-trace/kbdecode
+harness/research/g2d/tool/out/
+harness/research/g2d/logs/
 # ve-encoder: built test tool, generated raw clips, runner logs
 harness/research/ve-encoder/tools/out/
 harness/research/ve-encoder/runner/clips/

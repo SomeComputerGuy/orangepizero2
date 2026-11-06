@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/media/allwinner,sun50i-h616-g2d.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Allwinner H616 G2D 2D Graphics Engine
+
+maintainers:
+  - Arun Iyengar <aiyengar1990@gmail.com>
+
+description: |-
+  The Allwinner H616 G2D is a 2D graphics accelerator made of a mixer
+  (overlays, scaler, blender with colour space converters and a write-back
+  unit) and a rotation engine. It reads and writes memory through the SoC
+  IOMMU.
+
+properties:
+  compatible:
+    const: allwinner,sun50i-h616-g2d
+
+  reg:
+    maxItems: 1
+
+  interrupts:
+    maxItems: 1
+
+  clocks:
+    items:
+      - description: G2D bus clock
+      - description: G2D module clock
+      - description: G2D MBUS (DRAM access) clock
+
+  clock-names:
+    items:
+      - const: bus
+      - const: mod
+      - const: mbus
+
+  resets:
+    maxItems: 1
+
+  iommus:
+    maxItems: 1
+
+required:
+  - compatible
+  - reg
+  - interrupts
+  - clocks
+  - clock-names
+  - resets
+  - iommus
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    #include <dt-bindings/clock/sun50i-h616-ccu.h>
+    #include <dt-bindings/reset/sun50i-h616-ccu.h>
+
+    g2d: g2d@1480000 {
+        compatible = "allwinner,sun50i-h616-g2d";
+        reg = <0x01480000 0x40000>;
+        interrupts = <GIC_SPI 90 IRQ_TYPE_LEVEL_HIGH>;
+        clocks = <&ccu CLK_BUS_G2D>, <&ccu CLK_G2D>, <&ccu CLK_MBUS_G2D>;
+        clock-names = "bus", "mod", "mbus";
+        resets = <&ccu RST_BUS_G2D>;
+        iommus = <&iommu 6>;
+    };
+
+...

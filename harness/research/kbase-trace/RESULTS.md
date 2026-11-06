@@ -3,13 +3,50 @@
 Background, tools, port notes: ../impl-gles32-arm-traces.md.
 
 ## Current state
-Updated 2026-11-06 22:50 (fix agent after runner job 65).
-- **Rendering root cause found (job 65 data): the blob writes AFBC colour render targets, and this G31 has no AFBC.**
-  Runner job **66-kbase-traces4** queued (harness/runner-queue/66-kbase-traces4.md; package runner/kbase-traces.sh v4 +
-  runner/HANDOFF.md, checks 1-19). It tests the fix (blob config: AFBC off) and then takes the traces under it.
-  Kernel c48 (b82264f81, unchanged); bifrost_kbase.ko **v4** for c48 (md5 aa7e170386c6672fe001d95daff25f30,
-  kernel-check/kbase-trial/build-c48-v4.log, tag refreshed). Results: harness/research/arm-blob/traces/runner-j66/.
-- Unload/bind reset: FIXED (job 65 checks 14/15 PASS, U-Boot SPL count 2 = no reset).
+Updated 2026-11-06 23:30 (fix agent after runner job 66).
+- **Job 66: the blob config cannot turn AFBC off** (parsed, still AFBC RTs, 0 lit pixels). Host analysis (below): the
+  GLES_DISABLE_*_AFBC options are compiled out of this release blob and no kbase GPU property gates AFBC, but the blob
+  uses **no AFBC for float colour buffers** (RGBA16F/RGBA32F -> U-tiled RTs, no AFBC descriptor anywhere in the trace).
+- Runner job **67-kbase-traces5** queued (harness/runner-queue/67-kbase-traces5.md; package runner/kbase-traces.sh v5 +
+  runner/HANDOFF.md, checks 1-20). Step `afbc` replaced by `fb`: basic case with gles32probe PROBE_FB=tex8 (control),
+  rgba16f, rgba32f; probe + trace with the first float mode that renders. Kernel c48 (b82264f81), bifrost_kbase.ko v4
+  (md5 aa7e170386c6672fe001d95daff25f30), unchanged. Results: harness/research/arm-blob/traces/runner-j67/.
+- What a float framebuffer distorts in the traces: only the fragment output side (RT format RAW64/128 U-tiled instead of
+  RGBA8 AFBC, the blend/conversion of the colour output, no AFBC-decompress blit before glReadPixels). Vertex/tiler/
+  compute jobs, the GS/tess lowering and the shader programs other than the colour write are the same; and panfrost
+  on this GPU never uses AFBC either. The blob trace is not rewritten in any way (no descriptor fixup needed).
+- Next (fresh agent after job 67): if the float mode renders, item 8 step 2 (GS/tess observations from the trace);
+  if it still faults, the fault is not AFBC-only: decode files/trace/decoded/submit-*-post.txt (fault_ptr) again.
+
+## Job 66 (c48, 2026-11-06 21:50) findings + host analysis (2026-11-06 22:00-23:30)
+1. Job 66: the blob parsed the config files (`Successfully parsed 2/3 environment variable(s)`), but every variant
+   (v0-v3) gave 0/4096 lit pixels, glError 0x505, 2 DATA_INVALID faults, and the trace still holds 40 AFBC RTs
+   (18 of them 0x20258 after the run). Load/unload clean (checks 16/19 PASS), SPL count 2.
+2. **Why the options do nothing** (libmali g24p0, md5 dd143e98..., static): the option registry is a table of 180
+   entries at .data 0x3585d88 (stride 0x30: name, type, default(), enabled(), parse(ctx, entry, slot), index). The
+   init loop (0x1a905f4..0x1a90790) calls enabled(); if it returns 0 the value is parsed into a scratch buffer and the
+   slot gets the type's zero value; if 1, default() then parse() into the slot. GLES_DISABLE_SURFACE_AFBC (index 140)
+   and GLES_DISABLE_TEXTURE_AFBC (141), like all 48 GLES_* bool options, have enabled() = `mov w0,#0; ret` and the
+   presence-only parse stub 0x1a90bc0 (it only checks the key exists; options that work have real parsers that call
+   0x1a99760). Forcing the slot value through the registry (blobopt.c: enabled() -> 1, parse() writes 1) stores the 1
+   but the RTs stay AFBC: the readers of these options are compiled out too. Dead end, documented; blobopt.c kept as
+   the record (not shipped).
+3. **Host simulation** (new, kbase-trace/hostsim/): kbfake.so fakes /dev/mali0 (UK 11.45, gpuprops from job 66's
+   gpuprops.bin, SAME_VA/EXEC allocations, JIT writes, every atom DONE, DRV_TERMINATED after POST_TERM) and runs the real
+   blob + gles32probe under qemu-aarch64 (no GPU, no board), stacked under kbtrace.so so kbdecode decodes what the blob
+   would submit. ~5 s per run. It reproduces the board trace exactly (same GPU VAs, FBD 0x1afe385c0 / RT 0x1afe38680,
+   20 AFBC + 18 linear + 11 U-tiled RTs). `hostsim/sim-rt.sh <dir> [KBFAKE_SET]` prints the RT formats.
+4. GPU properties: every gpuprops key 2..85 set to 0 (one run each), keys 30 (CORE_FEATURES), 85 (RAW_GPU_FEATURES) also
+   0xffffffff, texture features all-0/all-1, unknown keys 86/87 added: **no change** (same 20 AFBC RTs). Only the
+   product id matters (any other id: `mali_device_info_init` fails, this is a G31-only build). kbase's uAPI has no AFBC
+   property to report (AFBC_FEATURES is in the regmap only), so there is no truthful property to export that the blob
+   would read. The blob reads no sysfs/debugfs besides dma_buf_* moduleprops and large_page_conf (strace).
+5. Framebuffer formats (gles32probe PROBE_FB, new): tex8, teximage8 (glTexImage2D), rbo8 (renderbuffer), rgb10a2, srgb8,
+   rgb565 -> AFBC RT (20 AFBC). **rgba16f and rgba32f -> 22 U-tiled RTs, 0 AFBC descriptors, 18 submits** (tex8: 28; the
+   10 extra are the AFBC pre-frame/decompress blits before each readback). Writeback format RAW64 for RGBA16F.
+6. Fallback not needed: a kbtrace fixup (AFBC RT -> linear before JOB_SUBMIT) would also have to rewrite the texture
+   descriptors and the blob's AFBC readback blits (invasive, distorts the fragment side); the float framebuffer gets
+   the blob's own non-AFBC path instead.
 
 ## Job 65 (c48, 2026-11-06 21:33) findings
 1. Memory captured (46 submits decode). The POST lines' `exception_status 0x1 / fault_ptr 0x872aec5d` are a red

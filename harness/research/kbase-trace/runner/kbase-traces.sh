@@ -22,6 +22,14 @@
 # v2 + GLES_DISABLE_CRC, v3 + GLES_FORCE_LINEAR_LAYOUT_UNCOMPRESSED_TEXTURE); probe and trace then run under the first
 # variant (v1..v3) that renders (v3 if none). bifrost_kbase.ko v4: no -ENXIO IRQ lines, no workqueue WARNING at load,
 # no unbalanced regulator disable at unload (port-7.3-v4.py). Results: arm-blob/traces/runner-j66/.
+# v5 (runner job 67, 2026-11-06), after job 66: the blob config cannot turn AFBC off. In this release build the
+# GLES_DISABLE_*_AFBC options are compiled out (registry entry enabled() = 0, parse() = presence-only stub; forcing the
+# stored value through the registry changes nothing either), and no GPU property moves the choice (host simulation of
+# kbase under qemu, kbase-trace/hostsim/: every gpuprops key zeroed, product id is the only gate). The blob does not use
+# AFBC for float colour formats: in the simulation RGBA16F/RGBA32F attachments get U-tiled render targets and the trace
+# holds no AFBC descriptor at all. Step `afbc` is replaced by `fb`: the basic case with gles32probe PROBE_FB=tex8
+# (control, AFBC), rgba16f and rgba32f; probe and trace run with the first float mode that renders (rgba16f if none).
+# Results: arm-blob/traces/runner-j67/.
 # Self-contained: board lock (fresh owner name per acquire), install the newest cumulative kernel with the one-shot
 # fallback armed (harness/research/vdec-perf/install-kernel.sh, like the vdec/OpenCL jobs; it must carry the BTF dedup
 # fix bd60a159b), stage bifrost_kbase.ko + the blob + the tools in /root/armblob (runtime files only: nothing is
@@ -42,18 +50,15 @@ SERIAL=$H/harness/serial.log
 KO=$H/kernel-check/kbase-trial/src/drivers/gpu/arm/bifrost/bifrost_kbase.ko
 BLOB=$A/dl/libmali-bifrost-g31-g24p0-gbm.so
 BTFFIX=bd60a159b                          # iommu-sun55i: drop the stale iommu_dma_cookie copy (kbase BTF validates only with it)
-OUT=${KBT_OUT:-$A/traces/runner-j66}      # results (arm-blob/ is git-ignored: blob-derived traces never get committed)
+OUT=${KBT_OUT:-$A/traces/runner-j67}      # results (arm-blob/ is git-ignored: blob-derived traces never get committed)
 R=/root/armblob                           # board work dir
 ENV="LD_LIBRARY_PATH=$R/lib"
 TESTS="basic gs_pass gs_amp gs_inv tess_tri tess_gs tess_quad gs_xfb gs_layer"
 RGBA="basic gs_pass gs_amp gs_inv tess_tri tess_gs tess_quad gs_xfb gs_layer0 gs_layer1"
-STEPS="load info afbc probe trace unload bind"
-VARIANTS="v0 v1 v2 v3"
-# blob config (key=value per line; the blob strips an optional MALI_ prefix): v0 = control, v1..v3 = AFBC off (+CRC off, +linear)
-vcfg() { case $1 in v0) ;; v1) printf "GLES_DISABLE_TEXTURE_AFBC=1\nGLES_DISABLE_SURFACE_AFBC=1\n";;
-  v2) vcfg v1; echo GLES_DISABLE_CRC=1;; v3) vcfg v2; echo GLES_FORCE_LINEAR_LAYOUT_UNCOMPRESSED_TEXTURE=1;; esac; }
-# probe/trace: blob config of the variant the afbc step selected ($R/out/afbc/SELECTED)
-CFGENV="CFG=\$(cat $R/out/afbc/SELECTED 2>/dev/null || echo v3); echo CONFIG \$CFG; cat $R/cfg/\$CFG.config; export MALI_PLATFORM_CONFIG=$R/cfg/\$CFG.config MALI_DEBUG_CONFIG=$R/cfg/\$CFG.config"
+STEPS="load info fb probe trace unload bind"
+FBMODES="tex8 rgba16f rgba32f"   # gles32probe PROBE_FB: tex8 = RGBA8 texture (control: AFBC RT), rgba16f/rgba32f = float (no AFBC)
+# probe/trace: the framebuffer mode the fb step selected ($R/out/fb/SELECTED)
+CFGENV="export PROBE_FB=\$(cat $R/out/fb/SELECTED 2>/dev/null || echo rgba16f); echo FBMODE \$PROBE_FB"
 GPUDEV=/sys/bus/platform/devices/1800000.gpu
 # board-side snippet: runtime PM, genpd and clock state of the GPU (unload/bind steps)
 PMSTATE="echo PM: status=\$(cat $GPUDEV/power/runtime_status 2>/dev/null) usage=\$(cat $GPUDEV/power/runtime_usage 2>/dev/null) driver=\$(basename \$(readlink $GPUDEV/driver) 2>/dev/null)
@@ -88,15 +93,15 @@ test -e /sys/kernel/btf/bifrost_kbase && echo MODULE-BTF-PRESENT || echo MODULE-
 ls /sys/class/misc/mali0/device/ 2>/dev/null | head -40" ;;
     info)  body="cat /sys/class/misc/mali0/device/gpuinfo 2>/dev/null; cat /sys/class/misc/mali0/device/power_policy 2>/dev/null
 cat /sys/kernel/debug/clk/gpu0/clk_rate 2>/dev/null; cat /sys/kernel/debug/regulator/regulator_summary 2>/dev/null | grep -i -A2 dcdc" ;;
-    afbc)  body="rm -rf $R/out/afbc; mkdir -p $R/out/afbc; sel=''
-for v in $VARIANTS; do mkdir -p $R/out/afbc/\$v; cd $R/out/afbc/\$v; n=\$(dmesg | wc -l)
-  MALI_PLATFORM_CONFIG=$R/cfg/\$v.config MALI_DEBUG_CONFIG=$R/cfg/\$v.config $ENV timeout 60 $R/gles32probe $R/out/afbc/\$v basic > run.txt 2>&1; rc=\$?
+    fb)    body="rm -rf $R/out/fb; mkdir -p $R/out/fb; sel=''
+for v in $FBMODES; do mkdir -p $R/out/fb/\$v; cd $R/out/fb/\$v; n=\$(dmesg | wc -l)
+  PROBE_FB=\$v $ENV timeout 60 $R/gles32probe $R/out/fb/\$v basic > run.txt 2>&1; rc=\$?
   b=\$(grep -m1 '^basic: lit pixels' info.txt 2>/dev/null)
-  echo \"VARIANT \$v rc \$rc faults \$(dmesg | tail -n +\$((n+1)) | grep -c DATA_INVALID) cfg [\$(tr '\\n' ' ' < $R/cfg/\$v.config)] \${b:-no basic line}\"
-  grep -m3 -i -E 'config|error|warn' run.txt | sed 's/^/BLOB: /'
-  [ -z \"\$sel\" ] && [ \$v != v0 ] && echo \"\$b\" | grep -q 'lit pixels [1-9]' && sel=\$v
+  echo \"FBMODE \$v rc \$rc faults \$(dmesg | tail -n +\$((n+1)) | grep -c DATA_INVALID) [\$(grep -m1 '^fb mode' info.txt 2>/dev/null)] \${b:-no basic line}\"
+  grep -m3 -i -E 'error|warn|fail' run.txt | sed 's/^/BLOB: /'
+  [ -z \"\$sel\" ] && [ \$v != tex8 ] && echo \"\$b\" | grep -q 'lit pixels [1-9]' && sel=\$v
 done
-echo \${sel:-v3} > $R/out/afbc/SELECTED; echo SELECTED \${sel:-v3} \$([ -n \"\$sel\" ] && echo renders || echo none-rendered)" ;;
+echo \${sel:-rgba16f} > $R/out/fb/SELECTED; echo SELECTED \${sel:-rgba16f} \$([ -n \"\$sel\" ] && echo renders || echo none-rendered)" ;;
     probe) body="rm -rf $R/out/probe; mkdir -p $R/out/probe; cd $R/out/probe
 $CFGENV
 n=\$(dmesg | wc -l)
@@ -160,13 +165,16 @@ checks() { # mechanical checks from the results (HANDOFF.md); prints PASS/FAIL l
   # v4: load noise fixed in kbase.ko v4 (port-7.3-v4.py)
   n=$(grep -c -E 'IRQ (JOB|MMU|GPU) not found' $OUT/dmesg-load.txt 2>/dev/null); [ -f $OUT/dmesg-load.txt ] && [ "${n:-0}" = 0 ] && p "load: no 'IRQ ... not found' lines" || fl "load: 'IRQ ... not found' lines: ${n:-no dmesg-load.txt}"
   n=$(grep -c -E 'WARNING:|Call trace' $OUT/dmesg-load.txt 2>/dev/null); [ -f $OUT/dmesg-load.txt ] && [ "${n:-0}" = 0 ] && p "load: no WARNING/Call trace in dmesg-load.txt" || { fl "load: WARNING/Call trace lines in dmesg-load.txt: ${n:-no file}"; grep -E 'WARNING:|workqueue' $OUT/dmesg-load.txt 2>/dev/null | head -3; }
-  # v4: AFBC variants (the fix under test): v1..v3 disable AFBC in the blob config; v0 is the control
-  f=$OUT/step-afbc.txt
-  grep -q '^STEP-DONE' $f 2>/dev/null && p "step afbc finished" || fl "step afbc did not finish (no STEP-DONE)"
-  grep '^VARIANT ' $f 2>/dev/null | sed 's/^/INFO afbc: /'; grep '^BLOB: ' $f 2>/dev/null | head -8 | sed 's/^/INFO afbc /'
-  grep -q '^SELECTED v[1-3] renders' $f 2>/dev/null && p "afbc: $(grep '^SELECTED' $f)" || fl "afbc: no variant rendered ($(grep '^SELECTED' $f 2>/dev/null || echo no SELECTED line))"
+  # v5: framebuffer modes (the fix under test): rgba16f/rgba32f colour attachments (no AFBC); tex8 is the AFBC control
+  f=$OUT/step-fb.txt
+  grep -q '^STEP-DONE' $f 2>/dev/null && p "step fb finished" || fl "step fb did not finish (no STEP-DONE)"
+  grep '^FBMODE ' $f 2>/dev/null | sed 's/^/INFO fb: /'; grep '^BLOB: ' $f 2>/dev/null | head -8 | sed 's/^/INFO fb /'
+  grep -q '^SELECTED rgba[13][62]f renders' $f 2>/dev/null && p "fb: $(grep '^SELECTED' $f)" || fl "fb: no float mode rendered ($(grep '^SELECTED' $f 2>/dev/null || echo no SELECTED line))"
+  n=$(grep '^FBMODE rgba[13][62]f ' $f 2>/dev/null | grep -c 'faults 0 ')
+  [ "$n" -ge 1 ] && p "fb: $n float mode(s) without DATA_INVALID faults" || fl "fb: DATA_INVALID faults in every float mode"
   for s in probe trace; do f=$OUT/step-$s.txt
-    grep '^CONFIG ' $f 2>/dev/null | sed "s/^/INFO $s blob /"
+    grep '^FBMODE ' $f 2>/dev/null | sed "s/^/INFO $s /"
+    grep -q '^fb mode rgba[13][62]f' $OUT/files/$s/info.txt 2>/dev/null && p "$s ran with a float framebuffer ($(grep -m1 '^fb mode' $OUT/files/$s/info.txt))" || fl "$s: no float 'fb mode' line in files/$s/info.txt"
     grep -q '^STEP-DONE' $f 2>/dev/null && p "step $s finished" || fl "step $s did not finish (no STEP-DONE)"
     grep -q "^${s^^}-RC 0" $f 2>/dev/null && p "gles32probe ($s) rc 0" || fl "gles32probe ($s) rc: $(grep "^${s^^}-RC" $f 2>/dev/null || echo missing)"
     [ -s $OUT/files/$s/info.txt ] && grep -q '^done' $OUT/files/$s/info.txt && p "files/$s/info.txt complete" || fl "files/$s/info.txt missing or incomplete"
@@ -269,7 +277,6 @@ stage() { # /root/armblob: module + blob via ship.sh (HTTP pieces, sha256-checke
   [ "$(S1 -n "md5sum < $R/lib/libmali.so.1 2>/dev/null | cut -c1-32")" = "$blobmd5" ] && log "stage: libmali.so.1 already on the board" || \
     { $V/ship.sh $BLOB $R/lib/libmali.so.1 2>&1 | tail -1 | tee -a $OUT/runner.log; [ "$(S1 -n "md5sum < $R/lib/libmali.so.1 | cut -c1-32")" = "$blobmd5" ] || blocked "libmali.so.1 md5 mismatch after ship"; }
   scp -q "${K[@]}" $T/kbtrace.so $T/gles32probe root@10.56.0.107:$R/ || blocked "cannot copy kbtrace.so / gles32probe"
-  for v in $VARIANTS; do vcfg $v | T1=30 S1 "mkdir -p $R/cfg; cat > $R/cfg/$v.config" || blocked "cannot write $R/cfg/$v.config"; done
   S1 -n "cd $R/lib; for l in libEGL.so.1 libGLESv2.so.2 libGLESv1_CM.so.1 libgbm.so.1 libOpenCL.so.1; do ln -sf libmali.so.1 \$l; done; chmod +x $R/gles32probe; modinfo -F vermagic $R/bifrost_kbase.ko" | sed 's/^/stage: board vermagic /' | tee -a $OUT/runner.log; }
 kbase_up() { S1 -n 'test -e /dev/mali0'; }
 SER0=$(stat -c %s $SERIAL 2>/dev/null || echo 0)
@@ -281,10 +288,10 @@ else run_step load 120 60 || blocked "step load did not finish"
   kbase_up || { log "kbase did not come up; dmesg:"; cat $OUT/dmesg-load.txt | tail -20 | tee -a $OUT/runner.log; restore; release; log "job $J end: kbase load failed"; exit 0; }
 fi
 grep -qx info $OUT/state || run_step info 60 30
-if ! grep -qx afbc $OUT/state || [ ! -s $OUT/files/afbc/SELECTED ]; then kbase_up || blocked "/dev/mali0 vanished before step afbc"
-  sed -i '/^afbc$/d' $OUT/state; run_step afbc 330 120
-  mkdir -p $OUT/files/afbc; scp -q -r "${K[@]}" root@10.56.0.107:$R/out/afbc/. $OUT/files/afbc/ 2>/dev/null || log "fetch afbc: scp failed"
-  log "afbc: $(grep '^SELECTED' $OUT/step-afbc.txt)"; fi
+if ! grep -qx fb $OUT/state || [ ! -s $OUT/files/fb/SELECTED ]; then kbase_up || blocked "/dev/mali0 vanished before step fb"
+  sed -i '/^fb$/d' $OUT/state; run_step fb 250 120
+  mkdir -p $OUT/files/fb; scp -q -r "${K[@]}" root@10.56.0.107:$R/out/fb/. $OUT/files/fb/ 2>/dev/null || log "fetch fb: scp failed"
+  log "fb: $(grep '^SELECTED' $OUT/step-fb.txt)"; fi
 for s in probe trace; do
   grep -qx $s $OUT/state && [ -s $OUT/files/$s/info.txt ] && continue
   kbase_up || blocked "/dev/mali0 vanished before step $s"

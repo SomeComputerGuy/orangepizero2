@@ -2,7 +2,10 @@
 /* GLES 3.2 GS/tessellation probe for the Arm libmali blob (GBM platform, surfaceless context).
  * Usage: gles32probe <outdir> [test-name ...]   (no test names = all tests)
  * Writes <outdir>/info.txt, <outdir>/<test>.rgba (64x64 RGBA8 readback), <outdir>/<test>.progbin
- * (glGetProgramBinary). Calls kbtrace_marker() around each test when kbtrace.so is preloaded. */
+ * (glGetProgramBinary). Calls kbtrace_marker() around each test when kbtrace.so is preloaded.
+ * Env PROBE_FB selects the colour attachment storage (job 67): tex8 (default: glTexStorage2D RGBA8), teximage8
+ * (glTexImage2D RGBA8), rbo8 (renderbuffer RGBA8), rgba16f, rgba32f, rgb10a2, srgb8, rgb565 (texture storage). Readbacks are
+ * always converted to RGBA8 in the .rgba files. */
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -61,10 +64,40 @@ static void save_bin(const char *name, GLuint p)
 	free(b);
 }
 
+static const char *fbmode(void)
+{
+	const char *m = getenv("PROBE_FB");
+	return m && *m ? m : "tex8";
+}
+
+static GLenum fbfmt(void)
+{
+	const char *m = fbmode();
+	if (!strcmp(m, "rgba16f")) return GL_RGBA16F;
+	if (!strcmp(m, "rgba32f")) return GL_RGBA32F;
+	if (!strcmp(m, "rgb10a2")) return GL_RGB10_A2;
+	if (!strcmp(m, "srgb8")) return GL_SRGB8_ALPHA8;
+	if (!strcmp(m, "rgb565")) return GL_RGB565;
+	return GL_RGBA8;
+}
+
 static void readback(const char *name)
 {
 	static unsigned char px[W * H * 4];
-	glReadPixels(0, 0, W, H, GL_RGBA, GL_UNSIGNED_BYTE, px);
+	static float fpx[W * H * 4];
+	static unsigned upx[W * H];
+	GLenum fmt = fbfmt();
+	if (fmt == GL_RGBA16F || fmt == GL_RGBA32F) {
+		glReadPixels(0, 0, W, H, GL_RGBA, GL_FLOAT, fpx);
+		for (int i = 0; i < W * H * 4; i++) { float v = fpx[i] < 0 ? 0 : fpx[i] > 1 ? 1 : fpx[i]; px[i] = (unsigned char)(v * 255.0f + 0.5f); }
+	} else if (fmt == GL_RGB10_A2) {
+		glReadPixels(0, 0, W, H, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, upx);
+		for (int i = 0; i < W * H; i++) {
+			px[4*i] = ((upx[i] >> 0) & 0x3ff) >> 2; px[4*i+1] = ((upx[i] >> 10) & 0x3ff) >> 2;
+			px[4*i+2] = ((upx[i] >> 20) & 0x3ff) >> 2; px[4*i+3] = (upx[i] >> 30) * 85;
+		}
+	} else
+		glReadPixels(0, 0, W, H, GL_RGBA, GL_UNSIGNED_BYTE, px);
 	unsigned sum = 0, lit = 0;
 	for (int i = 0; i < W * H; i++) { sum = sum * 31 + px[4*i] + (px[4*i+1] << 8) + (px[4*i+2] << 16); lit += px[4*i] | px[4*i+1] | px[4*i+2] ? 1 : 0; }
 	char fn[512]; snprintf(fn, sizeof fn, "%s/%s.rgba", od, name);
@@ -119,9 +152,24 @@ static const char *gs_layer = V "layout(triangles) in;\nlayout(triangle_strip, m
 static GLuint fbo_2d(void)
 {
 	GLuint t, f;
-	glGenTextures(1, &t); glBindTexture(GL_TEXTURE_2D, t); glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, W, H);
+	const char *m = fbmode();
 	glGenFramebuffers(1, &f); glBindFramebuffer(GL_FRAMEBUFFER, f);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, t, 0);
+	if (!strcmp(m, "rbo8")) {
+		glGenRenderbuffers(1, &t); glBindRenderbuffer(GL_RENDERBUFFER, t); glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, W, H);
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, t);
+	} else {
+		glGenTextures(1, &t); glBindTexture(GL_TEXTURE_2D, t);
+		if (!strcmp(m, "teximage8")) {
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, W, H, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		} else
+			glTexStorage2D(GL_TEXTURE_2D, 1, fbfmt(), W, H);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, t, 0);
+	}
+	{
+		static int once;
+		if (!once++) fprintf(info, "fb mode %s, status 0x%x\n", m, glCheckFramebufferStatus(GL_FRAMEBUFFER));
+	}
 	glViewport(0, 0, W, H); glClearColor(0, 0, 0, 1); glClear(GL_COLOR_BUFFER_BIT);
 	return f;
 }
@@ -275,7 +323,7 @@ int main(int argc, char **argv)
 	}
 	if (want(argc, argv, "gs_layer")) {
 		GLuint p = prog(vs_tri, NULL, NULL, gs_layer, fs_col, NULL, 0), t, f;
-		glGenTextures(1, &t); glBindTexture(GL_TEXTURE_2D_ARRAY, t); glTexStorage3D(GL_TEXTURE_2D_ARRAY, 1, GL_RGBA8, W, H, 2);
+		glGenTextures(1, &t); glBindTexture(GL_TEXTURE_2D_ARRAY, t); glTexStorage3D(GL_TEXTURE_2D_ARRAY, 1, fbfmt(), W, H, 2);
 		glGenFramebuffers(1, &f); glBindFramebuffer(GL_FRAMEBUFFER, f);
 		glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, t, 0);
 		fprintf(info, "gs_layer: fb status 0x%x\n", glCheckFramebufferStatus(GL_FRAMEBUFFER));

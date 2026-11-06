@@ -164,6 +164,13 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
     `fix/sunxi-h616-ahub-dam-aux-card` 61fb5e0e2 (fork, **to merge into test-cumulative**); rerun job 25 blocks until merged.
 - Merged, waiting for board: c19 panfrost oops fix (job 18; then release held 08/09/14/15), c21 DE33 vblank latch (job 19-display-tearing).
 - Open coding: SPI/I2C target mode (W33, agent running), DE33 writeback connector (W23, agent running).
+- Runner failures 2026-11-06 (next code agent, one at a time):
+  - 16-kbase-traces (c20): trace step rc 139 (segfault); probe PASS except dmesg; stalled 90 min in restore (ssh, see harness item).
+  - 19-display-tearing (c24): seq_gaps 1 in four of six runs (stock d4/d12 too, so a test artefact is possible); 60 flips/s, rest PASS.
+  - 20-spi-i2c-target (c24, no jumpers): no /dev/i2c-3, no 3-1064, no /dev/spidev1.0: overlays did not take effect (check overlay
+    names/apply in the package vs. the dtbo names).
+  - 21-de33-writeback (c24): BLOCKED "no Writeback-1 connector / de33_wb_* parameters", but c24 contains 6dbed6c18: the connector
+    init (non-fatal) most likely failed at probe: real bug, read the job's dmesg.
 - Harness: kbase-traces.sh ssh hung 1.5 h across a board reboot (23:52, no crash on serial); every runner package's ssh needs
   ServerAliveInterval/CountMax + a timeout, and the stall watchdog must fire on it (killed PID by hand 2026-11-06 01:16).
 - Next items: stateful v4l2jpegdec hang (after job 11 gstdebug), remaining M/L datasheet items (W22 encoder SPEC, W26, W12, W24, W29, W25 G2D).

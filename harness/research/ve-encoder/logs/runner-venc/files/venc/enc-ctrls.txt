@@ -1,0 +1,26 @@
+
+Codec Controls
+
+             video_bitrate_mode 0x009909ce (menu)   : min=0 max=2 default=1 value=1 (Constant Bitrate) flags=update, has-min-max
+                  video_bitrate 0x009909cf (int)    : min=1 max=100000000 step=1 default=2000000 value=2000000 flags=has-min-max
+frame_level_rate_control_enable 0x009909d7 (bool)   : default=0 value=0 flags=has-min-max
+generate_access_unit_delimiters 0x009909e7 (bool)   : default=0 value=0 flags=has-min-max
+          h264_i_frame_qp_value 0x00990a5e (int)    : min=0 max=51 step=1 default=26 value=26 flags=has-min-max
+          h264_p_frame_qp_value 0x00990a5f (int)    : min=0 max=51 step=1 default=28 value=28 flags=has-min-max
+          h264_minimum_qp_value 0x00990a61 (int)    : min=0 max=51 step=1 default=0 value=0 flags=has-min-max
+          h264_maximum_qp_value 0x00990a62 (int)    : min=0 max=51 step=1 default=51 value=51 flags=has-min-max
+                     h264_level 0x00990a67 (menu)   : min=0 max=15 default=11 value=11 (4) flags=has-min-max
+                   h264_profile 0x00990a6b (menu)   : min=0 max=4 default=1 value=1 (Constrained Baseline) flags=has-min-max
+           vertical_size_of_sar 0x00990a6c (int)    : min=1 max=65535 step=1 default=1 value=1 flags=has-min-max
+         horizontal_size_of_sar 0x00990a6d (int)    : min=1 max=65535 step=1 default=1 value=1 flags=has-min-max
+        aspect_ratio_vui_enable 0x00990a6e (bool)   : default=0 value=0 flags=has-min-max
+           vui_aspect_ratio_idc 0x00990a6f (menu)   : min=0 max=17 default=0 value=0 (Unspecified) flags=has-min-max
+     prepend_sps_and_pps_to_idr 0x00990b84 (int)    : min=0 max=1 step=1 default=1 value=1 flags=has-min-max
+               constant_quality 0x00990b85 (int)    : min=1 max=100 step=1 default=50 value=50 flags=has-min-max
+
+Stateless Codec Controls
+
+                h264_start_code 0x00a40901 (menu)   : min=0 max=1 default=1 value=1 (Annex B Start Code) flags=has-min-max
+    h264_sequence_parameter_set 0x00a40902 (h264-sps): value=unsupported payload type flags=has-payload
+     h264_picture_parameter_set 0x00a40903 (h264-pps): value=unsupported payload type flags=has-payload
+         h264_encode_parameters 0x00a40908 (unknown): type=206 value=unsupported payload type flags=has-payload

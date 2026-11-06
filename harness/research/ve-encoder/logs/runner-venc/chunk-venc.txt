@@ -1,0 +1,164 @@
+DMESG-START 662
+STEP probe
+[    0.199947] platform 1c0e000.video-codec: Adding to iommu group 0
+[    0.242604] cedrus 1c0e000.video-codec: Device registered as /dev/video0
+[    0.242827] cedrus 1c0e000.video-codec: Encoder registered as /dev/video1
+boot_warnings 0
+media /dev/media0 model=cedrus
+media /dev/media1 model=sun50i-di300
+ENC /dev/video1 DEC /dev/video0 MEDIA /dev/media0
+media_node /dev/media0
+STEP topology
+media_info 1
+dec_D_rc 0
+STEP enc-info
+== formats
+	[0]: 'NV12' (Y/UV 4:2:0)
+	[0]: 'S264' (H.264 Parsed Slice Data, compressed)
+== controls 20
+STEP compliance
+== compliance: Total for cedrus device /dev/media0: 8, Succeeded: 8, Failed: 0, Warnings: 0
+Total for cedrus device /dev/video0: 49, Succeeded: 48, Failed: 1, Warnings: 0
+Total for cedrus device /dev/video1: 49, Succeeded: 48, Failed: 1, Warnings: 0
+		fail: v4l2-test-codecs.cpp(161): ret
+	test VIDIOC_(TRY_)DECODER_CMD: FAIL
+		fail: v4l2-test-formats.cpp(1445): node->is_m2m && !is_stateful_enc
+	test VIDIOC_G/S_PARM: FAIL
+DMESG-ENCODES-START 664
+STEP encode r1
+== r1 1280x720 n=30 gop=0 qp=26
+RESULT frames=30 bytes=994139 keyframes=30 errors=0 ret=0 avg_us=3234 max_us=3300 fps=17.2
+RC 0
+BUFFERS: format 1280x720 stride 1280 size 1402880
+BUFFERS: source     0xffc00000 0xffd56800 0x156800
+BUFFERS: coded      0xff800000 0xff951800 0x151800
+BUFFERS: mb-info    0xff600000 0xff768000 0x168000
+BUFFERS: mv         0xff5c0000 0xff5cf000 0xf000
+BUFFERS: rc         0xff5cf000 0xff5d0000 0x1000
+BUFFERS: line       0xff5d0000 0xff5d5000 0x5000
+BUFFERS: tfcnt      0xff5d5000 0xff5e4000 0xf000
+BUFFERS: rec        0xff200000 0xff368000 0x168000
+BUFFERS: rec-subpix 0xff7f8000 0xff7ff000 0x7000
+BUFFERS: ref        0xff200000 0xff368000 0x168000
+BUFFERS: ref-subpix 0xff7f8000 0xff7ff000 0x7000
+STEP hwdec r1
+HWDEC r1 bytes 41472000 md5 06bebbe3801c36631cd02f407f7daeb3 raw 41472000 crop frames 30 stride 1280 rest 0 RC 0
+STEP encode r2
+== r2 1280x720 n=30 gop=10 qp=26
+RESULT frames=30 bytes=653763 keyframes=3 errors=0 ret=0 avg_us=3180 max_us=3255 fps=156.3
+RC 0
+BUFFERS: format 1280x720 stride 1280 size 1402880
+BUFFERS: source     0xffc00000 0xffd56800 0x156800
+BUFFERS: coded      0xff800000 0xff951800 0x151800
+BUFFERS: mb-info    0xff600000 0xff768000 0x168000
+BUFFERS: mv         0xff5c0000 0xff5cf000 0xf000
+BUFFERS: rc         0xff5cf000 0xff5d0000 0x1000
+BUFFERS: line       0xff5d0000 0xff5d5000 0x5000
+BUFFERS: tfcnt      0xff5d5000 0xff5e4000 0xf000
+BUFFERS: rec        0xff200000 0xff368000 0x168000
+BUFFERS: rec-subpix 0xff1f8000 0xff1ff000 0x7000
+BUFFERS: ref        0xff400000 0xff568000 0x168000
+BUFFERS: ref-subpix 0xfdbb8000 0xfdbbf000 0x7000
+STEP hwdec r2
+HWDEC r2 bytes 41472000 md5 6383b2fd91091add1525584e1f392d8f raw 41472000 crop frames 30 stride 1280 rest 0 RC 0
+STEP encode r3
+== r3 1920x1080 n=10 gop=0 qp=20
+RESULT frames=10 bytes=870745 keyframes=10 errors=0 ret=0 avg_us=7091 max_us=7168 fps=7.6
+RC 0
+BUFFERS: format 1920x1080 stride 1920 size 3164160
+BUFFERS: source     0xff800000 0xffb04800 0x304800
+BUFFERS: coded      0xfe800000 0xfeaf7600 0x2f7600
+BUFFERS: mb-info    0xfe400000 0xfe72a000 0x32a000
+BUFFERS: mv         0xfe380000 0xfe3a0000 0x20000
+BUFFERS: rc         0xfe3a0000 0xfe3a1000 0x1000
+BUFFERS: line       0xfe3a1000 0xfe3a9000 0x8000
+BUFFERS: tfcnt      0xfe3a9000 0xfe3c9000 0x20000
+BUFFERS: rec        0xfdc00000 0xfdf2a000 0x32a000
+BUFFERS: rec-subpix 0xfdbf0000 0xfdbfd000 0xd000
+BUFFERS: ref        0xfdc00000 0xfdf2a000 0x32a000
+BUFFERS: ref-subpix 0xfdbf0000 0xfdbfd000 0xd000
+STEP hwdec r3
+HWDEC r3 bytes 31104000 md5 e1124dbf908d389de8b4ed7bd9671d7b raw 31104000 crop frames 10 stride 1920 rest 0 RC 0
+STEP encode r4
+== r4 1920x1080 n=10 gop=10 qp=30
+RESULT frames=10 bytes=326899 keyframes=1 errors=0 ret=0 avg_us=6807 max_us=6829 fps=72.3
+RC 0
+BUFFERS: format 1920x1080 stride 1920 size 3164160
+BUFFERS: source     0xff800000 0xffb04800 0x304800
+BUFFERS: coded      0xfe800000 0xfeaf7600 0x2f7600
+BUFFERS: mb-info    0xfe400000 0xfe72a000 0x32a000
+BUFFERS: mv         0xfe380000 0xfe3a0000 0x20000
+BUFFERS: rc         0xfe3a0000 0xfe3a1000 0x1000
+BUFFERS: line       0xfe3a1000 0xfe3a9000 0x8000
+BUFFERS: tfcnt      0xfe3a9000 0xfe3c9000 0x20000
+BUFFERS: rec        0xfdc00000 0xfdf2a000 0x32a000
+BUFFERS: rec-subpix 0xfdff0000 0xfdffd000 0xd000
+BUFFERS: ref        0xfe000000 0xfe32a000 0x32a000
+BUFFERS: ref-subpix 0xfdbf0000 0xfdbfd000 0xd000
+STEP hwdec r4
+HWDEC r4 bytes 31104000 md5 0f61ca51068603ab793356437c654c54 raw 31104000 crop frames 10 stride 1920 rest 0 RC 0
+STEP encode r5
+== r5 1366x768 n=5 gop=0 qp=26
+RESULT frames=5 bytes=185700 keyframes=5 errors=0 ret=0 avg_us=3678 max_us=3720 fps=14.4
+RC 0
+BUFFERS: format 1366x768 stride 1376 size 1607168
+BUFFERS: source     0xffe00000 0xfff88600 0x188600
+BUFFERS: coded      0xffa00000 0xffb83000 0x183000
+BUFFERS: mb-info    0xff600000 0xff783000 0x183000
+BUFFERS: mv         0xff5c0000 0xff5d1000 0x11000
+BUFFERS: rc         0xff5d1000 0xff5d2000 0x1000
+BUFFERS: line       0xff5d2000 0xff5d8000 0x6000
+BUFFERS: tfcnt      0xff5d8000 0xff5e9000 0x11000
+BUFFERS: rec        0xff400000 0xff599000 0x199000
+BUFFERS: rec-subpix 0xfdbb0000 0xfdbb7000 0x7000
+BUFFERS: ref        0xff400000 0xff599000 0x199000
+BUFFERS: ref-subpix 0xfdbb0000 0xfdbb7000 0x7000
+STEP hwdec r5
+HWDEC r5 bytes 7868160 md5 edcc1ec6d7c826e79d200bc5a1a83537 raw 7879680 crop frames 5 stride 1368 rest 0 RC 0
+STEP encode r6
+== r6 720x480 n=10 gop=5 qp=26
+RESULT frames=10 bytes=94948 keyframes=2 errors=0 ret=0 avg_us=1360 max_us=1441 fps=43.9
+RC 0
+BUFFERS: format 720x480 stride 720 size 529920
+BUFFERS: source     0xffe00000 0xffe81600 0x81600
+BUFFERS: coded      0xffd00000 0xffd7e900 0x7e900
+BUFFERS: mb-info    0xffc00000 0xffc8a000 0x8a000
+BUFFERS: mv         0xffbf0000 0xffbf6000 0x6000
+BUFFERS: rc         0xffbf6000 0xffbf7000 0x1000
+BUFFERS: line       0xffbf7000 0xffbfa000 0x3000
+BUFFERS: tfcnt      0xffbfa000 0xffc00000 0x6000
+BUFFERS: rec        0xffa00000 0xffa8a000 0x8a000
+BUFFERS: rec-subpix 0xff9fc000 0xff9ff000 0x3000
+BUFFERS: ref        0xffb00000 0xffb8a000 0x8a000
+BUFFERS: ref-subpix 0xffafc000 0xffaff000 0x3000
+STEP hwdec r6
+HWDEC r6 bytes 5184000 md5 3c4385f68182a8e97a07a108efdb9447 raw 5184000 crop frames 10 stride 720 rest 0 RC 0
+STEP encode r7
+== r7 854x480 n=10 gop=5 qp=26
+RESULT frames=10 bytes=110376 keyframes=2 errors=0 ret=0 avg_us=1576 max_us=1604 fps=37.4
+RC 0
+BUFFERS: format 854x480 stride 864 size 635904
+BUFFERS: source     0xffe00000 0xffe9b400 0x9b400
+BUFFERS: coded      0xffc00000 0xffc97e00 0x97e00
+BUFFERS: mb-info    0xffb00000 0xffba2000 0xa2000
+BUFFERS: mv         0xffac0000 0xffac7000 0x7000
+BUFFERS: rc         0xffac7000 0xffac8000 0x1000
+BUFFERS: line       0xffac8000 0xffacc000 0x4000
+BUFFERS: tfcnt      0xffacc000 0xffad3000 0x7000
+BUFFERS: rec        0xff900000 0xff9a2000 0xa2000
+BUFFERS: rec-subpix 0xff8fc000 0xff900000 0x4000
+BUFFERS: ref        0xffa00000 0xffaa2000 0xa2000
+BUFFERS: ref-subpix 0xff9f8000 0xff9fc000 0x4000
+STEP hwdec r7
+HWDEC r7 bytes 6148800 md5 770fe67c3ad9ac7ead8f8fa66e2d9b5d raw 6163200 crop frames 10 stride 856 rest 0 RC 0
+STEP dmesg
+DMESG: [   56.737855] cedrus 1c0e000.video-codec: Failed to setup encoding job: -22
+DMESG: [   56.737975] cedrus 1c0e000.video-codec: Failed to setup encoding job: -22
+OUT: -rw-r--r-- 1 root root 994139 Nov  6 08:39 r1.h264
+OUT: -rw-r--r-- 1 root root 653763 Nov  6 08:39 r2.h264
+OUT: -rw-r--r-- 1 root root 870745 Nov  6 08:39 r3.h264
+OUT: -rw-r--r-- 1 root root 326899 Nov  6 08:39 r4.h264
+OUT: -rw-r--r-- 1 root root 185700 Nov  6 08:39 r5.h264
+OUT: -rw-r--r-- 1 root root  94948 Nov  6 08:39 r6.h264
+OUT: -rw-r--r-- 1 root root 110376 Nov  6 08:39 r7.h264
+ROUND-DONE

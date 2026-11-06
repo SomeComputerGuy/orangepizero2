@@ -1,0 +1,20 @@
+2026-11-06 08:35:59 job venc start, kernel c33 (Image md5 866f3ca37c446a2d200e90c53221b82b), venc commit d6d2ce09b, chunks: venc, done before: 
+2026-11-06 08:35:59 acquired by runner-venc-venc-1793954159
+2026-11-06 08:36:05 h264enc-test on the board is current (b06757d8cd45fbb58107268b777a0468413a1bfdb516c9b1f358a77153d868ab)
+2026-11-06 08:36:10 testsrc2-1280x720-30.nv12 on the board is current (72dda9782300bf7b1042774d33090fb0e1363a16cf3a817879a8deb68f722fd1)
+2026-11-06 08:36:12 testsrc2-1366x768-5.nv12 on the board is current (b4a1c536028945ed0f265f04cf6097a79c505073d9dac72dd365bb03b33c8a8c)
+2026-11-06 08:36:15 testsrc2-1920x1080-10.nv12 on the board is current (537faaf405ba9518d3ddfa755f2c994606156a545124b51e8d03fae173b7a23a)
+2026-11-06 08:36:17 testsrc2-720x480-10.nv12 on the board is current (917234804bdd1d87c79c6c20df4e5db8623e95742a486bc5724961dd2a4e978d)
+shipped /root/venc/clips/testsrc2-854x480-10.nv12 1dff44ea32316b07ffe6b88e23e507a22ba2778faaa3fc14e3868c0fbc85eb0f
+2026-11-06 08:36:32 clips on the board: 5 of 5 current
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+dtb sun50i-h616-orangepi-zero2.dtb.vdec-c33 md5 fbb509889a4cba869d6985f4e549039a
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+kernel: #31 SMP PREEMPT Fri Nov  6 08:21:32 UTC 2026
+2026-11-06 08:38:21 kernel encoder: Encoder registered as /dev/video1
+2026-11-06 08:38:21 chunk venc start
+2026-11-06 08:39:47 chunk venc done
+restore: Image=vmlinuz-7.3.1-edge-sunxi64 dtb=sun50i-h616-orangepi-zero2.dtb.stock
+2026-11-06 08:41:41 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 sun50i-h616-orangepi-zero2.dtb.stock 
+released by runner-venc-venc-1793954159
+2026-11-06 08:41:41 job venc end: 1 of 1 chunks done; results in /home/aruni/orangepizero2/harness/research/ve-encoder/logs/runner-venc/results.txt

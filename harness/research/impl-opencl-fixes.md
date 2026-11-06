@@ -287,6 +287,47 @@ process group (exact pgid file); the host collects dmesg (from the chunk's DMESG
 panfrost_job_timedout after the chunk, cut off or not; tdim runs `quick_2d quick_3d` directly; math-b says half_recip;
 math verdicts separate the Mesa race (stale lines with TIMEDOUT = 0) from a kernel suspect (stale lines with TIMEDOUT > 0).
 
+### Job 28 on c27: soft-stop series PASS; the img3d page fault (2026-11-06, agent panfrost-img3d)
+
+Summary harness/runner-queue/done/28-panfrost-softstop2.summary.md, logs logs/runner-softstop2/. The kernel series
+(e544ddb00 + 0b7e3a208 + e17629bba) works: stress, vk (10/10), vklong (both count64 cases Pass in 4-5 s), intops (59/59),
+reg (19/19), no Oops, no `Soft-stop failed`. Open items:
+- **img3d page fault** (`Unhandled Page fault in AS0 at VA 0x000000000B2F8000`, `js fault, js=1, status=JOB_BUS_FAULT,
+  head=tail=0xa09f200`): it is the CTS subtest `[CL_RGB CL_SIGNED_INT32] CLAMP_TO_EDGE`, integer coords (the only FAILED
+  line of files/img3d/logs/Images_Kernel_3D_int_.log: sample 70422 `got (ffffffff,...)` = the 0xff results pre-fill, i.e.
+  the compute job was killed at about z = 22 of 32 and the remaining work-items never stored; the fault line comes after
+  the img3d chunk's DMESG-START, and this subtest is the only failure). **Not the soft-stop/reset path**: the chunk's
+  ftrace count of panfrost_job_timedout is 0 (no watchdog, no soft-stop, no reset before the fault), and the only panfrost
+  change between c25 and c27 is e17629bba, which only runs on a timeout. Job 18 on c25 ran the identical subtest (same CTS
+  seed, same Mesa 9049a3c5f2c) and passed: the fault is intermittent. Kernel code checked (c37 tree): the fault is a
+  translation fault on an address that belongs to no BO (panfrost_mmu_map_fault_addr finds no mapping, not a heap BO);
+  BOs a job uses are pinned (job->mappings refs, shrinker skips gpu_usecount > 0, Mesa's cache drops purged BOs), maps
+  flush the AS (or the AS is re-enabled with FLUSH_MEM), so a kernel unmap under a running job has no path here. Mesa:
+  the shim dump of the CTS kernel on a 25x128x32 RGB32I 3D image (mesa-work/oclfix/host/t_rd3di.py, PAN_MESA_DEBUG=trace)
+  shows the plain hardware path: TEXC through a linear RGB32I 3D texture descriptor (row stride 320, surface stride
+  40960, 32 slices = 0x140000 bytes = the BO size, page aligned), sampler CLAMP_TO_EDGE, int coords converted to
+  float + 0.5; nothing format-specific in the shader. The fault address is page aligned, which fits an access that runs
+  past the end of a BO into an unmapped page (the image BO ends exactly on a page boundary, so a hardware over-read of
+  a few bytes for the 12-byte texel format would fault only when the VA after it is a hole, which depends on the BO
+  allocation order: intermittent). Not proven: the fault report carries no BO information and the package's dmesg filter
+  dropped the access type / source id lines.
+  Kernel diagnostic fa9d166f6 (fix/sunxi-panfrost-fault-bo-info, worktree wt-panfrost-faultinfo, patch
+  drm-panfrost-name-the-bos-around-an-unhandled-page-fault.patch, merged test-cumulative 76bd27766 = c38): on an unhandled
+  fault print the BO containing the address or the nearest BO below/above (VA range, size, `end+0x..` distance, mapped or
+  not, heap/noexec, Mesa label = use/format/size). Runner job 45-panfrost-img3d (package runner/, `ocl-job.sh img3d`,
+  checks in runner/HANDOFF-img3d.md): CL_RGB SIGNED_INT32 3D read x4, RGB UNSIGNED_INT32 x2, RGB FLOAT x1, RGBA SIGNED_INT32
+  control x1, full dmesg of the fault (the filter now keeps Reason/raw fault status/access type/source id/`fault bo:`/
+  Purging lines). Next agent: `fault bo: below ... fault at end+0x0..0xfff` on the RGB32 texture BO = texture over-read
+  -> pad linear 96-bit textures in pan_layout (Mesa fork) and repro; `inside ... NOT mapped` = kernel; far from any BO =
+  a bad descriptor pointer (Mesa).
+- **img3d Timeout**: the CTS was still progressing at the 800 s limit (log cut in the `unnormalized float coords` section,
+  further than job 18), TIMEDOUT 0: the full Images (Kernel 3D int) suite simply needs more than 800 s on the G31; not a
+  hang. It needs the no-timeout slot (slot3d.sh) of the full rerun, not a chunk.
+- **tdim**: package bug, `quick_2d`/`quick_3d` are not test names (the CTS registers quick_{1,2,3}d_{explicit,implicit}_local).
+  Fixed in ocl-job.sh (tdim uses the four 2D/3D names; job img3d has tdim2/tdim3 chunks).
+- **math-a / math-b**: FAILED 32/54 and 19/34 with stale-buffer lines and TIMEDOUT 0 = the rusticl multi-queue race of
+  section 7 again (no kernel involvement); unchanged, left as is.
+
 ## Full rerun on the fork (commit 9049a3c5f2c): PAUSED 2026-11-05 ~18:33 (user credit limit)
 
 Fork Mesa 9049a3c5f2c is deployed at `/root/opiz2-mesa/cl`. Results are on the board in `/root/oclfix/full-9049a3c/`

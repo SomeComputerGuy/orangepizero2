@@ -1,5 +1,9 @@
 #!/bin/bash
-# Runner package for the OpenCL/GPU board jobs: ocl-job.sh softstop2
+# Runner package for the OpenCL/GPU board jobs: ocl-job.sh softstop2 | img3d
+# img3d (runner job 45): repeat the OpenCL-CTS 3D image read of the 96-bit formats that faulted in job 28 (CL_RGB
+# SIGNED_INT32: "Unhandled Page fault in AS0 at VA 0xB2F8000", JOB_BUS_FAULT) on a kernel that names the BOs around an
+# unhandled fault (fa9d166f6, fix/sunxi-panfrost-fault-bo-info), plus the Thread Dimensions quick tests under their real
+# names (job 28's tdim chunk asked for quick_2d/quick_3d, which do not exist).
 # Self-contained: board lock (fresh owner name per acquire), install the newest cumulative kernel with the one-shot
 # fallback armed (harness/research/vdec-perf/install-kernel.sh c), check that it carries the whole panfrost soft-stop
 # series (e544ddb00 soft-stop/resume, 0b7e3a208 live-status wait, e17629bba 5 s soft-stop budget + hard stop + no resume
@@ -15,20 +19,23 @@
 # 2 = blocked (reason in $OUT/BLOCKED); 1 = setup error.
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/opencl-fixes; V=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh
-J=${1:?job: softstop2}
+J=${1:?job: softstop2 | img3d}
 K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
 OUT=$S/logs/runner-$J; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED
 case $J in
-  softstop2) CHUNKS="stress vk vklong intops tdim math-a math-b reg img3d"; CT=870; STALL=870 ;;
+  softstop2) CHUNKS="stress vk vklong intops tdim math-a math-b reg img3d"; CT=870; STALL=870
+             FIX=e17629bba ;;   # fix/sunxi-panfrost-softstop-budget HEAD (contains e544ddb00 + 0b7e3a208)
+  img3d)     CHUNKS="tdim2 tdim3 s32-1 s32-2 s32-3 s32-4 u32-1 u32-2 f32-1 ctl"; CT=870; STALL=870
+             FIX=fa9d166f6 ;;   # fix/sunxi-panfrost-fault-bo-info HEAD ("fault bo:" lines; contains the soft-stop series)
   *) echo "unknown job $J"; exit 1 ;;
 esac
 T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
 want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || exit 1
 R=/root/oclfix/$J                         # board results dir (clcts-run.py resumes from $R/opencl-mesa/binaries.csv: fresh per job)
 CTS=/root/cts/opencl-cts
-FIX=e17629bba                             # fix/sunxi-panfrost-softstop-budget HEAD (contains e544ddb00 + 0b7e3a208); the kernel must have it
 OOPS='Unable to handle|Oops|workqueue lockup|panfrost_dequeue_job'   # fail-fast patterns (serial log and dmesg)
-DMESG_PAT="panfrost|gpu sched|js fault|Soft-stop|Hard-stop|Page fault|$OOPS|WARNING|Call trace"
+# the fault report is one multi-line message: Reason/raw fault status/.../source id lines carry no "panfrost" prefix
+DMESG_PAT="panfrost|gpu sched|js fault|Soft-stop|Hard-stop|Page fault|Reason:|raw fault status|decoded fault status|exception type|access type|source id|fault bo:|Purging|$OOPS|WARNING|Call trace"
 SER=$H/harness/serial.log                 # our serial logger's file (host side)
 VK=/root/cts/deqp-vk
 VKENV='export PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1 MESA_VK_IGNORE_CONFORMANCE_WARNING=1 PANVK_DEBUG=sync VK_ICD_FILENAMES=$VK_DRIVER_FILES'
@@ -63,12 +70,12 @@ boot_trial() {
   # with the one built from a tree that contains the fix ($FIX must be an ancestor of the tag's commit; cumul-build
   # packages that tree's panfrost.ko).
   c=$(awk -v t=$T '$1==t{print $3}' $H/kernel-check/cumulative-kernels.txt)
-  git -C $H/wt-cumulative merge-base --is-ancestor $FIX "$c" 2>/dev/null || blocked "kernel $T ($c) lacks the panfrost soft-stop fix $FIX (fix/sunxi-panfrost-softstop-budget)"
+  git -C $H/wt-cumulative merge-base --is-ancestor $FIX "$c" 2>/dev/null || blocked "kernel $T ($c) lacks the panfrost fix $FIX"
   d=$(mktemp -d); tar xzf $H/kernel-check/vdec-serve/modules-$T.tgz -C $d 7.3.1/kernel/drivers/gpu/drm/panfrost/panfrost.ko
   want_sv=$(md5sum < $d/7.3.1/kernel/drivers/gpu/drm/panfrost/panfrost.ko | cut -c1-32); rm -rf $d
   have_sv=$($SSH -n 'md5sum < $(modinfo -n panfrost) | cut -c1-32')
   [ -n "$want_sv" ] && [ "$want_sv" = "$have_sv" ] && log "kernel fix: present (panfrost.ko md5 $have_sv)" || blocked "panfrost.ko on the board ($have_sv) is not the $T module ($want_sv)"
-  $SSH -n "test -f /root/opiz2-mesa/cl/env.sh && test -f /root/opiz2-mesa/cl/panfrost_icd.json && test -x $CTS/test_conformance/integer_ops/test_integer_ops && test -x $VK/deqp-vk && mkdir -p $R /root/oclfix/vklogs" || blocked "fork Mesa (/root/opiz2-mesa/cl with panvk), the OpenCL CTS or deqp-vk is missing on the board"; }
+  $SSH -n "test -f /root/opiz2-mesa/cl/env.sh && test -f /root/opiz2-mesa/cl/panfrost_icd.json && test -x $CTS/test_conformance/integer_ops/test_integer_ops && test -x $VK/deqp-vk && test -x $CTS/test_conformance/images/kernel_read_write/test_image_streams && mkdir -p $R/img /root/oclfix/vklogs" || blocked "fork Mesa (/root/opiz2-mesa/cl with panvk), the OpenCL CTS or deqp-vk is missing on the board"; }
 others_waiting() { ls $H/harness/queue/board.wait 2>/dev/null | grep -v "\.$OWN\." | grep -q .; }
 cts_cmd() { echo "python3 $CTS/clcts-run.py --cts $CTS/test_conformance --profile $CTS/opencl_conformance_tests_mesa.csv --out $R/opencl-mesa --timeout 800 --only '$1'"; }
 stress_cmd() { # compute soft-stop/resume stress: the compute jobs that run > 500 ms. 2 rounds of the Integer Ops long16 64-bit
@@ -97,6 +104,15 @@ done; done
 true
 EOS
 }
+img_cmd() { # img_cmd <chunk> <int|uint|float> <channel order> <channel type>: one OpenCL-CTS 3D image read run, NEAREST,
+  # restricted to one format (all address modes and coordinate kinds of that format); full log in $R/img/<chunk>.log
+  cat <<EOS
+cd $CTS/test_conformance/images/kernel_read_write; t0=\$(date +%s)
+timeout --foreground 800 ./test_image_streams CL_FILTER_NEAREST $2 3D $3 $4 > $R/img/$1.log 2>&1; echo "IMG-RC \$? t=\$(( \$(date +%s) - t0 ))s"
+grep -E '^(PASSED|FAILED)|^FAILED:|did not validate|got \(|ERROR' $R/img/$1.log | head -20 | sed 's/^/IMG: /'
+true
+EOS
+}
 chunk_script() { # print the board script of a chunk; it ends with ROUND-DONE
   local cmd
   case $1 in
@@ -104,7 +120,13 @@ chunk_script() { # print the board script of a chunk; it ends with ROUND-DONE
     vk)     cmd=$(vk_cmd 2 80 $FRAG_SHORT) ;;
     vklong) cmd=$(vk_cmd 1 400 $FRAG_LONG) ;;
     intops) cmd=$(cts_cmd '^Integer Ops$') ;;
-    tdim)   cmd="cd $CTS/test_conformance/thread_dimensions && timeout --foreground 800 ./test_thread_dimensions quick_2d quick_3d 2>&1 | grep -E '^(quick_|PASSED|FAILED)|ERROR|Verification|Error' | head -40 | sed 's/^/TDIM: /'; echo TDIM-RC \${PIPESTATUS[0]}" ;;
+    tdim)   cmd="cd $CTS/test_conformance/thread_dimensions && timeout --foreground 800 ./test_thread_dimensions quick_2d_explicit_local quick_2d_implicit_local quick_3d_explicit_local quick_3d_implicit_local 2>&1 | grep -E '^(quick_|PASSED|FAILED)|ERROR|Verification|Error' | head -40 | sed 's/^/TDIM: /'; echo TDIM-RC \${PIPESTATUS[0]}" ;;
+    tdim2)  cmd="cd $CTS/test_conformance/thread_dimensions && timeout --foreground 800 ./test_thread_dimensions quick_2d_explicit_local quick_2d_implicit_local 2>&1 | grep -E '^(quick_|PASSED|FAILED)|ERROR|Verification|Error' | head -40 | sed 's/^/TDIM: /'; echo TDIM-RC \${PIPESTATUS[0]}" ;;
+    tdim3)  cmd="cd $CTS/test_conformance/thread_dimensions && timeout --foreground 800 ./test_thread_dimensions quick_3d_explicit_local quick_3d_implicit_local 2>&1 | grep -E '^(quick_|PASSED|FAILED)|ERROR|Verification|Error' | head -40 | sed 's/^/TDIM: /'; echo TDIM-RC \${PIPESTATUS[0]}" ;;
+    s32-*)  cmd=$(img_cmd $1 int CL_RGB CL_SIGNED_INT32) ;;
+    u32-*)  cmd=$(img_cmd $1 uint CL_RGB CL_UNSIGNED_INT32) ;;
+    f32-*)  cmd=$(img_cmd $1 float CL_RGB CL_FLOAT) ;;
+    ctl)    cmd=$(img_cmd $1 int CL_RGBA CL_SIGNED_INT32) ;;   # control: 128-bit texels, same kernels
     reg)    cmd=$(cts_cmd "$REG") ;;
     img3d)  cmd=$(cts_cmd '^Images \(Kernel 3D int\)$') ;;
     math-a) cmd="cd $CTS/test_conformance/math_brute_force && timeout --foreground 800 ./test_bruteforce -w $MATH_A" ;;
@@ -134,7 +156,8 @@ collect() { # collect <chunk>: dmesg since the chunk's DMESG-START and the watch
   $SSH -n 'TR=/sys/kernel/tracing; a=$(grep -c panfrost_job_timedout $TR/trace 2>/dev/null); echo nop > $TR/current_tracer 2>/dev/null; echo "TRACE: TIMEDOUT ${a:-?}"' 2>/dev/null > $OUT/trace-$c.txt
   cat $OUT/dmesg-$c.txt $OUT/trace-$c.txt >> $f
   mkdir -p $OUT/files/$c; scp -q -r "${K[@]}" root@10.56.0.107:$R/opencl-mesa/. $OUT/files/$c/ 2>/dev/null
-  case $c in vk|vklong) scp -q -r "${K[@]}" root@10.56.0.107:/root/oclfix/vklogs $OUT/files/$c/ 2>/dev/null ;; esac; }
+  case $c in vk|vklong) scp -q -r "${K[@]}" root@10.56.0.107:/root/oclfix/vklogs $OUT/files/$c/ 2>/dev/null ;;
+    s32-*|u32-*|f32-*|ctl) scp -q "${K[@]}" root@10.56.0.107:$R/img/$c.log $OUT/files/$c/ 2>/dev/null ;; esac; }
 oops_fail() { # fail fast: kernel Oops / lockup lines (arg: where); results already copied; restore, release, exit 3
   log "OOPS during chunk $1 ($2): $(head -3 $OUT/OOPS | tr '\n' ' ')"
   restore; release; log "job $J ABORTED on the first Oops (exit 3)"; exit 3; }

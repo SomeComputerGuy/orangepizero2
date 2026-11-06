@@ -1,0 +1,4 @@
+caselist /root/cts/deqp-vk/mustpass/vk-subset.txt, 5225 cases, 104 s
+Fail                   2
+NotSupported           1847
+Pass                   3376

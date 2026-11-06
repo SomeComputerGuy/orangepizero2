@@ -1,0 +1,13 @@
+#38 SMP PREEMPT Fri Nov  6 10:29:47 UTC 2026
+DMESG-START 662
+CASE dEQP-VK.subgroups.basic.compute.subgroupelect rc=0 t=2s result=[ Pass (OK)] msg=[]
+CASE dEQP-VK.subgroups.basic.graphics.subgroupelect rc=0 t=1s result=[ Pass (OK)] msg=[]
+CASE dEQP-VK.subgroups.ballot_broadcast.compute.subgroupbroadcast_uint rc=0 t=2s result=[ Pass (OK)] msg=[]
+CASE dEQP-VK.subgroups.basic.compute.subgroupbarrier rc=0 t=1s result=[ Pass (OK)] msg=[]
+CASE dEQP-VK.subgroups.basic.compute.subgroupmemorybarrier rc=0 t=1s result=[ Pass (OK)] msg=[]
+CASE dEQP-VK.subgroups.basic.compute.subgroupmemorybarriershared rc=0 t=2s result=[ Pass (OK)] msg=[]
+CASE dEQP-VK.subgroups.basic.graphics.subgroupbarrier rc=0 t=1s result=[ Pass (OK)] msg=[]
+CASE dEQP-VK.subgroups.clustered.graphics.subgroupclusteredmul_ivec4 rc=0 t=2s result=[ Pass (OK)] msg=[]
+CASE dEQP-VK.subgroups.builtin_var.compute.subgroupsize_compute rc=0 t=1s result=[ Pass (OK)] msg=[]
+CHUNK-RC 0
+ROUND-DONE

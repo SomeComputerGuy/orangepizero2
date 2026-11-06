@@ -1,0 +1,15 @@
+Writing test log into /root/invenc/logs/dEQP-VK.subgroups.basic.compute.subgroupmemorybarriershared.qpa
+dEQP Core 54436699e326efdd3b152bb487c675bdae85aafd (0x54436699) starting..
+  target implementation = 'Vulkan Headless'
+
+Test case 'dEQP-VK.subgroups.basic.compute.subgroupmemorybarriershared'..
+  Pass (OK)
+
+DONE!
+
+Test run totals:
+  Passed:        1/1 (100.0%)
+  Failed:        0/1 (0.0%)
+  Not supported: 0/1 (0.0%)
+  Warnings:      0/1 (0.0%)
+  Waived:        0/1 (0.0%)

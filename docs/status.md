@@ -74,7 +74,8 @@ it flashes whichever variant was built last. Desktop variant (`./build.sh OPIZ2_
 
 Mode: LOW-CREDIT (one agent at a time, runner included). Per-task state: each task's RESULTS.md and memory file.
 Test kernels: cumulative cN on test-cumulative (kernel-check/cumulative-kernels.txt); newest c43 (c65ef3449).
-Image branch stonking-orangepizero2 = c36a2e787 (c37 minus G2D).
+Image branch stonking-orangepizero2 = 90b5e7da2 (c36a2e787 + AFBC compose, wb retry, JPEG drain, S_FMT fix; build-checked
+872 patches 0 failed, pushed to fork 2026-11-06). Desktop FFmpeg 0320 compose crop added (rev 5, 81d1c2a).
 
 ### A. Running
 - Job 58-tearing-wb on c43 (2026-11-06): NO tearing in 14 runs (0 mixed/wrong/bad, ok==flips, 0 late/forced latch
@@ -86,10 +87,10 @@ Image branch stonking-orangepizero2 = c36a2e787 (c37 minus G2D).
 1. Cherry-pick the board-PASS kernel fixes into stonking-orangepizero2 (-x, build-check):
    8b1f787fe H.265 AFBC compose offset (job 54) · 20e682fc2 writeback retry (job 55) · 950c46035 cedrus JPEG drain on
    DEC_CMD_STOP + fbba781aa S_FMT with CAPTURE buffers left (job 57; fixes every v4l2sl* resolution change since c10)
-   · 8af646391 tearing (if job 58 passes).
+   DONE 2026-11-06 = 90b5e7da2. Tearing fix (93b00281a) NOT yet: job 59 2 early captures under VE+mem load, agent on it.
 2. gst-plugins-good1.0 patches 0101 (1:4:0:0 JPEG colorimetry) + 0102 (sysmem when the peer answers ANY) into
    scripts/build-media-debs.sh; keep the MARGINAL rank for v4l2jpegdec, fix its "hangs" comment in image-integration.patch.
-3. FFmpeg compose crop (harness/afbc-wb/ffmpeg-v4l2request-compose.diff) into the desktop FFmpeg patches.
+3. DONE: FFmpeg compose crop = patches/ffmpeg/0320 (applies fuzz 0 on the image series), ffmpeg rev 5.
 4. Rebuild images, then runner reflash (harness/REFLASH.md, server image) + verify-board.sh. Also closes job 24 check 1
    (gstreamer1.0-libav in every variant).
 5. Vulkan step 1 (user go 2026-11-06: "get the Vulkan support running"): ship the Mesa fork (mesa-work/mesa-cl

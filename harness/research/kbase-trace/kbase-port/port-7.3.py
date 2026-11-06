@@ -75,3 +75,37 @@ rep(P, '\tdev_dbg(kbdev->dev, "%s\\n", __func__);\n\n\tpm_runtime_set_autosuspen
 # the generic glue treated that as fatal. Warn only.
 rep(P, '\t\tdev_warn(kbdev->dev, "%s: Device runtime usage count unexpectedly non zero %d",\n\t\t\t __func__, atomic_read(&kbdev->dev->power.usage_count));\n\t\tret = -EINVAL;\n',
        '\t\tdev_warn(kbdev->dev, "%s: Device runtime usage count unexpectedly non zero %d",\n\t\t\t __func__, atomic_read(&kbdev->dev->power.usage_count));\n')
+# --- v3 (after runner job 64): unload. panfrost_remove() leaves the GPU with RST_BUS_GPU asserted, clocks + mali-supply
+# off and runtime PM suspended (it also leaks one runtime-PM usage count: pm_runtime_get_sync() without a put, which is
+# the "usage count unexpectedly non zero 1" kbase sees at probe and again at term). kbase's term only did
+# pm_runtime_disable(): the GPU kept its reset deasserted (and, when not runtime-suspended, its clocks running) while
+# genpd cut the GPU power domain at the devres release, and the next panfrost bind found a GPU that had been
+# power-cycled without a reset pulse; jobs 16 and 64 hard-hung there (hardware watchdog reset ~15 s later).
+# Leave the GPU exactly as panfrost's remove does: reset asserted (clocks still on, synchronous reset), then clocks and
+# supply off, runtime PM status suspended. The interrupts are already released at this point (kbase_device_early_term).
+rep(P, 'static void enable_gpu_power_control(struct kbase_device *kbdev)\n{',
+       '/* sunxi: RST_BUS_GPU, deasserted in kbase_device_runtime_init(), asserted again in kbase_device_runtime_disable() */\n'
+       'static struct reset_control *sunxi_gpu_rst;\n\n'
+       'static void enable_gpu_power_control(struct kbase_device *kbdev)\n{')
+rep(P, '\tret = reset_control_deassert(rst);\n\tif (ret)\n\t\treturn ret;\n\tenable_gpu_power_control(kbdev);\n',
+       '\tret = reset_control_deassert(rst);\n\tif (ret)\n\t\treturn ret;\n\tsunxi_gpu_rst = rst;\n\tenable_gpu_power_control(kbdev);\n')
+rep(P, '\tpm_runtime_disable(kbdev->dev);\n}\n#endif /* KBASE_PM_RUNTIME */',
+       '\tpm_runtime_disable(kbdev->dev);\n\n'
+       '\t/* sunxi: hand the GPU back the way panfrost_remove() leaves it (see port-7.3.py v3) */\n'
+       '\tif (sunxi_gpu_rst)\n\t\treset_control_assert(sunxi_gpu_rst);\n'
+       '\tdisable_gpu_power_control(kbdev);\n'
+       '\tpm_runtime_set_suspended(kbdev->dev);\n'
+       '\tdev_info(kbdev->dev, "sunxi glue: reset %s, clocks + supply off, runtime PM suspended (usage count %d)\\n",\n'
+       '\t\t sunxi_gpu_rst ? "asserted" : "not held", atomic_read(&kbdev->dev->power.usage_count));\n'
+       '\tsunxi_gpu_rst = NULL;\n'
+       '}\n#endif /* KBASE_PM_RUNTIME */')
+# --- v3 diagnostic (job 65): every job of the blob's fragment slot fails with DATA_INVALID_FAULT (0x58). Log the slot's
+# HEAD/TAIL at the failure (rate limited; the job header the GPU writes back is in the kbtrace after-event snapshot).
+J = 'backend/gpu/mali_kbase_jm_hw.c'
+rep(J, '\t\t\t\tcompletion_code =\n\t\t\t\t\tkbase_reg_read32(kbdev, JOB_SLOT_OFFSET(i, STATUS));\n',
+       '\t\t\t\tcompletion_code =\n\t\t\t\t\tkbase_reg_read32(kbdev, JOB_SLOT_OFFSET(i, STATUS));\n'
+       '\t\t\t\tif (completion_code >= 0x40)\n'
+       '\t\t\t\t\tdev_warn_ratelimited(kbdev->dev, "sunxi diag: slot %u status 0x%x head 0x%llx tail 0x%llx\\n",\n'
+       '\t\t\t\t\t\t\t     i, completion_code,\n'
+       '\t\t\t\t\t\t\t     (unsigned long long)kbase_reg_read64(kbdev, JOB_SLOT_OFFSET(i, HEAD)),\n'
+       '\t\t\t\t\t\t\t     (unsigned long long)kbase_reg_read64(kbdev, JOB_SLOT_OFFSET(i, TAIL)));\n')

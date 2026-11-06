@@ -6,6 +6,14 @@
 # reset ~15 s into that call, a hard hang caught by the hardware watchdog, and the old keepalive-less ssh sat 1.5 h);
 # the module unload is now the separate diagnostic step `unload`, run only after all results are off the board, with
 # console loglevel 8 and the serial.log slice saved. Results: arm-blob/traces/runner-j64/.
+# v3 (runner job 65, 2026-11-06), after job 64: (a) kbtrace.bin held no memory (process_vm_readv cannot read kbase's
+# VM_PFNMAP mappings): kbtrace.so reads through a pipe now and records the JIT soft-job payloads, kbdecode re-decodes
+# every faulting submit from the after-event memory (submit-NNNN-post.txt; POST/JITADDR lines in index.txt);
+# (b) bifrost_kbase.ko v3: the sunxi glue term now asserts RST_BUS_GPU, turns clocks + supply off and marks runtime PM
+# suspended (as panfrost_remove does) before genpd cuts the GPU domain (job 16/64 reset at the panfrost rebind), plus a
+# rate-limited `sunxi diag: slot N status 0x.. head .. tail ..` line per job fault; (c) `unload` (rmmod + runtime-PM /
+# genpd / clock state before and after) and `bind` (panfrost rebind) are separate steps and are now real checks.
+# Results: arm-blob/traces/runner-j65/.
 # Self-contained: board lock (fresh owner name per acquire), install the newest cumulative kernel with the one-shot
 # fallback armed (harness/research/vdec-perf/install-kernel.sh, like the vdec/OpenCL jobs; it must carry the BTF dedup
 # fix bd60a159b), stage bifrost_kbase.ko + the blob + the tools in /root/armblob (runtime files only: nothing is
@@ -26,12 +34,17 @@ SERIAL=$H/harness/serial.log
 KO=$H/kernel-check/kbase-trial/src/drivers/gpu/arm/bifrost/bifrost_kbase.ko
 BLOB=$A/dl/libmali-bifrost-g31-g24p0-gbm.so
 BTFFIX=bd60a159b                          # iommu-sun55i: drop the stale iommu_dma_cookie copy (kbase BTF validates only with it)
-OUT=${KBT_OUT:-$A/traces/runner-j64}      # results (arm-blob/ is git-ignored: blob-derived traces never get committed)
+OUT=${KBT_OUT:-$A/traces/runner-j65}      # results (arm-blob/ is git-ignored: blob-derived traces never get committed)
 R=/root/armblob                           # board work dir
 ENV="LD_LIBRARY_PATH=$R/lib"
 TESTS="basic gs_pass gs_amp gs_inv tess_tri tess_gs tess_quad gs_xfb gs_layer"
 RGBA="basic gs_pass gs_amp gs_inv tess_tri tess_gs tess_quad gs_xfb gs_layer0 gs_layer1"
-STEPS="load info probe trace unload"
+STEPS="load info probe trace unload bind"
+GPUDEV=/sys/bus/platform/devices/1800000.gpu
+# board-side snippet: runtime PM, genpd and clock state of the GPU (unload/bind steps)
+PMSTATE="echo PM: status=\$(cat $GPUDEV/power/runtime_status 2>/dev/null) usage=\$(cat $GPUDEV/power/runtime_usage 2>/dev/null) driver=\$(basename \$(readlink $GPUDEV/driver) 2>/dev/null)
+grep -i gpu /sys/kernel/debug/pm_genpd/pm_genpd_summary 2>/dev/null | sed 's/^/GENPD: /'
+grep -i -E 'gpu' /sys/kernel/debug/clk/clk_summary 2>/dev/null | sed 's/^/CLK: /'"
 OWN=""
 mkdir -p $OUT/files; touch $OUT/state
 log() { echo "$(date '+%F %T') $*" | tee -a $OUT/runner.log; }
@@ -73,11 +86,16 @@ kill \$SP; wait \$SP 2>/dev/null; rm -f kctx/*.tmp; echo KCTX-SAMPLES \$(grep -c
 cat info.txt; ls -la
 dmesg | tail -n +\$((n+1)) | sed 's/^/DMESG: /'" ;;
     unload) body="dmesg -n 8; sync; n=\$(dmesg | wc -l)
+echo BEFORE-RMMOD; $PMSTATE
 echo RMMOD-START; timeout 40 rmmod bifrost_kbase; echo RMMOD-RC \$?
-dmesg | tail -n +\$((n+1)) | sed 's/^/DMESG: /'; n=\$(dmesg | wc -l); sync
-echo BIND-START; timeout 40 sh -c 'echo 1800000.gpu > /sys/bus/platform/drivers/panfrost/bind'; echo BIND-RC \$?; sleep 2
+sleep 3; echo AFTER-RMMOD; $PMSTATE
+dmesg | tail -n +\$((n+1)) | sed 's/^/DMESG: /'; sync" ;;
+    bind) body="dmesg -n 8; sync; n=\$(dmesg | wc -l)
+echo BEFORE-BIND; $PMSTATE; sync
+echo BIND-START; timeout 40 sh -c 'echo 1800000.gpu > /sys/bus/platform/drivers/panfrost/bind'; echo BIND-RC \$?; sleep 3
+echo AFTER-BIND; $PMSTATE
 dmesg | tail -n +\$((n+1)) | sed 's/^/DMESG: /'
-echo DRI: \$(ls /dev/dri)" ;;
+echo DRI: \$(ls /dev/dri | tr '\\n' ' ')" ;;
     trace) body="rm -rf $R/out/trace; mkdir -p $R/out/trace; cd $R/out/trace
 n=\$(dmesg | wc -l); $ENV KBTRACE_OUT=$R/out/trace/kbtrace.bin LD_PRELOAD=$R/kbtrace.so timeout 300 $R/gles32probe $R/out/trace; echo TRACE-RC \$?
 ls -la; tail -25 info.txt
@@ -120,7 +138,7 @@ checks() { # mechanical checks from the results (HANDOFF.md); prints PASS/FAIL l
     [ -s $OUT/files/$s/info.txt ] && grep -q '^done' $OUT/files/$s/info.txt && p "files/$s/info.txt complete" || fl "files/$s/info.txt missing or incomplete"
     for t in $RGBA; do [ -s $OUT/files/$s/$t.rgba ] && p "files/$s/$t.rgba" || fl "files/$s/$t.rgba missing or empty"; done
     for t in $TESTS; do [ -s $OUT/files/$s/$t.progbin ] && p "files/$s/$t.progbin" || fl "files/$s/$t.progbin missing or empty"; done
-    n=$(grep -c -E 'Unhandled|Oops|BUG:|WARNING:|Call trace|mali.*(fault|error)' $OUT/dmesg-$s.txt 2>/dev/null); [ "${n:-0}" = 0 ] && p "dmesg-$s.txt: no fault/oops lines" || { fl "dmesg-$s.txt fault/oops lines: $n"; grep -E 'Unhandled|Oops|BUG:|WARNING:|Call trace|mali.*(fault|error)' $OUT/dmesg-$s.txt; }
+    n=$(grep -c -E 'Unhandled|Oops|BUG:|WARNING:|Call trace|mali.*(fault|error)' $OUT/dmesg-$s.txt 2>/dev/null); [ "${n:-0}" = 0 ] && p "dmesg-$s.txt: no fault/oops lines" || { fl "dmesg-$s.txt fault/oops lines: $n"; grep -E 'Unhandled|Oops|BUG:|WARNING:|Call trace|mali.*(fault|error)' $OUT/dmesg-$s.txt | head -5; }
   done
   [ -s $OUT/files/trace/kbtrace.bin ] && p "files/trace/kbtrace.bin $(stat -c %s $OUT/files/trace/kbtrace.bin) bytes" || fl "files/trace/kbtrace.bin missing or empty"
   [ -s $OUT/files/trace/decoded/index.txt ] && p "decoded: $(ls $OUT/files/trace/decoded | grep -c '^submit-') submits, index.txt $(wc -l < $OUT/files/trace/decoded/index.txt) lines" || fl "files/trace/decoded/index.txt missing (kbdecode)"
@@ -129,10 +147,28 @@ checks() { # mechanical checks from the results (HANDOFF.md); prints PASS/FAIL l
   # runner.log lines carry a date prefix, so match ' restored: ' (job 16's '^restored: ' could never match)
   n=$(grep ' restored: ' $OUT/runner.log 2>/dev/null | tail -1)
   echo "$n" | grep -q '7.3.1-edge-sunxi64' && echo "$n" | grep -q 'renderD128' && p "stock kernel restored, panfrost renderD128 back" || fl "stock kernel not restored or no renderD128: ${n:-no restored line}"
-  f=$OUT/step-unload.txt   # diagnostic only: INFO lines, never FAIL
-  if [ -f $f ]; then echo "INFO unload: $(grep -E '^(RMMOD|BIND)-RC|^DRI:|^STALLED' $f | tr '\n' ' ')$(grep -q '^STEP-DONE' $f || echo '(no STEP-DONE: board hung or reset)')"
+  # v3: the trace now holds the GPU memory: the fragment job headers decode (job 64: every header read as zero)
+  n=$(grep -l 'Type: Fragment' $OUT/files/trace/decoded/submit-*.txt 2>/dev/null | wc -l)
+  [ "$n" -ge 1 ] && p "trace memory captured: $n submit files decode a fragment job" || fl "trace memory not captured: no 'Type: Fragment' in files/trace/decoded/submit-*.txt"
+  f=$OUT/files/trace/decoded/index.txt
+  if [ -f $f ]; then grep -m8 -E ' POST atom ' $f | sed 's/^ */INFO post: /'; grep -m4 -E 'JIT_ALLOC ' $f | sed 's/^ */INFO jit: /'
+    grep -m6 -E ' JITADDR ' $f | sed 's/^ */INFO jitaddr: /'; fi
+  grep -h -m4 'sunxi diag:' $OUT/dmesg-probe.txt $OUT/dmesg-trace.txt 2>/dev/null | sed 's/^/INFO diag: /'
+  # v3: unload (rmmod) and bind (panfrost rebind) are real checks now (glue term fix); a reset shows as no STEP-DONE
+  f=$OUT/step-unload.txt
+  if [ -f $f ]; then
+    grep -q '^RMMOD-RC 0' $f && grep -q '^STEP-DONE' $f && p "unload: rmmod rc 0, step finished" || fl "unload: $(grep -E '^RMMOD-RC|^STALLED' $f | tr '\n' ' ')$(grep -q '^STEP-DONE' $f || echo '(no STEP-DONE: board hung or reset)')"
+    grep -q 'sunxi glue: reset asserted' $OUT/dmesg-unload.txt 2>/dev/null && p "unload: glue term ran ($(grep -o 'sunxi glue: reset asserted.*' $OUT/dmesg-unload.txt | head -1))" || fl "unload: no 'sunxi glue: reset asserted' line in dmesg-unload.txt (old kbase.ko?)"
+    grep -E '^(PM|GENPD|CLK):|^(BEFORE|AFTER)-' $f | sed 's/^/INFO unload /'
     grep -E 'Unhandled|Oops|BUG:|WARNING:|Call trace|Internal error|SError|hung|mali|panfrost' $OUT/dmesg-unload.txt 2>/dev/null | head -20 | sed 's/^/INFO unload /'
-  else echo "INFO unload: step not run"; fi
+  else fl "unload: step not run"; fi
+  f=$OUT/step-bind.txt
+  if [ -f $f ]; then
+    grep -q '^BIND-RC 0' $f && grep -q '^STEP-DONE' $f && grep -q '^DRI: .*renderD128' $f && p "bind: panfrost rebound, renderD128 present, step finished" || fl "bind: $(grep -E '^BIND-RC|^DRI:|^STALLED' $f | tr '\n' ' ')$(grep -q '^STEP-DONE' $f || echo '(no STEP-DONE: board hung or reset)')"
+    grep -E '^(PM|GENPD|CLK):|^(BEFORE|AFTER)-' $f | sed 's/^/INFO bind /'
+    grep -E 'Unhandled|Oops|BUG:|WARNING:|Call trace|Internal error|SError|hung|mali|panfrost' $OUT/dmesg-bind.txt 2>/dev/null | head -20 | sed 's/^/INFO bind /'
+  else fl "bind: step not run (unload failed or board reset)"; fi
+  n=$(grep -a -c 'U-Boot SPL' $OUT/serial.txt 2>/dev/null); echo "INFO serial: U-Boot SPL count ${n:-0} (expected 2: trial-kernel boot + restore reboot; more = a reset)"
   grep -a -E 'Unhandled|Oops|BUG:|WARNING:|Call trace|Internal error|SError|rcu.*stall|watchdog|U-Boot SPL' $OUT/serial.txt 2>/dev/null | head -20 | sed 's/^/INFO serial /'
   [ -f $OUT/BLOCKED ] && fl "BLOCKED: $(cat $OUT/BLOCKED)"
   echo "state: $(tr '\n' ' ' < $OUT/state)"
@@ -216,7 +252,11 @@ if [ -s $OUT/files/trace/kbtrace.bin ]; then rm -rf $OUT/files/trace/decoded
 # diagnostic, only after every result is on the host: does kbase unload and panfrost rebind? (job 16: the board reset
 # ~15 s into rmmod + bind). Console loglevel 8 so an oops reaches serial.log; a reset is caught by the keepalive /
 # stall watchdog, then restore() waits for the board (the vdec fallback brings it back on the stock kernel).
-if ! grep -qx unload $OUT/state; then kbase_up && { log "step unload: rmmod bifrost_kbase + panfrost bind (diagnostic)"; run_step unload 100 60 || log "step unload did not finish: board hung or reset (see serial.txt)"; grep -qx unload $OUT/state || echo unload >> $OUT/state; }; fi
+# v3: unload = rmmod (glue term fix under test) with runtime-PM/genpd/clock state before and after; bind = panfrost rebind
+if ! grep -qx unload $OUT/state; then kbase_up && { log "step unload: rmmod bifrost_kbase"; run_step unload 100 60 || log "step unload did not finish: board hung or reset (see serial.txt)"; grep -qx unload $OUT/state || echo unload >> $OUT/state; }; fi
+if ! grep -qx bind $OUT/state && grep -q '^STEP-DONE' $OUT/step-unload.txt 2>/dev/null; then
+  if T1=20 S1 -n true 2>/dev/null; then log "step bind: panfrost rebind"; run_step bind 100 60 || log "step bind did not finish: board hung or reset (see serial.txt)"
+  else log "step bind: board unreachable after unload"; fi; grep -qx bind $OUT/state || echo bind >> $OUT/state; fi
 restore; release
 log "job $J end: steps done: $(tr '\n' ' ' < $OUT/state)"
 [ -f $OUT/BLOCKED ] && exit 2; exit 0

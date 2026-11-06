@@ -1,0 +1,7 @@
+#51 SMP PREEMPT Fri Nov  6 20:28:54 UTC 2026
+DMESG-START 2628
+caselist /root/mapenomem/caselists/gles31-compute.txt, 195 cases, 5 s
+Pass                   195
+
+CHUNK-RC 0
+ROUND-DONE

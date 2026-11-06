@@ -1,0 +1,12 @@
+ROUND 600M-1: rc=0 s=155 rows=2  2 OOM  err12=0
+GPU-ALIVE 600M-1: dEQP-GLES31.functional.compute.basic.ubo_to_ssbo_single_invocation,Pass 
+ROUND 600M-2: rc=0 s=27 rows=2  2 OOM  err12=0
+GPU-ALIVE 600M-2: dEQP-GLES31.functional.compute.basic.ubo_to_ssbo_single_invocation,Pass 
+ROUND 600M-3: rc=0 s=31 rows=2  2 OOM  err12=0
+GPU-ALIVE 600M-3: dEQP-GLES31.functional.compute.basic.ubo_to_ssbo_single_invocation,Pass 
+ROUND 450M: rc=0 s=12 rows=2  2 OOM  err12=4
+GPU-ALIVE 450M: dEQP-GLES31.functional.compute.basic.ubo_to_ssbo_single_invocation,Pass 
+ROUND 500M: rc=0 s=13 rows=2  2 OOM  err12=4
+GPU-ALIVE 500M: dEQP-GLES31.functional.compute.basic.ubo_to_ssbo_single_invocation,Pass 
+ROUND 700M: rc=0 s=37 rows=2  2 OOM  err12=0
+GPU-ALIVE 700M: dEQP-GLES31.functional.compute.basic.ubo_to_ssbo_single_invocation,Pass 

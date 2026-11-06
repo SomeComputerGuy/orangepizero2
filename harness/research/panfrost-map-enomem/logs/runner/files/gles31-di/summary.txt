@@ -1,0 +1,3 @@
+caselist /root/mapenomem/caselists/gles31-di.txt, 221 cases, 57 s
+NotSupported           18
+Pass                   203

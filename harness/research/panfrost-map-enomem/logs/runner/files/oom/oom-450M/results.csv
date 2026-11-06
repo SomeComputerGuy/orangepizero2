@@ -1,0 +1,3 @@
+test,status,duration_s,detail
+dEQP-GLES31.functional.draw_indirect.compute_interop.large.drawelements_separate_grid_1000x1000_drawcount_5000,OOM,0.5,SIGKILL x2 (memcg OOM):  | Test case 'dEQP-GLES31.functional.draw_indirect.compute_interop.large.drawelements_separate_grid_1000x1000_drawcount_5000'.. | MESA: error: DRM_IOCTL_PANFROST_CREATE_BO failed (err=12)
+dEQP-GLES31.functional.draw_indirect.compute_interop.large.drawelements_combined_grid_1000x1000_drawcount_5000,OOM,0.6,SIGKILL x2 (memcg OOM):  | Test case 'dEQP-GLES31.functional.draw_indirect.compute_interop.large.drawelements_combined_grid_1000x1000_drawcount_5000'.. | MESA: error: DRM_IOCTL_PANFROST_CREATE_BO failed (err=12)

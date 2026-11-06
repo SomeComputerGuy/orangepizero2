@@ -1,0 +1,2 @@
+caselist /root/mapenomem/caselists/gles31-compute.txt, 195 cases, 5 s
+Pass                   195

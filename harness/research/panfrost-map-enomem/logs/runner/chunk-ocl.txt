@@ -1,0 +1,11 @@
+#51 SMP PREEMPT Fri Nov  6 20:28:54 UTC 2026
+DMESG-START 2628
+Compute Info                             Pass     rc=0 PASSED 3 of 3 tests.
+Atomics                                  Pass     rc=0 PASSED 13 of 13 tests.
+Select                                   Pass     rc=0 PASSED 22 of 22 tests.
+Half Ops                                 Pass     rc=0 PASSED 13 of 13 tests.
+C11 Atomics                              Pass     rc=0 PASSED 32 of 32 tests.
+Workgroups                               Pass     rc=0 
+Subgroups                                Pass     rc=0 
+CHUNK-RC 0
+ROUND-DONE

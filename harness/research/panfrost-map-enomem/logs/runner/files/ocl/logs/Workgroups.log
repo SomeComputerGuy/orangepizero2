@@ -1,0 +1,9 @@
+ Initializing random seed to 0.
+Requesting Default device based on command line for platform index 0 and device index 0
+Compute Device Name = Mali-G31 MC1 (Panfrost), Compute Device Vendor = Arm, Compute Device Version = OpenCL 3.0 , CL C Version = OpenCL C 1.2 
+Device latest conformance version passed: v0000-01-01-00
+Supports single precision denormals: NO
+sizeof( void*) = 8  (host)
+sizeof( void*) = 8  (device)
+Test skipped while initialization
+SKIPPED 14 of 14 tests.

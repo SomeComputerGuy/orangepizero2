@@ -1,0 +1,25 @@
+[AVHWFramesContext @ 0xaaaaad7f0c00] Using V4L2 media driver cedrus (7.3.1) for VP9F
+RESULT writeback_connector 77
+RESULT mode 1024x768 total 1344x806 clock 65000
+RESULT crtc 52 plane 35 primary 42 afbc8 1 afbc10 1 nv12 1 p010 1
+RESULT wb_formats XR24 AR24 XB24 AB24 RX24 RA24 BX24 BA24 RG24 BG24 XR30 NV12 NV21 YU12
+RESULT stream /root/vdec-streams/vp9-p2-2160p60.webm vp9 3840x2160 (null) pixfmt P010 wb XR30 crop 1408,704 tile 0 band 0
+RESULT frame 0 pic_offset 0,0 fb 3840x2160
+RESULT fb 85 format P010 modifier 0x0000000000000000 planes 2 pitch 7680 size 42118176 3840x2160
+RESULT frame 0 cap_md5 cb998309fad5953c9f3f7de6d747ffd5 repeat same fbd_ctl 0x00000000 fence_ms 33.0 18.8
+RESULT fb 86 format P010 modifier 0x0000000000000000 planes 2 pitch 7680 size 42118176 3840x2160
+RESULT frame 1 cap_md5 dc072ec39069ac8a770adf13e514cda8 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.5
+RESULT fb 87 format P010 modifier 0x0000000000000000 planes 2 pitch 7680 size 42118176 3840x2160
+RESULT frame 2 cap_md5 29da9accf0801f45531c01737a43e548 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.6
+RESULT frame 3 cap_md5 55a9eb4cb38696d0baad67bbb9bb0966 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.6
+RESULT frame 4 cap_md5 072ac12267707cc954cd6c03ef48f227 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.5
+RESULT frame 5 cap_md5 440542b6be384dd1c7c8bfda33aa1607 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.6
+RESULT frame 6 cap_md5 41892125a6ceb0447bdd5b89b80d1247 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.5
+RESULT frame 7 cap_md5 78f1368cc5a0d6cde0aad94cbd23abdd repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.4
+RESULT frame 8 cap_md5 8f305ba5313ed064a43594ebea6442f1 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.6
+RESULT frame 9 cap_md5 ebf739f97d0582a57d7250cbdb88de74 repeat same fbd_ctl 0x00000000 fence_ms 33.4 22.6
+RESULT frame 10 cap_md5 8c36a5c317df34459b28c1fc3c42ca89 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.4
+RESULT frame 11 cap_md5 110561119fdc70173df6f01019000455 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.5
+RESULT summary pass linear frames 12 wb_errors 0 repeat_differ 0 wrong_buffer_kind 0 fbd_state_wrong 0 fbd_readable 1 fence_ms_mean 27.8
+RESULT verdict pass_ok
+RC 0

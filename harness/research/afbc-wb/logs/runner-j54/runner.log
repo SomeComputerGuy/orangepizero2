@@ -1,0 +1,40 @@
+2026-11-06 16:59:08 job j54 start, kernel c39 (Image md5 b74f1af053066a48ab7ac8a5bae26005), client sha 10ccf7c0cb028a02, done before: 
+2026-11-06 16:59:08 acquired by runner-afbcwb-j54-1793984348
+shipped /root/afbcwb/afbc-wb 10ccf7c0cb028a0228e5d61c05ca3ff1e83e109cf67dffb528a22fc6749b209a
+2026-11-06 16:59:35 board /root/afbcwb/streams/syn-hevc8.mkv current
+2026-11-06 16:59:37 board /root/afbcwb/streams/syn-hevc8.srcmd5 current
+2026-11-06 16:59:39 board /root/afbcwb/streams/syn-hevc10.mkv current
+2026-11-06 16:59:41 board /root/afbcwb/streams/syn-hevc10.srcmd5 current
+2026-11-06 16:59:43 board /root/afbcwb/streams/syn-vp9p0.webm current
+2026-11-06 16:59:45 board /root/afbcwb/streams/syn-vp9p0.srcmd5 current
+2026-11-06 16:59:47 board /root/afbcwb/streams/syn-vp9p2.webm current
+2026-11-06 16:59:49 board /root/afbcwb/streams/syn-vp9p2.srcmd5 current
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+dtb sun50i-h616-orangepi-zero2.dtb.vdec-c39 md5 aa4d5bbb33e171e32c349e413c68f12c
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+kernel: #39 SMP PREEMPT Fri Nov  6 16:52:41 UTC 2026
+2026-11-06 17:01:51 kernel c39 dtb ok (aa4d5bbb33e171e32c349e413c68f12c), writeback present
+2026-11-06 17:01:51 case syn-hevc8 start: syn-hevc8.mkv NV12 AS12 24 XR30
+2026-11-06 17:02:15 case syn-hevc8 done
+2026-11-06 17:02:15 case syn-hevc10 start: syn-hevc10.mkv P010 AS01 24 XR30
+2026-11-06 17:02:38 case syn-hevc10 done
+2026-11-06 17:02:38 case syn-vp9p0 start: syn-vp9p0.webm NV12 AS12 24 XR30
+2026-11-06 17:03:02 case syn-vp9p0 done
+2026-11-06 17:03:02 case syn-vp9p2 start: syn-vp9p2.webm P010 AS01 24 XR30
+2026-11-06 17:03:26 case syn-vp9p2 done
+2026-11-06 17:03:26 case syn-hevc8-xr24 start: syn-hevc8.mkv NV12 AS12 24 XR24
+2026-11-06 17:03:50 case syn-hevc8-xr24 done
+2026-11-06 17:03:50 case real-hevc10 start: hevc-main10-2160p60.mkv P010 AS01 12 XR30
+2026-11-06 17:04:04 case real-hevc10 done
+2026-11-06 17:04:04 case real-hevc8 start: hevc-main-2160p60.mkv NV12 AS12 12 XR30
+2026-11-06 17:04:18 case real-hevc8 done
+2026-11-06 17:04:18 case real-vp9p2 start: vp9-p2-2160p60.webm P010 AS01 12 XR30
+2026-11-06 17:04:43 case real-vp9p2 done
+2026-11-06 17:04:43 case real-vp9p0 start: vp9-p0-2160p60.webm NV12 AS12 12 XR30
+2026-11-06 17:05:07 case real-vp9p0 done
+2026-11-06 17:05:07 case real-vp9p0-y4 start: vp9-p0-2160p60.webm NV12 AS12 12 XR30 1408,708
+2026-11-06 17:05:33 case real-vp9p0-y4 done
+restore: Image=vmlinuz-7.3.1-edge-sunxi64 dtb=sun50i-h616-orangepi-zero2.dtb.stock
+2026-11-06 17:06:19 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 sun50i-h616-orangepi-zero2.dtb.stock 
+released by runner-afbcwb-j54-1793984348
+2026-11-06 17:06:19 job j54 end: 10 of 10 cases done; results in /home/aruni/orangepizero2/harness/research/afbc-wb/logs/runner-j54/results.txt

@@ -1,0 +1,40 @@
+[AVHWFramesContext @ 0xaaaab62f0c00] Using V4L2 media driver cedrus (7.3.1) for VP9F
+RESULT writeback_connector 77
+RESULT mode 1024x768 total 1344x806 clock 65000
+RESULT crtc 52 plane 35 primary 42 afbc8 1 afbc10 1 nv12 1 p010 1
+RESULT wb_formats XR24 AR24 XB24 AB24 RX24 RA24 BX24 BA24 RG24 BG24 XR30 NV12 NV21 YU12
+RESULT stream /root/vdec-streams/vp9-p0-2160p60.webm vp9 3840x2160 (null) pixfmt AS12 wb XR30 crop 1408,704 tile 0 band 0
+RESULT frame 0 pic_offset 0,0 fb 3840x2160
+RESULT fb 85 format YU08 modifier 0x0800000000000061 planes 1 pitch 0 size 13057056 3840x2160
+RESULT frame 0 cap_md5 64fbad2721a2ef6a00c41a88658809b2 repeat same fbd_ctl 0xff000015 fence_ms 32.9 19.4
+RESULT frame 0 vs_linear mismatches 571800 max_dev 313 first 1,0 linear 3fff2400 afbc 3fff2800
+RESULT dump /root/afbcwb/real-vp9p0/dump/f000.{linear,afbc}.cap XR30 1024x768 packed
+RESULT fb 86 format YU08 modifier 0x0800000000000061 planes 1 pitch 0 size 13057056 3840x2160
+RESULT frame 1 cap_md5 06f6c7c92a03f6c79e4c2a9c160c0f16 repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.7
+RESULT frame 1 vs_linear mismatches 252582 max_dev 319 first 11,0 linear 3ffef000 afbc 3ffef400
+RESULT dump /root/afbcwb/real-vp9p0/dump/f001.{linear,afbc}.cap XR30 1024x768 packed
+RESULT fb 87 format YU08 modifier 0x0800000000000061 planes 1 pitch 0 size 13057056 3840x2160
+RESULT frame 2 cap_md5 59e579d115eed0c0bf649aa3b905b6d0 repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.7
+RESULT frame 2 vs_linear mismatches 168658 max_dev 305 first 29,0 linear 3fff0000 afbc 3fff0400
+RESULT frame 3 cap_md5 492a4c019a12636d9f9dff1b928d4aaf repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.6
+RESULT frame 3 vs_linear mismatches 152021 max_dev 317 first 29,0 linear 3fff0000 afbc 3fff0400
+RESULT frame 4 cap_md5 a9a38bbaa5be5b64a73ad67d4135d30a repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.8
+RESULT frame 4 vs_linear mismatches 138790 max_dev 302 first 9,0 linear 3fff0000 afbc 3fff0400
+RESULT frame 5 cap_md5 f19918d4a0e7c2419e8ffad267f56f46 repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.8
+RESULT frame 5 vs_linear mismatches 132075 max_dev 304 first 9,0 linear 3fff0000 afbc 3fff0400
+RESULT frame 6 cap_md5 134f001e74ac13749aec47454ae569fb repeat same fbd_ctl 0xff000015 fence_ms 33.4 22.7
+RESULT frame 6 vs_linear mismatches 125540 max_dev 303 first 3,0 linear 3ffef400 afbc 3ffef800
+RESULT frame 7 cap_md5 c64b69fdc20146d56da4800e3069624a repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.7
+RESULT frame 7 vs_linear mismatches 118977 max_dev 311 first 9,0 linear 3fff0000 afbc 3fff0400
+RESULT frame 8 cap_md5 44b9eee4eebafa87529f72d24377a575 repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.8
+RESULT frame 8 vs_linear mismatches 115062 max_dev 313 first 89,0 linear 3fff0800 afbc 3fff0400
+RESULT frame 9 cap_md5 bbd62fb4b4caf175ef120a5804f4612e repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.7
+RESULT frame 9 vs_linear mismatches 105429 max_dev 304 first 49,0 linear 3ffef000 afbc 3ffef400
+RESULT frame 10 cap_md5 6cb31b25a303db889dac7d5ca810e2e9 repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.7
+RESULT frame 10 vs_linear mismatches 102148 max_dev 332 first 49,0 linear 3ffef000 afbc 3ffef400
+RESULT frame 11 cap_md5 e64634a0d6e8ac08e6a684c19496de7d repeat same fbd_ctl 0xff000015 fence_ms 33.3 22.8
+RESULT frame 11 vs_linear mismatches 98632 max_dev 317 first 141,0 linear 3fff0800 afbc 3fff0400
+RESULT summary pass afbc frames 12 wb_errors 0 repeat_differ 0 wrong_buffer_kind 0 fbd_state_wrong 0 fbd_readable 1 fence_ms_mean 27.9
+RESULT compare frames 12 exact 0 mismatches 2081714 max_dev 332 ref_missing 0
+RESULT verdict pass_ok
+RC 0

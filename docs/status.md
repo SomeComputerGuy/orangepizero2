@@ -77,9 +77,10 @@ Test kernels: cumulative cN on test-cumulative (kernel-check/cumulative-kernels.
 Image branch stonking-orangepizero2 = c36a2e787 (c37 minus G2D).
 
 ### A. Running
-- Runner job 58-tearing-wb on c43: DE33 tearing fixes 8af646391 (stale vblank status bit cleared on IRQ enable, flip
-  event sent after the latch flush, snapshot under latch_lock) + writeback per-frame tearing check, idle and under load.
-  State: harness/research/display-tearing/RESULTS.md.
+- Job 58-tearing-wb on c43 (2026-11-06): NO tearing in 14 runs (0 mixed/wrong/bad, ok==flips, 0 late/forced latch
+  flushes, 60.003 fps, IRQ re-enable bursts clean), but check 6 FAIL: de33_latch_events stayed 0, so the held-flip-event
+  path never ran; check 7 NOT TESTED (VE load package bug, ffmpeg input read error). Code agent on it -> c44 + job 59.
+  Info: under memory load 49-56 fps with seq_gaps (no tearing). State: harness/research/display-tearing/RESULTS.md.
 
 ### B. Image integration (after the user's current build_all; the main armbian-build checkout stays untouched until then)
 1. Cherry-pick the board-PASS kernel fixes into stonking-orangepizero2 (-x, build-check):

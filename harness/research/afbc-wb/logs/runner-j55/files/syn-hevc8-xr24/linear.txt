@@ -1,0 +1,41 @@
+[AVHWFramesContext @ 0xaaaae8201df0] Using V4L2 media driver cedrus (7.3.1) for S265
+RESULT writeback_connector 77
+RESULT mode 1024x768 total 1344x806 clock 65000
+RESULT crtc 52 plane 35 primary 42 afbc8 1 afbc10 1 nv12 1 p010 1
+RESULT wb_formats XR24 AR24 XB24 AB24 RX24 RA24 BX24 BA24 RG24 BG24 XR30 NV12 NV21 YU12
+RESULT stream /root/afbcwb/streams/syn-hevc8.mkv hevc 1024x768 (null) pixfmt NV12 wb XR24 crop 0,0 tile 64 band 10
+RESULT frame 0 pic_offset 0,0 fb 1024x768
+RESULT fb 85 format NV12 modifier 0x0000000000000000 planes 2 pitch 1024 size 1179648 1024x768
+RESULT frame 0 cap_md5 aca3457c9bdeccfee267d14f9fbcd448 repeat same fbd_ctl 0x00000000 fence_ms 33.0 19.2
+RESULT fb 86 format NV12 modifier 0x0000000000000000 planes 2 pitch 1024 size 1179648 1024x768
+RESULT frame 1 cap_md5 7377207ae4ed00220f1c84db317dba49 repeat same fbd_ctl 0x00000000 fence_ms 33.4 26.7
+RESULT fb 87 format NV12 modifier 0x0000000000000000 planes 2 pitch 1024 size 1179648 1024x768
+RESULT frame 2 cap_md5 b5ebb72d125e92419ca72d7673ed43f8 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.7
+RESULT fb 88 format NV12 modifier 0x0000000000000000 planes 2 pitch 1024 size 1179648 1024x768
+RESULT frame 3 cap_md5 7ef0746f47ce2a244e9f1a9a7fc2c455 repeat same fbd_ctl 0x00000000 fence_ms 33.2 22.6
+RESULT fb 89 format NV12 modifier 0x0000000000000000 planes 2 pitch 1024 size 1179648 1024x768
+RESULT frame 4 cap_md5 77996fa40c3effc2a58faf2b787e8eb7 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.6
+RESULT fb 90 format NV12 modifier 0x0000000000000000 planes 2 pitch 1024 size 1179648 1024x768
+RESULT frame 5 cap_md5 f9d8ad677429a3f4f7d63ba7bc96e4b7 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.6
+RESULT frame 6 cap_md5 bf6abf77ab94ddfa8e02fe73eb752113 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.5
+RESULT frame 7 cap_md5 016caa7a85cca56872ad2ffa70696fad repeat same fbd_ctl 0x00000000 fence_ms 33.4 22.7
+RESULT frame 8 cap_md5 84ed31c623528727eb92c7d37737d95e repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.5
+RESULT frame 9 cap_md5 324567f55c05fc22eca617d379346257 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.5
+RESULT frame 10 cap_md5 95cd69a803b33ca6917ef35370fd9238 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.7
+RESULT frame 11 cap_md5 0b529d90e9a3171f084c1209be742053 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.6
+RESULT frame 12 cap_md5 4e0682b719673706bd8eb34cf1d5bdd2 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.7
+RESULT frame 13 cap_md5 c06fdb7e6ec1eb69f4ea19f11533d541 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.6
+RESULT frame 14 cap_md5 255c8b23f6a63e96b613077def911590 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.7
+RESULT frame 15 cap_md5 75679cafcf9be1fef74ee14e5e73263b repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.7
+RESULT frame 16 cap_md5 ac0752ebf68886f675b94a5b48e910bb repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.6
+RESULT frame 17 cap_md5 d07d68b30460bab1f26291bc7390c281 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.7
+RESULT frame 18 cap_md5 acde652f9e15aaa48d307f4dc059034a repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.7
+RESULT frame 19 cap_md5 067fa3e84b128e91049133d93557e6ef repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.7
+RESULT frame 20 cap_md5 ec4dc4327ed3398f84fce7706672106f repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.6
+RESULT frame 21 cap_md5 f83a9c1dc38acdd709bf4740885b08f7 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.5
+RESULT frame 22 cap_md5 33358fdf6267e9b42dd225e67a1e332d repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.7
+RESULT frame 23 cap_md5 2375a6051177990dff354e39c154addb repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.6
+RESULT summary pass linear frames 24 wb_errors 0 repeat_differ 0 wrong_buffer_kind 0 fbd_state_wrong 0 fbd_readable 1 fence_ms_mean 28.0
+RESULT src_md5 ok 24 mismatch 0 of 24
+RESULT verdict pass_ok
+RC 0

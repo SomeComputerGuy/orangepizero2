@@ -1,0 +1,28 @@
+[AVHWFramesContext @ 0xaaaab1e30c00] Using V4L2 media driver cedrus (7.3.1) for S265
+RESULT writeback_connector 77
+RESULT mode 1024x768 total 1344x806 clock 65000
+RESULT crtc 52 plane 35 primary 42 afbc8 1 afbc10 1 nv12 1 p010 1
+RESULT wb_formats XR24 AR24 XB24 AB24 RX24 RA24 BX24 BA24 RG24 BG24 XR30 NV12 NV21 YU12
+RESULT stream /root/vdec-streams/hevc-main-2160p60.mkv hevc 3840x2160 (null) pixfmt NV12 wb XR30 crop 1408,704 tile 0 band 0
+RESULT frame 0 pic_offset 0,0 fb 3840x2160
+RESULT fb 85 format NV12 modifier 0x0000000000000000 planes 2 pitch 3840 size 12441600 3840x2160
+RESULT frame 0 cap_md5 38f6af8a6f624dd68309a38faeadde1d repeat same fbd_ctl 0x00000000 fence_ms 32.3 19.6
+RESULT fb 86 format NV12 modifier 0x0000000000000000 planes 2 pitch 3840 size 12441600 3840x2160
+RESULT frame 1 cap_md5 35edbe4084153e6cf15ffc8b5853a188 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.7
+RESULT fb 87 format NV12 modifier 0x0000000000000000 planes 2 pitch 3840 size 12441600 3840x2160
+RESULT frame 2 cap_md5 272b58e61b76812bad6f73fc50492bae repeat same fbd_ctl 0x00000000 fence_ms 49.7 18.2
+RESULT fb 88 format NV12 modifier 0x0000000000000000 planes 2 pitch 3840 size 12441600 3840x2160
+RESULT frame 3 cap_md5 071a8d839b568c5a23d55435dc2f777d repeat same fbd_ctl 0x00000000 fence_ms 33.1 22.8
+RESULT fb 89 format NV12 modifier 0x0000000000000000 planes 2 pitch 3840 size 12441600 3840x2160
+RESULT frame 4 cap_md5 65aefa37c3d50e03ed73b78e51e5e133 repeat same fbd_ctl 0x00000000 fence_ms 33.0 22.7
+RESULT fb 90 format NV12 modifier 0x0000000000000000 planes 2 pitch 3840 size 12441600 3840x2160
+RESULT frame 5 cap_md5 218a045f663f51688fab00a5e027c520 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.8
+RESULT frame 6 cap_md5 c9c594de0c463cdd42f04772d8b52a9a repeat same fbd_ctl 0x00000000 fence_ms 49.6 22.8
+RESULT frame 7 cap_md5 0649ef727651c1e2cec9e395255a8822 repeat same fbd_ctl 0x00000000 fence_ms 33.0 22.8
+RESULT frame 8 cap_md5 a9ec9bb995b4d7eb6e3512ad77eda7a1 repeat same fbd_ctl 0x00000000 fence_ms 33.0 22.7
+RESULT frame 9 cap_md5 a6272b8e95d7702897917642f70f5115 repeat same fbd_ctl 0x00000000 fence_ms 33.3 22.8
+RESULT frame 10 cap_md5 1490df6ccca5991c506933b855f5f432 repeat same fbd_ctl 0x00000000 fence_ms 33.2 22.7
+RESULT frame 11 cap_md5 9bc1afe97280e01c85fabbd0de0c50da repeat same fbd_ctl 0x00000000 fence_ms 32.9 22.7
+RESULT summary pass linear frames 12 wb_errors 0 repeat_differ 0 wrong_buffer_kind 0 fbd_state_wrong 0 fbd_readable 1 fence_ms_mean 29.0
+RESULT verdict pass_ok
+RC 0

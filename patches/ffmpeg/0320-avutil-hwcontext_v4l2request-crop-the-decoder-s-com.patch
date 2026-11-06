@@ -1,0 +1,92 @@
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 6 Nov 2026 19:30:00 +0000
+Subject: [PATCH] avutil/hwcontext_v4l2request: crop the decoder's compose
+ offset
+
+Some stateless decoders write the picture at an offset inside the capture
+buffer: the Allwinner H616 H.265 engine stores its AFBC output 4 lines down
+(cedrus reports it as the compose rectangle, top = 4). Query the compose
+rectangle after setting the capture format, allocate frames that much
+taller and set crop_top/crop_left, so the displayed picture starts at the
+right line. Decoders without an offset (or without G_SELECTION) are
+unchanged.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+--- a/libavcodec/v4l2_request.c
++++ b/libavcodec/v4l2_request.c
+@@ -512,8 +512,26 @@
+     FrameDecodeData *fdd = frame->private_ref;
+     V4L2RequestContext *ctx = fdd->hwaccel_priv;
+ 
++    const struct v4l2_rect *compose = &ctx->fctxi->capture.compose;
++    int ret;
++
+     // Wait on CAPTURE buffer before returning the frame to application
+-    return v4l2_request_wait_on_capture(ctx, index);
++    ret = v4l2_request_wait_on_capture(ctx, index);
++    if (ret)
++        return ret;
++
++    /*
++     * The picture starts at an offset in the CAPTURE buffer (compose
++     * rectangle): describe the buffer as that much larger and crop the
++     * offset away, so that a DRM PRIME consumer sizes its framebuffer for
++     * the whole surface and starts its source rectangle at the picture.
++     */
++    frame->width += compose->left;
++    frame->height += compose->top;
++    frame->crop_left += compose->left;
++    frame->crop_top += compose->top;
++
++    return 0;
+ }
+ 
+ int ff_v4l2_request_reset_picture(AVCodecContext *avctx, V4L2RequestPictureContext *pic)
+--- a/libavutil/hwcontext_v4l2request.c
++++ b/libavutil/hwcontext_v4l2request.c
+@@ -543,6 +543,28 @@
+         goto fail;
+     }
+ 
++    /*
++     * Picture position in a CAPTURE buffer: e.g. the Cedrus H.265 AFBC
++     * output starts 4 lines down. Optional, a driver without selection
++     * support has the picture at the buffer origin.
++     */
++    {
++        struct v4l2_selection sel = {
++            .type = V4L2_TYPE_IS_MULTIPLANAR(fctxi->capture.format.type) ?
++                    V4L2_BUF_TYPE_VIDEO_CAPTURE : fctxi->capture.format.type,
++            .target = V4L2_SEL_TGT_COMPOSE,
++        };
++        if (ioctl(fctxi->video_fd, VIDIOC_G_SELECTION, &sel) == 0 &&
++            sel.r.left >= 0 && sel.r.top >= 0 &&
++            sel.r.left < 64 && sel.r.top < 64)
++            fctxi->capture.compose = sel.r;
++        else
++            memset(&fctxi->capture.compose, 0, sizeof(fctxi->capture.compose));
++        if (fctxi->capture.compose.left || fctxi->capture.compose.top)
++            av_log(hwfc, AV_LOG_VERBOSE, "CAPTURE picture offset %d,%d\n",
++                   fctxi->capture.compose.left, fctxi->capture.compose.top);
++    }
++
+     // All tests passed, video device should be capable
+     return 0;
+ 
+--- a/libavutil/hwcontext_v4l2request_internal.h
++++ b/libavutil/hwcontext_v4l2request_internal.h
+@@ -61,6 +61,12 @@
+         * AVBufferRef.data points to a struct v4l2_buffer for the created buffer.
+         */
+         AVBufferPool *pool;
++
++        /**
++         * Where the picture lies in a CAPTURE buffer (compose rectangle),
++         * all zero when the driver does not report one.
++         */
++        struct v4l2_rect compose;
+     } capture, output;
+ };
+ 

@@ -16,6 +16,7 @@ debian/patches/series (scripts/build-media-debs.sh). All 36 apply with fuzz 0 on
 | 0311 | shared glue: FATE source list gains the four local uAPI headers |
 | 0312 | shared glue: AFBC fourcc fallbacks for distro headers |
 | 0313 | orangepizero2: AVS2 decoder output hold-back for asynchronous hwaccels (two decode requests in flight on v4l2request; `-flags low_delay` turns it off; aq1: starved VE gaps 151 -> 1 per 4K Main10 run, md5 unchanged) |
+| 0320 | orangepizero2: crop the decoder's compose offset (cedrus H.265 AFBC is stored 4 lines down; kernel compose rectangle). Board PASS job 54 (afbc-wb) |
 | debian/0001 | packaging: --enable-v4l2-request --enable-libudev |
 
 uAPIs expected by the add-on hwaccels (local copies in libavcodec/v4l2-stateless-*.h, used only when the kernel

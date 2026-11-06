@@ -92,3 +92,27 @@ Without jumpers those are `SKIP NOT TESTED`, never FAIL.
   prints `INFO adapters:`, new check W33-i2c-bus-number (TWI3 = i2c-3, TWI2 = i2c-2); sit-job.sh precheck needs
   c6ce58c59 and the i2c3 alias in the served DTB. Re-queued as harness/runner-queue/43-spi-i2c-target.md.
 - Next (fresh agent after job 43): any FAIL -> fix; with the user's jumpers rerun for the loopback items.
+
+## Job 43 (2026-11-06, c36): 1 FAIL W33-i2c-slave-eeprom-bind; everything else PASS, loopbacks SKIP (logs/job43/)
+- Passed: W33-i2c-bus-number (alias fix works: TWI3 = i2c-3, TWI2 = i2c-2), W33-i2c-target-func (0xeff002b has
+  I2C_FUNC_SLAVE), W33-i2c-host-with-target, all five SPI always-decided items.
+- FAIL: `3-1064 driver='' slave-eeprom size=''`, nothing in dmesg. The overlay's `slave-24c02` child (reg 0x40000064) did
+  create the client (directory present), so the overlay is right; the driver never probed.
+- Root cause: CONFIG_I2C_SLAVE_EEPROM=m (shipped in modules-c36.tgz), but the module declares only an i2c: device table.
+  i2c_device_uevent() sends the of: modalias for a client with an of_node (`of:NeepromT(null)Cslave-24c02`), and
+  modules.alias had only `alias i2c:slave-24c02 i2c_slave_eeprom` -> udev never loads it. (sysfs new_device works because
+  that client has no of_node.) mv64xxx reg_target was never reached; it is tested once the module binds.
+- Fix: armbian-build **b7b01b931** (fix/sunxi-i2c-slave-eeprom-of-autoload, off test-cumulative 95fa41f2a, pushed to
+  fork): patches.armbian/i2c-slave-eeprom-add-of-match-table-for-module-autoload.patch (series.conf after the mv64xxx
+  target patch): an of_device_id table with the same 8 names + MODULE_DEVICE_TABLE(of). Match/probe unchanged (client
+  name = compatible, i2c_client_get_device_id() still gives size/flags). checkpatch --strict: 0 errors, only the 8
+  "undocumented compatible" warnings (these names have no binding upstream). Config unchanged (=m kept). Merged into
+  test-cumulative 1e1fd3eae = **c37** (Image md5 36a7f0bc7419b515b1106dd86fa26756 = c36's: module-only change; modules-c37
+  modules.alias has `alias of:N*T*Cslave-24c02 i2c_slave_eeprom`).
+- Package: every jumper item now gets its own line (W33-spi-loopback-100, W33-i2c-loopback-200,
+  W33-i2c-slave-eeprom-content, W33-i2c-loopback-i2cset were missing as SKIP), items that cannot run after an earlier
+  failure print FAIL "not run: ..." instead of vanishing (always 15 CHECK lines), bind FAIL prints `INFO eeprom evidence:`
+  (modalias, lsmod, of: alias count, manual modprobe result), I2C set runs first, precheck needs b7b01b931 + the of:
+  alias in modules-<tag>.tgz. Re-queued as harness/runner-queue/44-spi-i2c-target.md.
+- Next (fresh agent after job 44): bind PASS -> W33 done for the no-jumper items; a FAIL with `eeprom evidence` showing the
+  module loaded but unbound points at mv64xxx reg_target (dmesg). Jumper loopbacks still need the user.

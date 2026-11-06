@@ -1,6 +1,6 @@
 #!/bin/bash
 # board-sit.sh: mechanical checks for datasheet item W33 (SPI target mode in spi-sun6i, I2C target mode in
-# i2c-mv64xxx), runner job 43 (jobs 20/31 reworked). Runs on the Zero2 as root. Three modes:
+# i2c-mv64xxx), runner job 44 (jobs 20/31/43 reworked). Runs on the Zero2 as root. Three modes:
 #   board-sit.sh wiring             on the STOCK kernel, before the overlays: finds out with GPIO whether the
 #                                   loopback jumpers are fitted (drives one end, reads the other; both levels
 #                                   must follow). Prints WIRED_SPI=0|1 and WIRED_I2C=0|1.
@@ -67,7 +67,12 @@ if [ "$MODE" = checks-i2c ]; then
   dev=/sys/bus/i2c/devices/$B3-1064
   if [ -d $dev ]; then drv=$(basename "$(readlink $dev/driver 2>/dev/null)"); sz=$(stat -c %s $dev/slave-eeprom 2>/dev/null)
     if [ "$drv" = i2c-slave-eeprom ] && [ "$sz" = 256 ]; then res W33-i2c-slave-eeprom-bind PASS "$B3-1064 driver $drv, slave-eeprom $sz bytes"
-    else res W33-i2c-slave-eeprom-bind FAIL "$B3-1064 driver='$drv' slave-eeprom size='$sz' (reg_target failed?)"; fi
+    else res W33-i2c-slave-eeprom-bind FAIL "$B3-1064 driver='$drv' slave-eeprom size='$sz' (module not autoloaded or reg_target failed)"
+      # job 43: the DT client's uevent is an of: modalias; the module needs an OF table to autoload (armbian-build
+      # b7b01b931). Evidence only (the verdict above stands): modalias, module state, then a manual modprobe.
+      info "eeprom evidence: modalias='$(cat $dev/modalias 2>&1)' name='$(cat $dev/name 2>&1)' lsmod=$(lsmod | grep -c '^i2c_slave_eeprom') alias-of=$(grep -c 'alias of:.*Cslave-24c02 i2c_slave_eeprom' /lib/modules/$(uname -r)/modules.alias 2>/dev/null)"
+      mo=$(modprobe -v i2c-slave-eeprom 2>&1); sleep 1
+      info "eeprom evidence: after modprobe ($mo): driver='$(basename "$(readlink $dev/driver 2>/dev/null)")' slave-eeprom size='$(stat -c %s $dev/slave-eeprom 2>/dev/null)' dmesg: $(dmesg | grep -iE 'slave|5002c00|i2c-3|i2c i2c-' | tail -4 | tr '\n' '|')"; fi
   else res W33-i2c-slave-eeprom-bind FAIL "no $dev"; fi
   # the same controller still works as a host with the target registered (scan of an otherwise empty bus returns)
   t0=$(date +%s); out=$(timeout 60 i2cdetect -y -r $B3 2>&1); rc=$?; dt=$(( $(date +%s) - t0 ))
@@ -85,9 +90,12 @@ if [ "$MODE" = checks-i2c ]; then
       [ "$got" = "$want" ] && res W33-i2c-slave-eeprom-content PASS "$got" || res W33-i2c-slave-eeprom-content FAIL "sysfs $got want $want"
       o=$(timeout 10 i2cset -y $B2 0x64 0xf0 0x5a 2>&1; timeout 10 i2cget -y $B2 0x64 0xf0 2>&1 | tail -1)
       case "$o" in *0x5a) res W33-i2c-loopback-i2cset PASS "i2cset/i2cget 0xf0 -> $o";; *) res W33-i2c-loopback-i2cset FAIL "$o";; esac
-    else res W33-i2c-loopback-16 FAIL "no adapter under 5002800.i2c (sit-i2c2-ph overlay missing)"; evidence 5002800 i2c@5002800; fi
+    else res W33-i2c-loopback-16 FAIL "no adapter under 5002800.i2c (sit-i2c2-ph overlay missing)"; evidence 5002800 i2c@5002800
+      for it in W33-i2c-loopback-200 W33-i2c-slave-eeprom-content W33-i2c-loopback-i2cset; do res $it FAIL "not run: no host adapter under 5002800.i2c"; done; fi
   else
-    res W33-i2c-loopback-16 SKIP "NOT TESTED: no jumpers pin 5 PH4<->pin 8 PH2, pin 3 PH5<->pin 10 PH3 detected"
+    # every jumper item gets its own line (job 43 listed only the first one)
+    for it in W33-i2c-loopback-16 W33-i2c-loopback-200 W33-i2c-slave-eeprom-content W33-i2c-loopback-i2cset; do
+      res $it SKIP "NOT TESTED: no jumpers pin 5 PH4<->pin 8 PH2, pin 3 PH5<->pin 10 PH3 detected"; done
   fi
   info "dmesg i2c: $(dmesg | grep -iE 'i2c|twi|5002[8c]00|pinctrl' | grep -viE 'hdmi|ddc' | tail -8 | tr '\n' '|')"
 
@@ -117,16 +125,21 @@ elif [ "$MODE" = checks-spi ]; then
             if [ "$hrx" = "$tpat" ] && [ "$trx" = "$hpat" ]; then res W33-spi-loopback-$n PASS "host got the target's $n bytes and the target the host's (target rc $trc)"
             else res W33-spi-loopback-$n FAIL "target rc $trc; host rx ${hrx:0:40} want ${tpat:0:40}; target rx ${trx:0:40} want ${hpat:0:40}"; fi
           done
-        else res W33-spi-loopback-16 FAIL "no /dev/spidev2.0 (sit-spi-gpio-pc overlay missing)"; fi
+        else for n in 16 100; do res W33-spi-loopback-$n FAIL "no /dev/spidev2.0 (sit-spi-gpio-pc overlay missing)"; done; fi
       else
-        res W33-spi-loopback-16 SKIP "NOT TESTED: no jumpers pin 13 PC5->23 PH6, 11 PC6->19 PH7, 22 PC7<-21 PH8, 15 PC8->3 PH5 detected"
+        for n in 16 100; do
+          res W33-spi-loopback-$n SKIP "NOT TESTED: no jumpers pin 13 PC5->23 PH6, 11 PC6->19 PH7, 22 PC7<-21 PH8, 15 PC8->3 PH5 detected"; done
       fi
       # handler swap from user space: "(null)" removes it, "spi-dev" (the spidev id table name) brings it back
       echo "(null)" > $tgt/slave 2>spi-slave-null.err; sleep 1
       [ -c /dev/spidev1.0 ] && res W33-spi-target-unregister FAIL "/dev/spidev1.0 still there after '(null)': $(cat spi-slave-null.err)" || res W33-spi-target-unregister PASS "spidev1.0 removed"
       echo spi-dev > $tgt/slave 2>spi-slave-store.err; sleep 1
       [ -c /dev/spidev1.0 ] && res W33-spi-target-reregister PASS "/dev/spidev1.0 back after 'echo spi-dev > slave' (slave='$(cat $tgt/slave)')" || res W33-spi-target-reregister FAIL "no /dev/spidev1.0 after 'echo spi-dev': $(cat spi-slave-store.err) slave='$(cat $tgt/slave 2>&1)'"
+    else for it in W33-spi-target-abort W33-spi-loopback-16 W33-spi-loopback-100 W33-spi-target-unregister W33-spi-target-reregister; do
+        res $it FAIL "not run: no /dev/spidev1.0"; done
     fi
+  else for it in W33-spi-target-spidev W33-spi-target-abort W33-spi-loopback-16 W33-spi-loopback-100 W33-spi-target-unregister W33-spi-target-reregister; do
+      res $it FAIL "not run: no spi1 target controller"; done
   fi
   [ -c /dev/spidev2.0 ] && info "spi-gpio host: $(readlink -f /sys/class/spidev/spidev2.0/device/../ 2>/dev/null | xargs basename 2>/dev/null)" || { info "no /dev/spidev2.0"; evidence spi-gpio spi-gpio; }
   info "dmesg spi: $(dmesg | grep -iE 'spi|501[01]000|pinctrl' | grep -viE 'spi-nor|mtd|m25p|flash' | tail -8 | tr '\n' '|')"

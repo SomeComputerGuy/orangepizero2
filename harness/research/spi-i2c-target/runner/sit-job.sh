@@ -1,8 +1,9 @@
 #!/bin/bash
-# Runner package for job 43-spi-i2c-target (jobs 20/31 reworked): sit-job.sh (no arguments). See HANDOFF.md.
-# Chunks: "wiring" (stock kernel: GPIO probe for the loopback jumpers), "spi" (installs the newest cumulative kernel
-# with the vdec fallback armed and the matching DTB, boots it with the user overlays sit-spi1-target + sit-spi-gpio-pc,
-# runs board-sit.sh checks-spi), "i2c" (reboots the trial kernel with sit-i2c3-slave + sit-i2c2-ph, runs checks-i2c),
+# Runner package for job 44-spi-i2c-target (jobs 20/31/43 reworked): sit-job.sh (no arguments). See HANDOFF.md.
+# Chunks: "wiring" (stock kernel: GPIO probe for the loopback jumpers), "i2c" (installs the newest cumulative kernel
+# with the vdec fallback armed and the matching DTB, boots it with the user overlays sit-i2c3-slave + sit-i2c2-ph,
+# runs board-sit.sh checks-i2c; the mandatory set), "spi" (short sanity: reboots the trial kernel with
+# sit-spi1-target + sit-spi-gpio-pc, runs checks-spi),
 # "restore" (removes the overlays, restores Image/DTB/modules, reboots to the stock image kernel). The two overlay sets
 # boot separately because spi1-target (CS0) and i2c3 (SDA) both use PH5 = header pin 3 (job 20 FAIL root cause).
 # Self-contained: board lock (fresh owner per acquire), stall watchdog, resumable (chunks in $OUT/state are skipped).
@@ -17,6 +18,7 @@ UOV_spi="sit-spi1-target sit-spi-gpio-pc"; UOV_i2c="sit-i2c3-slave sit-i2c2-ph"
 FIX_TITLE='h616 SPI and TWI target'          # 03961fad0, fix/sunxi-h616-spi-i2c-target (drivers + overlays)
 FIX2=85e6dcb38                               # fix/sunxi-h616-spi1-target-spidev: spidev "slave" child in the spi1-target overlay
 FIX3=c6ce58c59                               # fix/sunxi-h616-zero-i2c-aliases: i2c0..i2c5 aliases (TWI3 = i2c-3; job 31 FAIL cause)
+FIX4=b7b01b931                               # fix/sunxi-i2c-slave-eeprom-of-autoload: OF table so the module autoloads (job 43 FAIL cause)
 OWN=""
 log() { echo "$(date '+%F %T') $*" | tee -a $OUT/runner.log; }
 waitup() { for i in $(seq 1 60); do sleep 5; $SSH -n true 2>/dev/null && return 0; done; return 1; }
@@ -47,6 +49,8 @@ precheck() { # the newest cumulative kernel must contain both fix commits; the h
   git -C $H/wt-cumulative merge-base --is-ancestor $FIX2 $sha 2>/dev/null || blocked "newest cumulative kernel $T ($sha) lacks $FIX2 (fix/sunxi-h616-spi1-target-spidev not merged yet)"
   git -C $H/wt-cumulative merge-base --is-ancestor $FIX3 $sha 2>/dev/null || blocked "newest cumulative kernel $T ($sha) lacks $FIX3 (fix/sunxi-h616-zero-i2c-aliases not merged yet)"
   $H/kernel-check/work-cumul/linux-7.3.1/scripts/dtc/dtc -q -I dtb -O dts $H/kernel-check/vdec-serve/sun50i-h616-orangepi-zero2.dtb.$T 2>/dev/null | sed -n '/aliases {/,/};/p' | grep -q 'i2c3 = "/soc/i2c@5002c00"' || blocked "sun50i-h616-orangepi-zero2.dtb.$T has no i2c3 alias (built without $FIX3?)"
+  git -C $H/wt-cumulative merge-base --is-ancestor $FIX4 $sha 2>/dev/null || blocked "newest cumulative kernel $T ($sha) lacks $FIX4 (fix/sunxi-i2c-slave-eeprom-of-autoload not merged yet)"
+  tar xzOf $H/kernel-check/vdec-serve/modules-$T.tgz 7.3.1/modules.alias 2>/dev/null | grep -q 'alias of:.*Cslave-24c02 i2c_slave_eeprom' || blocked "modules-$T.tgz: modules.alias has no of: alias for i2c_slave_eeprom (built without $FIX4?)"
   want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || blocked "no Image.$T in kernel-check/vdec-serve"
   [ -s $H/kernel-check/vdec-serve/sun50i-h616-orangepi-zero2.dtb.$T ] || blocked "no sun50i-h616-orangepi-zero2.dtb.$T in kernel-check/vdec-serve"
   for f in spi1-target spi-gpio-pc i2c3-ph-slave-eeprom i2c2-ph; do [ -s $SD/dtbo/sun50i-h616-$f.dtbo ] || blocked "missing $SD/dtbo/sun50i-h616-$f.dtbo"; done
@@ -86,16 +90,16 @@ run_checks() { # run_checks <spi|i2c>: board-sit.sh checks-<set> <wired>, output
   $SSH -n 'dmesg | grep -iE "spi|i2c|twi|pinctrl|fault|timed out|oops|bug:|warn|call trace" | grep -viE "ACPI|EFI|spi-nor|mtd" | tail -60' > $OUT/dmesg-$set.txt 2>&1
   scp -q "${K[@]}" 'root@10.56.0.107:/root/sit/*.txt' 'root@10.56.0.107:/root/sit/*.out' 'root@10.56.0.107:/root/sit/*.err' $OUT/board/ 2>/dev/null
   echo $set >> $OUT/state; log "chunk $set done: $(grep -c 'CHECK .* PASS' $OUT/checks-$set.txt) PASS, $(grep -c 'CHECK .* FAIL' $OUT/checks-$set.txt) FAIL, $(grep -c 'CHECK .* SKIP' $OUT/checks-$set.txt) SKIP"; }
-log "job 43-spi-i2c-target start, done before: $(tr '\n' ' ' < $OUT/state)"
-if ! grep -qx spi $OUT/state && ! grep -qx i2c $OUT/state; then : > $OUT/checks.txt; fi   # fresh run: start the combined file
+log "job 44-spi-i2c-target start, done before: $(tr '\n' ' ' < $OUT/state)"
+if ! grep -qx i2c $OUT/state && ! grep -qx spi $OUT/state; then : > $OUT/checks.txt; fi   # fresh run: start the combined file
 trap 'release' EXIT
 acquire
 precheck
 if ! grep -qx wiring $OUT/state; then wiring; fi
-for set in spi i2c; do
+for set in i2c spi; do
   if ! grep -qx $set $OUT/state; then boot_set $set; log "checks $set start"; run_checks $set; fi
 done
 if ! grep -qx restore $OUT/state; then restore; fi
 release
-log "job 43-spi-i2c-target end: $(tr '\n' ' ' < $OUT/state)"
+log "job 44-spi-i2c-target end: $(tr '\n' ' ' < $OUT/state)"
 [ -f $OUT/BLOCKED ] && exit 2; exit 0

@@ -8,3 +8,18 @@ kernel: #23 SMP PREEMPT Fri Nov  6 00:46:05 UTC 2026
 2026-11-06 01:31:56 BLOCKED: kernel c24 has no Writeback-1 connector / de33_wb_* parameters (writeback not in this kernel)
 2026-11-06 01:32:43 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 
 released by runner-wb-wb-1793928440
+2026-11-06 04:56:25 job wb start, kernel c27 (Image md5 5a5a047651e74096a29b0c153fdb221c), writeback commit 6dbed6c18, chunks: wb, done before: 
+2026-11-06 04:56:25 acquired by runner-wb-wb-1793940985
+2026-11-06 04:56:30 client on the board is current (4712f498241ac029a52810dd62bc652ae4a6bc67b94feeb113bead240fcdaf7b)
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+dtb sun50i-h616-orangepi-zero2.dtb.vdec-c27 md5 fbb509889a4cba869d6985f4e549039a
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+kernel: #25 SMP PREEMPT Fri Nov  6 04:18:02 UTC 2026
+2026-11-06 04:58:19 kernel dtb: c27 (fbb509889a4cba869d6985f4e549039a)
+2026-11-06 04:58:24 kernel writeback: present (/sys/class/drm/card0-Writeback-1 )
+2026-11-06 04:58:25 chunk wb start
+2026-11-06 04:58:49 chunk wb done
+restore: Image=vmlinuz-7.3.1-edge-sunxi64 dtb=sun50i-h616-orangepi-zero2.dtb.stock
+2026-11-06 04:59:35 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 sun50i-h616-orangepi-zero2.dtb.stock 
+released by runner-wb-wb-1793940985
+2026-11-06 04:59:35 job wb end: 1 of 1 chunks done; results in /home/aruni/orangepizero2/harness/research/de33-writeback/logs/runner-wb/results.txt

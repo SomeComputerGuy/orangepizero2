@@ -1,0 +1,1 @@
+RESULT memload threads 4 mb 32 secs 14.4 GBps 0.679

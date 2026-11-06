@@ -1,19 +1,23 @@
-DMESG-START 660
+DMESG-START 663
 STEP probe
-driver_lines 2
+driver_lines 4
 iommu_group 1
 clk_rate 300000000
 boot_warnings 0
-device /dev/video2
+selftest_mixer_regs bad
+selftest_rot_regs ok
+selftest_mixer timeout
+selftest_rot ok
+device /dev/video3
 STEP formats
 formats_out 18
-formats_cap 36
+formats_cap 18
 STEP cedrus-topology
 cedrus_D_rc 0
 STEP compliance
-COMPLIANCE: Total for sun50i-g2d device /dev/video2: 48, Succeeded: 48, Failed: 0, Warnings: 0
+COMPLIANCE: Total for sun50i-g2d device /dev/video3: 48, Succeeded: 48, Failed: 0, Warnings: 0
 STEP compliance-s
-COMPLIANCE-S: Total for sun50i-g2d device /dev/video2: 57, Succeeded: 51, Failed: 6, Warnings: 0
+COMPLIANCE-S: Total for sun50i-g2d device /dev/video3: 57, Succeeded: 51, Failed: 6, Warnings: 0
 STEP conv rgb-copy
 == rgb-copy: RESULT rc 1 reason BUFERR iteration 0 RC 1 
 STEP conv rgb-ar24
@@ -114,71 +118,72 @@ STEP conv max-size
 == max-size: RESULT rc 1 reason BUFERR iteration 0 RC 1 
 STEP gst-inspect
 element 1
-device Device
-device_expected /dev/video2
+element_name v4l2video3convert
+device /dev/video3
+device_expected /dev/video3
 STEP gst gst-rgb2nv12
-== gst-rgb2nv12: RC 1 size 0 
+== gst-rgb2nv12: RC 0 size 460800 
 STEP gst gst-nv122rgb
-== gst-nv122rgb: RC 1 size 0 
+== gst-nv122rgb: RC 0 size 307200 
 STEP dmesg
-DMESG: [   80.605476] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   81.117451] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   81.629449] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   82.141454] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   82.653505] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   83.165521] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   83.677505] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   84.189450] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   84.701508] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   85.213368] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   85.725470] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   86.365455] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   86.973463] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   87.581438] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   88.189440] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   88.797450] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   89.405519] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   90.013400] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   90.589347] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   91.165348] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   91.741474] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   92.349453] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   92.989373] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   93.565363] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   94.141315] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   94.717389] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   95.325470] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   95.901301] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   96.477345] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   97.053455] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   97.693374] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   98.269343] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   98.845329] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [   99.421442] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  100.029391] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  100.605353] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  101.181363] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  101.757419] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  102.365408] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  103.005441] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  103.645419] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  104.285415] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  104.893403] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  105.501456] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  106.141341] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  106.717352] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  107.293330] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  107.869426] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  108.509327] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  109.085323] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  109.661334] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  110.237427] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  110.845416] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  111.453396] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  112.285310] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  113.277327] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  113.917335] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  114.525306] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  115.133257] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
-DMESG: [  116.669319] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000
+DMESG: [   81.760513] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   82.272498] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   82.784508] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   83.296486] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   83.808490] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   84.320497] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   84.832555] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   85.344495] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   85.856472] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   86.496402] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   87.072412] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   87.648387] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   88.224512] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   88.832458] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   89.440492] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   90.048409] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   90.624424] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   91.200387] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   91.776408] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   92.384381] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   92.960382] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   93.536385] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   94.112473] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   94.752503] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   95.393200] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   96.032402] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   96.608405] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   97.184362] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   97.760467] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   98.400392] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   98.976370] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [   99.552389] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  100.128508] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  100.736448] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  101.344466] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  101.952596] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  102.560400] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  103.136378] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  103.712313] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  104.288357] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  104.864360] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  105.440367] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  106.016352] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  106.592517] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  107.200442] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  107.808499] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  108.448364] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  109.024313] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  109.600372] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  110.176469] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  110.784366] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  111.360433] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  112.128357] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  113.216360] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  113.856387] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  114.464361] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  115.072423] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  116.640339] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  130.656388] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
+DMESG: [  131.392366] sun50i-g2d 1480000.g2d: job timed out, mixer status 00000000 ctl 00000000 top 3/3/3 v0 00000000 bld 00000000 wb 00000000 irqs 1
 ROUND-DONE

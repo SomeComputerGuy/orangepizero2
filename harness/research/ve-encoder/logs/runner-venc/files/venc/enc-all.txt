@@ -1,0 +1,126 @@
+Driver Info:
+	Driver name      : cedrus
+	Card type        : cedrus
+	Bus info         : platform:cedrus
+	Driver version   : 7.3.1
+	Capabilities     : 0x84208000
+		Video Memory-to-Memory
+		Streaming
+		Extended Pix Format
+		Device Capabilities
+	Device Caps      : 0x04208000
+		Video Memory-to-Memory
+		Streaming
+		Extended Pix Format
+Media Driver Info:
+	Driver name      : cedrus
+	Model            : cedrus
+	Serial           : 
+	Bus info         : platform:cedrus
+	Media version    : 7.3.1
+	Hardware revision: 0x00000000 (0)
+	Driver version   : 7.3.1
+Interface Info:
+	ID               : 0x0300001a
+	Type             : V4L Video
+Entity Info:
+	ID               : 0x0000000f (15)
+	Name             : cedrus-enc-source
+	Function         : V4L2 I/O
+	Pad 0x01000010   : 0: Source
+	  Link 0x02000016: to remote pad 0x1000012 of entity 'cedrus-enc-proc' (Video Encoder): Data, Enabled, Immutable
+Priority: 2
+Format Video Capture:
+	Width/Height      : 1280/720
+	Pixel Format      : 'S264' (H.264 Parsed Slice Data)
+	Field             : None
+	Bytes per Line    : 0
+	Size Image        : 1382400
+	Colorspace        : Default
+	Transfer Function : Default (maps to Rec. 709)
+	YCbCr/HSV Encoding: Default (maps to ITU-R 601)
+	Quantization      : Default (maps to Full Range)
+	Flags             : 
+Format Video Output:
+	Width/Height      : 1280/720
+	Pixel Format      : 'NV12' (Y/UV 4:2:0)
+	Field             : None
+	Bytes per Line    : 1280
+	Size Image        : 1382400
+	Colorspace        : Default
+	Transfer Function : Default (maps to Rec. 709)
+	YCbCr/HSV Encoding: Default (maps to ITU-R 601)
+	Quantization      : Default (maps to Limited Range)
+	Flags             : 
+Streaming Parameters Video Output:
+	Capabilities     : timeperframe
+	Frames per second: 30.000 (30/1)
+	Write buffers    : 0
+
+Codec Controls
+
+             video_bitrate_mode 0x009909ce (menu)   : min=0 max=2 default=1 value=1 (Constant Bitrate) flags=update, has-min-max
+				1: Constant Bitrate
+				2: Constant Quality
+                  video_bitrate 0x009909cf (int)    : min=1 max=100000000 step=1 default=2000000 value=2000000 flags=has-min-max
+frame_level_rate_control_enable 0x009909d7 (bool)   : default=0 value=0 flags=has-min-max
+generate_access_unit_delimiters 0x009909e7 (bool)   : default=0 value=0 flags=has-min-max
+          h264_i_frame_qp_value 0x00990a5e (int)    : min=0 max=51 step=1 default=26 value=26 flags=has-min-max
+          h264_p_frame_qp_value 0x00990a5f (int)    : min=0 max=51 step=1 default=28 value=28 flags=has-min-max
+          h264_minimum_qp_value 0x00990a61 (int)    : min=0 max=51 step=1 default=0 value=0 flags=has-min-max
+          h264_maximum_qp_value 0x00990a62 (int)    : min=0 max=51 step=1 default=51 value=51 flags=has-min-max
+                     h264_level 0x00990a67 (menu)   : min=0 max=15 default=11 value=11 (4) flags=has-min-max
+				0: 1
+				1: 1b
+				2: 1.1
+				3: 1.2
+				4: 1.3
+				5: 2
+				6: 2.1
+				7: 2.2
+				8: 3
+				9: 3.1
+				10: 3.2
+				11: 4
+				12: 4.1
+				13: 4.2
+				14: 5
+				15: 5.1
+                   h264_profile 0x00990a6b (menu)   : min=0 max=4 default=1 value=1 (Constrained Baseline) flags=has-min-max
+				0: Baseline
+				1: Constrained Baseline
+				2: Main
+				4: High
+           vertical_size_of_sar 0x00990a6c (int)    : min=1 max=65535 step=1 default=1 value=1 flags=has-min-max
+         horizontal_size_of_sar 0x00990a6d (int)    : min=1 max=65535 step=1 default=1 value=1 flags=has-min-max
+        aspect_ratio_vui_enable 0x00990a6e (bool)   : default=0 value=0 flags=has-min-max
+           vui_aspect_ratio_idc 0x00990a6f (menu)   : min=0 max=17 default=0 value=0 (Unspecified) flags=has-min-max
+				0: Unspecified
+				1: 1:1
+				2: 12:11
+				3: 10:11
+				4: 16:11
+				5: 40:33
+				6: 24:11
+				7: 20:11
+				8: 32:11
+				9: 80:33
+				10: 18:11
+				11: 15:11
+				12: 64:33
+				13: 160:99
+				14: 4:3
+				15: 3:2
+				16: 2:1
+				17: Extended SAR
+     prepend_sps_and_pps_to_idr 0x00990b84 (int)    : min=0 max=1 step=1 default=1 value=1 flags=has-min-max
+               constant_quality 0x00990b85 (int)    : min=1 max=100 step=1 default=50 value=50 flags=has-min-max
+
+Stateless Codec Controls
+
+                h264_start_code 0x00a40901 (menu)   : min=0 max=1 default=1 value=1 (Annex B Start Code) flags=has-min-max
+				0: No Start Code
+				1: Annex B Start Code
+    h264_sequence_parameter_set 0x00a40902 (h264-sps): value=unsupported payload type flags=has-payload
+     h264_picture_parameter_set 0x00a40903 (h264-pps): value=unsupported payload type flags=has-payload
+         h264_encode_parameters 0x00a40908 (unknown): type=206 value=unsupported payload type flags=has-payload

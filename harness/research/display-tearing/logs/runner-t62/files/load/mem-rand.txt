@@ -1,0 +1,88 @@
+RESULT selftest pure step 1 verdict OK want OK boundary -1 bad_rows 0
+RESULT selftest pure step 32 verdict OK want OK boundary -1 bad_rows 0
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT writeback_cap 1
+RESULT writeback_connectors 1
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT wb_encoder id=76 possible_crtcs=0x3 possible_clones=0x3
+RESULT wb_reaches_crtc 1
+RESULT crtc 52 plane 42 wb_connector 77
+RESULT wb_props crtc=21 fb=78 fence=80
+RESULT wb_formats XR24 AR24 XB24 AB24 RX24 RA24 BX24 BA24 RG24 BG24 XR30 NV12 NV21 YU12
+RESULT wb_format_offered 1
+RESULT tear flips 600 frames_checked 600 ok 600 wrong 0 stale 0 early 0 mixed 0 bad 0 fence_errors 0
+RESULT wb_fail_reasons error 0 missed 0 replaced 0 timeout 0 cancelled 0 wait 0 other 0
+RESULT flip 3 seq_gap 2 late_vblanks 2 deferred_vblanks 0 commit_margin_ms -17.970 snapshot_latency_ms 0.955
+RESULT flip 4 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -8.535 snapshot_latency_ms 0.781
+RESULT flip 5 seq_gap 2 late_vblanks 2 deferred_vblanks 0 commit_margin_ms -16.614 snapshot_latency_ms 0.836
+RESULT flip 9 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -3.280 snapshot_latency_ms 0.816
+RESULT flip 12 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -1.232 snapshot_latency_ms 0.789
+RESULT flip 13 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -4.950 snapshot_latency_ms 0.807
+RESULT flip 14 seq_gap 2 late_vblanks 2 deferred_vblanks 0 commit_margin_ms -12.674 snapshot_latency_ms 4.956
+RESULT flip 15 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -8.099 snapshot_latency_ms 3.286
+RESULT flip 16 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -15.591 snapshot_latency_ms 0.884
+RESULT flip 17 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -3.260 snapshot_latency_ms 0.884
+RESULT flip 19 seq_gap 2 late_vblanks 2 deferred_vblanks 0 commit_margin_ms -21.423 snapshot_latency_ms 0.819
+RESULT flip 20 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -11.764 snapshot_latency_ms 0.938
+RESULT flip 21 seq_gap 2 late_vblanks 2 deferred_vblanks 0 commit_margin_ms -28.149 snapshot_latency_ms 3.401
+RESULT flip 22 seq_gap 2 late_vblanks 2 deferred_vblanks 0 commit_margin_ms -18.538 snapshot_latency_ms 0.872
+RESULT flip 23 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -12.887 snapshot_latency_ms 0.947
+RESULT flip 24 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -5.916 snapshot_latency_ms 0.797
+RESULT flip 26 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms 0.294 snapshot_latency_ms 1.251
+RESULT flip 30 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -4.484 snapshot_latency_ms 0.826
+RESULT flip 32 seq_gap 2 late_vblanks 2 deferred_vblanks 0 commit_margin_ms -20.039 snapshot_latency_ms 0.792
+RESULT flip 33 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -15.053 snapshot_latency_ms 0.814
+RESULT flip 34 seq_gap 2 late_vblanks 2 deferred_vblanks 0 commit_margin_ms -24.337 snapshot_latency_ms 0.779
+RESULT flip 35 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -14.773 snapshot_latency_ms 0.862
+RESULT flip 36 seq_gap 2 late_vblanks 2 deferred_vblanks 0 commit_margin_ms -22.688 snapshot_latency_ms 0.821
+RESULT flip 38 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -1.215 snapshot_latency_ms 0.895
+RESULT flip 41 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -0.972 snapshot_latency_ms 0.799
+RESULT flip 43 seq_gap 2 late_vblanks 2 deferred_vblanks 0 commit_margin_ms -22.301 snapshot_latency_ms 0.931
+RESULT flip 44 seq_gap 2 late_vblanks 2 deferred_vblanks 0 commit_margin_ms -15.751 snapshot_latency_ms 0.991
+RESULT flip 45 seq_gap 2 late_vblanks 2 deferred_vblanks 0 commit_margin_ms -4.129 snapshot_latency_ms 12.831
+RESULT flip 46 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -1.630 snapshot_latency_ms 0.827
+RESULT flip 47 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -8.973 snapshot_latency_ms 4.921
+RESULT flip 48 seq_gap 2 late_vblanks 2 deferred_vblanks 0 commit_margin_ms -21.375 snapshot_latency_ms 0.843
+RESULT flip 50 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -0.608 snapshot_latency_ms 0.892
+RESULT flip 54 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -3.239 snapshot_latency_ms 0.928
+RESULT flip 57 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -1.116 snapshot_latency_ms 0.833
+RESULT flip 59 seq_gap 2 late_vblanks 2 deferred_vblanks 0 commit_margin_ms -18.484 snapshot_latency_ms 0.866
+RESULT flip 61 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -10.502 snapshot_latency_ms 0.900
+RESULT flip 63 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -2.856 snapshot_latency_ms 0.962
+RESULT flip 64 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms 0.580 snapshot_latency_ms 4.192
+RESULT flip 65 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -7.648 snapshot_latency_ms 0.835
+RESULT flip 67 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -0.788 snapshot_latency_ms 0.891
+RESULT flip 71 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -3.704 snapshot_latency_ms 0.833
+RESULT flip 74 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -1.326 snapshot_latency_ms 1.037
+RESULT flip 75 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -14.085 snapshot_latency_ms 0.978
+RESULT flip 76 seq_gap 2 late_vblanks 2 deferred_vblanks 0 commit_margin_ms -22.436 snapshot_latency_ms 0.825
+RESULT flip 77 seq_gap 2 late_vblanks 2 deferred_vblanks 0 commit_margin_ms -18.626 snapshot_latency_ms 0.942
+RESULT flip 78 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -9.564 snapshot_latency_ms 0.869
+RESULT flip 79 seq_gap 2 late_vblanks 2 deferred_vblanks 0 commit_margin_ms -17.406 snapshot_latency_ms 5.019
+RESULT flip 81 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -2.533 snapshot_latency_ms 0.868
+RESULT flip 83 seq_gap 2 late_vblanks 2 deferred_vblanks 0 commit_margin_ms -26.228 snapshot_latency_ms 0.657
+RESULT flip 84 seq_gap 1 late_vblanks 1 deferred_vblanks 0 commit_margin_ms -0.774 snapshot_latency_ms 0.420
+RESULT seq_gap_account gap_flips 50 gap_vblanks 68 late_vblanks 68 deferred_vblanks 0 unexplained 0 client_late 48 commit_slow 2
+RESULT snapshot_latency mean_ms 0.425 max_ms 12.831 n 599
+RESULT event_order events_got 600 unheld 0 unflushed 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+RESULT flip_rate 53.886 seq_gaps 50
+RESULT seq_gap_max 2 first_gap_flip 3 frame_ms 16.666
+RESULT commit_phase mean_ms 9.233 max_ms 44.815 outside_blanking 581 of 599 blanking_ms 0.786
+RESULT commit_ioctl mean_ms 0.335 max_ms 8.839 n 600
+RESULT fence_wait mean_ms 0.064 max_ms 12.039 n 600
+RESULT check mean_ms 6.434 max_ms 33.468 n 600
+RESULT draw mean_ms 1.784 max_ms 12.890 n 596
+RC 0

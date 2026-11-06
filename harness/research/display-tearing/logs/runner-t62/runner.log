@@ -1,0 +1,17 @@
+2026-11-06 20:10:45 job t62 start, kernel c47 (Image md5 b3938b2633e1bcc7cf9d5262fa66b5d1), fix 825596b48, chunks: base load, done before: 
+2026-11-06 20:10:46 acquired by runner-tearwb-t62-1793995845
+shipped /root/wb/kms-wb 4970f3b2f4b8102099b6f75390b1db17efcac8a99e8bc4a763f8043e56bf0b12
+2026-11-06 20:10:56 client shipped (4970f3b2f4b8102099b6f75390b1db17efcac8a99e8bc4a763f8043e56bf0b12)
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+dtb sun50i-h616-orangepi-zero2.dtb.vdec-c47 md5 aa4d5bbb33e171e32c349e413c68f12c
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+kernel: #50 SMP PREEMPT Fri Nov  6 20:06:51 UTC 2026
+2026-11-06 20:12:55 kernel c47 up (dtb aa4d5bbb33e171e32c349e413c68f12c), writeback present
+2026-11-06 20:12:55 chunk base start
+2026-11-06 20:15:13 chunk base done
+2026-11-06 20:15:13 chunk load start
+2026-11-06 20:19:20 chunk load done
+restore: Image=vmlinuz-7.3.1-edge-sunxi64 dtb=sun50i-h616-orangepi-zero2.dtb.stock
+2026-11-06 20:20:08 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 
+released by runner-tearwb-t62-1793995845
+2026-11-06 20:20:08 job t62 end: 2 of 2 chunks done; results in /home/aruni/orangepizero2/harness/research/display-tearing/logs/runner-t62/results.txt

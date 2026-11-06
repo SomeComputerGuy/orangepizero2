@@ -1,0 +1,209 @@
+DMESG-START 681
+/sys/class/drm/card0-HDMI-A-1 status=connected modes: 1024x768 800x600 800x600 848x480 640x480 
+VE load started pid 6341 (-hwaccel_output_format drm_prime), 69 VE IRQs in 2 s
+== ve-d4: /root/wb/kms-wb -D 4000 tear 600
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT flip 593 fence_error status=-5 reason error
+RESULT tear flips 600 frames_checked 599 ok 599 wrong 0 stale 0 early 0 mixed 0 bad 0 fence_errors 1
+RESULT wb_fail_reasons error 1 missed 0 replaced 0 timeout 0 cancelled 0 wait 0 other 0
+RESULT seq_gap_account gap_flips 77 gap_vblanks 77 late_vblanks 77 deferred_vblanks 0 unexplained 0 client_late 40 commit_slow 37
+RESULT snapshot_latency mean_ms 0.894 max_ms 4.041 n 599
+RESULT event_order events_got 600 unheld 0 unflushed 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+RESULT flip_rate 53.169 seq_gaps 77
+RESULT seq_gap_max 1 first_gap_flip 9 frame_ms 16.666
+RESULT commit_phase mean_ms 10.192 max_ms 18.978 outside_blanking 599 of 599 blanking_ms 0.786
+== ve-rand: /root/wb/kms-wb -D -1 tear 600
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT tear flips 600 frames_checked 600 ok 600 wrong 0 stale 0 early 0 mixed 0 bad 0 fence_errors 0
+RESULT wb_fail_reasons error 0 missed 0 replaced 0 timeout 0 cancelled 0 wait 0 other 0
+RESULT seq_gap_account gap_flips 152 gap_vblanks 152 late_vblanks 152 deferred_vblanks 0 unexplained 0 client_late 108 commit_slow 44
+RESULT snapshot_latency mean_ms 0.938 max_ms 6.829 n 599
+RESULT event_order events_got 600 unheld 0 unflushed 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+RESULT flip_rate 47.859 seq_gaps 152
+RESULT seq_gap_max 1 first_gap_flip 8 frame_ms 16.666
+RESULT commit_phase mean_ms 12.449 max_ms 24.378 outside_blanking 599 of 599 blanking_ms 0.786
+RC 0
+VE load stopped
+== mem-d4: /root/wb/kms-wb -D 4000 tear 600
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT tear flips 600 frames_checked 600 ok 600 wrong 0 stale 0 early 0 mixed 0 bad 0 fence_errors 0
+RESULT wb_fail_reasons error 0 missed 0 replaced 0 timeout 0 cancelled 0 wait 0 other 0
+RESULT seq_gap_account gap_flips 48 gap_vblanks 61 late_vblanks 61 deferred_vblanks 0 unexplained 0 client_late 45 commit_slow 3
+RESULT snapshot_latency mean_ms 0.422 max_ms 5.080 n 599
+RESULT event_order events_got 600 unheld 0 unflushed 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+RESULT flip_rate 54.458 seq_gaps 48
+RESULT seq_gap_max 2 first_gap_flip 3 frame_ms 16.666
+RESULT commit_phase mean_ms 6.347 max_ms 40.482 outside_blanking 599 of 599 blanking_ms 0.786
+RC 0
+== mem-rand: /root/wb/kms-wb -D -1 tear 600
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT tear flips 600 frames_checked 600 ok 600 wrong 0 stale 0 early 0 mixed 0 bad 0 fence_errors 0
+RESULT wb_fail_reasons error 0 missed 0 replaced 0 timeout 0 cancelled 0 wait 0 other 0
+RESULT seq_gap_account gap_flips 50 gap_vblanks 68 late_vblanks 68 deferred_vblanks 0 unexplained 0 client_late 48 commit_slow 2
+RESULT snapshot_latency mean_ms 0.425 max_ms 12.831 n 599
+RESULT event_order events_got 600 unheld 0 unflushed 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+RESULT flip_rate 53.886 seq_gaps 50
+RESULT seq_gap_max 2 first_gap_flip 3 frame_ms 16.666
+RESULT commit_phase mean_ms 9.233 max_ms 44.815 outside_blanking 581 of 599 blanking_ms 0.786
+RC 0
+VE load started pid 7850 (-hwaccel_output_format drm_prime), 69 VE IRQs in 2 s
+== vemem-rand: /root/wb/kms-wb -D -1 tear 600
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT flip 399 fence_error status=-116 reason replaced
+RESULT tear flips 600 frames_checked 599 ok 599 wrong 0 stale 0 early 0 mixed 0 bad 0 fence_errors 1
+RESULT wb_fail_reasons error 0 missed 0 replaced 1 timeout 0 cancelled 0 wait 0 other 0
+RESULT seq_gap_account gap_flips 150 gap_vblanks 150 late_vblanks 150 deferred_vblanks 0 unexplained 0 client_late 100 commit_slow 50
+RESULT snapshot_latency mean_ms 0.989 max_ms 5.350 n 599
+RESULT event_order events_got 600 unheld 0 unflushed 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+RESULT flip_rate 47.988 seq_gaps 150
+RESULT seq_gap_max 1 first_gap_flip 3 frame_ms 16.666
+RESULT commit_phase mean_ms 12.714 max_ms 24.457 outside_blanking 597 of 599 blanking_ms 0.786
+== vemem-rand2: /root/wb/kms-wb -D -1 tear 600
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT flip 51 fence_error status=-116 reason replaced
+RESULT flip 441 fence_error status=-116 reason replaced
+RESULT tear flips 600 frames_checked 598 ok 598 wrong 0 stale 0 early 0 mixed 0 bad 0 fence_errors 2
+RESULT wb_fail_reasons error 0 missed 0 replaced 2 timeout 0 cancelled 0 wait 0 other 0
+RESULT seq_gap_account gap_flips 140 gap_vblanks 142 late_vblanks 140 deferred_vblanks 2 unexplained 0 client_late 90 commit_slow 50
+RESULT snapshot_latency mean_ms 0.972 max_ms 5.750 n 599
+RESULT event_order events_got 600 unheld 0 unflushed 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+RESULT flip_rate 48.505 seq_gaps 140
+RESULT seq_gap_max 2 first_gap_flip 10 frame_ms 16.666
+== vemem-rand3: /root/wb/kms-wb -D -1 tear 600
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT flip 180 fence_error status=-116 reason replaced
+RESULT flip 314 fence_error status=-116 reason replaced
+RESULT flip 385 fence_error status=-116 reason replaced
+RESULT flip 518 fence_error status=-116 reason replaced
+RESULT tear flips 600 frames_checked 596 ok 596 wrong 0 stale 0 early 0 mixed 0 bad 0 fence_errors 4
+RESULT wb_fail_reasons error 0 missed 0 replaced 4 timeout 0 cancelled 0 wait 0 other 0
+RESULT seq_gap_account gap_flips 135 gap_vblanks 136 late_vblanks 135 deferred_vblanks 1 unexplained 0 client_late 85 commit_slow 50
+RESULT snapshot_latency mean_ms 0.934 max_ms 4.294 n 599
+RESULT event_order events_got 600 unheld 0 unflushed 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+VE load stopped
+== kmsg-rand: /root/wb/kms-wb -D -1 tear 600
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT tear flips 600 frames_checked 600 ok 600 wrong 0 stale 0 early 0 mixed 0 bad 0 fence_errors 0
+RESULT wb_fail_reasons error 0 missed 0 replaced 0 timeout 0 cancelled 0 wait 0 other 0
+RESULT seq_gap_account gap_flips 0 gap_vblanks 0 late_vblanks 0 deferred_vblanks 0 unexplained 0 client_late 0 commit_slow 0
+RESULT snapshot_latency mean_ms 0.260 max_ms 0.523 n 599
+RESULT event_order events_got 600 unheld 0 unflushed 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+RESULT flip_rate 60.004 seq_gaps 0
+RESULT seq_gap_max 0 first_gap_flip -1 frame_ms 16.666
+RESULT commit_phase mean_ms 7.333 max_ms 14.897 outside_blanking 579 of 599 blanking_ms 0.786
+RC 0
+VE load stopped
+DUMPS: 0
+ROUND-DONE

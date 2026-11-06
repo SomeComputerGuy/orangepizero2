@@ -1,0 +1,19 @@
+set: checks-i2c
+kernel: 7.3.1 #25 SMP PREEMPT Fri Nov  6 04:18:02 UTC 2026
+Image: vmlinuz-7.3.1-vdec-c27 dtb: sun50i-h616-orangepi-zero2.dtb.vdec-c27
+overlays: user_overlays=sit-i2c3-slave sit-i2c2-ph 
+INFO wired: I2C=0
+CHECK W33-i2c-target-func FAIL no /dev/i2c-3 (i2c3 did not probe with the sit-i2c3-slave overlay)
+INFO evidence 5002c00: dmesg: 
+INFO evidence 5002c00: dt status: okay overlays-applied: symbols-present
+INFO evidence 5002c00: devices_deferred: 
+CHECK W33-i2c-slave-eeprom-bind FAIL no /sys/bus/i2c/devices/3-1064
+CHECK W33-i2c-host-with-target FAIL i2cdetect -y -r 3 rc 1 in 0s: Error: Could not open file `/dev/i2c-3' or `/dev/i2c/3': No such file or directory
+INFO i2cdetect 3 found: 
+CHECK W33-i2c-loopback-16 SKIP NOT TESTED: no jumpers pin 5 PH4<->pin 8 PH2, pin 3 PH5<->pin 10 PH3 detected
+INFO dmesg i2c: [    0.235110] i2c_dev: i2c /dev entries driver|[    0.320950] sun50i-h616-r-pinctrl 7022000.pinctrl: initialized sunXi PIO driver|[    0.335572] sun50i-h616-r-pinctrl 7022000.pinctrl: supply vcc-pl not found, using dummy regulator|[    0.349660] sun50i-h616-pinctrl 300b000.pinctrl: initialized sunXi PIO driver|
+INFO dmesg-warn: [    0.245973] WARNING: drivers/media/mc/mc-device.c:619 at media_device_register_entity+0x194/0x1c0, CPU#1: swapper/0/1
+INFO dmesg-warn: [    0.246256] Call trace:
+INFO dmesg-warn: [    0.246609] WARNING: drivers/media/mc/mc-device.c:619 at media_device_register_entity+0x194/0x1c0, CPU#1: swapper/0/1
+INFO dmesg-warn: [    0.246879] Call trace:
+ROUND-DONE

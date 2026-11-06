@@ -1,0 +1,19 @@
+[    0.001445] pid_max: default: 32768 minimum: 301
+[    0.126198] iommu: Default domain type: Translated
+[    0.130816] NetLabel:  unlabeled traffic allowed by default
+[    0.143818] PCI: CLS 0 bytes, default 64
+[    0.235110] i2c_dev: i2c /dev entries driver
+[    0.245973] WARNING: drivers/media/mc/mc-device.c:619 at media_device_register_entity+0x194/0x1c0, CPU#1: swapper/0/1
+[    0.246256] Call trace:
+[    0.246609] WARNING: drivers/media/mc/mc-device.c:619 at media_device_register_entity+0x194/0x1c0, CPU#1: swapper/0/1
+[    0.246650] Tainted: [W]=WARN
+[    0.246879] Call trace:
+[    0.271692] bridge: filtering via arp/ip/ip6tables is no longer available by default. Update your scripts to load br_netfilter if you need this.
+[    0.320950] sun50i-h616-r-pinctrl 7022000.pinctrl: initialized sunXi PIO driver
+[    0.335572] sun50i-h616-r-pinctrl 7022000.pinctrl: supply vcc-pl not found, using dummy regulator
+[    0.349660] sun50i-h616-pinctrl 300b000.pinctrl: initialized sunXi PIO driver
+[    0.379339] sun8i-dw-hdmi 6000000.hdmi: registered DesignWare HDMI I2C bus driver
+[    0.383335] sun6i-spi 5010000.spi: registered host spi0
+[    0.383680] spi spi0.0: setup mode 0, 8 bits/w, 40000000 Hz max --> 0
+[    1.524455] sun6i-spi 5010000.spi: registered child spi0.0
+[    7.962060] systemd[1]: Queued start job for default target graphical.target.

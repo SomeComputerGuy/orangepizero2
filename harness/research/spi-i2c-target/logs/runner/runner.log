@@ -1,0 +1,26 @@
+2026-11-06 05:00:10 job 31-spi-i2c-target start, done before: 
+2026-11-06 05:00:10 acquired by runner-sit-1793941210
+2026-11-06 05:00:22 wiring: WIRED_SPI=0 WIRED_I2C=0 
+2026-11-06 05:00:26 installing c27 (Image md5 5a5a047651e74096a29b0c153fdb221c)
+shipped /root/stage/sun50i-h616-orangepi-zero2.dtb.c27 a386d7fa2c6246096c4383ded1b6fa566bdc086228381ac18fb6947f8760ad36
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+dtb sun50i-h616-orangepi-zero2.dtb.vdec-c27 md5 fbb509889a4cba869d6985f4e549039a
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+user_overlays=sit-spi1-target sit-spi-gpio-pc
+kernel (spi): #25 SMP PREEMPT Fri Nov  6 04:18:02 UTC 2026
+boot (spi): [    0.000000] alternatives: applying boot alternatives
+boot (spi): [    0.009382] alternatives: applying system-wide alternatives
+boot (spi): dt: symbols present
+2026-11-06 05:02:35 checks spi start
+2026-11-06 05:02:57 chunk spi done: 5 PASS, 0 FAIL, 1 SKIP
+user_overlays=sit-i2c3-slave sit-i2c2-ph
+kernel (i2c): #25 SMP PREEMPT Fri Nov  6 04:18:02 UTC 2026
+boot (i2c): [    0.000000] alternatives: applying boot alternatives
+boot (i2c): [    0.009377] alternatives: applying system-wide alternatives
+boot (i2c): dt: symbols present
+2026-11-06 05:03:57 checks i2c start
+2026-11-06 05:04:19 chunk i2c done: 0 PASS, 3 FAIL, 1 SKIP
+restore: Image=vmlinuz-7.3.1-edge-sunxi64 dtb=sun50i-h616-orangepi-zero2.dtb.stock
+2026-11-06 05:05:06 restored: #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 sun50i-h616-orangepi-zero2.dtb.stock 0 
+released by runner-sit-1793941210
+2026-11-06 05:05:06 job 31-spi-i2c-target end: wiring spi i2c restore 

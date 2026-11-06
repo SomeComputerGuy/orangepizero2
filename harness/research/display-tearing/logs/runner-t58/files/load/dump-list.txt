@@ -1,0 +1,35 @@
+/root/tearwb/load/dump/kmsg-rand/:
+total 36
+drwxr-xr-x 2 root root  4096 Nov  6 18:46 .
+drwxr-xr-x 8 root root  4096 Nov  6 18:46 ..
+-rw-r--r-- 1 root root 26859 Nov  6 18:46 tear.csv
+
+/root/tearwb/load/dump/mem-d4/:
+total 36
+drwxr-xr-x 2 root root  4096 Nov  6 18:45 .
+drwxr-xr-x 8 root root  4096 Nov  6 18:46 ..
+-rw-r--r-- 1 root root 26143 Nov  6 18:45 tear.csv
+
+/root/tearwb/load/dump/mem-rand/:
+total 36
+drwxr-xr-x 2 root root  4096 Nov  6 18:45 .
+drwxr-xr-x 8 root root  4096 Nov  6 18:46 ..
+-rw-r--r-- 1 root root 26309 Nov  6 18:45 tear.csv
+
+/root/tearwb/load/dump/ve-d4/:
+total 36
+drwxr-xr-x 2 root root  4096 Nov  6 18:44 .
+drwxr-xr-x 8 root root  4096 Nov  6 18:46 ..
+-rw-r--r-- 1 root root 26032 Nov  6 18:44 tear.csv
+
+/root/tearwb/load/dump/vemem-rand/:
+total 36
+drwxr-xr-x 2 root root  4096 Nov  6 18:46 .
+drwxr-xr-x 8 root root  4096 Nov  6 18:46 ..
+-rw-r--r-- 1 root root 26773 Nov  6 18:46 tear.csv
+
+/root/tearwb/load/dump/ve-rand/:
+total 36
+drwxr-xr-x 2 root root  4096 Nov  6 18:45 .
+drwxr-xr-x 8 root root  4096 Nov  6 18:46 ..
+-rw-r--r-- 1 root root 26263 Nov  6 18:45 tear.csv

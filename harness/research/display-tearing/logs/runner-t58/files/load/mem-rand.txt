@@ -1,0 +1,34 @@
+RESULT selftest pure step 1 verdict OK want OK boundary -1 bad_rows 0
+RESULT selftest pure step 32 verdict OK want OK boundary -1 bad_rows 0
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT writeback_cap 1
+RESULT writeback_connectors 1
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT wb_encoder id=76 possible_crtcs=0x3 possible_clones=0x3
+RESULT wb_reaches_crtc 1
+RESULT crtc 52 plane 42 wb_connector 77
+RESULT wb_props crtc=21 fb=78 fence=80
+RESULT wb_formats XR24 AR24 XB24 AB24 RX24 RA24 BX24 BA24 RG24 BG24 XR30 NV12 NV21 YU12
+RESULT wb_format_offered 1
+RESULT tear flips 600 frames_checked 600 ok 600 wrong 0 stale 0 early 0 mixed 0 bad 0 fence_errors 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+RESULT flip_rate 48.768 seq_gaps 110
+RESULT seq_gap_max 2 first_gap_flip 3 frame_ms 16.666
+RESULT commit_phase mean_ms 11.149 max_ms 40.298 outside_blanking 583 of 599 blanking_ms 0.786
+RESULT commit_ioctl mean_ms 0.511 max_ms 8.385 n 600
+RESULT fence_wait mean_ms 0.090 max_ms 12.301 n 600
+RESULT check mean_ms 8.853 max_ms 36.148 n 600
+RESULT draw mean_ms 2.628 max_ms 14.346 n 596
+RC 0

@@ -1,0 +1,15 @@
+2026-11-06 09:13:59 job wb41 start, kernel c35 (Image md5 f3ec40c60dfbc0bfa94fdcf53ec9169b), writeback commit 30706dcc8, chunks: wb, done before: 
+2026-11-06 09:13:59 acquired by runner-wb-wb41-1793956439
+shipped /root/wb/kms-wb a30d348af2a096176449a5a7e40633fd9b2931f573b93a763796ac9c4421d0d4
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+dtb sun50i-h616-orangepi-zero2.dtb.vdec-c35 md5 fbb509889a4cba869d6985f4e549039a
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+kernel: #33 SMP PREEMPT Fri Nov  6 08:52:49 UTC 2026
+2026-11-06 09:15:57 kernel dtb: c35 (fbb509889a4cba869d6985f4e549039a)
+2026-11-06 09:16:02 kernel writeback: present (/sys/class/drm/card0-Writeback-1 )
+2026-11-06 09:16:02 chunk wb start
+2026-11-06 09:18:25 chunk wb done
+restore: Image=vmlinuz-7.3.1-edge-sunxi64 dtb=sun50i-h616-orangepi-zero2.dtb.stock
+2026-11-06 09:19:13 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 sun50i-h616-orangepi-zero2.dtb.stock 
+released by runner-wb-wb41-1793956439
+2026-11-06 09:19:13 job wb41 end: 1 of 1 chunks done; results in /home/aruni/orangepizero2/harness/research/de33-writeback/logs/runner-wb41/results.txt

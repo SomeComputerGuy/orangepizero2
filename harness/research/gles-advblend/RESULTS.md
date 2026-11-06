@@ -7,7 +7,8 @@ State file of the gles-advblend task (agent 2026-11-05). Memory: project-gles-ad
 "results differ"): 4 x 11 fullscreen draws with different advanced blend equations on a 1024x1024 RGBA8 FBO, no barrier
 (GL_KHR_blend_equation_advanced_coherent is advertised), one fragment job. First pixel right, not all pixels equal.
 Passes with `MESA_EXTENSION_OVERRIDE=-GL_KHR_blend_equation_advanced_coherent` (glBlendBarrier = one fragment job per
-draw), `multiplySequence` (7 draws) passes, the 86 other cases (one dependent draw per pixel) pass. No GPU timeouts.
+draw), `multiplySequence` (7 draws) passes, the 86 other cases (one dependent draw per pixel) pass. ("No GPU
+timeouts" was wrong: job 48 shows one `gpu sched timeout` per failing run; see "Root cause (job 48)".)
 Rule: the extension stays on; no cap hides it.
 
 ## Host reproduction (no board)
@@ -55,7 +56,58 @@ sample_variables, builtin_var), `khr-ms` (199), `deqp-fbo` (118), `gles3-blend-a
 CTS chunks are compared with the baseline harness/analysis/gpu/cts/<suite>/results.csv (compare-<c>.txt, REGRESSIONS=0
 required). Results: logs/runner/.
 
+## Root cause (job 48, stock kernel #17, 2026-11-06): the fragment job outlives the 500 ms watchdog
+Job 48 (done/48-gles-advblend.summary.md, logs/runner/) ran the fork 02df5721016 (contains dc7266d584b) on the STOCK
+kernel #17, which lacks the panfrost soft-stop/resume series. Data:
+- Every non-barrier 1024x1024 mixed run FAILS, system Mesa AND fork, with every knob combination (fork-mixed 290432,
+  -2 303600, -3 283312, knob-* 285136-298400, sys-mixed 199056 wrong pixels of 1048576). The knobs make no difference:
+  dc7266d584b neither fixes nor causes anything here (its theory was wrong).
+- The wrong pixels all have the value **0,0,0,0** = never written (the CTS clear/first draw gives 32,32,32,255 and any
+  blend result is opaque), in whole 16x16 tiles, as one contiguous block of the frame (the lower-right part of the
+  tile walk) plus a few partial tiles at its edge. That is a fragment job stopped part-way, not a blend/coherency error.
+- dmesg-repro: 13 x `gpu sched timeout, js=0, config=0x7b00/0x7300, status=0x8, head=tail=...` (js 0 = fragment,
+  status 0x8 = ACTIVE: still running when the 500 ms panfrost watchdog fired; the reset throws away the rest of the
+  frame) for 14 failing runs, khr-adv 1 (= mixedSequence), no js fault, no page fault.
+- The numbers fit a job that is simply too long: 72 % of the tiles done at 500 ms -> the 44-draw job needs ~0.69 s
+  (fork; system Mesa 81 % -> ~0.62 s). Predicted for x8 (88 draws, ~1.38 s): 1 - 0.5/1.38 = 64 % lost; measured
+  676544/1048576 = 64.5 %. 256x256 (1/16 of the work, ~45 ms) PASS, multiplySequence (7 draws, ~0.11 s) PASS, barrier
+  runs (one fragment job per draw, each ~16 ms) PASS. Cost per fragment: 44 x 1 M fragments of an LD_TILE + advanced
+  blend shader in 0.69 s = ~67 M fragment-shader invocations/s on the single G31 core: plausible, no hang.
+- So the failure is the kernel's job watchdog, the same mechanism as the OpenCL long jobs and the VK spirv_assembly
+  fragment cases (impl-opencl-fixes.md "Root cause: panfrost job timeout"). That is fixed by the soft-stop/resume series
+  in test-cumulative (e544ddb00 + 0b7e3a208 + e17629bba, c27+; job 28 PASS, job 46 tdim PASS on c38): a long job is
+  soft-stopped at a tile boundary and resumed, never reset. No Mesa change is needed or made; the extension stays on.
+- deqp-fbo: 3 timeouts with the same head 0xa1265c0, 512 ms apart (one job resubmitted after each reset): most likely
+  dEQP-GLES31.functional.fbo.no_attachments.maximums.all (no-attachment framebuffer at the maximum size, the one Fail of
+  that chunk, also Fail in the baseline): another long job, expected FIXED on c38. Not proven (results.csv has no
+  per-case times).
+- Fork vs system Mesa: the fork is ~10 % slower on this job (0.69 vs 0.62 s; knob-all = old descriptors is as slow, so
+  not dc7266d584b; build-cl is debugoptimized + b_ndebug). Perf, deferred.
+- Job 48's version check looked for the literal `git-dc7266d584`; the version string carries the fork HEAD
+  (`git-02df572101`). Fixed: the package checks `git merge-base --is-ancestor dc7266d584b HEAD` (runner.log `fork: ...
+  (contains dc7266d584b)`) and that build-cl is built from mesa-cl HEAD (exit 1 "stale build" otherwise).
+
+## Board validation 2: runner job harness/runner-queue/50-gles-advblend.md (queued 2026-11-06)
+Same package (runner/gles-advblend.sh, HANDOFF.md, checks 1-7), now: installs the newest cumulative kernel (c38+),
+checks the soft-stop series (ancestry of e17629bba + panfrost.ko md5), restores the stock kernel with
+vdec-perf/restore-kernel.sh; ftrace count of panfrost_job_timedout per chunk (trace-<c>.txt) and per repro run (`ms=`
+wall time, `TO=` cumulative watchdog hits on every TAG line); `gpu sched timeout` in repro/khr-adv is now a FAIL check.
+Results: logs/runner2/ (job 48's stay in logs/runner/).
+
 ## Open / next step
+- Job 50. Fresh agent after it:
+  - fork-mixed* PASS, TO > 0, no `gpu sched timeout`, mixedSequence Pass -> DONE (kernel series = fix; record it in
+    impl-gpu-spec.md and the memory file). Then look at the knob/sys lines: if sys-mixed and knob-all PASS too,
+    dc7266d584b is not needed for this test -> revert it in the fork (keeps the fork closer to upstream; its descriptor
+    changes are then unproven) and drop the knobs; if a knob line FAILS while fork-mixed passes, that descriptor matters:
+    keep the commit and say why.
+  - fork-mixed FAIL with TO > 0 and 0,0,0,0 tiles -> the resume path loses the rest of a fragment job: kernel
+    (panfrost_job.c soft-stop/resume of js 0; check the job-chain head/tail after soft-stop) in a fix/* worktree.
+  - fork-mixed FAIL with TO = 0 and non-zero wrong values -> a real coherency problem after all: then pandecode the
+    board job (PAN_MESA_DEBUG=trace) as planned below.
+- Shipping: the image kernel must carry the soft-stop series (it is in test-cumulative, not upstream).
+
+Older notes (before job 48):
 - Waiting for job 15. Fresh agent after it: copy the TAG lines and the compare summaries here; if `fork-mixed` still
   fails, the bad-tile map in files/repro/repro-fork-mixed.txt and the knob lines say what is left (then look at
   the clear-colour tile init vs preload, and at pandecode of the board job with PAN_MESA_DEBUG=trace via the repro).

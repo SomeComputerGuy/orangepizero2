@@ -1,21 +1,31 @@
 #!/bin/bash
-# Runner package for the GLES advanced-blend coherency fix (fork panfrost-opencl-fixes dc7266d584b): gles-advblend.sh
-# Self-contained: board lock (fresh owner name per acquire), deploy the cross-built fork to /root/opiz2-mesa/gl1 (the
-# system Mesa and /root/opiz2-mesa/cl* stay untouched), run the chunks (each at most ~15 min) on whatever kernel is
-# booted under a stall watchdog, copy the results off after every chunk, compare the CTS chunks with the baseline
-# (harness/analysis/gpu/cts/<suite>/results.csv), release. No kernel change: nothing to restore. Between chunks the lock
-# is handed over if another session waits. Resumable: re-running the same command skips chunks listed in $OUT/state.
+# Runner package for KHR-GLES31 blend_equation_advanced test_coherency.mixedSequence: gles-advblend.sh (job 50)
+# Job 48 (stock kernel #17) showed the real cause: the one fragment job of the 44 fullscreen advanced-blend draws at
+# 1024x1024 runs ~0.7 s, the 500 ms panfrost watchdog resets the GPU ("gpu sched timeout ... status=0x8") and the tiles
+# not yet written stay 0. The panfrost soft-stop/resume series (e544ddb00, 0b7e3a208, e17629bba; test-cumulative c27+)
+# resumes such a job instead. This job runs the same chunks on the NEWEST cumulative kernel.
+# Self-contained: board lock (fresh owner name per acquire), install the newest cumulative kernel with the one-shot
+# fallback armed (harness/research/vdec-perf/install-kernel.sh), check it carries the soft-stop series (git ancestry +
+# panfrost.ko md5), deploy the cross-built fork to /root/opiz2-mesa/gl1 (system Mesa and /root/opiz2-mesa/cl* untouched),
+# run the chunks (each at most ~15 min) under a stall watchdog with an ftrace count of panfrost_job_timedout, copy the
+# results off after every chunk, compare the CTS chunks with the baseline (harness/analysis/gpu/cts/<suite>/results.csv),
+# restore the stock kernel (vdec-perf/restore-kernel.sh: Image, DTB, modules), release. Between chunks the lock is handed
+# over (stock kernel restored first) if another session waits. Resumable: re-running the same command skips chunks
+# listed in $OUT/state.
 # Exit 0 = all chunks ran (pass/fail is judged from the results, see HANDOFF.md); 2 = blocked (reason in $OUT/BLOCKED);
 # 1 = setup or lock error.
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/gles-advblend; MW=$H/mesa-work; SSH=$H/harness/ssh.sh
-J=advblend
+J=advblend2; V=$H/harness/research/vdec-perf
 K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
-OUT=$S/logs/runner; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED
+OUT=$S/logs/runner2; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED
 CHUNKS="repro khr-adv deqp-fbfetch deqp-ms khr-ms deqp-fbo gles3-blend-a gles3-blend-b"; CT=870; STALL=870
-FORK=dc7266d584b                          # mesa-cl commit the build must contain (the advanced-blend fix)
+FORK=dc7266d584b                          # mesa-cl commit the build must contain (descriptor change + debug knobs)
+KFIX=e17629bba                            # kernel: soft-stop series HEAD (contains e544ddb00 + 0b7e3a208)
+CK=$H/kernel-check/cumulative-kernels.txt; T=$(tail -1 $CK | cut -d' ' -f1); KC=$(tail -1 $CK | cut -d' ' -f3)
+want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || exit 1
 LIB=$MW/build-cl/src/gallium/targets/dri/libgallium-26.2.4.so
-R=/root/oclfix/advblend                   # board results dir
+R=/root/oclfix/advblend2                  # board results dir (fresh name: job 48's results stay apart)
 D=/root/cts/deqp-gles                     # board dEQP/glcts install (deqp-run.py, glcts/, gles3/, gles31/, mustpass/)
 FORKENV='. /root/opiz2-mesa/gl1/env.sh; export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/root/cts/lib EGL_PLATFORM=surfaceless MESA_SHADER_CACHE_DISABLE=true'
 SYSENV='export LD_LIBRARY_PATH=/root/cts/lib EGL_PLATFORM=surfaceless MESA_SHADER_CACHE_DISABLE=true'
@@ -25,15 +35,33 @@ log() { echo "$(date '+%F %T') $*" | tee -a $OUT/runner.log; }
 acquire() { OWN=runner-$J-$(date +%s); out=$($H/harness/board-lock.sh acquire $OWN) || { log "lock: $out"; exit 1; }
   case $out in *"already held"*) log "lock already held by $OWN"; exit 1;; esac; log "$out"; }
 release() { [ -n "$OWN" ] && $H/harness/board-lock.sh release $OWN | tee -a $OUT/runner.log; OWN=""; }
-blocked() { log "BLOCKED: $*"; echo "$*" > $OUT/BLOCKED; release; exit 2; }
+waitup() { for i in $(seq 1 60); do sleep 5; $SSH -n true 2>/dev/null && return 0; done; return 1; }
+restore() { $V/restore-kernel.sh 2>&1 | tail -1 | tee -a $OUT/runner.log   # Image, DTB (.stock), modules (7.3.1.good); reboots
+  sleep 15; if waitup; then log "restored: $($SSH -n 'uname -rv; readlink /boot/Image' | tr '\n' ' ')"
+  else log "BOARD UNREACHABLE after restore reboot"; echo "board unreachable after restore" > $OUT/BLOCKED; fi; }
+blocked() { log "BLOCKED: $*"; echo "$*" > $OUT/BLOCKED; restore; release; exit 2; }
+boot_trial() { # newest cumulative kernel with the soft-stop series, verified by Image and panfrost.ko md5
+  $SSH -n true || { log "BLOCKED: board does not answer ssh"; echo "board does not answer ssh" > $OUT/BLOCKED; release; exit 2; }
+  [ "$($SSH -n 'readlink /boot/Image')" = vmlinuz-7.3.1-edge-sunxi64 ] || blocked "board not on the stock image kernel at start"
+  $V/install-kernel.sh $T 2>&1 | tail -3 | tee -a $OUT/runner.log
+  $SSH -n 'sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'; sleep 15
+  waitup || { log "trial kernel did not come up (the fallback reverts on the next boot)"; echo "trial boot failed" > $OUT/BLOCKED; release; exit 2; }
+  [ "$($SSH -n 'md5sum < /boot/$(readlink /boot/Image) | cut -c1-32')" = "$want" ] || blocked "$T Image md5 mismatch after install"
+  $SSH -n 'touch /run/vdec-ok; uname -v' | sed 's/^/kernel: /' | tee -a $OUT/runner.log
+  local d=$(mktemp -d) ws hs; tar xzf $H/kernel-check/vdec-serve/modules-$T.tgz -C $d 7.3.1/kernel/drivers/gpu/drm/panfrost/panfrost.ko
+  ws=$(md5sum < $d/7.3.1/kernel/drivers/gpu/drm/panfrost/panfrost.ko | cut -c1-32); rm -rf $d
+  hs=$($SSH -n 'md5sum < $(modinfo -n panfrost) | cut -c1-32')
+  [ -n "$ws" ] && [ "$ws" = "$hs" ] && log "kernel fix: present ($T contains $KFIX, panfrost.ko md5 $hs)" || blocked "panfrost.ko on the board ($hs) is not the $T module ($ws)"; }
 others_waiting() { ls $H/harness/queue/board.wait 2>/dev/null | grep -v "\.$OWN\." | grep -q .; }
 # host-side preconditions (no board needed)
 [ -f $LIB ] || { log "missing build: $LIB (run: . mesa-work/tools/env-cl.sh; ninja -C mesa-work/build-cl)"; exit 1; }
 [ -f $S/host/advblend-arm64 ] || { log "missing $S/host/advblend-arm64 (see RESULTS.md for the cross-compile line)"; exit 1; }
+git -C $H/wt-cumulative merge-base --is-ancestor $KFIX "$KC" 2>/dev/null || { log "newest cumulative kernel $T ($KC) lacks the soft-stop series $KFIX"; exit 1; }
 head=$(git -C $MW/mesa-cl rev-parse --short=11 HEAD)
 git -C $MW/mesa-cl merge-base --is-ancestor $FORK HEAD 2>/dev/null || { log "mesa-cl HEAD $head does not contain $FORK"; exit 1; }
 [ -z "$(git -C $MW/mesa-cl status --short -- src 2>/dev/null)" ] || log "note: mesa-cl has uncommitted changes under src/"
-strings $LIB | grep -q "Mesa 26.2.4 (git-${FORK:0:10}" || log "note: $LIB version string is not git-${FORK:0:10} (stale build?)"
+# the build must be of mesa-cl HEAD (which contains $FORK): version string git-<HEAD>, not git-<FORK> (job 48's check bug)
+strings $LIB | grep -q "Mesa 26.2.4 (git-${head:0:10})" || { log "stale build: $LIB is not built from mesa-cl HEAD $head (run: . mesa-work/tools/env-cl.sh; ninja -C mesa-work/build-cl)"; exit 1; }
 log "fork: $head (contains $FORK), libgallium $(md5sum < $LIB | cut -c1-32)"
 # caselists (host side, from the mustpass lists)
 mkdir -p $OUT/caselists
@@ -46,8 +74,6 @@ grep -E '^dEQP-GLES3\.functional\.fragment_ops\.blend\.' $M/gles3-main.txt | awk
 grep -E '^dEQP-GLES3\.functional\.fragment_ops\.blend\.' $M/gles3-main.txt | awk 'NR%2==0' > $OUT/caselists/gles3-blend-b.txt
 for c in deqp-fbfetch deqp-ms deqp-fbo khr-adv khr-ms gles3-blend-a gles3-blend-b; do n=$(wc -l < $OUT/caselists/$c.txt); [ "$n" -gt 0 ] || { log "empty caselist $c"; exit 1; }; done
 setup() { # deploy the fork to /root/opiz2-mesa/gl1, the repro binary and the caselists; check the board has the CTS
-  $SSH -n true || blocked "board does not answer ssh"
-  $SSH -n 'uname -v' | sed 's/^/kernel: /' | tee -a $OUT/runner.log
   MESA_ENV=$MW/tools/env-cl.sh $MW/tools/deploy.sh build-cl gl1 2>&1 | tail -2 | tee -a $OUT/runner.log
   want=$(md5sum < $MW/deploy/gl1/lib/libgallium-26.2.4.so | cut -c1-32)
   have=$($SSH -n 'md5sum < /root/opiz2-mesa/gl1/lib/libgallium-26.2.4.so | cut -c1-32')
@@ -61,7 +87,8 @@ chunk_script() { # print the board script of a chunk; it ends with ROUND-DONE
   local cmd
   case $1 in
     repro) cmd="cd $R
-r() { tag=\$1; shift; $R/advblend \"\$@\" > $R/repro-\$tag.txt 2>&1; echo \"TAG \$tag: \$(grep -E '^(renderer|first pixel|RESULT)' $R/repro-\$tag.txt | tr '\n' ' ')\"; }
+r() { tag=\$1; shift; t0=\$(date +%s%N); $R/advblend \"\$@\" > $R/repro-\$tag.txt 2>&1; t1=\$(date +%s%N)
+  echo \"TAG \$tag: \$(grep -E '^(renderer|first pixel|RESULT)' $R/repro-\$tag.txt | tr '\n' ' ') ms=\$(( (t1-t0)/1000000 )) TO=\$(grep -c panfrost_job_timedout /sys/kernel/tracing/trace 2>/dev/null)\"; }
 ( $SYSENV; r sys-mixed --size 1024; r sys-mixed-barrier --size 1024 --barrier )
 ( $FORKENV
   r fork-mixed --size 1024; r fork-mixed-2 --size 1024; r fork-mixed-3 --size 1024; r fork-multiply --seq multiply --size 1024
@@ -85,9 +112,13 @@ r() { tag=\$1; shift; $R/advblend \"\$@\" > $R/repro-\$tag.txt 2>&1; echo \"TAG 
   cat <<EOS
 cd /root; uname -v
 n1=\$(dmesg | wc -l); echo DMESG-START \$n1
+TR=/sys/kernel/tracing; mountpoint -q \$TR || mount -t tracefs nodev \$TR 2>/dev/null
+echo nop > \$TR/current_tracer 2>/dev/null; echo > \$TR/trace 2>/dev/null
+echo panfrost_job_timedout > \$TR/set_ftrace_filter 2>/dev/null && echo function > \$TR/current_tracer && echo 1 > \$TR/tracing_on && echo TRACE-ON || echo TRACE-OFF
 $cmd
 echo CHUNK-RC \$?
-dmesg | tail -n +\$((n1+1)) | grep -E 'panfrost|gpu sched|js fault|Soft-stop|Page fault|Unhandled' | tail -40 | sed 's/^/DMESG: /'
+dmesg | tail -n +\$((n1+1)) | grep -E 'panfrost|gpu sched|js fault|Soft-stop|Hard-stop|Page fault|Unhandled|Oops|Unable to handle' | tail -60 | sed 's/^/DMESG: /'
+echo "TRACE: TIMEDOUT \$(grep -c panfrost_job_timedout \$TR/trace 2>/dev/null)"; echo nop > \$TR/current_tracer 2>/dev/null
 echo ROUND-DONE
 EOS
 }
@@ -123,17 +154,17 @@ run_chunk() { # run_chunk <chunk>: remote command under timeout + stall watchdog
     *) scp -q -r "${K[@]}" root@10.56.0.107:$R/$c/. $OUT/files/$c/ 2>/dev/null; rm -f $OUT/files/$c/*.qpa
        case $c in khr-*) compare $c gles31-khr-main ;; gles3-*) compare $c gles3-main ;; *) compare $c gles31-main ;; esac ;;
   esac
-  grep '^DMESG: ' $f > $OUT/dmesg-$c.txt
+  grep '^DMESG: ' $f > $OUT/dmesg-$c.txt; grep '^TRACE: ' $f > $OUT/trace-$c.txt
   grep -q ROUND-DONE $f && { echo $c >> $OUT/state; log "chunk $c done"; } || log "chunk $c ended without ROUND-DONE"; }
 [ "${1:-}" = "--print" ] && { for c in $CHUNKS; do echo "## $c"; chunk_script $c; done; exit 0; }
 log "job $J start, chunks: $CHUNKS, done before: $(tr '\n' ' ' < $OUT/state)"
 trap 'release' EXIT
-acquire; setup
+acquire; boot_trial; setup
 for c in $CHUNKS; do
   grep -qx "$c" $OUT/state && continue
-  if others_waiting; then log "another session waits: handing over the lock"; release; acquire; setup; fi
+  if others_waiting; then log "another session waits: handing over the lock"; restore; release; acquire; boot_trial; setup; fi
   log "chunk $c start"; run_chunk $c
 done
-release
+restore; release
 log "job $J end: $(wc -l < $OUT/state) of $(echo $CHUNKS | wc -w) chunks done"
 [ -f $OUT/BLOCKED ] && exit 2; exit 0

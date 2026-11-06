@@ -34,10 +34,13 @@ and dmesg-1.txt.
 ## Job afbc: AFBC capture md5 via the GPU (about 40 min, 5 chunks: vp9p2 hevc10 avs2 hevc8 vp9p0)
 Command: `bash harness/research/vdec-perf/runner/vdec-job.sh afbc`
 
-Precondition: the Mesa fork must be at /root/opiz2-mesa/main on the board.
-- If any chunk prints `[env] BLOCKED`, stop and report "afbc blocked: Mesa fork missing on the board". Do not count
-  this as a FAIL.
-- On c9 (2026-11-05) the system Mesa 26.2.4 was used instead, and every EGL import failed with 0x3009.
+Mesa: the script deploys the Mesa fork itself (mesa-work/build-arm64, Mesa 27.0.0-devel) to /root/opiz2-mesa/main
+after the kernel boots (system Mesa untouched) and checks the libgallium md5 on the board. Job 47 was blocked because
+nothing deployed it.
+- Check 0 (runner.log): a line `deployed main ok (mesa <sha>, libgallium-27.0.0-devel.so md5 <md5>)` -> PASS; report
+  it. Exit 1 with "missing build" / "not built from mesa HEAD" before the lock = package not ready: report BLOCKED with
+  that line (do not build Mesa yourself). `BLOCKED: main deploy mismatch` -> BLOCKED, report the line.
+- If a chunk still prints `[env] BLOCKED`, report "afbc blocked: Mesa fork missing on the board" (BLOCKED, not FAIL).
 
 Checks, per `chunk-<case>.txt`:
 - PASS if the `[gl] GL_RENDERER` line does not contain `Mesa 26.2.4-1ubuntu1`, i.e. the system Mesa is not in use.

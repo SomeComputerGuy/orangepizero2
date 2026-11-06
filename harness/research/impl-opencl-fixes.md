@@ -110,6 +110,10 @@ raw logs in `mesa-work/oclfix/b*/`.
   working feature. Options for the owner: (a) keep as is (1 known fail), (b) add a separate panfrost cap so only
   KHR_blend_equation_advanced_coherent is dropped on v7.0, (c) dig further (pandecode of the fragment job, compare with
   the Arm blob trace).
+- **Update 2026-11-06 (job 48, gles-advblend/RESULTS.md):** the "no GPU timeouts" above was wrong. The wrong pixels
+  are 0,0,0,0 (never written) and the run logs one `gpu sched timeout ... status=0x8` (job still active): the single
+  fragment job of 44 fullscreen draws takes ~0.7 s and the 500 ms watchdog resets the GPU mid-frame (same cause as the
+  CL long jobs, root-cause section below). On the stock kernel; the soft-stop/resume series should fix it: job 50.
 
 ### 7. Still failing, analysed but not fixed
 - **Math (wimpy, 50 subtests).** All the baseline "huge ulp / NaN / 0xffffdead at index 0" errors are wrong *whole
@@ -378,6 +382,23 @@ Inputs: done/45-panfrost-img3d.summary.md (c38, fork /root/opiz2-mesa/cl = 9049a
   in panfrost_job.c (soft-stop/resume path).
 - Out of scope, open for the next agent: the INSTR_INVALID_ENC js faults (job 14 subgroup cases d2-ballot, d3-elect,
   d7-vote, d8-cts-elect; job 09 samplerless float 1Dbuffer, CL_A UNORM_INT8 1Dbuffer, 1 of 235).
+
+### Job 46 on c38: RGB fix and tdim DONE (2026-11-06, agent gles-advblend-3)
+
+Input: done/46-rgb-tdim.summary.md, logs/runner-rgbtdim/ (c38, A = cl2 dc7266d584b, B = cl3 02df5721016).
+- **RGB fix 02df5721016: PASS, done.** Old Mesa (A) faulted on the edge repro in the sampled cases: rgb8s (1 fault per
+  run, A and A2) and rgb32is (2 + 1 faults; `fault bo: below ... fault at end+0x0, label "Texture format=r32g32b32_sint
+  extent=25x128x32"` = a read exactly at the end of the 96-bit texture BO, JOB_BUS_FAULT js=1, results lost). New Mesa
+  (B, B2): 0 faults in all 6 cases; CTS 2Darray RGB8 UNORM/SNORM A/B all PASS F=0; 3D RGB32I on B PASSED 11 of 11,
+  F=0. The plain-read cases rgb8/rgb32i never faulted (only the clamped/sampled reads do), so the verdict rule said
+  MIXED for "over-fetch confirmed"; the end+0x0 fault label settles it. Keep the fork commit; note it for shipping.
+- **TDIM: PASS** (quick_2d_explicit_local x3, quick_3d_explicit_local in 845 s, quick_3d_implicit_local), 0 `gpu sched
+  timeout` / Soft-stop / Hard-stop lines. The PROG lines show done rising with run (3D explicit: 1279 watchdog hits,
+  each one a soft-stop + resume) = slow jobs, no never-ending job.
+- The job-45 tdim2 lost job (`gpu sched timeout ... status=0x0` after soft-stops) did not recur in 3 runs and 444 jobs:
+  **unconfirmed**, no kernel change; reopen only if it shows again (then read the job/fence trace).
+- Still open (next agent, out of this scope): INSTR_INVALID_ENC js faults (job 14 subgroup cases, job 09 samplerless
+  float 1Dbuffer).
 
 ## Full rerun on the fork (commit 9049a3c5f2c): PAUSED 2026-11-05 ~18:33 (user credit limit)
 

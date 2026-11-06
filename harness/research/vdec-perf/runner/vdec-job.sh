@@ -33,7 +33,7 @@ waitup() { for i in $(seq 1 60); do sleep 5; $SSH -n true 2>/dev/null && return 
 acquire() { OWN=runner-$J-$(date +%s); out=$($H/harness/board-lock.sh acquire $OWN) || { log "lock: $out"; exit 1; }
   case $out in *"already held"*) log "lock already held by $OWN"; exit 1;; esac; log "$out"; }
 release() { [ -n "$OWN" ] && $H/harness/board-lock.sh release $OWN | tee -a $OUT/runner.log; OWN=""; }
-restore() { $SSH -n 'ln -sfn vmlinuz-7.3.1-edge-sunxi64 /boot/Image; rm -f /boot/vdec-trial; sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'
+restore() { $S/restore-kernel.sh 2>&1 | tail -1 | tee -a $OUT/runner.log   # Image, DTB (.stock) and modules (7.3.1.good), reboots
   sleep 15; if waitup; then log "restored: $($SSH -n 'uname -rv; readlink /boot/Image' | tr '\n' ' ')"
   else log "BOARD UNREACHABLE after restore reboot"; echo "board unreachable after restore" > $OUT/BLOCKED; fi; }
 blocked() { log "BLOCKED: $*"; echo "$*" > $OUT/BLOCKED; restore; release; exit 2; }
@@ -45,6 +45,21 @@ boot_trial() {
   [ "$($SSH -n 'md5sum < /boot/$(readlink /boot/Image) | cut -c1-32')" = "$want" ] || blocked "$T Image md5 mismatch after install"
   $SSH -n 'touch /run/vdec-ok; uname -v' | sed 's/^/kernel: /' | tee -a $OUT/runner.log
   scp -q "${K[@]}" $S/ve-timeline.sh $S/$BQ root@10.56.0.107:/root/vp/ || blocked "scp of the board script failed"; }
+# afbc: afbc-gpu-check needs the Mesa fork (mesa-work/mesa, build-arm64, 27.0-devel) at /root/opiz2-mesa/main; the system
+# Mesa 26.2.4 rejects every AFBC YUV dma-buf import (EGL 0x3009). Job 47 was blocked because nothing deployed it: the job
+# now deploys it itself (rsync, side by side; system Mesa untouched) and checks the libgallium md5 on the board.
+MW=$H/mesa-work; MLIB=libgallium-27.0.0-devel.so
+if [ $J = afbc ]; then   # host-side precondition: the build exists and is current (no rebuild inside the job)
+  [ -f $MW/build-arm64/src/gallium/targets/dri/$MLIB ] || { echo "missing build: mesa-work/build-arm64 $MLIB (run: . mesa-work/tools/env.sh; ninja -C mesa-work/build-arm64)"; exit 1; }
+  mh=$(git -C $MW/mesa rev-parse --short=10 HEAD)
+  strings $MW/build-arm64/src/gallium/targets/dri/$MLIB | grep -q "(git-$mh)" || { echo "mesa-work/build-arm64 is not built from mesa HEAD $mh (run: . mesa-work/tools/env.sh; ninja -C mesa-work/build-arm64)"; exit 1; }
+fi
+deploy_main() { # afbc: fork build -> /root/opiz2-mesa/main, verified by md5
+  $MW/tools/deploy.sh build-arm64 main 2>&1 | tail -1 | tee -a $OUT/runner.log
+  local want=$(md5sum < $MW/deploy/main/lib/$MLIB | cut -c1-32)
+  local have=$($SSH -n "md5sum < /root/opiz2-mesa/main/lib/$MLIB | cut -c1-32")
+  [ -n "$want" ] && [ "$want" = "$have" ] && $SSH -n 'test -f /root/opiz2-mesa/main/env.sh' || blocked "main deploy mismatch (host $want board $have) or env.sh missing"
+  log "deployed main ok (mesa $(git -C $MW/mesa rev-parse --short=11 HEAD), $MLIB md5 $have)"; }
 others_waiting() { ls $H/harness/queue/board.wait 2>/dev/null | grep -v "\.$OWN\." | grep -q .; }
 run_chunk() { # run_chunk <chunk>: remote board script under timeout + stall watchdog; output to $OUT/chunk-<c>.txt
   local c=$1 f=$OUT/chunk-$1.txt e="$ENV"; [ $J = afbc ] && e="$e CASES=$c"
@@ -59,10 +74,10 @@ run_chunk() { # run_chunk <chunk>: remote board script under timeout + stall wat
   grep -q ROUND-DONE $f && { echo $c >> $OUT/state; log "chunk $c done"; } || log "chunk $c ended without ROUND-DONE"; }
 log "job $J start, kernel $T (Image md5 $want), chunks: $CHUNKS, done before: $(tr '\n' ' ' < $OUT/state)"
 trap 'release' EXIT
-acquire; boot_trial
+acquire; boot_trial; [ $J = afbc ] && deploy_main
 for c in $CHUNKS; do
   grep -qx "$c" $OUT/state && continue
-  if others_waiting; then log "another session waits: handing over the lock"; restore; release; acquire; boot_trial; fi
+  if others_waiting; then log "another session waits: handing over the lock"; restore; release; acquire; boot_trial; [ $J = afbc ] && deploy_main; fi
   log "chunk $c start"; run_chunk $c
 done
 restore; release

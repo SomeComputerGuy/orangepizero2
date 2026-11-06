@@ -46,6 +46,11 @@ The board jobs are packaged in runner/ (vdec-job.sh + HANDOFF.md). Job files: ha
      import (EGL 0x3009), so no frame was compared. This is an environment problem, not a VE result.
    - Job 02-afbc blocks cleanly while the fork is missing. Deploying the Mesa fork to the board is for the GPU/Mesa
      owner.
+   - 2026-11-06: job 47 (c38) BLOCKED the same way. Package fixed: vdec-job.sh afbc now deploys the fork itself
+     (mesa-work/build-arm64 -> /root/opiz2-mesa/main via mesa-work/tools/deploy.sh, libgallium-27.0.0-devel.so md5
+     checked on the board, runner.log `deployed main ok`; exits 1 before the lock if build-arm64 is not built from
+     mesa HEAD; build-arm64 rebuilt from 15bd751e896). restore() now uses restore-kernel.sh (Image, DTB, modules).
+     Requeued as runner job 49-afbc.
    - The checker's header stats also printed "body offsets ... out-of-range 31779". Re-check its header parsing
      (afbc/afbc-gpu-check.c -H) if the import works and frames still mismatch.
    - Tooling and method: commit 58d5407, kernel-check/afbc-dumps/report-draft.md (§10/§10.1, to be appended to

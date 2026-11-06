@@ -198,7 +198,9 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
 - Writeback -EIO under VE DRAM load: retry fix 20e682fc2 (fix/sunxi-h616-de33-wb-retry) in c40 (6d124e150): job 55 PASS
   (real-hevc8 x5: 2-5 OVERFLOW captures each, all retried, 0 lost, 0 wb_errors; syn regression PASS). TODO with 8b1f787fe:
   cherry-pick into stonking AFTER the user's build.
-  New: c40 build shows 17 dtc warnings (A64/H5 board dts, c39 had 0) - find which cumulative change/tool caused them.
+  c40 '17 dtc warnings' = NOT a regression: pre-existing stock Armbian files (overlay sun50i-a64-pine64-7inch-lcd.dtso,
+  patch arm64-dts-sun50i-h5-nanopi-r1s-h5-add-rtl8153-support: usb device reg cells), shown because c40 rebuilt all DTBs
+  (c39's dtbs step was incremental). c40 diff touches no DT. Optional Armbian PR (other boards), low priority.
   Package built 2026-11-06: harness/afbc-wb (client + lossless flat-chroma-tile synthetic streams), runner job 53-afbc-wb (c38, no kernel change); pass = AFBC captures bit-identical to linear away from chroma-tile edges (the DE33 scaler uses another chroma phase for AFBC). State: harness/research/afbc-wb/RESULTS.md.
 - Next items: stateful v4l2jpegdec hang (after job 11 gstdebug), remaining M/L datasheet items (W22 encoder SPEC, W26, W12, W24, W29, W25 G2D).
 

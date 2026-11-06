@@ -1,0 +1,14 @@
+[    0.001441] pid_max: default: 32768 minimum: 301
+[    0.125707] iommu: Default domain type: Translated
+[    0.129735] NetLabel:  unlabeled traffic allowed by default
+[    0.142629] PCI: CLS 0 bytes, default 64
+[    0.238211] i2c_dev: i2c /dev entries driver
+[    0.274058] bridge: filtering via arp/ip/ip6tables is no longer available by default. Update your scripts to load br_netfilter if you need this.
+[    0.324049] sun50i-h616-r-pinctrl 7022000.pinctrl: initialized sunXi PIO driver
+[    0.338961] sun50i-h616-r-pinctrl 7022000.pinctrl: supply vcc-pl not found, using dummy regulator
+[    0.353112] sun50i-h616-pinctrl 300b000.pinctrl: initialized sunXi PIO driver
+[    0.383101] sun8i-dw-hdmi 6000000.hdmi: registered DesignWare HDMI I2C bus driver
+[    0.387294] sun6i-spi 5010000.spi: registered host spi0
+[    0.387745] spi spi0.0: setup mode 0, 8 bits/w, 40000000 Hz max --> 0
+[    1.523495] sun6i-spi 5010000.spi: registered child spi0.0
+[    8.338181] systemd[1]: Queued start job for default target graphical.target.

@@ -195,7 +195,9 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
   TODO: cherry-pick 8b1f787fe into stonking AFTER the user's current build; add the FFmpeg diff to the desktop FFmpeg
   package patches. Open: real-hevc8 linear-pass writeback -EIO (-5) on 2-3 of 12 frames (jobs 53+54); AVS2 AFBC offset
   unverified (no host encoder).
-- Writeback -EIO under VE DRAM load: retry fix 20e682fc2 (fix/sunxi-h616-de33-wb-retry) in c40 (6d124e150), job 55.
+- Writeback -EIO under VE DRAM load: retry fix 20e682fc2 (fix/sunxi-h616-de33-wb-retry) in c40 (6d124e150): job 55 PASS
+  (real-hevc8 x5: 2-5 OVERFLOW captures each, all retried, 0 lost, 0 wb_errors; syn regression PASS). TODO with 8b1f787fe:
+  cherry-pick into stonking AFTER the user's build.
   New: c40 build shows 17 dtc warnings (A64/H5 board dts, c39 had 0) - find which cumulative change/tool caused them.
   Package built 2026-11-06: harness/afbc-wb (client + lossless flat-chroma-tile synthetic streams), runner job 53-afbc-wb (c38, no kernel change); pass = AFBC captures bit-identical to linear away from chroma-tile edges (the DE33 scaler uses another chroma phase for AFBC). State: harness/research/afbc-wb/RESULTS.md.
 - Next items: stateful v4l2jpegdec hang (after job 11 gstdebug), remaining M/L datasheet items (W22 encoder SPEC, W26, W12, W24, W29, W25 G2D).

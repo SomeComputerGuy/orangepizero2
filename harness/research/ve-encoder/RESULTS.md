@@ -3,7 +3,12 @@
 Task state file (AGENT-RULES "Budget"). Plan: `PLAN.md` section 4. Acceptance: `SPEC.md`, docs/datasheet-checklist.md W22.
 Memory: project-ve-encoder.md. Updated 2026-11-06 by the ve-encoder agent (first implementation task).
 
-## State: FIRST ENCODES FAULTED (job 34, c29); IOMMU root cause fixed in c30, runner job 35 queued
+## State: ENGINE ENCODES CORRECTLY (job 35, c31: slice data decodes at 44-54 dB once the headers are repaired); header bug + r5 fault fixed in c32, runner job 37 queued
+
+- 2026-11-06 (job 35 fix agent): job 35 on c31 completed r1-r4 (rc 0, 3 ms/7 ms per picture) but no stream decoded,
+  and r5 (1366x768) faulted. Root causes and fixes: **4727ed447** on fix/sunxi-h616-venc (merged into test-cumulative
+  91b91f9dc = **c32**, Image md5 5521e882b85f511947ced0996eb2c3bb): see "Job 35" at the end. Runner job 37
+  (harness/runner-queue/37-ve-encoder.md) re-runs the package on c32.
 
 - 2026-11-06 (job 34 fix agent): job 34 on c29 probed and passed the topology checks, then every picture faulted
   (`Page fault for 0x0 (master 3, dir rd, L1 page table)` + `frame processing timed out!`, 0-byte streams) and
@@ -62,9 +67,10 @@ Diagnostics by symptom are in PLAN.md 4.2 step 1.
 
 ## Open items / next step
 
-- **Next step: the runner runs job 35 (harness/runner-queue/35-ve-encoder.md) on c30 or later.**
+- **Next step: the runner runs job 37 (harness/runner-queue/37-ve-encoder.md) on c32 or later.**
   Then a fresh agent reads `logs/runner-venc/results.txt` + the summary and fixes what failed (PLAN 4.2 step 1), or,
-  on PASS, continues with PLAN 4.2 steps 2-4 (CABAC A/B, NV21/YUV420 input, RC statistics). If an IOMMU fault remains,
+  on PASS, continues with PLAN 4.2 steps 2-4 (CABAC A/B, NV21/YUV420 input, RC statistics).
+  Copy 0810 (SPS/PPS nal_ref_idc) to ~/orangepi5/patches/linux/ (the 08xx core series is shared byte for byte). If an IOMMU fault remains,
   its address tells which buffer: a fault inside/just past one of the aux regions = that region is too small (double it);
   a fault at 0 again = yet another address register (the ISP output 0xa70/0xa74 and 0xb9c's neighbours are the
   remaining unwritten ones); a fault at a non-zero address = a programmed buffer read past its end (recon/sub-pixel).
@@ -143,3 +149,41 @@ Diagnostics by symptom are in PLAN.md 4.2 step 1.
   0 failed, build exit 0, 0 C warnings; Image md5 9723454c0c955ab5dbc6193c29d78436. cedrus dir compile-checked W=1 too.
 - Re-queued as harness/runner-queue/35-ve-encoder.md. Code: compare against the T527 per-frame sequence
   (dl/sunxi-venc-t527/sunxi-venc/sunxi_venc_h264.c) for anything else that differs once the first picture completes.
+
+## Job 35 (2026-11-06, c31): streams undecodable (32-bit puts dropped) + r5 fault (MB info buffer short) (fixed, c32)
+- Summary harness/runner-queue/done/35-ve-encoder.summary.md; evidence archived in logs/job35-c31/ (results, encoder
+  logs, compliance, dmesg, files/head-hex.txt). Note: the summary attributed the fault to r1 and said r2+ were aborted;
+  results.txt shows r1-r4 all completed (rc 0, frames/keyframes right, ~3.2 ms at 720p, ~7 ms at 1080p) and only r5
+  (1366x768, frame 0: "timeout waiting for the encoder") faulted: dmesg is checked after the chunk. HANDOFF now says so,
+  and the package records dmesg per run.
+- Streams: every one begins `07 42 c0 28 ...` (r1 head `0742c028965402802dd0c208ce3c3065b804...`): no Annex B start
+  code anywhere, SPS/PPS NAL headers 0x07/0x08 (nal_ref_idc 0), the IDR slice header 0x65 right, and the SPS ends right
+  after timing_info_present_flag = 1. Every missing piece is a 32-bit put: the core writes the start code as one u(32)
+  (v4l2_h264_enc_rbsp_start_code) and num_units_in_tick/time_scale as u(32); the engine's bit writer drops a put of 32
+  bits silently (STARTTRIG NUM_BITS 13:8 holds 32, but nobody ever put more than 24: jemk and the T527 driver write a
+  start code as 24 zero bits + 16 bits, Bootlin splits u32 into bytes). Proof on the host
+  (tools/job35-repair.py: start codes and the two timing fields put back, ref_idc 3): r1 30 frames PSNR-Y 49.2 dB,
+  r2 (I+P) 47.6, r3 (1080p I) 53.9, r4 (1080p I+P) 44.4, all frames, no ffmpeg error. So the engine programming
+  (ISP, reconstruction, references, P pictures, EPTB, slice header) is right.
+- Fix 1 (`media-cedrus-enc-put-at-most-24-bits-at-a-time.patch`): cedrus_enc_h264_put_bits() splits every put into
+  pieces of <= 24 bits, MSB first, each masked to its width.
+- r5 fault `Page fault for 0x00000000fff83000 (master 3, dir rd, L2 page table)`: L2 = unmapped page in a mapped 1 MiB
+  region. dma-iommu rounds IOVA ranges < 32 pages up to a power of two, size-aligned; the only encoder buffer whose end
+  can be 0xfff83000 is 12 KiB at 0xfff80000: the macroblock info buffer (0xbc0), sized like the V3s map (4 KiB per 32 MB
+  columns: 3 pages for 86 columns). 1280x720 (same 12 KiB, 45 rows vs 48) did not fault; 1920x1080 (16 KiB = whole IOVA
+  range) reads into the neighbour if it overreads. (Inference from the address; no IOVA dump exists:
+  CONFIG_DYNAMIC_DEBUG is off.) Fix 2 (`media-cedrus-enc-give-the-macroblock-info-buffer-a-picture-s-size.patch`): a
+  picture's size (ALIGN(W16,32) x ALIGN(H16,128) x 3/2), as the T527 driver. IOMMU on. If job 37 still faults, the
+  address again names the buffer by the same arithmetic (rec/subpix next).
+- Fix 3 (`0810-media-h264-Write-parameter-sets-with-a-non-zero-nal_ref_idc.patch`, core): SPS/PPS with nal_ref_idc 3
+  (H.264 7.4.1 forbids 0). Shared-core patch: copy to the OPi5 series.
+- Compliance `fail: v4l2-test-codecs.cpp(161)`: it is in the DECODER node's section (/dev/video0; the package runs
+  v4l2-compliance with -m, which tests every node of the media device). Known stock 1.32 limitation: the cedrus decoder's
+  extra fourccs leave no codec mask, so stateful DECODER_CMD rules apply (impl-cedrus-compliance.md; fixed by our
+  v4l-utils patches 0001-0003, not on the board). The encoder node had only the justified G/S_PARM fail. Package:
+  compliance values from the encoder node's section only, decoder fails as `compliance_dec_fail` (information).
+- Package: FIX=4727ed447, per-run dmesg (rN.dmesg.txt, rN dmesg_iommu/dmesg_timeout), head_hex (first 32 bytes),
+  start_first/start_codes/nal_sps/nal_pps/nal_idr/nal_p/sps_ref_idc (check 8), hwdec_md5_match needs > 0 frames (job 35
+  "matched" two empty outputs), HANDOFF exit-3 reporting clarified.
+- Build: c32 = test-cumulative 91b91f9dc, kernel-check/run-cumul-c32.log: 868 patches applied, 0 failed, build exit 0, 0 C warnings, 0 dtc warnings; Image md5 5521e882b85f511947ced0996eb2c3bb. The two cedrus/core objects rebuilt with the fixes.
+

@@ -1,0 +1,24 @@
+device /dev/video1 media /dev/media0
+output 1920x1080 stride 1920 size 3133440, capture 1920x1080 S264 size 3110400
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 0: I IDR 85606 bytes, 7151 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 1: I IDR 86483 bytes, 7088 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 2: I IDR 87286 bytes, 7088 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 3: I IDR 87328 bytes, 7085 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 4: I IDR 87408 bytes, 7070 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 5: I IDR 87585 bytes, 7079 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 6: I IDR 87056 bytes, 7085 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 7: I IDR 86751 bytes, 7081 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 8: I IDR 87382 bytes, 7058 us keyframe
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 9: I IDR 87650 bytes, 7081 us keyframe
+RESULT frames=10 bytes=870535 keyframes=10 errors=0 ret=0 avg_us=7086 max_us=7151 fps=7.6
+RC 0

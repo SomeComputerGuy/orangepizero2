@@ -21,11 +21,15 @@ case $J in
 esac
 T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
 want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || exit 1
-FIX=4d9a200e8                              # fix/sunxi-h616-venc HEAD (armbian-build); the kernel must have it: f35cdf390 (encoder) +
+FIX=4727ed447                              # fix/sunxi-h616-venc HEAD (armbian-build); the kernel must have it: f35cdf390 (encoder) +
                                            # ac009bb5b/c307dd053 (own media entities, job 32 hang) + 201516cc5 (every encoder address register
-                                           # gets a buffer: the IOMMU fault for address 0 of job 34) + 4d9a200e8 (v4l2-compliance fixes).
-                                           # c30 is the first kernel with all of it.
+                                           # gets a buffer: the IOMMU fault for address 0 of job 34) + 4d9a200e8 (v4l2-compliance fixes) +
+                                           # 4727ed447 (job 35: 24-bit puts = start codes and VUI timing back, picture-sized MB info buffer =
+                                           # the 1366x768 fault at 0xfff83000, SPS/PPS nal_ref_idc 3). c32 is the first kernel with all of it.
 COMPLIANCE_EXPECTED='v4l2-test-formats.cpp(1445)'   # the one justified fail: G/S_PARM on a stateless encoder (v4l2-compliance 1.32 predates the uAPI)
+# compliance_unexpected counts only the ENCODER node's section of compliance.txt: with -m the tool also tests the decoder node,
+# whose `v4l2-test-codecs.cpp(161)` fail (job 35) is the known stock-1.32 limitation (unknown cedrus fourccs -> no codec mask,
+# harness/research/impl-cedrus-compliance.md); the decoder's fail lines are reported as compliance_dec_fail (information only).
 TOOL=$S/tools/out/h264enc-test             # built by harness/research/ve-encoder/tools/build.sh
 CLIPS=$S/runner/clips                      # generated here with the host ffmpeg (testsrc2, raw NV12)
 P=/root/venc/h264enc-test
@@ -118,7 +122,8 @@ run() { local name=\$1 w=\$2 h=\$3 n=\$4 g=\$5 q=\$6 c=\$7
   m1=\$(dmesg | wc -l)
   timeout -k 5 120 $P -v -w \$w -h \$h -n \$n -g \$g -q \$q -i $R/clips/\$c.nv12 -o \$name.h264 > \$name.txt 2>&1; echo "RC \$?" >> \$name.txt
   grep -E '^RESULT|^RC|ERROR|error|timeout' \$name.txt | head -8
-  dmesg | tail -n +\$((m1+1)) | grep -iE 'cedrus|iommu|timed out' | head -5 | sed 's/^/DMESG: /'
+  dmesg | tail -n +\$((m1+1)) > \$name.dmesg.txt   # per run: which run a fault belongs to (job 35's fault was r5's, not r1's)
+  grep -iE 'cedrus|iommu|timed out' \$name.dmesg.txt | head -5 | sed 's/^/DMESG: /'
   if command -v gst-launch-1.0 >/dev/null && [ -s \$name.h264 ]; then
     step hwdec \$name
     timeout -k 5 120 gst-launch-1.0 -q filesrc location=\$name.h264 ! h264parse ! v4l2slh264dec ! videoconvert ! video/x-raw,format=NV12 ! filesink location=\$name.hwdec.nv12 > \$name.hwdec.txt 2>&1; echo "RC \$?" >> \$name.hwdec.txt
@@ -146,10 +151,15 @@ extract() { # host side: decode every stream with ffmpeg, PSNR against the clip,
   grep '^media ' $d/probe.txt 2>/dev/null | sed "s/^/$c all /" >> $OUT/results.txt
   if grep -q COMPLIANCE-SKIP $d/compliance.txt 2>/dev/null; then echo "$c all compliance SKIP" >> $OUT/results.txt
   else
-    local tot; tot=$(grep -E '^Total' $d/compliance.txt 2>/dev/null | tail -1)
+    local enc tot; enc=$(awk '$1=="ENC" {print $2}' $d/nodes.txt 2>/dev/null)
+    # the encoder node's section: from "Compliance test for ... <enc>:" to its "Total for ... <enc>:" line
+    awk -v n="$enc:" '/^Compliance test for / { s = ($NF == n) } s { print } /^Total for / { s = 0 }' $d/compliance.txt > $d/compliance-enc.txt 2>/dev/null
+    awk -v n="$enc:" '/^Compliance test for / { s = ($0 ~ /\/dev\/video/ && $NF != n) } s && /fail:/ { print }' $d/compliance.txt > $d/compliance-dec-fails.txt 2>/dev/null
+    tot=$(grep -E '^Total' $d/compliance-enc.txt 2>/dev/null | tail -1)
     echo "$c all compliance_failed $(echo "$tot" | grep -o 'Failed: [0-9]*' | grep -o '[0-9]*' || echo missing)" >> $OUT/results.txt
     echo "$c all compliance_warnings $(echo "$tot" | grep -o 'Warnings: [0-9]*' | grep -o '[0-9]*' || echo missing)" >> $OUT/results.txt
-    echo "$c all compliance_unexpected $(grep 'fail:' $d/compliance.txt 2>/dev/null | grep -vcF "$COMPLIANCE_EXPECTED" || true)" >> $OUT/results.txt
+    echo "$c all compliance_unexpected $(grep 'fail:' $d/compliance-enc.txt 2>/dev/null | grep -vcF "$COMPLIANCE_EXPECTED" || true)" >> $OUT/results.txt
+    echo "$c all compliance_dec_fail $(grep -c . $d/compliance-dec-fails.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
   fi
   while read -r r w h n g q clip; do
     fs=$((w * h * 3 / 2))
@@ -157,6 +167,16 @@ extract() { # host side: decode every stream with ffmpeg, PSNR against the clip,
     awk -v c=$c -v r=$r '/^RESULT/ { for (i = 2; i <= NF; i++) { split($i, kv, "="); print c, r, kv[1], kv[2] } }
                          /^RC / { print c, r, "rc", $2 }' $d/$r.txt >> $OUT/results.txt
     echo "$c $r stream_bytes $(stat -c %s $d/$r.h264 2>/dev/null || echo 0)" >> $OUT/results.txt
+    # the first bytes as hex (start code 00000001, then the SPS NAL header 67 and profile 42 c0 28), the start-code and NAL counts:
+    # job 35's streams began 0742c028... (no start codes, nal_ref_idc 0) because the bit writer dropped 32-bit puts
+    echo "$c $r head_hex $(head -c 32 $d/$r.h264 2>/dev/null | od -An -tx1 -v | tr -d ' \n')" >> $OUT/results.txt
+    [ -s $d/$r.h264 ] && python3 -I -c 'import sys; d = open(sys.argv[1], "rb").read(); n = d.split(b"\x00\x00\x01")[1:]
+t = [x[0] & 31 for x in n if x]; r = sys.argv[2]
+print(r, "start_first", int(d[:4] == b"\x00\x00\x00\x01")); print(r, "start_codes", len(n))
+print(r, "nal_sps", t.count(7)); print(r, "nal_pps", t.count(8)); print(r, "nal_idr", t.count(5)); print(r, "nal_p", t.count(1))
+print(r, "sps_ref_idc", next(((x[0] >> 5) & 3 for x in n if x and x[0] & 31 == 7), -1))' $d/$r.h264 "$c $r" >> $OUT/results.txt
+    echo "$c $r dmesg_iommu $(grep -ciE 'iommu.*fault|Page fault' $d/$r.dmesg.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
+    echo "$c $r dmesg_timeout $(grep -ciE 'timed out' $d/$r.dmesg.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
     if [ -s $d/$r.h264 ]; then
       dec=$d/$r.dec.nv12
       ffmpeg -v error -y -i $d/$r.h264 -f rawvideo -pix_fmt nv12 $dec > $d/$r.ffmpeg-err.txt 2>&1
@@ -177,7 +197,7 @@ extract() { # host side: decode every stream with ffmpeg, PSNR against the clip,
     else echo "$c $r hwdec_frames $(( $(echo "$hw" | awk '{print $4}') / fs ))" >> $OUT/results.txt
          echo "$c $r hwdec_md5 $(echo "$hw" | awk '{print $6}')" >> $OUT/results.txt
          a=$(echo "$hw" | awk '{print $6}'); b=$(grep "^$c $r hwdec_md5_ffmpeg" $OUT/results.txt | awk '{print $4}')
-         [ -n "$a" ] && [ "$a" = "$b" ] && echo "$c $r hwdec_md5_match 1" >> $OUT/results.txt || echo "$c $r hwdec_md5_match 0" >> $OUT/results.txt; fi
+         [ -n "$a" ] && [ "$a" = "$b" ] && [ "$(echo "$hw" | awk '{print $4}')" -gt 0 ] 2>/dev/null && echo "$c $r hwdec_md5_match 1" >> $OUT/results.txt || echo "$c $r hwdec_md5_match 0" >> $OUT/results.txt; fi
   done <<< "$RUNS"
   echo "$c all dmesg_bad $(grep -cE "$OOPS" $d/dmesg-chunk.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
   echo "$c all dmesg_iommu $(grep -ciE 'iommu.*fault|Page fault' $d/dmesg-chunk.txt 2>/dev/null || echo 0)" >> $OUT/results.txt

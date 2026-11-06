@@ -1,0 +1,64 @@
+device /dev/video1 media /dev/media0
+output 1280x720 stride 1280 size 1382400, capture 1280x720 S264 size 1382400
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 0: I IDR 32315 bytes, 3088 us keyframe
+  used: type P frame_num 1 poc 2 qp_delta 0
+frame 1: P 21998 bytes, 3147 us
+  used: type P frame_num 2 poc 4 qp_delta 0
+frame 2: P 21384 bytes, 3157 us
+  used: type P frame_num 3 poc 6 qp_delta 0
+frame 3: P 19561 bytes, 3139 us
+  used: type P frame_num 4 poc 8 qp_delta 0
+frame 4: P 19395 bytes, 3127 us
+  used: type P frame_num 5 poc 10 qp_delta 0
+frame 5: P 19932 bytes, 3189 us
+  used: type P frame_num 6 poc 12 qp_delta 0
+frame 6: P 21060 bytes, 3175 us
+  used: type P frame_num 7 poc 14 qp_delta 0
+frame 7: P 19613 bytes, 3150 us
+  used: type P frame_num 8 poc 16 qp_delta 0
+frame 8: P 20995 bytes, 3149 us
+  used: type P frame_num 9 poc 18 qp_delta 0
+frame 9: P 19497 bytes, 3199 us
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 10: I IDR 33669 bytes, 3228 us keyframe
+  used: type P frame_num 1 poc 2 qp_delta 0
+frame 11: P 20430 bytes, 3154 us
+  used: type P frame_num 2 poc 4 qp_delta 0
+frame 12: P 20576 bytes, 3196 us
+  used: type P frame_num 3 poc 6 qp_delta 0
+frame 13: P 21478 bytes, 3173 us
+  used: type P frame_num 4 poc 8 qp_delta 0
+frame 14: P 20679 bytes, 3214 us
+  used: type P frame_num 5 poc 10 qp_delta 0
+frame 15: P 19688 bytes, 3165 us
+  used: type P frame_num 6 poc 12 qp_delta 0
+frame 16: P 19488 bytes, 3148 us
+  used: type P frame_num 7 poc 14 qp_delta 0
+frame 17: P 21204 bytes, 3211 us
+  used: type P frame_num 8 poc 16 qp_delta 0
+frame 18: P 20010 bytes, 3201 us
+  used: type P frame_num 9 poc 18 qp_delta 0
+frame 19: P 19801 bytes, 3205 us
+  used: type I frame_num 0 poc 0 qp_delta 0
+frame 20: I IDR 32907 bytes, 3240 us keyframe
+  used: type P frame_num 1 poc 2 qp_delta 0
+frame 21: P 22262 bytes, 3211 us
+  used: type P frame_num 2 poc 4 qp_delta 0
+frame 22: P 20122 bytes, 3154 us
+  used: type P frame_num 3 poc 6 qp_delta 0
+frame 23: P 19879 bytes, 3149 us
+  used: type P frame_num 4 poc 8 qp_delta 0
+frame 24: P 20215 bytes, 3170 us
+  used: type P frame_num 5 poc 10 qp_delta 0
+frame 25: P 21210 bytes, 3159 us
+  used: type P frame_num 6 poc 12 qp_delta 0
+frame 26: P 23886 bytes, 3217 us
+  used: type P frame_num 7 poc 14 qp_delta 0
+frame 27: P 19866 bytes, 3197 us
+  used: type P frame_num 8 poc 16 qp_delta 0
+frame 28: P 19915 bytes, 3204 us
+  used: type P frame_num 9 poc 18 qp_delta 0
+frame 29: P 20557 bytes, 3201 us
+RESULT frames=30 bytes=653592 keyframes=3 errors=0 ret=0 avg_us=3177 max_us=3240 fps=157.6
+RC 0

@@ -1,0 +1,16 @@
+[h264 @ 0x5b4a73b66d80] missing picture in access unit with size 993509
+[extract_extradata @ 0x5b4a73b68480] No start code is found.
+[in#0/h264 @ 0x5b4a73b66100] could not find codec parameters
+[h264 @ 0x5b4a73b6df80] No start code is found.
+[h264 @ 0x5b4a73b6df80] Error splitting the input into NAL units.
+[vist#0:0/h264 @ 0x5b4a73b68180] [dec:h264 @ 0x5b4a73b6bd80] Decoding error: Invalid data found when processing input
+[vist#0:0/h264 @ 0x5b4a73b68180] [dec:h264 @ 0x5b4a73b6bd80] Decode error rate 1 exceeds maximum 0.666667
+[vf#0:0 @ 0x5b4a73b6ad80] Cannot determine format of input 0:0 after EOF
+[vf#0:0 @ 0x5b4a73b6ad80] Task finished with error: Invalid data found when processing input
+[vf#0:0 @ 0x5b4a73b6ad80] Terminating thread with error: Invalid data found when processing input
+[vost#0:0/rawvideo @ 0x5b4a73b6a940] [enc:rawvideo @ 0x5b4a73b6ac40] Could not open encoder before EOF
+[vost#0:0/rawvideo @ 0x5b4a73b6a940] Task finished with error: Invalid argument
+[vost#0:0/rawvideo @ 0x5b4a73b6a940] Terminating thread with error: Invalid argument
+[vist#0:0/h264 @ 0x5b4a73b68180] [dec:h264 @ 0x5b4a73b6bd80] Task finished with error: Error number -1145393733 occurred
+[vist#0:0/h264 @ 0x5b4a73b68180] [dec:h264 @ 0x5b4a73b6bd80] Terminating thread with error: Error number -1145393733 occurred
+[out#0/rawvideo @ 0x5b4a73b676c0] Nothing was written into output file, because at least one of its streams received no packets.

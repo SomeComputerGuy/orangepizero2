@@ -21,7 +21,7 @@ case $J in
 esac
 T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
 want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || exit 1
-FIX=d6d2ce09b                              # fix/sunxi-h616-venc HEAD (armbian-build); the kernel must have it: f35cdf390 (encoder) +
+FIX=d6d2ce09b                              # fix/sunxi-h616-venc HEAD (job 39: package fixes only, same kernel) (armbian-build); the kernel must have it: f35cdf390 (encoder) +
                                            # ac009bb5b/c307dd053 (own media entities, job 32 hang) + 201516cc5 (every encoder address register
                                            # gets a buffer: the IOMMU fault for address 0 of job 34) + 4d9a200e8 (v4l2-compliance fixes) +
                                            # 4727ed447 (job 35: 24-bit puts = start codes and VUI timing back, SPS/PPS nal_ref_idc 3) +
@@ -62,17 +62,24 @@ gen_clips() { # host: raw NV12 test clips (testsrc2: moving bars, text and a cou
   mkdir -p $CLIPS
   while read -r r w h n g q c; do
     [ -s $CLIPS/$c.nv12 ] && continue
-    ffmpeg -v error -y -f lavfi -i "testsrc2=size=${w}x${h}:rate=30" -frames:v $n -pix_fmt nv12 -f rawvideo $CLIPS/$c.nv12 \
+    ffmpeg -nostdin -v error -y -f lavfi -i "testsrc2=size=${w}x${h}:rate=30" -frames:v $n -pix_fmt nv12 -f rawvideo $CLIPS/$c.nv12 \
       || { log "clip $c: ffmpeg failed"; exit 1; }
   done <<< "$RUNS"; }
 ship_file() { # ship_file <host file> <board path>: only when the board copy differs
   local want_sha have_sha; want_sha=$(sha256sum < "$1" | cut -d' ' -f1)
   have_sha=$($SSH -n "sha256sum < $2 2>/dev/null | cut -d' ' -f1")
   [ "$want_sha" = "$have_sha" ] && { log "$(basename $2) on the board is current ($want_sha)"; return; }
-  $V/ship.sh "$1" "$2" 2>&1 | tail -1 | tee -a $OUT/runner.log
+  $V/ship.sh "$1" "$2" < /dev/null 2>&1 | tail -1 | tee -a $OUT/runner.log
   have_sha=$($SSH -n "sha256sum < $2 | cut -d' ' -f1"); [ "$want_sha" = "$have_sha" ] || blocked "ship of $2 failed"; }
-ship_all() { $SSH -n "mkdir -p $R/clips $R/out"; ship_file $TOOL $P; $SSH -n "chmod +x $P"
-  while read -r r w h n g q c; do ship_file $CLIPS/$c.nv12 $R/clips/$c.nv12; done <<< "$RUNS"; }
+ship_all() { # job 38: ship.sh's ssh read the rest of a `while read ... <<< $RUNS` loop's input, so every clip after the first
+  # one actually shipped (720x480) was skipped (854x480 never reached the board). Now: a for loop over the unique clips,
+  # ship.sh with stdin from /dev/null, and every clip's sha256 checked on the board afterwards (BLOCKED if one is missing).
+  local c clips; clips=$(echo "$RUNS" | awk '{print $7}' | sort -u)
+  $SSH -n "mkdir -p $R/clips $R/out"; ship_file $TOOL $P; $SSH -n "chmod +x $P"
+  for c in $clips; do ship_file $CLIPS/$c.nv12 $R/clips/$c.nv12; done
+  for c in $clips; do [ "$(sha256sum < $CLIPS/$c.nv12 | cut -d' ' -f1)" = "$($SSH -n "sha256sum < $R/clips/$c.nv12 2>/dev/null | cut -d' ' -f1")" ] \
+    || blocked "clip $c.nv12 missing or different on the board after shipping"; done
+  log "clips on the board: $(echo $clips | wc -w) of $(echo $clips | wc -w) current"; }
 boot_trial() { # install the newest cumulative kernel with the fallback armed; it must contain the venc commit
   local c; c=$(awk -v t=$T '$1==t{print $3}' $H/kernel-check/cumulative-kernels.txt)
   git -C $H/wt-cumulative merge-base --is-ancestor $FIX "$c" 2>/dev/null || blocked "kernel $T ($c) lacks the venc commit $FIX"
@@ -124,18 +131,32 @@ m0=\$(dmesg | wc -l); echo DMESG-ENCODES-START \$m0   # the compliance Requests 
 run() { local name=\$1 w=\$2 h=\$3 n=\$4 g=\$5 q=\$6 c=\$7
   step encode \$name
   echo "== \$name \${w}x\${h} n=\$n gop=\$g qp=\$q"
-  m1=\$(dmesg | wc -l)
+  m1=\$(dmesg | wc -l); rm -f \$name.buffers.txt \$name.hwdec.txt \$name.h264
   timeout -k 5 120 $P -v -w \$w -h \$h -n \$n -g \$g -q \$q -i $R/clips/\$c.nv12 -o \$name.h264 > \$name.txt 2>&1; echo "RC \$?" >> \$name.txt
   grep -E '^RESULT|^RC|ERROR|error|timeout' \$name.txt | head -8
   dmesg | tail -n +\$((m1+1)) > \$name.dmesg.txt   # per run: which run a fault belongs to (job 35's fault was r5's, not r1's)
-  cat /sys/kernel/debug/cedrus/encoder-buffers > \$name.buffers.txt 2>&1   # IOVA + size of every buffer of the run's last picture (c33+)
+  # IOVA + size of every buffer of the run's last picture (c33+). Only from a run whose encoder exited 0: the debugfs file
+  # keeps the previous run's list when an encode never starts (job 38 r7 reported r6's 720x480 list)
+  if grep -qx 'RC 0' \$name.txt; then cat /sys/kernel/debug/cedrus/encoder-buffers > \$name.buffers.txt 2>&1
+  else echo "NO-ENCODE \$(tail -1 \$name.txt)" > \$name.buffers.txt; fi
   sed 's/^/BUFFERS: /' \$name.buffers.txt | head -14
   grep -iE 'cedrus|iommu|timed out' \$name.dmesg.txt | head -5 | sed 's/^/DMESG: /'
   if command -v gst-launch-1.0 >/dev/null && [ -s \$name.h264 ]; then
     step hwdec \$name
     timeout -k 5 120 gst-launch-1.0 -q filesrc location=\$name.h264 ! h264parse ! v4l2slh264dec ! videoconvert ! video/x-raw,format=NV12 ! filesink location=\$name.hwdec.nv12 > \$name.hwdec.txt 2>&1; echo "RC \$?" >> \$name.hwdec.txt
-    echo "HWDEC \$name bytes \$(stat -c %s \$name.hwdec.nv12 2>/dev/null || echo 0) md5 \$(md5sum < \$name.hwdec.nv12 2>/dev/null | cut -c1-32) \$(tail -1 \$name.hwdec.txt)" | tee -a \$name.hwdec.txt
-    rm -f \$name.hwdec.nv12
+    # filesink writes GStreamer's default NV12 layout: stride ROUND_UP_4(w), chroma at stride x ROUND_UP_2(h); the padding
+    # bytes are not written by the decoder (job 38 r5: 1366 wide -> stride 1368, 2304 bytes/frame of padding, md5 differs).
+    # Keep the visible w x h pixels only (tight NV12, as ffmpeg writes it) before the md5.
+    crop=\$(python3 -I -c 'import sys
+w, h = int(sys.argv[1]), int(sys.argv[2]); s = (w + 3) // 4 * 4; h2 = (h + 1) // 2 * 2; fr = s * h2 * 3 // 2
+d = open(sys.argv[3], "rb").read(); o = open(sys.argv[4], "wb"); n = len(d) // fr
+for i in range(n):
+    f = d[i * fr:(i + 1) * fr]
+    for y in range(h): o.write(f[y * s:y * s + w])
+    for y in range((h + 1) // 2): o.write(f[s * h2 + y * s:s * h2 + y * s + (w + 1) // 2 * 2])
+print("frames", n, "stride", s, "rest", len(d) % fr)' \$w \$h \$name.hwdec.nv12 \$name.hwdec.vis.nv12 < /dev/null 2>&1 | tail -1)
+    echo "HWDEC \$name bytes \$(stat -c %s \$name.hwdec.vis.nv12 2>/dev/null || echo 0) md5 \$(md5sum < \$name.hwdec.vis.nv12 2>/dev/null | cut -c1-32) raw \$(stat -c %s \$name.hwdec.nv12 2>/dev/null || echo 0) crop \$crop \$(tail -1 \$name.hwdec.txt)" | tee -a \$name.hwdec.txt
+    rm -f \$name.hwdec.nv12 \$name.hwdec.vis.nv12
   else echo "HWDEC \$name SKIP" | tee \$name.hwdec.txt; fi
 }
 while read -r r w h n g q c; do run \$r \$w \$h \$n \$g \$q \$c; done <<'RUNS'
@@ -185,21 +206,24 @@ print(r, "sps_ref_idc", next(((x[0] >> 5) & 3 for x in n if x and x[0] & 31 == 7
     echo "$c $r dmesg_iommu $(cnt -iE 'iommu.*fault|Page fault' $d/$r.dmesg.txt)" >> $OUT/results.txt
     # debugfs buffer list (d6d2ce09b): the source buffer must hold stride x (ALIGN(h,16) x 3/2 + 16) bytes (one macroblock row past
     # the NV12 picture: the engine reads past its end, job 37's 1366x768 fault)
-    local bpl want_src have_src; bpl=$(( (w + 15) / 16 * 16 )); want_src=$(( bpl * ((h + 15) / 16 * 16 * 3 / 2 + 16) ))
+    local bpl want_src have_src bf; bpl=$(( (w + 15) / 16 * 16 )); want_src=$(( bpl * ((h + 15) / 16 * 16 * 3 / 2 + 16) ))
     have_src=$(awk '$1=="source" {print strtonum($4)}' $d/$r.buffers.txt 2>/dev/null | tail -1)
     echo "$c $r buffers_file $(cnt -E '^(source|coded|mb-info|rec) ' $d/$r.buffers.txt)" >> $OUT/results.txt
     echo "$c $r source_bytes ${have_src:-missing} want $want_src" >> $OUT/results.txt
-    [ -n "$have_src" ] && [ "$have_src" -ge "$want_src" ] && echo "$c $r source_room 1" >> $OUT/results.txt || echo "$c $r source_room 0" >> $OUT/results.txt
+    # the list must be this run's: its "format WxH" line names the run's size (job 38 r7 showed r6's list)
+    grep -q "^format ${w}x${h} " $d/$r.buffers.txt 2>/dev/null && bf=1 || bf=0
+    echo "$c $r buffers_format $bf" >> $OUT/results.txt
+    [ $bf = 1 ] && [ -n "$have_src" ] && [ "$have_src" -ge "$want_src" ] && echo "$c $r source_room 1" >> $OUT/results.txt || echo "$c $r source_room 0" >> $OUT/results.txt
     echo "$c $r dmesg_timeout $(cnt -iE 'timed out' $d/$r.dmesg.txt)" >> $OUT/results.txt
     if [ -s $d/$r.h264 ]; then
       dec=$d/$r.dec.nv12
-      ffmpeg -v error -y -i $d/$r.h264 -f rawvideo -pix_fmt nv12 $dec > $d/$r.ffmpeg-err.txt 2>&1
+      ffmpeg -nostdin -v error -y -i $d/$r.h264 -f rawvideo -pix_fmt nv12 $dec > $d/$r.ffmpeg-err.txt 2>&1
       echo "$c $r ffmpeg_errors $(grep -c . $d/$r.ffmpeg-err.txt)" >> $OUT/results.txt
       frames=$(( $(stat -c %s $dec 2>/dev/null || echo 0) / fs ))
       echo "$c $r decoded $frames" >> $OUT/results.txt
       echo "$c $r hwdec_md5_ffmpeg $(head -c $((frames * fs)) $dec | md5sum | cut -c1-32)" >> $OUT/results.txt
       if [ $frames -gt 0 ]; then
-        ffmpeg -v error -f rawvideo -pix_fmt nv12 -s ${w}x${h} -i $dec -f rawvideo -pix_fmt nv12 -s ${w}x${h} -i $CLIPS/$clip.nv12 \
+        ffmpeg -nostdin -v error -f rawvideo -pix_fmt nv12 -s ${w}x${h} -i $dec -f rawvideo -pix_fmt nv12 -s ${w}x${h} -i $CLIPS/$clip.nv12 \
           -frames:v $frames -lavfi "psnr=stats_file=$d/$r.psnr.txt" -f null - > /dev/null 2>&1
         awk -v c=$c -v r=$r '{ for (i = 1; i <= NF; i++) if ($i ~ /^psnr_y:/) { split($i, kv, ":"); y = kv[2] + 0; if (y > 999) y = 999; s += y; if (m == "" || y < m) m = y; k++ } }
                              END { if (k) { printf "%s %s psnr_avg %.2f\n%s %s psnr_min %.2f\n%s %s psnr_frames %d\n", c, r, s / k, c, r, m, c, r, k } else print c, r, "psnr_avg 0" }' $d/$r.psnr.txt >> $OUT/results.txt
@@ -237,7 +261,7 @@ run_chunk() { # run_chunk <chunk>: remote script under timeout + stall watchdog;
       log "OOPS on the serial log during chunk $c, killing ssh $p"; kill $p; echo OOPS >> $f; oops=serial; break; fi
     if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s in step '$(grep '^STEP' $f | tail -1 | cut -c6-)', killing ssh $p"; kill $p; echo "STALLED in step $(grep '^STEP' $f | tail -1 | cut -c6-)" >> $f; stall_diag $c; break; fi
   done; wait $p 2>/dev/null
-  mkdir -p $OUT/files/$c; scp -q -r "${K[@]}" root@10.56.0.107:$R/out/. $OUT/files/$c/ 2>/dev/null
+  rm -rf $OUT/files/$c; mkdir -p $OUT/files/$c; scp -q -r "${K[@]}" root@10.56.0.107:$R/out/. $OUT/files/$c/ 2>/dev/null
   if [ -z "$oops" ] && grep -qE "$OOPS" $OUT/files/$c/dmesg-chunk.txt 2>/dev/null; then grep -E "$OOPS|Call trace|pc :|lr :" $OUT/files/$c/dmesg-chunk.txt | head -40 > $OUT/OOPS; oops=dmesg; fi
   extract $c
   [ -n "$oops" ] && oops_fail $c $oops

@@ -1,0 +1,5 @@
+n:1 mse_avg:0.98 mse_y:0.80 mse_u:1.38 mse_v:1.32 psnr_avg:48.21 psnr_y:49.11 psnr_u:46.73 psnr_v:46.93 
+n:2 mse_avg:0.97 mse_y:0.77 mse_u:1.39 mse_v:1.32 psnr_avg:48.28 psnr_y:49.25 psnr_u:46.71 psnr_v:46.93 
+n:3 mse_avg:1.01 mse_y:0.80 mse_u:1.45 mse_v:1.38 psnr_avg:48.10 psnr_y:49.08 psnr_u:46.51 psnr_v:46.73 
+n:4 mse_avg:0.96 mse_y:0.78 mse_u:1.41 mse_v:1.24 psnr_avg:48.29 psnr_y:49.19 psnr_u:46.62 psnr_v:47.20 
+n:5 mse_avg:1.03 mse_y:0.80 mse_u:1.55 mse_v:1.44 psnr_avg:48.00 psnr_y:49.12 psnr_u:46.23 psnr_v:46.53 

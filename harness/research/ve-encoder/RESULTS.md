@@ -3,7 +3,13 @@
 Task state file (AGENT-RULES "Budget"). Plan: `PLAN.md` section 4. Acceptance: `SPEC.md`, docs/datasheet-checklist.md W22.
 Memory: project-ve-encoder.md. Updated 2026-11-06 by the ve-encoder agent (first implementation task).
 
-## State: r1-r4 PASS on c32 (job 37); the 1366x768 fault is a read past the NV12 source buffer, fixed in c33, runner job 38 queued
+## State: job 38 on c33: r1-r6 PASS on every check, no fault; r5 hwdec and r7 were test bugs (package fixed), runner job 39 queued on c33
+
+- 2026-11-06 (job 38 fix agent): job 38 on c33 (summary harness/runner-queue/done/38-ve-encoder.summary.md, evidence
+  archived in logs/job38-c33/): checks 1, 2, 7 PASS; r1-r6 PASS checks 3-5, 8, 9 (r5 1366x768 source 1607168 >= 1573632:
+  the job 35/37 fault is gone); r1-r4, r6 hwdec md5 match. No kernel change needed, c33 stays. See "Job 38" at the end.
+  Runner job 39 (harness/runner-queue/39-ve-encoder.md) re-runs the whole package (r1-r7) on c33.
+
 
 - 2026-11-06 (job 37 fix agent): job 37 on c32 passed r1-r4 (720p/1080p, I and I+P, 44-54 dB, framing right, hw
   decode md5 = ffmpeg's, compliance only the justified G/S_PARM fail); r5 (1366x768) faulted at 0xfff83000 again, so
@@ -74,7 +80,9 @@ Diagnostics by symptom are in PLAN.md 4.2 step 1.
 
 ## Open items / next step
 
-- **Next step: the runner runs job 38 (harness/runner-queue/38-ve-encoder.md) on c33 or later.**
+- **Next step: the runner runs job 39 (harness/runner-queue/39-ve-encoder.md) on c33 or later.** On PASS of all 9
+  checks for r1-r7: PLAN 4.2 steps 2-4. (Job 38 text below kept for reference.)
+- (old) the runner runs job 38 (harness/runner-queue/38-ve-encoder.md) on c33 or later.
   Then a fresh agent reads `logs/runner-venc/results.txt` + the summary and fixes what failed (PLAN 4.2 step 1), or,
   on PASS, continues with PLAN 4.2 steps 2-4 (CABAC A/B, NV21/YUV420 input, RC statistics).
   Copy 0810 (SPS/PPS nal_ref_idc) to ~/orangepi5/patches/linux/ (the 08xx core series is shared byte for byte). If an IOMMU fault remains,
@@ -228,3 +236,29 @@ Diagnostics by symptom are in PLAN.md 4.2 step 1.
 - If r5 still faults on c33: the dump names the buffer. A fault past the source buffer's new end = the overread is
   longer than one MB row (then size it by the dump's distance); a fault elsewhere = another buffer, same arithmetic.
 - Build: c33 = test-cumulative 342cfa31c, kernel-check/run-cumul-c33.log: 869 patches applied, 0 failed, build exit 0, 0 C warnings; the 17 dtc warnings are the pre-existing pine64-7inch-lcd overlay and nanopi-r1s-h5 ones (as c30; c32 rebuilt no DTBs); Image md5 866f3ca37c446a2d200e90c53221b82b.
+
+
+## Job 38 (2026-11-06, c33): r1-r6 PASS, no fault; r5 hwdec "mismatch" = GStreamer dump padding, r7 = clip not shipped (package fixed)
+- r5 hardware decode (check 6 FAIL): 5 frames, 7879680 bytes, md5 28209e62... vs ffmpeg edcc1ec6..., source 7868160.
+  7879680 / 5 = 1575936 = 1368 x 768 x 3/2 exactly: GStreamer's default GstVideoInfo NV12 layout for a 1366-wide
+  picture (stride ROUND_UP_4(1366) = 1368, chroma at stride x ROUND_UP_2(768)). So the caps width WAS 1366: the cedrus
+  decoder's visible size (from the SPS frame cropping) reached v4l2slh264dec and the element cropped correctly; an
+  uncropped dump would have the driver's coded stride 1376 (1585152 bytes/frame). The frames are copied into
+  default-layout system memory for filesink (no VideoMeta), and the 2 padding bytes per row are never written (pool
+  memory, content undefined), so the md5 of the raw dump cannot equal ffmpeg's tight 1366 output. Not a driver bug,
+  not a GStreamer bug: a test artefact, the same class as gst-jpeg's z17x33 (research/gst-jpeg/RESULTS.md: "never
+  compare md5s of padded dumps at odd sizes"). r1-r4 and r6 have widths that are multiples of 4, hence no padding.
+  Fix (package): on the board a python3 step keeps only the visible w x h pixels of the dump (tight NV12) before the
+  md5; the HWDEC line also records `raw <bytes>` and `crop frames N stride S rest R` (rest must be 0). Tested on the host
+  with a synthetic 1366x768 stride-1368 dump (round trip exact).
+- r7 854x480 (FAIL rc 3, "No such file"): ship_all looped `while read ... <<< "$RUNS"` and ship.sh's ssh (no -n) read
+  the rest of the loop's input whenever a clip was actually shipped, so every clip after the first newly shipped one was
+  skipped (job 38: 720x480 shipped, 854x480 never; earlier jobs the same with 1080p/1366x768 one job at a time, which
+  is why the log shows one "shipped" line per job). Fix: for loop over the unique clips, ship.sh stdin from /dev/null,
+  then a sha256 check of every clip on the board (BLOCKED if one is missing; runner.log `clips on the board: 5 of 5
+  current`). ffmpeg calls got -nostdin.
+- r7 source_room 0 came from the stale debugfs list (the file shows the last encode job, r6's 720x480). Fix: buffers.txt
+  per run (cleared first, written only after an encode with RC 0, else `NO-ENCODE RC n`), new value `buffers_format`
+  (the list's `format WxH` line must be the run's size; source_room needs it), host files/<chunk>/ emptied before the
+  copy so no previous job's file survives.
+- Kernel: unchanged (c33 = test-cumulative 342cfa31c, Image md5 866f3ca37c446a2d200e90c53221b82b); FIX stays d6d2ce09b.

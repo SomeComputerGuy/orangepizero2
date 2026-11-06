@@ -59,6 +59,10 @@ all IDR QP 26 (a size that is not a multiple of 16: cropping and the 8-pixel ISP
 page to the byte, so a read past the end faults: jobs 35 and 37); r6 720x480 10 frames IDR every 5 + P QP 26; r7
 854x480 10 frames IDR every 5 + P QP 26 (a width that is not a multiple of 16, with P pictures).
 
+Shipping (job 38 r7 package bug, fixed for job 39): every clip is shipped in a for loop and its sha256 is checked on the
+board afterwards; runner.log must show `clips on the board: 5 of 5 current` before the kernel install, else the job
+is BLOCKED (`clip <name>.nv12 missing or different on the board after shipping`): report BLOCKED, not FAIL.
+
 Exit codes: 0 = chunk ran, judge with the checks below; 3 = Oops/WARN/IOMMU fault, FAIL; 2 = blocked (report BLOCKED
 and the last 10 lines of runner.log); 1 = setup or lock error.
 
@@ -93,6 +97,11 @@ and the last 10 lines of runner.log); 1 = setup or lock error.
 6. Hardware decode, for each run: `hwdec_frames` equal to the frame count and `hwdec_md5_match 1` -> PASS; `hwdec SKIP`
    (no gst-launch-1.0 on the board) -> SKIP; else FAIL with the last 5 lines of files/venc/<run>.hwdec.txt. A FAIL
    here with checks 3-5 PASS means the H.264 decoder or GStreamer, not the encoder: report it as such.
+   The md5 is over the visible pixels only (since job 39): GStreamer's NV12 dump has stride ROUND_UP_4(width) and its
+   padding bytes are not written by the decoder, so job 38's r5 (1366 wide, stride 1368) "mismatch" was the padding.
+   The `HWDEC` line in <run>.hwdec.txt also gives `raw <bytes of the GStreamer dump>` and `crop frames N stride S rest R`;
+   report them for r5 and r7 (expected r5: raw 7879680, crop frames 5 stride 1368 rest 0; r7: raw 6163200 (stride
+   856), crop frames 10 stride 856 rest 0). `rest` other than 0 -> FAIL (the dump layout is not GStreamer's default).
 7. dmesg: `venc all dmesg_bad 0`, `dmesg_iommu 0`, `dmesg_timeout 0`, `dmesg_encode_failed 0` -> PASS; else FAIL, copy
    the matching lines from files/venc/dmesg-chunk.txt exactly (first 20). `dmesg_encode_failed` counts only the encode
    steps (files/venc/dmesg-encodes.txt): the v4l2-compliance "Requests" test queues requests without the SPS/PPS/encode
@@ -105,7 +114,8 @@ and the last 10 lines of runner.log); 1 = setup or lock error.
    Expected: r1 30/30/0 (sps/idr/p), r2 3/3/27, r3 10/10/0, r4 1/1/9, r5 5/5/0, r6 2/2/8, r7 2/2/8. Report `head_hex` of r1 (should begin
    `000000016742c028`).
 
-9. Encoder buffers, for each run: `buffers_file 4` and `source_room 1` (the `source_bytes` value is at least its `want`
+9. Encoder buffers, for each run: `buffers_format 1` (the list's `format WxH` line is this run's size: the list is
+   written only after an encode with RC 0, else buffers.txt says `NO-ENCODE RC n`), `buffers_file 4` and `source_room 1` (the `source_bytes` value is at least its `want`
    value: the source buffer has the macroblock row of room past the picture) -> PASS, else FAIL with the
    `source_bytes` line and files/venc/<run>.buffers.txt. `buffers_file 0` with buffers.txt saying "No such file" = the
    kernel lacks d6d2ce09b or debugfs is not mounted. On any IOMMU fault (check 7), copy the run's buffers.txt verbatim

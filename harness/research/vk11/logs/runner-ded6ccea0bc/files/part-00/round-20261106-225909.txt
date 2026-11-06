@@ -1,0 +1,11 @@
+#51 SMP PREEMPT Fri Nov  6 20:28:54 UTC 2026
+PROGRESS 1105
+PROGRESS 2305
+PROGRESS 2746
+PROGRESS 2987
+PROGRESS 4243
+DEQP-RC 143
+PART-INCOMPLETE 4243 of 50743
+DMESG: [  236.572376] Thread-1 (run_s invoked oom-killer: gfp_mask=0x100cca(GFP_HIGHUSER_MOVABLE), order=0, oom_score_adj=-900
+DMESG: [  236.572968] oom-kill:constraint=CONSTRAINT_MEMCG,nodemask=(null),cpuset=/,mems_allowed=0,oom_memcg=/system.slice/run-p5540-i1322.scope,task_memcg=/system.slice/run-p5540-i1322.scope,task=deqp-vk,pid=5544,uid=0
+ROUND-DONE

@@ -11,6 +11,9 @@ If a process dies mid-case, that case is recorded as Crash. If no line arrives f
 --timeout seconds, the case is killed and recorded as Timeout. The shard then restarts at
 the next case. Results go to OUT/results.csv as "test,status,duration_s,detail", in
 caselist order, and the run can be resumed: cases already in OUT/shard-*.csv are skipped.
+OUT/shard-N.current holds the case the shard last started (for an outside stuck-case watchdog).
+A memcg OOM kill of dEQP inside a case: retried once, then recorded as OOM (run it under systemd-run with
+-p OOMPolicy=continue, or systemd stops the whole scope, this runner included, at the first kill).
 --budget S (optional): stop after S seconds of wall time (the dEQP process is killed, its unfinished case is
 not recorded and runs again on resume); then no results.csv/summary.txt is written and the exit code is 3.
 """
@@ -71,6 +74,7 @@ def run_shard(idx, cases, a, extra):
     with open(path, "a", newline="") as fo:
         w = csv.writer(fo)
         kpath = os.path.join(a.out, "shard-%d.kills.json" % idx)  # persisted so a runner restart cannot loop
+        curpath = os.path.join(a.out, "shard-%d.current" % idx)
         kills = json.load(open(kpath)) if os.path.exists(kpath) else {}
         while todo:
             cl = os.path.join(a.out, "shard-%d.caselist" % idx)
@@ -142,7 +146,10 @@ def run_shard(idx, cases, a, extra):
                 tail = (tail + [line])[-6:]
                 m = RE_CASE.match(line.rstrip("\n"))
                 if m:
-                    cur, t0 = m.group(1), time.time(); continue
+                    cur, t0 = m.group(1), time.time()
+                    with open(curpath, "w") as cf:  # for an outside watchdog: the case this shard is in
+                        cf.write(cur + "\n")
+                    continue
                 m = RE_RES.match(line.rstrip("\n"))
                 if m and cur:
                     w.writerow([cur, m.group(1), "%.2f" % (time.time() - t0), m.group(2)[:300]]); fo.flush()

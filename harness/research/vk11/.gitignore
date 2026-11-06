@@ -8,3 +8,4 @@ host/vkprops
 host/vkprops-arm64
 host/stub/libvulkan.so.1
 host/deqp-*/
+logs/runner-*/files/*/shard-0.csv

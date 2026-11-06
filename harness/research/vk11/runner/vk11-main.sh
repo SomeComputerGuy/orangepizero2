@@ -1,7 +1,7 @@
 #!/bin/bash
 # Runner package job 68: the full dEQP-VK vk-main (vulkan-cts-1.4.6.2, 3 247 552 cases) on the fork panvk that now
-# reports Vulkan 1.1 on the G31 (mesa-cl panfrost-opencl-fixes ded6ccea0bc = 0dbf521d381 backport + core-builtins fix,
-# on top of ab1caa7378f/0e274280595). No MESA_VK_VERSION_OVERRIDE: the driver's own apiVersion is tested.
+# reports Vulkan 1.1 on the G31 (mesa-cl panfrost-opencl-fixes 9d278fabfc2 = 0dbf521d381 backport + core-builtins fix
+# ded6ccea0bc + lazy JM descriptor pool 039c393b7fb + Bifrost warp count 9d278fabfc2, on top of ab1caa7378f/0e274280595). No MESA_VK_VERSION_OVERRIDE: the driver's own apiVersion is tested.
 # Derived from harness/research/gpu-invalid-enc/runner/invalid-enc.sh (job 52).
 # Self-contained: board lock (fresh owner name per acquire), newest cumulative kernel with the fallback armed
 # (vdec-perf/install-kernel.sh, must carry the panfrost soft-stop fix e544ddb00), stock kernel restored with
@@ -15,6 +15,11 @@
 # (the lock shows STALE? after 4 h), stock kernel -> release -> re-acquire -> trial kernel -> continue.
 # Stall watchdog: no output for 300 s, or no new result row for 660 s (per-case timeout is 300 s) = stall: the round
 # is killed (exact PIDs), the case that was running is recorded as Hang (from the qpa) and the part continues.
+# Memory: deqp-run.py runs in a 600 MB memcg scope with OOMPolicy=continue (without it systemd stops the whole scope
+# at the first OOM kill, job 68 chunk 1); an OOM-killed case is retried once, then recorded as OOM. Stuck case: a round
+# that adds no row records the case deqp-run.py was in (shard-0.current); the 2nd such round for the same case records
+# it as ResourceLimit (an OOM kill in that round) or Stuck, and the part goes on. No case can block a part.
+# New build: a frozen copy, host results and board results of another fork commit are moved away / removed at start.
 # Exit: 0 all parts done; 4 paused; 2 blocked (reason in logs/runner/BLOCKED); 1 setup or lock error.
 # Checks: `vk11-main.sh --check` prints the mechanical checks of HANDOFF.md.
 set -u
@@ -23,7 +28,7 @@ V=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh; R=$S/runner
 J=vk11
 . $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid
 OUT=$S/logs/runner; mkdir -p $OUT/files $OUT/dmesg $OUT/parts; touch $OUT/state $OUT/runner.log
-FORK=ded6ccea0bc                          # mesa-cl commit the build must be (git string in the driver)
+FORK=9d278fabfc2                          # mesa-cl commit the build must be (git string in the driver)
 SOFTSTOP=e544ddb00                        # panfrost soft-stop/resume fix the cumulative kernel must contain
 NPART=64; BUDGET=780; CT=960; QUIET=300; NOPROG=660; REFRESH=12600
 MAIN=$H/harness/research/gpu-src/vk-mustpass-1.4.6.2/vk-main.txt; MAINLINES=3247552
@@ -52,6 +57,12 @@ check() {
     xs=$(echo "$l" | sed 's/.*out=\[\([^]]*\)\].*/\1/'); [ $(echo $xs | wc -w) -ge 16 ] || v=FAIL
     for x in $xs; do [ $(( (x >> 8) & 255 )) = "$cc" ] || v=FAIL; done; done
   echo "3 ARM core builtins probe d9 (rc=0, ids <= max, core count = shaderCoreCount $cc): $v"
+  v=PASS; local wpc; wpc=$(awk '/^shaderWarpsPerCore/{print $2; exit}' $f 2>/dev/null); [ -n "$wpc" ] || v=FAIL
+  for t in 1x1x1-g4x2x2:16 4x1x1-g4x2x2:64 3x5x7-g4x2x2:1680 64x1x1-g16x8x1:8192; do l=$(grep "^DIAG fork-d10-raw-${t%:*} " $f 2>/dev/null)
+    echo "$l" | grep -q ' rc=0 ' || v=FAIL; local r=($(echo "$l" | grep -o 'out=\[[0-9 ]*\]' | tr -d 'out=[]') x x x x x x x x x)
+    [ "${r[2]}" = 0 ] && [ "${r[3]}" = 0 ] && [ "${r[8]}" = "${t#*:}" ] && [ "${r[1]}" -le "${r[6]}" ] && [ "${r[0]}" -lt "${r[7]}" ] && [ "${r[7]}" = "$cc" ] && [ "${r[6]}" = $(( ${wpc:-0} - 1 )) ] 2>/dev/null || v=FAIL
+    echo "  d10 ${t%:*}: max core ${r[0]}, max warp ${r[1]}, warp>max ${r[2]}, core>=count ${r[3]}, warp max ${r[6]}, count ${r[7]}, invocations ${r[8]} (want ${t#*:})"; done
+  echo "3b raw core builtins d10 (no id above max, max warp id = shaderWarpsPerCore $wpc - 1, all invocations ran): $v"
   v=PASS
   grep -q '^DIAG fork-d2-ballot-4x1x1 rc=0 .*out=\[15 15 15 15 ' $f 2>/dev/null || v=FAIL
   grep -q '^DIAG fork-d3-elect-4x1x1 rc=0 .*out=\[42 13 13 13 ' $f 2>/dev/null || v=FAIL
@@ -80,6 +91,7 @@ check() {
     grep '^BASELINE' $OUT/cmp.txt | sed 's/^/INFO /'
   else echo "9 regressions: no finished part yet: FAIL"; fi
   echo "INFO Hang rows (stall watchdog): $(grep -c 'HANG-MARKED' $OUT/runner.log) ; stalls: $(grep -c 'STALL:' $OUT/runner.log)"
+  echo "INFO stuck-case rows (ResourceLimit/Stuck): $(grep -c STUCK-MARKED $OUT/runner.log)"
   echo "INFO Soft-stop lines in dmesg: $(cat $OUT/dmesg/*.txt 2>/dev/null | grep -c Soft-stop)"
   [ -f $OUT/BLOCKED ] && echo "INFO BLOCKED: $(cat $OUT/BLOCKED)"; true
 }
@@ -117,8 +129,16 @@ others_waiting() { ls $H/harness/queue/board.wait 2>/dev/null | grep -v "\.$OWN\
 # host-side preconditions (no board needed)
 if [ "${1:-}" != "--print" ]; then
 [ -f $LIB ] || { log "missing build: $LIB"; exit 1; }
-[ -f $VH/host/vkcomp-arm64 ] && [ -f $VH/host/diag/d8-cts-elect.spv ] && [ -f $S/host/diag/d9-core.spv ] && [ -f $S/host/vkprops-arm64 ] || { log "missing vkcomp-arm64, vkprops-arm64 or a diag .spv"; exit 1; }
+[ -f $VH/host/vkcomp-arm64 ] && [ -f $VH/host/diag/d8-cts-elect.spv ] && [ -f $S/host/diag/d9-core.spv ] && [ -f $S/host/diag/d10-raw.spv ] && [ -f $S/host/vkprops-arm64 ] || { log "missing vkcomp-arm64, vkprops-arm64 or a diag .spv"; exit 1; }
 [ -f $MAIN ] && [ "$(wc -l < $MAIN)" = $MAINLINES ] || { log "missing or wrong $MAIN (want $MAINLINES lines)"; exit 1; }
+if [ -f $OUT/FORK ] && [ "$(cat $OUT/FORK)" != $FORK ]; then   # results of another build never mix with this one
+  A=$S/logs/runner-$(cat $OUT/FORK); mkdir -p $A
+  for x in files dmesg state progress.txt chunk-probe.txt runner.log BLOCKED cmp.txt cmp-head.txt check.txt; do [ -e $OUT/$x ] && mv $OUT/$x $A/; done
+  mkdir -p $OUT/files $OUT/dmesg; touch $OUT/state $OUT/runner.log; log "results of fork $(cat $OUT/FORK) moved to $A"
+fi
+echo $FORK > $OUT/FORK
+if [ -d $FROZEN ] && ! strings $FROZEN/lib/libvulkan_panfrost.so | grep -q "git-${FORK:0:10}"; then
+  rm -rf $FROZEN; log "stale frozen copy removed (not a build of $FORK)"; fi
 if [ -d $FROZEN ]; then libmd5=$(md5sum < $FROZEN/lib/libvulkan_panfrost.so | cut -c1-32)
 else strings $LIB | grep -q "git-${FORK:0:10}" || { log "$LIB is not a build of $FORK (rebuild build-cl at $FORK)"; exit 1; }; libmd5=new; fi
 KIMG=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || { log "no served kernel Image.$T"; exit 1; }
@@ -146,10 +166,11 @@ setup() { # deploy the fork to /root/opiz2-mesa/vk3 (first time from build-cl, l
   have=$($SSH -n "md5sum < /root/opiz2-mesa/$DN/lib/libvulkan_panfrost.so | cut -c1-32")
   [ -n "$want" ] && [ "$want" = "$have" ] && log "deployed $DN ok (libvulkan_panfrost md5 $have)" || blocked "$DN deploy mismatch (host $want board $have)"
   $SSH -n "test -f /root/opiz2-mesa/$DN/panfrost_icd.json && test -x $VK/deqp-vk && mkdir -p $B/parts $B/res $B/diag $B/trace" || blocked "$DN icd json or /root/cts/deqp-vk is missing on the board"
+  $SSH -n "[ \"\$(cat $B/res/FORK 2>/dev/null)\" = $FORK ] || { rm -rf $B/res $B/parts/part-*.txt; mkdir -p $B/res; echo $FORK > $B/res/FORK; echo RES-RESET; }" | grep -q RES-RESET && log "board results of another build removed ($B/res)"
   avail=$($SSH -n "df --output=avail -k /root | tail -1"); [ "${avail:-0}" -gt 1500000 ] || blocked "less than 1.5 GB free on the board /root ($avail kB)"
   scp -q "${K[@]}" $VH/host/vkcomp-arm64 root@10.56.0.107:$B/vkcomp || blocked "cannot copy vkcomp"
   scp -q "${K[@]}" $S/host/vkprops-arm64 root@10.56.0.107:$B/vkprops || blocked "cannot copy vkprops"
-  scp -q "${K[@]}" $VH/host/diag/d2-ballot.spv $VH/host/diag/d3-elect.spv $VH/host/diag/d6-broadcast.spv $VH/host/diag/d8-cts-elect.spv $S/host/diag/d9-core.spv root@10.56.0.107:$B/diag/ || blocked "cannot copy the diag shaders"
+  scp -q "${K[@]}" $VH/host/diag/d2-ballot.spv $VH/host/diag/d3-elect.spv $VH/host/diag/d6-broadcast.spv $VH/host/diag/d8-cts-elect.spv $S/host/diag/d9-core.spv $S/host/diag/d10-raw.spv root@10.56.0.107:$B/diag/ || blocked "cannot copy the diag shaders"
   scp -q "${K[@]}" $H/harness/analysis/gpu/deqp-run.py root@10.56.0.107:$VK/deqp-run.py || blocked "cannot copy deqp-run.py"
   $SSH -n "chmod +x $B/vkcomp $B/vkprops"; }
 
@@ -162,10 +183,12 @@ cd /root; uname -v; t0=\$(cut -d' ' -f1 /proc/uptime)
 ( $FORKENV; timeout 60 $B/vkprops ) 2>&1 | grep -v '^ext '
 ( $FORKENV; timeout 60 $B/vkprops ) 2>&1 | grep -c '^ext ' | sed 's/^/deviceExtensions-listed /'
 ( $FORKENV; command -v vulkaninfo >/dev/null && timeout 60 vulkaninfo --summary 2>&1 | grep -E 'apiVersion|driverInfo|deviceName|conformanceVersion' | sed 's/^/vulkaninfo: /' )
-run1() { sh=\$1; lx=\$2; ly=\$3; lz=\$4; tag=fork-\$sh-\${lx}x\${ly}x\${lz}
-  out=\$( ( $FORKENV; timeout 30 $B/vkcomp $B/diag/\$sh.spv \$lx \$ly \$lz 4 2 2 1 2>&1 ) ); rc=\$?
+run1() { sh=\$1; lx=\$2; ly=\$3; lz=\$4; gx=\${5:-4}; gy=\${6:-2}; gz=\${7:-2}; tag=fork-\$sh-\${lx}x\${ly}x\${lz}
+  [ \$# -gt 4 ] && tag=\$tag-g\${gx}x\${gy}x\${gz}
+  out=\$( ( $FORKENV; timeout 30 $B/vkcomp $B/diag/\$sh.spv \$lx \$ly \$lz \$gx \$gy \$gz 1 2>&1 ) ); rc=\$?
   echo "DIAG \$tag rc=\$rc out=[\$(echo "\$out" | grep -v '^device\|^pipeline\|^dispatch' | head -2 | tr '\n' ' ' | sed 's/ *\$//')]"; }
 for ls in "1 1 1" "4 1 1" "3 5 7"; do run1 d9-core \$ls; done
+for a in "1 1 1 4 2 2" "4 1 1 4 2 2" "3 5 7 4 2 2" "64 1 1 16 8 1"; do run1 d10-raw \$a; done
 for sh in d2-ballot d3-elect d6-broadcast d8-cts-elect; do run1 \$sh 4 1 1; done
 $(dmesg_since)
 echo ROUND-DONE
@@ -187,10 +210,21 @@ if [ -f $D/STALLED ]; then # the case that was running when the host watchdog fi
   rm -f $D/STALLED
 fi
 if [ -f $D/summary.txt ]; then echo PART-COMPLETE; else
-  ( $FORKENV; cd $VK; exec systemd-run --quiet --scope -p MemoryMax=600M -p MemorySwapMax=64M python3 $VK/deqp-run.py --deqp $VK/deqp-vk --caselist $B/parts/$P.txt --out $D --jobs 1 --timeout 300 --budget $BUDGET ) > $D/round.out 2>&1 &
+  r0=\$(cat $D/shard-0.csv 2>/dev/null | wc -l)
+  ( $FORKENV; cd $VK; exec systemd-run --quiet --scope -p MemoryMax=600M -p MemorySwapMax=64M -p OOMPolicy=continue python3 $VK/deqp-run.py --deqp $VK/deqp-vk --caselist $B/parts/$P.txt --out $D --jobs 1 --timeout 300 --budget $BUDGET ) > $D/round.out 2>&1 &
   pid=\$!; echo \$pid > $B/round.pid
   while kill -0 \$pid 2>/dev/null; do sleep 30; echo PROGRESS \$(cat $D/shard-0.csv 2>/dev/null | wc -l); done
   wait \$pid; echo DEQP-RC \$?; rm -f $B/round.pid; tail -12 $D/round.out
+  r1=\$(cat $D/shard-0.csv 2>/dev/null | wc -l)
+  if [ "\$r1" != "\$r0" ]; then rm -f $D/noprog.txt
+  elif [ ! -f $D/summary.txt ] && [ -s $D/shard-0.current ]; then # no new row: count rounds stuck on the same case
+    c=\$(cat $D/shard-0.current); echo "\$c" >> $D/noprog.txt; n=\$(grep -cxF "\$c" $D/noprog.txt); echo "NOPROG \$c \$n"
+    if [ \$n -ge 2 ] && ! awk -F, -v c="\$c" '\$1==c{f=1} END{exit !f}' $D/shard-0.csv 2>/dev/null; then
+      if $(dmesg_since) | grep -q 'oom-kill'; then st=ResourceLimit; why="memcg OOM (600 MB) in \$n rounds without a result"
+      else st=Stuck; why="no result in \$n rounds (rc of deqp-run.py not 0)"; fi
+      echo "\$c,\$st,,\$why" >> $D/shard-0.csv; echo "STUCK-MARKED \$c \$st"; rm -f $D/noprog.txt
+    fi
+  fi
   rm -f $D/shard-0.qpa
   [ -f $D/summary.txt ] && echo PART-COMPLETE || echo PART-INCOMPLETE \$(cat $D/shard-0.csv 2>/dev/null | wc -l) of \$(wc -l < $B/parts/$P.txt)
 fi
@@ -233,6 +267,7 @@ run_round() { # run_round <part>: one round, copy off, finish the part if comple
   watch_run round $f || { after_stall $P; log "$P: stall (round log $f)"; }
   grep '^DMESG' $f >> $OUT/dmesg/$P.txt
   grep -q '^HANG-MARKED' $f && grep '^HANG-MARKED' $f | sed "s/^/$P /" | tee -a $OUT/runner.log
+  grep -q '^STUCK-MARKED' $f && grep '^STUCK-MARKED' $f | sed "s/^/$P /" | tee -a $OUT/runner.log
   grep -q '^NOSPACE' $f && blocked "board /root is full ($(grep '^NOSPACE' $f))"
   scp -q "${K[@]}" root@10.56.0.107:$B/res/$P/shard-0.csv $d/ 2>/dev/null   # copy-off every round
   local rows; rows=$(cat $d/shard-0.csv 2>/dev/null | wc -l); want=$(zcat $OUT/parts/$P.txt.gz | wc -l)
@@ -246,7 +281,7 @@ run_round() { # run_round <part>: one round, copy off, finish the part if comple
     $SSH -n "rm -rf $B/res/$P $B/parts/$P.txt $B/parts/$P.txt.gz"
     echo $P >> $OUT/state; log "$P done"
   fi
-  [ $nprog -ge 3 ] && blocked "$P: 3 rounds in a row without a new result (see $OUT/files/$P/round-*.txt)"; true; }
+  [ $nprog -ge 4 ] && blocked "$P: 4 rounds in a row without a new result even after stuck-case marking (see $OUT/files/$P/round-*.txt)"; true; }
 
 # ---------------- main ----------------
 log "job $J start ($(grep -c '^part-' $OUT/state) of $NPART parts done before; max hours ${MAXH})"

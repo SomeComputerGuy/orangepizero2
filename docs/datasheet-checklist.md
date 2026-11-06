@@ -273,7 +273,7 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 | SPI0 (NOR flash) | supported | spi-sun6i `sun8i-h3-spi` fallback, `jedec,spi-nor` 40 MHz, `mtd0` 2 MB | yes | OK | tracked |
 | SPI1 on the 26-pin header | supported | overlays `spidev1_*` | no | OK\* | tracked |
 | Master mode, modes 0–3, CS/CLK polarity, 64-byte FIFOs, IRQ/DMA, 3/4-wire, 1–32-bit frames | supported | spi-sun6i | partly (SPI0) | OK\* | tracked |
-| Slave mode | supported | **no target mode in spi-sun6i** | no | GAP | W33 |
+| Slave mode | supported | spi-sun6i target mode (standard `spi-slave` property, GCR.MODE = 0, PIO, abortable; host mode unchanged) on `fix/sunxi-h616-spi-i2c-target` + overlays `spi1-target` (SPI1 as target on PH5–PH8, handler via `/sys/class/spi_slave/spi1/slave`) and `spi-gpio-pc` (bit-banged test host on PC5–PC8) | no (job 20: target probe, spidev bind, abort; loopback only with 4 jumpers 13→23, 11→19, 22←21, 15→3) | OK\* | W33: merge + job 20; loopback jumpers = user hardware |
 | Dual/Quad I/O | supported | H616 cfg with DUAL/QUAD (UM §9.3.6 SPI_BCC bit 28 DRM, bit 29 Quad_EN, re-verified) + Zero2 NOR `spi-rx-bus-width = <2>` (fix/sunxi-h616-small-gaps, merged). Quad N/A on the Zero2 (WP#/HOLD# not on PC15/PC16) | no (job 19: debugfs params `1S-1S-2S`, eGON.BT0 magic + two identical mtd0 reads) | OK\* (dual) | W5: job 19. TCR sample mode fix `fix/sunxi-h616-spi-sample-mode` merged (222161752) |
 
 ### 2.10.5 TWI
@@ -282,9 +282,9 @@ Our DE33 is the regmap-based Armbian `patches.drm/0032–0048` (Jernej) + TVE YU
 |---|---|---|---|---|---|
 | TWI0–TWI4 master, 100/400 kHz, repeated START, arbitration | supported | i2c-mv64xxx, nodes disabled + overlays. Header has TWI3 (PH4/PH5) and TWI2/TWI1/TWI4 alternatives on the PH header pins. TWI0 (PI5/6) and TWI1-on-PI are RGMII → N/A | no | OK\* | tracked (26-pin header row) |
 | S_TWI0 | supported | `i2c@7081400` disabled | — | N/A: PL0/PL1 carry RSB to the AXP305 (`r_rsb` okay) | — |
-| Slave mode, own address/general call | supported | **i2c-mv64xxx has no slave support** | no | GAP | W33 |
+| Slave mode, own address/general call | supported | i2c-mv64xxx target mode for the Allwinner variant (`reg_target`, TWI_ADDR/TWI_XADDR 7- and 10-bit, states 0x60–0xC8, re-armed after own host transfers) on `fix/sunxi-h616-spi-i2c-target` + overlay `i2c3-ph-slave-eeprom` (24C02 emulation at 0x64 on PH4/PH5). General call: the Linux slave API has no consumer for it (GCE stays 0) | no (job 20: I2C_FUNC_SLAVE, i2c-slave-eeprom binds, host scan with the target armed; loopback to i2c2-ph with 2 jumpers 5↔8, 3↔10) | OK\* | W33: merge + job 20; loopback jumpers = user hardware |
 | 10-bit addressing | supported | i2c-mv64xxx supports 10-bit in master mode | no | OK\* | — |
-| DMA in master mode | supported | mv64xxx has no DMA path | no | GAP | W33 (low value) |
+| DMA in master mode | supported | mv64xxx has no DMA path (not part of W33's slave work) | no | GAP | low value, open |
 
 ### 2.10.6 CIR receiver
 
@@ -377,7 +377,7 @@ referenced from the tables above.
 | W18 | M | AHUB I2S3 overlay (merged) + DAM card overlay `ahub-dam` (fix/sunxi-h616-datasheet-w 821dfb5bd); job 19; loopback/DAC test needs wiring (user) | 2.8 |
 | W30 | M | USB2 standby wake-up from suspend: needs the 13-pin expansion board + a USB keyboard (user) | 2.10.1 |
 | W34 | M | PWM complementary/dead-time: no header pair on the Zero2 (pair 23 = PH2 + PH0 debug UART), user decision + analyser. Capture input: driver work, mainline v10 has none either | 2.10.7 |
-| W33 | M | SPI slave and I2C slave modes (driver work in spi-sun6i / i2c-mv64xxx) | 2.10.4, 2.10.5 |
+| W33 | M | ~~SPI slave and I2C slave modes~~ **done (host side)**: spi-sun6i target mode + i2c-mv64xxx target mode, overlays `spi1-target` / `spi-gpio-pc` / `i2c3-ph-slave-eeprom` (`fix/sunxi-h616-spi-i2c-target`, W=1 + dtc clean, not merged); runner job 20 (probe/bind/abort without wiring; loopbacks need the user's jumpers) | 2.10.4, 2.10.5 |
 | W22 | M | Extend `ve-encoder/SPEC.md` acceptance: MJPEG streams, 4096×4096, CBR/VBR 256k–100M, I/P single ref, 8 ROIs (needs a uAPI) | 2.4.2 |
 | W26 | M | AVS0/AVS1 counters: expose them or document them as unused (low value) | 2.6 |
 | W13 | L | ~~De-interlacer (DI300)~~ **done**: driver + node + IOMMU master 1 merged, board-tested 2026-11-03 (§4.1); smoke test in job 19; D6/D7 re-test open | 2.5.2 |

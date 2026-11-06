@@ -1,0 +1,13 @@
+Setting pipeline to PAUSED ...
+Pipeline is PREROLLING ...
+/GstPipeline:pipeline0/GstJpegParse:jpegparse0.GstPad:sink: caps = image/jpeg, width=(int)320, height=(int)240, framerate=(fraction)30/1, colorimetry=(string)1:4:0:0, chroma-site=(string)jpeg
+/GstPipeline:pipeline0/GstJpegParse:jpegparse0.GstPad:src: caps = image/jpeg, parsed=(boolean)true, width=(int)320, height=(int)240, sof-marker=(int)0, colorspace=(string)sYUV, sampling=(string)YCbCr-4:2:0, sampling-factors=(string)2x2:1x1:1x1, scans=(int)1, component-tables=(string)luma-chroma, colorimetry=(string)1:4:0:0, interlace-mode=(string)progressive, framerate=(fraction)30/1, pixel-aspect-ratio=(fraction)1/1
+ERROR: from element /GstPipeline:pipeline0/GstMatroskaDemux:matroskademux0: Internal data stream error.
+Additional debug info:
+../gst/matroska/matroska-demux.c(6394): gst_matroska_demux_loop (): /GstPipeline:pipeline0/GstMatroskaDemux:matroskademux0:
+streaming stopped, reason not-negotiated (-4)
+Details:
+details, flow-return=(int)-4;
+ERROR: pipeline doesn't want to preroll.
+Setting pipeline to NULL ...
+Freeing pipeline ...

@@ -92,8 +92,11 @@ Image branch stonking-orangepizero2 = c36a2e787 (c37 minus G2D).
 3. FFmpeg compose crop (harness/afbc-wb/ffmpeg-v4l2request-compose.diff) into the desktop FFmpeg patches.
 4. Rebuild images, then runner reflash (harness/REFLASH.md, server image) + verify-board.sh. Also closes job 24 check 1
    (gstreamer1.0-libav in every variant).
-5. Mesa fork (mesa-work/mesa-cl panfrost-opencl-fixes 0e274280595: RGB overfetch, G31 ballot/WMASK, A8 texel buffers,
-   all board PASS jobs 46/52) into the image: user decision + GitHub repo needed.
+5. Vulkan step 1 (user go 2026-11-06: "get the Vulkan support running"): ship the Mesa fork (mesa-work/mesa-cl
+   panfrost-opencl-fixes 0e274280595: RGB overfetch, G31 ballot/WMASK, A8 texel buffers; board PASS jobs 46/52) as the
+   image's Mesa in all variants, and set PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1 system-wide (panvk = Vulkan 1.0 on G31).
+   Checks: vulkaninfo/vkcube on the board, GNOME desktop still renders (GTK4 renderer choice), GLES/OpenCL no regressions.
+   Fork GitHub repo still to be created by the user (build from the local tree until then).
 
 ### C. Coding queue (one fresh agent at a time, in order)
 6. Ethernet: bulk host->board TCP stalls at exactly 512 KiB and 8000-byte pings lose ~33 % after ~1 h (seen on debug
@@ -111,8 +114,9 @@ Image branch stonking-orangepizero2 = c36a2e787 (c37 minus G2D).
     MPEG-4 VOL LOW_DELAY flag when the OPi5 draft is final; take OPi5 FFmpeg 0314 (copy only).
 14. Upstream GStreamer bug: v4l2videodec swallows not-negotiated on the output thread (EOS with no frame).
 15. GLES 3.2 in panfrost (fork branch panfrost-gs-tess; Arm blob traces, then GS/tess lowering, then KHR-GLES32).
-16. Vulkan 1.1: fork fixes in the image, Mesa ba09d293e54 (version gate), PAN_I_WANT_A_BROKEN_VULKAN_DRIVER (user's
-    call), full vk-main at 1.1 (~14 h). 2 create_device_global_priority cases still fail (as before).
+16. Vulkan step 2 = Vulkan 1.1 on G31 (user go 2026-11-06; FIRST coding item after the tearing work): Mesa
+    ba09d293e54 (version gate) in the fork, full vk-main at 1.1 (~14 h, resumable runner package), fix failures.
+    2 create_device_global_priority cases still fail (as before). Step 3 later: scope 1.2+ features vs. G31 hardware.
 17. Bluetooth LE connect + GATT (needs a phone; the host's LL privacy blocks a host test).
 18. Optional Armbian PR: pre-existing dtc warnings in sun50i-a64-pine64-7inch-lcd.dtso and the nanopi-r1s-h5 rtl8153 patch.
 
@@ -129,7 +133,7 @@ Image branch stonking-orangepizero2 = c36a2e787 (c37 minus G2D).
   (suspend power), jumpers for the W33 / header I2C-SPI-UART loopbacks; second board's console in serial.log.
 
 ### G. Waiting for the user
-- Report when ./build-all.sh is done (then B). Create the Mesa fork GitHub repo. PAN_I_WANT_A_BROKEN_VULKAN_DRIVER.
+- Report when ./build-all.sh is done (then B). Create the Mesa fork GitHub repo.
 - Go for upstream items (docs/upstream-queue.md) and the Armbian PRs (docs/prs/README.md).
 
 ### Done 2026-11-06 (board PASS)

@@ -25,3 +25,25 @@ kernel: #38 SMP PREEMPT Fri Nov  6 10:29:47 UTC 2026
 2026-11-06 14:04:45 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 
 released by runner-afbc-1793973597
 2026-11-06 14:04:45 job afbc end: 0 of 5 chunks done
+2026-11-06 15:03:37 job afbc start, kernel c38 (Image md5 f7fc82bd55173cf0ddd56a15ff9a72d6), chunks: vp9p2 hevc10 avs2 hevc8 vp9p0, done before: 
+2026-11-06 15:03:37 acquired by runner-afbc-1793977417
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+dtb sun50i-h616-orangepi-zero2.dtb.vdec-c38 md5 aa4d5bbb33e171e32c349e413c68f12c
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+kernel: #38 SMP PREEMPT Fri Nov  6 10:29:47 UTC 2026
+23M	/home/aruni/orangepizero2/mesa-work/deploy/main
+2026-11-06 15:05:49 deployed main ok (mesa 15bd751e896, libgallium-27.0.0-devel.so md5 4d42fdd7c40fcb1961740d856fd6cdba)
+2026-11-06 15:05:49 chunk vp9p2 start
+2026-11-06 15:06:14 chunk vp9p2 done
+2026-11-06 15:06:14 chunk hevc10 start
+2026-11-06 15:06:39 chunk hevc10 done
+2026-11-06 15:06:39 chunk avs2 start
+2026-11-06 15:07:05 chunk avs2 done
+2026-11-06 15:07:05 chunk hevc8 start
+2026-11-06 15:07:30 chunk hevc8 done
+2026-11-06 15:07:30 chunk vp9p0 start
+2026-11-06 15:07:54 chunk vp9p0 done
+restore: Image=vmlinuz-7.3.1-edge-sunxi64 dtb=sun50i-h616-orangepi-zero2.dtb.stock
+2026-11-06 15:08:40 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 
+released by runner-afbc-1793977417
+2026-11-06 15:08:40 job afbc end: 5 of 5 chunks done

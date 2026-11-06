@@ -1,0 +1,29 @@
+#38 SMP PREEMPT Fri Nov  6 10:29:47 UTC 2026
+DMESG-START 790
+TRACE-ON
+PROG t=60s run=86 done=86 timedout=5
+PROG t=120s run=132 done=131 timedout=53
+TDIM 1 quick_2d_explicit_local RC 0 t=155s
+TDIM 1 quick_2d_explicit_local: quick_2d_explicit_local...
+TDIM 1 quick_2d_explicit_local: quick_2d_explicit_local passed
+TDIM 1 quick_2d_explicit_local: PASSED sub-test.
+TDIM 1 quick_2d_explicit_local: PASSED test.
+PROG t=180s run=188 done=188 timedout=94
+PROG t=240s run=262 done=261 timedout=113
+PROG t=300s run=292 done=292 timedout=180
+TDIM 2 quick_2d_explicit_local RC 0 t=154s
+TDIM 2 quick_2d_explicit_local: quick_2d_explicit_local...
+TDIM 2 quick_2d_explicit_local: quick_2d_explicit_local passed
+TDIM 2 quick_2d_explicit_local: PASSED sub-test.
+TDIM 2 quick_2d_explicit_local: PASSED test.
+PROG t=360s run=374 done=374 timedout=190
+PROG t=421s run=424 done=423 timedout=232
+TDIM 3 quick_2d_explicit_local RC 0 t=154s
+TDIM 3 quick_2d_explicit_local: quick_2d_explicit_local...
+TDIM 3 quick_2d_explicit_local: quick_2d_explicit_local passed
+TDIM 3 quick_2d_explicit_local: PASSED sub-test.
+TDIM 3 quick_2d_explicit_local: PASSED test.
+TDIM-TRACE run=444 done=444 timedout=281
+CHUNK-RC 0
+ROUND-DONE
+TRACE: TIMEDOUT 0

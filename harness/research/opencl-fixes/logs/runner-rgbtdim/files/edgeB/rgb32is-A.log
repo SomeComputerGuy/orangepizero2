@@ -1,0 +1,4 @@
+CASE rgb32is RGB SIGNED_INT32 3D 25x128x32 texel 12 B row 320 B data 0x140000 B, last texel at 0x13ffe0
+RESULT rgb32is rep 0 enqueue 0 finish 0 stored 12 of 64
+RESULT rgb32is rep 1 enqueue 0 finish 0 stored 0 of 64
+RESULT rgb32is rep 2 enqueue 0 finish 0 stored 4 of 64

@@ -1,0 +1,36 @@
+2026-11-06 14:11:34 job rgbtdim start, kernel c38 (Image md5 f7fc82bd55173cf0ddd56a15ff9a72d6), chunks: edgeA edgeB edgeA2 edgeB2 ctsA ctsB ctsA2 ctsB2 s32B tdim2x tdim3e tdim3i, done before: 
+2026-11-06 14:11:34 acquired by runner-rgbtdim-1793974294
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+dtb sun50i-h616-orangepi-zero2.dtb.vdec-c38 md5 aa4d5bbb33e171e32c349e413c68f12c
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+kernel: #38 SMP PREEMPT Fri Nov  6 10:29:47 UTC 2026
+2026-11-06 14:13:38 kernel fix: present (panfrost.ko md5 9014bbc7a2b41c667e3c562193d22eec)
+65M	/home/aruni/orangepizero2/mesa-work/deploy/cl3
+2026-11-06 14:14:21 deployed cl3 ok (mesa-cl 02df5721016, libRusticlOpenCL md5 598e32eada258ac0d43b1abf166d12ce); cl2 present
+2026-11-06 14:14:21 chunk edgeA start
+2026-11-06 14:15:10 chunk edgeA done
+2026-11-06 14:15:10 chunk edgeB start
+2026-11-06 14:15:38 chunk edgeB done
+2026-11-06 14:15:38 chunk edgeA2 start
+2026-11-06 14:16:06 chunk edgeA2 done
+2026-11-06 14:16:06 chunk edgeB2 start
+2026-11-06 14:16:35 chunk edgeB2 done
+2026-11-06 14:16:35 chunk ctsA start
+2026-11-06 14:17:43 chunk ctsA done
+2026-11-06 14:17:43 chunk ctsB start
+2026-11-06 14:18:51 chunk ctsB done
+2026-11-06 14:18:51 chunk ctsA2 start
+2026-11-06 14:19:59 chunk ctsA2 done
+2026-11-06 14:19:59 chunk ctsB2 start
+2026-11-06 14:21:07 chunk ctsB2 done
+2026-11-06 14:21:07 chunk s32B start
+2026-11-06 14:26:16 chunk s32B done
+2026-11-06 14:26:16 chunk tdim2x start
+2026-11-06 14:34:48 chunk tdim2x done
+2026-11-06 14:34:48 chunk tdim3e start
+2026-11-06 14:50:20 chunk tdim3e done
+2026-11-06 14:50:20 chunk tdim3i start
+2026-11-06 14:52:51 chunk tdim3i done
+2026-11-06 14:53:41 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 
+released by runner-rgbtdim-1793974294
+2026-11-06 14:53:41 job rgbtdim end: 12 of 12 chunks done

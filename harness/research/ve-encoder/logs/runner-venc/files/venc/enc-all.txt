@@ -46,7 +46,7 @@ Format Video Output:
 	Pixel Format      : 'NV12' (Y/UV 4:2:0)
 	Field             : None
 	Bytes per Line    : 1280
-	Size Image        : 1382400
+	Size Image        : 1402880
 	Colorspace        : Default
 	Transfer Function : Default (maps to Rec. 709)
 	YCbCr/HSV Encoding: Default (maps to ITU-R 601)

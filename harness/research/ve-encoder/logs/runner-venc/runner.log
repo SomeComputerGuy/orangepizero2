@@ -1,0 +1,24 @@
+2026-11-06 01:58:34 job venc start, kernel c25 (Image md5 de8e87b28a1cb43b3b96d83c69f3577e), venc commit f35cdf390, chunks: venc, done before: 
+2026-11-06 01:58:34 acquired by runner-venc-venc-1793930314
+shipped /root/venc/h264enc-test b06757d8cd45fbb58107268b777a0468413a1bfdb516c9b1f358a77153d868ab
+shipped /root/venc/clips/testsrc2-1280x720-30.nv12 72dda9782300bf7b1042774d33090fb0e1363a16cf3a817879a8deb68f722fd1
+2026-11-06 01:58:53 BLOCKED: kernel c25 (04964f921) lacks the venc commit f35cdf390
+2026-11-06 01:59:42 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 
+released by runner-venc-venc-1793930314
+2026-11-06 05:05:29 job venc start, kernel c27 (Image md5 5a5a047651e74096a29b0c153fdb221c), venc commit f35cdf390, chunks: venc, done before: 
+2026-11-06 05:05:29 acquired by runner-venc-venc-1793941529
+2026-11-06 05:05:35 h264enc-test on the board is current (b06757d8cd45fbb58107268b777a0468413a1bfdb516c9b1f358a77153d868ab)
+2026-11-06 05:05:40 testsrc2-1280x720-30.nv12 on the board is current (72dda9782300bf7b1042774d33090fb0e1363a16cf3a817879a8deb68f722fd1)
+2026-11-06 05:05:42 testsrc2-1280x720-30.nv12 on the board is current (72dda9782300bf7b1042774d33090fb0e1363a16cf3a817879a8deb68f722fd1)
+shipped /root/venc/clips/testsrc2-1920x1080-10.nv12 537faaf405ba9518d3ddfa755f2c994606156a545124b51e8d03fae173b7a23a
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+dtb sun50i-h616-orangepi-zero2.dtb.vdec-c27 md5 fbb509889a4cba869d6985f4e549039a
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+kernel: #25 SMP PREEMPT Fri Nov  6 04:18:02 UTC 2026
+2026-11-06 05:07:46 kernel encoder: Encoder registered as /dev/video1
+2026-11-06 05:07:46 chunk venc start
+2026-11-06 05:10:58 STALL: chunk venc no output for 180 s, killing ssh 2595678
+2026-11-06 05:10:59 chunk venc ended without ROUND-DONE
+2026-11-06 05:16:17 BOARD UNREACHABLE after restore reboot
+released by runner-venc-venc-1793941529
+2026-11-06 05:16:17 job venc end: 0 of 1 chunks done; results in /home/aruni/orangepizero2/harness/research/ve-encoder/logs/runner-venc/results.txt

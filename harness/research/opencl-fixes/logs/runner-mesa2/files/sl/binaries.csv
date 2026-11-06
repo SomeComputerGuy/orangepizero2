@@ -1,0 +1,4 @@
+suite,verdict,exit,summary,seconds,command
+Images (Samplerless int),Pass,0,PASSED 6 of 6 tests.,22,images/samplerlessReads/test_samplerless_reads int
+Images (Samplerless uint),Pass,0,PASSED 6 of 6 tests.,18,images/samplerlessReads/test_samplerless_reads uint
+Images (Samplerless float),Fail,1,FAILED 1 of 6 tests.,41,images/samplerlessReads/test_samplerless_reads float

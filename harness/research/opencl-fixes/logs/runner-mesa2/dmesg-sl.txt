@@ -1,0 +1,1 @@
+DMESG: [  181.788808] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0xa010240, tail=0xa010240

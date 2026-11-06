@@ -1,0 +1,36 @@
+2026-11-06 12:05:58 fork: dc7266d584b (contains a0a4534b14d), lib d7f49a679bacb7f7632a1d719ce48ef6
+2026-11-06 12:05:58 job mesa2 start, chunks: sl basic-a basic-b basic-c basic-d f2d-r2d f2d-r2da f2d-w f2d-rw imgA imgB imgC imgD reg, done before: 
+2026-11-06 12:05:58 acquired by runner-mesa2-1793966758
+kernel: #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026
+66M	/home/aruni/orangepizero2/mesa-work/deploy/cl2
+2026-11-06 12:06:24 deployed cl2 ok (libRusticlOpenCL md5 65426c07af5f2a0de70925cfe97f3e0d)
+2026-11-06 12:06:29 chunk sl start
+2026-11-06 12:08:13 chunk sl done
+2026-11-06 12:08:13 chunk basic-a start
+2026-11-06 12:09:35 chunk basic-a done
+2026-11-06 12:09:35 chunk basic-b start
+2026-11-06 12:20:39 chunk basic-b done
+2026-11-06 12:20:39 chunk basic-c start
+2026-11-06 12:22:23 chunk basic-c done
+2026-11-06 12:22:23 chunk basic-d start
+2026-11-06 12:33:46 chunk basic-d done
+2026-11-06 12:33:46 chunk f2d-r2d start
+2026-11-06 12:39:28 chunk f2d-r2d done
+2026-11-06 12:39:28 chunk f2d-r2da start
+2026-11-06 12:53:50 chunk f2d-r2da done
+2026-11-06 12:53:50 chunk f2d-w start
+2026-11-06 12:54:54 chunk f2d-w done
+2026-11-06 12:54:54 chunk f2d-rw start
+2026-11-06 12:55:37 chunk f2d-rw done
+2026-11-06 12:55:37 chunk imgA start
+2026-11-06 13:05:41 chunk imgA done
+2026-11-06 13:05:41 chunk imgB start
+2026-11-06 13:13:45 chunk imgB done
+2026-11-06 13:13:45 chunk imgC start
+2026-11-06 13:22:09 chunk imgC done
+2026-11-06 13:22:09 chunk imgD start
+2026-11-06 13:30:13 chunk imgD done
+2026-11-06 13:30:13 chunk reg start
+2026-11-06 13:38:37 chunk reg done
+released by runner-mesa2-1793966758
+2026-11-06 13:38:37 job mesa2 end: 14 of 14 chunks done

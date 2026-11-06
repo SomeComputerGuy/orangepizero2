@@ -1,0 +1,14 @@
+suite,verdict,exit,summary,seconds,command
+Images (Samplerless int),Pass,0,PASSED 6 of 6 tests.,22,images/samplerlessReads/test_samplerless_reads int
+Images (Samplerless uint),Pass,0,PASSED 6 of 6 tests.,18,images/samplerlessReads/test_samplerless_reads uint
+Images (Samplerless float),Fail,1,FAILED 1 of 6 tests.,41,images/samplerlessReads/test_samplerless_reads float
+Images (API Info),Pass,0,PASSED 6 of 6 tests.,121,images/clGetInfo/test_cl_get_info
+Images (Kernel Methods),Pass,0,PASSED 6 of 6 tests.,79,images/kernel_image_methods/test_kernel_image_methods
+Images (clCopyImage 1D),Pass,0,PASSED 5 of 5 tests.,69,images/clCopyImage/test_cl_copy_images 1D 1DTo1Dbuffer 1Darray 1Dbuffer 1DbufferTo1D
+Images (clReadWriteImage),Pass,0,PASSED 6 of 6 tests.,78,images/clReadWriteImage/test_cl_read_write_images
+Images (clFillImage int),Pass,0,PASSED 6 of 6 tests.,115,images/clFillImage/test_cl_fill_images int
+Images (clFillImage uint),Pass,0,PASSED 6 of 6 tests.,125,images/clFillImage/test_cl_fill_images uint
+Images (Kernel 1D int),Pass,0,PASSED 2 of 2 tests.,176,images/kernel_read_write/test_image_streams CL_FILTER_NEAREST int 1D 1Darray
+Images (clFillImage float),Pass,0,PASSED 6 of 6 tests.,290,images/clFillImage/test_cl_fill_images float
+Images (Kernel 1D uint),Pass,0,PASSED 2 of 2 tests.,197,images/kernel_read_write/test_image_streams CL_FILTER_NEAREST uint 1D 1Darray
+Images (Kernel 1D float),Pass,0,PASSED 2 of 2 tests.,292,images/kernel_read_write/test_image_streams CL_FILTER_NEAREST float 1D 1Darray

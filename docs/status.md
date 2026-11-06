@@ -103,7 +103,8 @@ Image branch stonking-orangepizero2 = 90b5e7da2 (c36a2e787 + AFBC compose, wb re
 ### C. Coding queue (one fresh agent at a time, in order)
 6. Ethernet: bulk host->board TCP stalls at exactly 512 KiB and 8000-byte pings lose ~33 % after ~1 h (seen on debug
    kernels); retest on the image kernel first. Jumbo fix 0e2765af5 (max_mtu 2018) is in the image.
-7. panfrost: WARN in panfrost_mmu_map (panfrost_mmu.c:478) when 2 GLES 3.1 OOM cases hit the memcg limit; return an error.
+7. panfrost: WARN in panfrost_mmu_map under memcg OOM: WARN gone since da59f9208 (c39+); unwind fixes a524d09da in c48,
+   runner job 63-panfrost-map-enomem queued (harness/research/panfrost-map-enomem/RESULTS.md).
 8. Job 16 kbase trace step segfault (rc 139); harness ssh needs ServerAlive + timeout seen by the stall watchdog
    (kbase-traces.sh hung 1.5 h across a reboot).
 9. JPEG greyscale decode: fold in the 11-03 probe result.

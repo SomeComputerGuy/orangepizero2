@@ -1,0 +1,24 @@
+#sessionInfo releaseName 54436699e326efdd3b152bb487c675bdae85aafd
+#sessionInfo releaseId 0x54436699
+#sessionInfo targetName "Vulkan Headless"
+#sessionInfo logFormatVersion "0.3.4"
+#sessionInfo vendorID 0x13b5
+#sessionInfo deviceID 0x70930000
+#sessionInfo deviceName Mali-G31 MC1
+#sessionInfo commandLineParameters "--deqp-case=dEQP-VK.subgroups.ballot_broadcast.compute.subgroupbroadcast_int8_t --deqp-log-images=disable --deqp-log-shader-sources=disable --deqp-shadercache=disable --deqp-log-filename=/root/vkhangs/logs/dEQP-VK.subgroups.ballot_broadcast.compute.subgroupbroadcast_int8_t.qpa"
+
+#beginSession
+
+#beginTestCaseResult dEQP-VK.subgroups.ballot_broadcast.compute.subgroupbroadcast_int8_t
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult CasePath="dEQP-VK.subgroups.ballot_broadcast.compute.subgroupbroadcast_int8_t" Version="0.3.4" CaseType="SelfValidate">
+ <Text>Device does not support the specified format in subgroup operations at vktSubgroupsBallotBroadcastTests.cpp:273</Text>
+ <Number Name="TestDuration" Description="Test case duration in microseconds" Tag="Time" Unit="us">9533</Number>
+ <Result StatusCode="NotSupported">Device does not support the specified format in subgroup operations at vktSubgroupsBallotBroadcastTests.cpp:273</Result>
+</TestCaseResult>
+
+#endTestCaseResult
+
+Run took 0.25 seconds
+
+#endSession

@@ -1,0 +1,37 @@
+2026-11-05 22:38:57 note: mesa-cl has uncommitted changes under src/
+2026-11-05 22:38:58 fork: a516f2c3ddc (contains b7a705442bd), lib baaf35da9e1444a4ccab99fc222593a4
+2026-11-05 22:51:40 fork: dc7266d584b (contains b7a705442bd), lib c439037226760ad38e2a39bf0a38c565; kernel c17 (7897dec08, Image md5 22330a4caccc513b757e743934c2700f)
+2026-11-06 10:38:44 fork: dc7266d584b (contains b7a705442bd), lib c439037226760ad38e2a39bf0a38c565; kernel c38 (76bd27766, Image md5 f7fc82bd55173cf0ddd56a15ff9a72d6)
+2026-11-06 10:38:44 job vkhangs start, chunks: diag cases-sg cases-frag-a cases-frag-b subset1 subset2 subset3 subset4 ocl gles, done before: 
+2026-11-06 10:38:44 acquired by runner-vkhangs-1793961524
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+dtb sun50i-h616-orangepi-zero2.dtb.vdec-c38 md5 aa4d5bbb33e171e32c349e413c68f12c
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+2026-11-06 10:40:30 kernel fix: present (c38 contains e544ddb00)
+kernel: #38 SMP PREEMPT Fri Nov  6 10:29:47 UTC 2026
+66M	/home/aruni/orangepizero2/mesa-work/deploy/vk1
+2026-11-06 10:40:51 deployed vk1 ok (libvulkan_panfrost md5 6a7431597d2f374821a6b08dc9ff297d)
+usage: see source
+2026-11-06 10:41:02 chunk diag start
+2026-11-06 10:41:26 chunk diag done
+2026-11-06 10:41:26 chunk cases-sg start
+2026-11-06 10:41:51 chunk cases-sg done
+2026-11-06 10:41:51 chunk cases-frag-a start
+2026-11-06 10:42:14 chunk cases-frag-a done
+2026-11-06 10:42:14 chunk cases-frag-b start
+2026-11-06 10:42:37 chunk cases-frag-b done
+2026-11-06 10:42:37 chunk subset1 start
+2026-11-06 10:45:02 chunk subset1 done
+2026-11-06 10:45:02 chunk subset2 start
+2026-11-06 10:45:25 chunk subset2 done
+2026-11-06 10:45:25 chunk subset3 start
+2026-11-06 10:45:50 chunk subset3 done
+2026-11-06 10:45:50 chunk subset4 start
+2026-11-06 10:46:14 chunk subset4 done
+2026-11-06 10:46:14 chunk ocl start
+2026-11-06 10:59:59 chunk ocl done
+2026-11-06 10:59:59 chunk gles start
+2026-11-06 11:00:22 chunk gles done
+2026-11-06 11:01:17 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 
+released by runner-vkhangs-1793961524
+2026-11-06 11:01:17 job vkhangs end: 10 of 10 chunks done

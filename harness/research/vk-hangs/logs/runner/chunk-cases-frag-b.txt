@@ -1,0 +1,7 @@
+#38 SMP PREEMPT Fri Nov  6 10:29:47 UTC 2026
+DMESG-START 688
+CASE dEQP-VK.spirv_assembly.type.vec4.i8.bit_field_insert_offset16_count64_frag rc=0 t=4s result=[ Pass (Rendered output matches input)] msg=[]
+CASE dEQP-VK.spirv_assembly.type.vec4.i64.bit_field_u_extract_offset8_count16_frag rc=0 t=4s result=[ Pass (Rendered output matches input)] msg=[]
+CASE dEQP-VK.spirv_assembly.type.vec4.u64.bit_field_insert_offset8_count64_frag rc=0 t=5s result=[ Pass (Rendered output matches input)] msg=[]
+CHUNK-RC 0
+ROUND-DONE

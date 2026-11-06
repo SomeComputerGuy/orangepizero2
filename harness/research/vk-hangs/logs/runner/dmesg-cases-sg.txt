@@ -1,0 +1,9 @@
+DMESG-START 684
+DMESG dEQP-VK.subgroups.basic.compute.subgroupelect: [   92.994621] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12a20080, tail=0x12a20080
+DMESG dEQP-VK.subgroups.basic.graphics.subgroupelect: [   94.958449] panfrost 1800000.gpu: js fault, js=0, status=INSTR_INVALID_ENC, head=0x12a26500, tail=0x12a26500
+DMESG dEQP-VK.subgroups.ballot_broadcast.compute.subgroupbroadcast_uint: [   97.016755] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12a2c080, tail=0x12a2c080
+DMESG dEQP-VK.subgroups.basic.compute.subgroupbarrier: [   98.328031] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12a2c080, tail=0x12a2c080
+DMESG: [   92.994621] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12a20080, tail=0x12a20080
+DMESG: [   94.958449] panfrost 1800000.gpu: js fault, js=0, status=INSTR_INVALID_ENC, head=0x12a26500, tail=0x12a26500
+DMESG: [   97.016755] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12a2c080, tail=0x12a2c080
+DMESG: [   98.328031] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12a2c080, tail=0x12a2c080

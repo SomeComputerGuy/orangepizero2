@@ -1,0 +1,8 @@
+#38 SMP PREEMPT Fri Nov  6 10:29:47 UTC 2026
+DMESG-START 700
+556 /root/vkhangs/gles3-derivate.txt
+caselist /root/vkhangs/gles3-derivate.txt, 556 cases, 12 s
+Pass                   556
+
+CHUNK-RC 0
+ROUND-DONE

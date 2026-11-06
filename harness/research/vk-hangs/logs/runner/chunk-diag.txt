@@ -1,0 +1,103 @@
+#38 SMP PREEMPT Fri Nov  6 10:29:47 UTC 2026
+DMESG-START 663
+DIAG fork-d1-plain-1x1x1 rc=0 excs=[1x0x1 ] out=[1000 1000 1000 1000 1000 1000 1000 1000 1000 1000 1000 1000 1000 1000 1000 1000] wait=[dispatch 4 2 2: wait -> 0]
+DIAG fork-d1-plain-4x1x1 rc=0 excs=[1x0x1 ] out=[1000 1001 1002 1003 1000 1001 1002 1003 1000 1001 1002 1003 1000 1001 1002 1003] wait=[dispatch 4 2 2: wait -> 0]
+DIAG fork-d1-plain-3x5x7 rc=0 excs=[1x0x1 ] out=[1000 1001 1002 1000 1001 1002 1000 1001 1002 1000 1001 1002 1003 1004 1005 1003] wait=[dispatch 4 2 2: wait -> 0]
+/root/vkhangs/chunk-diag.sh: line 9:  4401 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG fork-d2-ballot-1x1x1 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG fork-d2-ballot-1x1x1: [   67.588626] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+/root/vkhangs/chunk-diag.sh: line 9:  4449 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG fork-d2-ballot-4x1x1 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG fork-d2-ballot-4x1x1: [   67.859768] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+/root/vkhangs/chunk-diag.sh: line 9:  4484 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG fork-d2-ballot-3x5x7 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG fork-d2-ballot-3x5x7: [   68.093843] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+/root/vkhangs/chunk-diag.sh: line 9:  4519 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG fork-d3-elect-1x1x1 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG fork-d3-elect-1x1x1: [   68.327952] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+/root/vkhangs/chunk-diag.sh: line 9:  4554 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG fork-d3-elect-4x1x1 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG fork-d3-elect-4x1x1: [   68.561846] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+/root/vkhangs/chunk-diag.sh: line 9:  4589 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG fork-d3-elect-3x5x7 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG fork-d3-elect-3x5x7: [   68.803950] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DIAG fork-d4-shared-1x1x1 rc=0 excs=[1x0x1 ] out=[1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1] wait=[dispatch 4 2 2: wait -> 0]
+DIAG fork-d4-shared-4x1x1 rc=0 excs=[1x0x1 ] out=[4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4] wait=[dispatch 4 2 2: wait -> 0]
+DIAG fork-d4-shared-3x5x7 rc=0 excs=[1x0x1 ] out=[4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4] wait=[dispatch 4 2 2: wait -> 0]
+DIAG fork-d5-ids-1x1x1 rc=0 excs=[1x0x1 ] out=[262144 262144 262144 262144 262144 262144 262144 262144 262144 262144 262144 262] wait=[dispatch 4 2 2: wait -> 0]
+DIAG fork-d5-ids-4x1x1 rc=0 excs=[1x0x1 ] out=[262144 262145 262146 262147 262144 262145 262146 262147 262144 262145 262146 262] wait=[dispatch 4 2 2: wait -> 0]
+DIAG fork-d5-ids-3x5x7 rc=0 excs=[1x0x1 ] out=[262144 262145 262146 262144 262145 262146 262144 262145 262146 262144 262145 262] wait=[dispatch 4 2 2: wait -> 0]
+DIAG fork-d6-broadcast-1x1x1 rc=0 excs=[1x0x1 ] out=[256 256 256 256 256 256 256 256 256 256 256 256 256 256 256 256] wait=[dispatch 4 2 2: wait -> 0]
+DIAG fork-d6-broadcast-4x1x1 rc=0 excs=[1x0x1 ] out=[260 260 260 260 260 260 260 260 260 260 260 260 260 260 260 260] wait=[dispatch 4 2 2: wait -> 0]
+DIAG fork-d6-broadcast-3x5x7 rc=0 excs=[1x0x1 ] out=[260 260 260 260 260 260 260 260 260 260 260 260 260 260 260 260] wait=[dispatch 4 2 2: wait -> 0]
+/root/vkhangs/chunk-diag.sh: line 9:  4939 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG fork-d7-vote-1x1x1 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG fork-d7-vote-1x1x1: [   71.155177] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+/root/vkhangs/chunk-diag.sh: line 9:  4974 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG fork-d7-vote-4x1x1 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG fork-d7-vote-4x1x1: [   71.391078] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+/root/vkhangs/chunk-diag.sh: line 9:  5009 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG fork-d7-vote-3x5x7 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG fork-d7-vote-3x5x7: [   71.628613] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+/root/vkhangs/chunk-diag.sh: line 9:  5044 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG fork-d8-cts-elect-1x1x1 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG fork-d8-cts-elect-1x1x1: [   71.871775] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+/root/vkhangs/chunk-diag.sh: line 9:  5079 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG fork-d8-cts-elect-4x1x1 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG fork-d8-cts-elect-4x1x1: [   72.113048] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+/root/vkhangs/chunk-diag.sh: line 9:  5114 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG fork-d8-cts-elect-3x5x7 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG fork-d8-cts-elect-3x5x7: [   72.356327] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DIAG sys-d1-plain-1x1x1 rc=0 excs=[1x0x1 ] out=[1000 1000 1000 1000 1000 1000 1000 1000 1000 1000 1000 1000 1000 1000 1000 1000] wait=[dispatch 4 2 2: wait -> 0]
+DIAG sys-d1-plain-4x1x1 rc=0 excs=[1x0x1 ] out=[1000 1001 1002 1003 1000 1001 1002 1003 1000 1001 1002 1003 1000 1001 1002 1003] wait=[dispatch 4 2 2: wait -> 0]
+DIAG sys-d1-plain-3x5x7 rc=0 excs=[1x0x1 ] out=[1000 1001 1002 1000 1001 1002 1000 1001 1002 1000 1001 1002 1003 1004 1005 1003] wait=[dispatch 4 2 2: wait -> 0]
+/root/vkhangs/chunk-diag.sh: line 9:  5254 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG sys-d2-ballot-1x1x1 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG sys-d2-ballot-1x1x1: [   73.675452] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+/root/vkhangs/chunk-diag.sh: line 9:  5289 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG sys-d2-ballot-4x1x1 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG sys-d2-ballot-4x1x1: [   73.910149] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+/root/vkhangs/chunk-diag.sh: line 9:  5324 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG sys-d2-ballot-3x5x7 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG sys-d2-ballot-3x5x7: [   74.146167] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+/root/vkhangs/chunk-diag.sh: line 9:  5359 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG sys-d3-elect-1x1x1 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG sys-d3-elect-1x1x1: [   74.416681] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+/root/vkhangs/chunk-diag.sh: line 9:  5394 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG sys-d3-elect-4x1x1 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG sys-d3-elect-4x1x1: [   74.652090] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+/root/vkhangs/chunk-diag.sh: line 9:  5429 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG sys-d3-elect-3x5x7 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG sys-d3-elect-3x5x7: [   74.888480] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+/root/vkhangs/chunk-diag.sh: line 9:  5464 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG sys-d6-broadcast-1x1x1 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG sys-d6-broadcast-1x1x1: [   75.130593] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+/root/vkhangs/chunk-diag.sh: line 9:  5499 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG sys-d6-broadcast-4x1x1 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG sys-d6-broadcast-4x1x1: [   75.366422] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+/root/vkhangs/chunk-diag.sh: line 9:  5534 Aborted                    timeout 30 /root/vkhangs/vkcomp /root/vkhangs/diag/$sh.spv $lx $ly $lz 4 2 2 $nb 2>&1
+DIAG sys-d6-broadcast-3x5x7 rc=134 excs=[1x0x51 ] out=[Incomplete job or timeout] wait=[]
+DMESG sys-d6-broadcast-3x5x7: [   75.601256] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+CHUNK-RC 0
+DMESG: [   67.588626] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   67.859768] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   68.093843] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   68.327952] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   68.561846] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   68.803950] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   71.155177] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   71.391078] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   71.628613] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   71.871775] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   72.113048] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   72.356327] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   73.675452] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   73.910149] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   74.146167] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   74.416681] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   74.652090] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   74.888480] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   75.130593] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   75.366422] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+DMESG: [   75.601256] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12b20080, tail=0x12b20080
+ROUND-DONE

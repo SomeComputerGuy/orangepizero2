@@ -1,0 +1,6 @@
+Writing test log into /root/vkhangs/logs/dEQP-VK.subgroups.basic.graphics.subgroupelect.qpa
+dEQP Core 54436699e326efdd3b152bb487c675bdae85aafd (0x54436699) starting..
+  target implementation = 'Vulkan Headless'
+
+Test case 'dEQP-VK.subgroups.basic.graphics.subgroupelect'..
+Incomplete job or timeout

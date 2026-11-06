@@ -1,0 +1,13 @@
+DMESG-START 688
+DMESG: [  245.938548] panfrost 1800000.gpu: js fault, js=0, status=INSTR_INVALID_ENC, head=0x12aa8500, tail=0x12aa8500
+DMESG: [  248.510189] panfrost 1800000.gpu: js fault, js=0, status=INSTR_INVALID_ENC, head=0x12a67500, tail=0x12a67500
+DMESG: [  251.100744] panfrost 1800000.gpu: js fault, js=0, status=INSTR_INVALID_ENC, head=0x12a67500, tail=0x12a67500
+DMESG: [  253.546372] panfrost 1800000.gpu: js fault, js=0, status=INSTR_INVALID_ENC, head=0x12a67500, tail=0x12a67500
+DMESG: [  256.003645] panfrost 1800000.gpu: js fault, js=0, status=INSTR_INVALID_ENC, head=0x12a67840, tail=0x12a67840
+DMESG: [  259.088777] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12a20080, tail=0x12a20080
+DMESG: [  261.592946] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12a2c080, tail=0x12a2c080
+DMESG: [  264.034773] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12a2c080, tail=0x12a2c080
+DMESG: [  266.476207] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12a2c080, tail=0x12a2c080
+DMESG: [  268.912327] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12a2c080, tail=0x12a2c080
+DMESG: [  271.359780] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12a2c240, tail=0x12a2c240
+DMESG: [  274.501626] panfrost 1800000.gpu: js fault, js=0, status=INSTR_INVALID_ENC, head=0x12a26500, tail=0x12a26500

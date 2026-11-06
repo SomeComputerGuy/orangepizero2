@@ -1,0 +1,101 @@
+#sessionInfo releaseName 54436699e326efdd3b152bb487c675bdae85aafd
+#sessionInfo releaseId 0x54436699
+#sessionInfo targetName "Vulkan Headless"
+#sessionInfo logFormatVersion "0.3.4"
+#sessionInfo vendorID 0x13b5
+#sessionInfo deviceID 0x70930000
+#sessionInfo deviceName Mali-G31 MC1
+#sessionInfo commandLineParameters "--deqp-case=dEQP-VK.subgroups.basic.graphics.subgroupelect --deqp-log-images=disable --deqp-log-shader-sources=disable --deqp-shadercache=disable --deqp-log-filename=/root/vkhangs/logs/dEQP-VK.subgroups.basic.graphics.subgroupelect.qpa"
+
+#beginSession
+
+#beginTestCaseResult dEQP-VK.subgroups.basic.graphics.subgroupelect
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult CasePath="dEQP-VK.subgroups.basic.graphics.subgroupelect" Version="0.3.4" CaseType="SelfValidate">
+ <Section Name="fragment" Description="Program: fragment">
+  <ShaderProgram LinkStatus="OK">
+   <InfoLog></InfoLog>
+   <FragmentShader CompileStatus="OK">
+    <ShaderSource></ShaderSource>
+    <InfoLog></InfoLog>
+</FragmentShader>
+</ShaderProgram>
+  <Number Name="FragmentCompileTime" Description="Fragment shader compile time" Tag="Time" Unit="ms">718.857971</Number>
+  <Number Name="LinkTime" Description="Link time" Tag="Time" Unit="ms">0.024000</Number>
+</Section>
+ <Section Name="geometry_lines" Description="Program: geometry_lines">
+  <ShaderProgram LinkStatus="OK">
+   <InfoLog></InfoLog>
+   <GeometryShader CompileStatus="OK">
+    <ShaderSource></ShaderSource>
+    <InfoLog></InfoLog>
+</GeometryShader>
+</ShaderProgram>
+  <Number Name="GeometryCompileTime" Description="Geometry shader compile time" Tag="Time" Unit="ms">4.330000</Number>
+  <Number Name="LinkTime" Description="Link time" Tag="Time" Unit="ms">0.029000</Number>
+</Section>
+ <Section Name="geometry_points" Description="Program: geometry_points">
+  <ShaderProgram LinkStatus="OK">
+   <InfoLog></InfoLog>
+   <GeometryShader CompileStatus="OK">
+    <ShaderSource></ShaderSource>
+    <InfoLog></InfoLog>
+</GeometryShader>
+</ShaderProgram>
+  <Number Name="GeometryCompileTime" Description="Geometry shader compile time" Tag="Time" Unit="ms">4.438000</Number>
+  <Number Name="LinkTime" Description="Link time" Tag="Time" Unit="ms">0.033000</Number>
+</Section>
+ <Section Name="tesc" Description="Program: tesc">
+  <ShaderProgram LinkStatus="OK">
+   <InfoLog></InfoLog>
+   <TessControlShader CompileStatus="OK">
+    <ShaderSource></ShaderSource>
+    <InfoLog></InfoLog>
+</TessControlShader>
+</ShaderProgram>
+  <Number Name="TessControlCompileTime" Description="Tesselation control shader compile time" Tag="Time" Unit="ms">4.526000</Number>
+  <Number Name="LinkTime" Description="Link time" Tag="Time" Unit="ms">0.034000</Number>
+</Section>
+ <Section Name="tese" Description="Program: tese">
+  <ShaderProgram LinkStatus="OK">
+   <InfoLog></InfoLog>
+   <TessEvaluationShader CompileStatus="OK">
+    <ShaderSource></ShaderSource>
+    <InfoLog></InfoLog>
+</TessEvaluationShader>
+</ShaderProgram>
+  <Number Name="TessEvaluationCompileTime" Description="Tesselation evaluation shader compile time" Tag="Time" Unit="ms">4.663000</Number>
+  <Number Name="LinkTime" Description="Link time" Tag="Time" Unit="ms">0.037000</Number>
+</Section>
+ <Section Name="vert" Description="Program: vert">
+  <ShaderProgram LinkStatus="OK">
+   <InfoLog></InfoLog>
+   <VertexShader CompileStatus="OK">
+    <ShaderSource></ShaderSource>
+    <InfoLog></InfoLog>
+</VertexShader>
+</ShaderProgram>
+  <Number Name="VertexCompileTime" Description="Vertex shader compile time" Tag="Time" Unit="ms">4.404000</Number>
+  <Number Name="LinkTime" Description="Link time" Tag="Time" Unit="ms">0.029000</Number>
+</Section>
+ <Section Name="tesc_noSubgroup" Description="Program: tesc_noSubgroup">
+  <ShaderProgram LinkStatus="OK">
+   <InfoLog></InfoLog>
+   <SpirVAssemblySource></SpirVAssemblySource>
+</ShaderProgram>
+  <Number Name="SpirVAssemblyTime" Description="SpirV assembly time" Tag="Time" Unit="ms">9.949000</Number>
+</Section>
+ <Section Name="tese_noSubgroup" Description="Program: tese_noSubgroup">
+  <ShaderProgram LinkStatus="OK">
+   <InfoLog></InfoLog>
+   <SpirVAssemblySource></SpirVAssemblySource>
+</ShaderProgram>
+  <Number Name="SpirVAssemblyTime" Description="SpirV assembly time" Tag="Time" Unit="ms">1.230000</Number>
+</Section>
+ <Section Name="vert_noSubgroup" Description="Program: vert_noSubgroup">
+  <ShaderProgram LinkStatus="OK">
+   <InfoLog></InfoLog>
+   <SpirVAssemblySource></SpirVAssemblySource>
+</ShaderProgram>
+  <Number Name="SpirVAssemblyTime" Description="SpirV assembly time" Tag="Time" Unit="ms">0.869000</Number>
+</Section>

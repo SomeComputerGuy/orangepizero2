@@ -1,0 +1,23 @@
+NEW cases 5225: Crash=12 Fail=2 NotSupported=1847 Pass=3364
+REGRESSIONS: 0
+FIXED: 4
+  FIX dEQP-VK.subgroups.basic.framebuffer.subgroupbarrier_fragment (was OOM)
+  FIX dEQP-VK.subgroups.basic.framebuffer.subgroupmemorybarrier_fragment (was OOM)
+  FIX dEQP-VK.subgroups.basic.framebuffer.subgroupmemorybarrierbuffer_fragment (was OOM)
+  FIX dEQP-VK.subgroups.basic.framebuffer.subgroupmemorybarrierimage_fragment (was OOM)
+STILL-NONPASS: 14
+  STILL dEQP-VK.api.device_init.create_device_global_priority.basic Fail (was Fail)
+  STILL dEQP-VK.api.device_init.create_device_global_priority_khr.basic Fail (was Fail)
+  STILL dEQP-VK.subgroups.basic.compute.subgroupbarrier Crash (was OOM)
+  STILL dEQP-VK.subgroups.basic.compute.subgroupelect Crash (was OOM)
+  STILL dEQP-VK.subgroups.basic.compute.subgroupmemorybarrier Crash (was OOM)
+  STILL dEQP-VK.subgroups.basic.compute.subgroupmemorybarrierbuffer Crash (was OOM)
+  STILL dEQP-VK.subgroups.basic.compute.subgroupmemorybarrierimage Crash (was OOM)
+  STILL dEQP-VK.subgroups.basic.compute.subgroupmemorybarriershared Crash (was OOM)
+  STILL dEQP-VK.subgroups.basic.graphics.subgroupbarrier Crash (was OOM)
+  STILL dEQP-VK.subgroups.basic.graphics.subgroupelect Crash (was OOM)
+  STILL dEQP-VK.subgroups.basic.graphics.subgroupmemorybarrier Crash (was OOM)
+  STILL dEQP-VK.subgroups.basic.graphics.subgroupmemorybarrierbuffer Crash (was OOM)
+  STILL dEQP-VK.subgroups.basic.graphics.subgroupmemorybarrierimage Crash (was OOM)
+  STILL dEQP-VK.subgroups.clustered.graphics.subgroupclusteredmul_ivec4 Crash (was OOM)
+MISSING (in baseline, not run): 0

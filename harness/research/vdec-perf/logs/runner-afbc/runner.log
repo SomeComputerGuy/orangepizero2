@@ -1,0 +1,8 @@
+2026-11-06 10:34:31 job afbc start, kernel c9 (Image md5 c210a5b247cacdf366b38062385d3a3f), chunks: vp9p2 hevc10 avs2 hevc8 vp9p0, done before: 
+2026-11-06 10:34:31 acquired by runner-afbc-1793961271
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+dtb sun50i-h616-orangepi-zero2.dtb.vdec-c38 md5 aa4d5bbb33e171e32c349e413c68f12c
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+2026-11-06 10:37:33 BLOCKED: c9 Image md5 mismatch after install
+2026-11-06 10:38:16 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 
+released by runner-afbc-1793961271

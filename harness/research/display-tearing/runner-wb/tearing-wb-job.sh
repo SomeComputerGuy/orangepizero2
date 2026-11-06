@@ -1,26 +1,26 @@
 #!/bin/bash
-# Runner package for job 59-tearing-wb2 (was 58-tearing-wb): writeback proof that no scanned-out frame mixes two commits (DE33 display tearing).
-# `bash harness/research/display-tearing/runner-wb/tearing-wb-job.sh` (job id t59; logs harness/research/display-tearing/logs/runner-t59/)
+# Runner package for job 60-tearing-wb3 (was 58-tearing-wb, 59-tearing-wb2): writeback proof that no scanned-out frame mixes two commits (DE33 display tearing).
+# `bash harness/research/display-tearing/runner-wb/tearing-wb-job.sh` (job id t60; logs harness/research/display-tearing/logs/runner-t60/)
 # Self-contained: board lock (fresh owner name), the newest cumulative kernel (must contain the latch-event fix $FIX) installed
 # with the one-shot fallback armed (harness/research/vdec-perf/install-kernel.sh, Image+modules+DTB), HDMI-A-1 forced on at
 # 1024x768@60 (no sink; mode missing = NOT TESTED), harness/kms-wb/out/kms-wb `tear N`: a different full-screen picture every
 # frame and a writeback capture of every frame, each capture must be exactly its own commit's picture. Chunk `base`: no load,
 # commit phases d0/d4/d12/random + 4 short bursts after 7 s idle (vblank IRQ re-enabled each time). Chunk `load`: the same
-# under a 4K H.265 cedrus decode loop, a 4-thread memcpy load, both, and a printk flood. Kernel counters (de33_latch_*,
+# under a 4K H.265 cedrus decode loop, a 4-thread memcpy load, both (3 runs), and a printk flood. Kernel counters (de33_latch_*,
 # de33_wb_*, sun4i_tcon vblank_stale_cleared) before/after every run. Resumable: re-running skips the chunks in $OUT/state;
 # the trial kernel is booted once and kept across chunks unless another session waits (then restore + hand-over). The stock
 # image kernel is restored at the end. Stall watchdog: no chunk output for $STALL s kills the chunk.
 # Exit 0 = chunks ran (judge with HANDOFF.md checks); 2 = BLOCKED ($OUT/BLOCKED); 3 = Oops/WARN ($OUT/OOPS); 1 = setup/lock error.
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/display-tearing; V=$H/harness/research/vdec-perf; SSH="timeout 120 $H/harness/ssh.sh"
-J=t59
+J=t60
 K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR
    -o ConnectTimeout=8 -o ServerAliveInterval=15 -o ServerAliveCountMax=8)
 OUT=$S/logs/runner-$J; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED $OUT/OOPS
 CHUNKS="base load"; CT=900; STALL=150
 T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
 want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || exit 1
-FIX=93b00281a                              # fix/sunxi-h616-de33-latch-event HEAD (atomic_begin event fix); the kernel must contain it
+FIX=3e0255e2f                              # fix/sunxi-h616-de33-latch-event HEAD (writeback captures only its own snapshot); the kernel must contain it
 CLIENT=$H/harness/kms-wb/out/kms-wb       # built by harness/kms-wb/build.sh
 P=/root/wb/kms-wb
 R=/root/tearwb                            # board results dir
@@ -66,7 +66,7 @@ boot_trial() {
 others_waiting() { ls $H/harness/queue/board.wait 2>/dev/null | grep -v "\.$OWN\." | grep -q .; }
 runs_of() { case $1 in
   base) echo "selftest probe t-d0 t-d4 t-d12 t-rand burst1 burst2 burst3 burst4" ;;
-  load) echo "ve-d4 ve-rand mem-d4 mem-rand vemem-rand kmsg-rand" ;; esac; }
+  load) echo "ve-d4 ve-rand mem-d4 mem-rand vemem-rand vemem-rand2 vemem-rand3 kmsg-rand" ;; esac; }
 chunk_script() { # board script of a chunk ($1); ends with ROUND-DONE
   cat <<EOS
 set -u; D=$R/$1; rm -rf \$D; mkdir -p \$D/dump; cd \$D
@@ -117,7 +117,9 @@ load)
   ve_stop
   mem_start 14 mem-d4; run mem-d4 -D 4000 tear 600; wait \$MEMPID 2>/dev/null
   mem_start 14 mem-rand; run mem-rand -D -1 tear 600; wait \$MEMPID 2>/dev/null
-  ve_start; mem_start 14 vemem-rand; run vemem-rand -D -1 tear 600; wait \$MEMPID 2>/dev/null; ve_stop
+  ve_start
+  for v in vemem-rand vemem-rand2 vemem-rand3; do mem_start 14 \$v; run \$v -D -1 tear 600; wait \$MEMPID 2>/dev/null; done
+  ve_stop
   # printk flood (IRQ latency): 50 lines/s at KERN_ERR; console loglevel in printk.txt
   ( for i in \$(seq 1 700); do echo "<3>tearing-wb printk load \$i" > /dev/kmsg; sleep 0.02; done ) </dev/null >/dev/null 2>&1 & KPID=\$!
   run kmsg-rand -D -1 tear 600; kill \$KPID 2>/dev/null; wait \$KPID 2>/dev/null

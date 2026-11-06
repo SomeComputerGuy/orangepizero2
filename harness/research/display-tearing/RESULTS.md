@@ -90,6 +90,28 @@ served in kernel-check/vdec-serve (*.c44), pushed to fork. Client kms-wb sha256 
 Package updated for job 59 (J=t59, FIX=93b00281a, checks 6/7 extended, check 9 = no STALL): runner job
 harness/runner-queue/59-tearing-wb2.md, logs harness/research/display-tearing/logs/runner-t59/.
 
+## Job 59 result (c44, 2026-11-06 19:01-19:11) and the writeback fix
+Everything PASS (no MIXED/BAD anywhere, events held 100 %, unheld/unflushed 0, late/forced/deferred 0, VE load real at
+506-549 IRQs, no STALL) except load/vemem-rand: 2 WRONG "early" (flip 560 captured tag 49 want 48, flip 561 tag 50 want
+49), ok 598/600. Root cause: a writeback measurement bug, not the display. vemem-rand de33_wb_busy_frames delta = 2
+(0 in every other run) = the unit was still writing out capture 559 at the vblank that flushed commit 560 (DRAM load).
+sun50i_wb_vblank() only looks at the queue head when the unit is idle, and its "picture unchanged" check (20e682fc2)
+compared against the snapshot seen when the job FIRST reached an idle unit (frame_seq), not the job's own latch_seq: so
+job 560 started one vblank late (after commit 561's flush) and recorded 561's picture with a good fence; job 561 the
+same one frame later (busy again), job 562 was right because commit 563 came 15 frames later (csv: 563 commit_phase
+237 ms). The scan-out was right: every flip has its own flush (commits delta 603 == flushes 603, coalesced 0), its
+events in consecutive vblanks (seq 10751, 10752, 10753), held and flushed. The same bug would have shown a coalesced
+commit's job as the next commit's picture.
+Fix: armbian-build fix/sunxi-h616-de33-latch-event 3e0255e2f, patches.armbian/drm-sun4i-de33-writeback-capture-only-
+the-job-s-own-snapshot.patch (after the latch-event patch in series.conf): a job starts only while flushed ==
+job->latch_seq; else -EIO + de33_wb_lost, and the loop goes on to the next job in the same IRQ (so the job whose picture
+is on screen still starts at once). eligible/frame_seq removed. Scratch: kernel-check/wb-ownsnap/{a,b,tools,hdr.txt}.
+Classifier unchanged (WRONG stays a FAIL); HANDOFF check 3 L made exact: fence_errors == wb_failed_delta, <= overflow +
+timeout + lost, lost <= busy_frames + deferred + coalesced + overflow + timeout, ok >= 570.
+Build check (kernel-check/wb-ownsnap/build-check.log): 880 patches, 0 failed, 0 C warnings, dtc 0. c45 = test-cumulative
+7a7ee8e23 (merge of 3e0255e2f), 2026-11-06 19:23, Image md5 751c43fc9fbcc188c93f8a20ee42daeb, served in kernel-check/vdec-serve (*.c45).
+Runner job harness/runner-queue/60-tearing-wb3.md (package J=t60, logs logs/runner-t60/).
+
 ## Writeback tearing check (design, runner job 58)
 harness/kms-wb `tear N` (kms-wb.c cmd_tear): ring of 4 source dumbs, frame i pixel = (i & 0xff) << 16 | y (red tags the
 commit, green/blue the row), a writeback capture of every flip (ring 6), each capture classified on every 32nd pixel of
@@ -108,11 +130,11 @@ Package: harness/research/display-tearing/runner-wb/{tearing-wb-job.sh,HANDOFF.m
 harness/runner-queue/58-tearing-wb.md, logs harness/research/display-tearing/logs/runner-t58/.
 
 ## Open / next
-- Next: runner job 59-tearing-wb2 on c44; a fresh agent judges done/59-tearing-wb2.summary.md with HANDOFF checks 0-9.
+- Next: runner job 60-tearing-wb3 on c45 (harness/runner-queue/60-tearing-wb3.md, package runner-wb/ with J=t60,
+  FIX=3e0255e2f, vemem-rand x3); a fresh agent judges done/60-tearing-wb3.summary.md with HANDOFF checks 0-9.
   PASS -> status item 9 "Display tearing" = fixed and verified by writeback; cherry-pick b04527be4's follow-ups
-  (8af646391, 93b00281a) into stonking-orangepizero2 with the other writeback commits after the user's build.
-  Check 6 unheld > 0 -> the event still bypasses hold_event (look for another path that sends crtc->state->event:
-  sun4i_crtc_atomic_disable, the vblank_delay hrtimer path); MIXED/WRONG -> as in the job-58 notes below.
+  (8af646391, 93b00281a, 3e0255e2f) into stonking-orangepizero2 with the other writeback commits after the user's build.
+  WRONG again with wb_busy_frames/lost 0 -> a real early latch (look at the flush/held-event path); MIXED -> job-58 notes.
 - Job 58 FAIL branches kept for reference: MIXED with boundary_row small (< 40) on most frames -> the flush lands in
   active video (TCON line counter not zeroed at vsync start; sun4i_tcon1_mode_set doubles vtotal) -> fix
   sun50i_mixer_latch_mode_set() line_active/line_deadline. WRONG early -> event/snapshot race still open.

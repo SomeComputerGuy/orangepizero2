@@ -201,6 +201,17 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
   c40 '17 dtc warnings' = NOT a regression: pre-existing stock Armbian files (overlay sun50i-a64-pine64-7inch-lcd.dtso,
   patch arm64-dts-sun50i-h5-nanopi-r1s-h5-add-rtl8153-support: usb device reg cells), shown because c40 rebuilt all DTBs
   (c39's dtbs step was incremental). c40 diff touches no DT. Optional Armbian PR (other boards), low priority.
+- GStreamer JPEG stateful v4l2jpegdec DONE (job 57 PASS on c42, 2026-11-06): kernel 950c46035 (cedrus JPEG drain on
+  DEC_CMD_STOP) + fbba781aa (S_FMT with CAPTURE bufs left while stopped; fixes EBUSY on every v4l2sl* resolution change
+  since c10's REMOVE_BUFS, incl. H.264 new SPS; + MV-buffer free loop over max_num_buffers); gst-plugins-good patches
+  0101 (accept 1:4:0:0 JPEG colorimetry) + 0102 (sysmem when peer caps ANY). Keep MARGINAL rank for v4l2jpegdec (fix the
+  "hangs" comment in image-integration.patch).
+- IMAGE INTEGRATION QUEUE (after the user's current build; stonking main checkout untouched until then):
+  kernel 8b1f787fe (H.265 AFBC compose), 20e682fc2 (wb retry), 950c46035 + fbba781aa (cedrus JPEG/S_FMT);
+  gst-plugins-good1.0 0101-0102 into scripts/build-media-debs.sh; FFmpeg compose diff
+  (harness/afbc-wb/ffmpeg-v4l2request-compose.diff) into the desktop FFmpeg patches.
+- Work list (new): upstream gst v4l2videodec swallows not-negotiated on the output thread (EOS with no frame);
+  AVS2 AFBC offset unverified. Note: build-kernel.sh needs an ABSOLUTE WORK= path.
   Package built 2026-11-06: harness/afbc-wb (client + lossless flat-chroma-tile synthetic streams), runner job 53-afbc-wb (c38, no kernel change); pass = AFBC captures bit-identical to linear away from chroma-tile edges (the DE33 scaler uses another chroma phase for AFBC). State: harness/research/afbc-wb/RESULTS.md.
 - Stateful v4l2jpegdec hang ROOT-CAUSED 2026-11-06: cedrus (JPEG without requests = stateful-style node) refused V4L2_DEC_CMD_STOP, gst fell back to empty buffers -> endless "Failed to setup decoding job: -22". Kernel fix 950c46035 fix/sunxi-cedrus-jpeg-stop-drain (fork) in c41 = 39b1dce3f; runner job 56-gst-jpeg-stateful. MARGINAL override stays (wrong autoplug at equal rank, not a hang workaround any more). TODO after PASS: cherry-pick into stonking.
 - Next items: remaining M/L datasheet items (W22 encoder SPEC, W26, W12, W24, W29, W25 G2D).

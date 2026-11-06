@@ -189,6 +189,7 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
   ServerAliveInterval/CountMax + a timeout, and the stall watchdog must fire on it (killed PID by hand 2026-11-06 01:16).
 - Shared with OPi5 (2026-11-06): (1) MPEG-4 VOL LOW_DELAY flag (OPi5 drafts on k16-mpeg4): when final, cedrus refuses interlaced B-VOPs in try_ctrl and FFmpeg 0302 becomes per-device; (2) take OPi5 FFmpeg 0314 "mpegvideo_motion: mirror the 16x8 block of field qpel" (~/orangepi5/work/_out/media-debs/patches/ffmpeg/0314-*.patch, copy only).
 - AFBC (job 51, 2026-11-06): the H616 Mali-G31 has NO AFBC (AFBC_FEATURES 0x10001), so a GPU import is NOT TESTABLE. Next route for a bit-exact AFBC check: scan out the cedrus AFBC capture on a DE33 plane and capture it with the writeback connector (jobs 40-42 PASS), compared with the linear decode.
+  Package built 2026-11-06: harness/afbc-wb (client + lossless flat-chroma-tile synthetic streams), runner job 53-afbc-wb (c38, no kernel change); pass = AFBC captures bit-identical to linear away from chroma-tile edges (the DE33 scaler uses another chroma phase for AFBC). State: harness/research/afbc-wb/RESULTS.md.
 - Next items: stateful v4l2jpegdec hang (after job 11 gstdebug), remaining M/L datasheet items (W22 encoder SPEC, W26, W12, W24, W29, W25 G2D).
 
 ### C. Needs hardware from the user

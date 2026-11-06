@@ -11,6 +11,8 @@ If a process dies mid-case, that case is recorded as Crash. If no line arrives f
 --timeout seconds, the case is killed and recorded as Timeout. The shard then restarts at
 the next case. Results go to OUT/results.csv as "test,status,duration_s,detail", in
 caselist order, and the run can be resumed: cases already in OUT/shard-*.csv are skipped.
+--budget S (optional): stop after S seconds of wall time (the dEQP process is killed, its unfinished case is
+not recorded and runs again on resume); then no results.csv/summary.txt is written and the exit code is 3.
 """
 import argparse, csv, json, os, re, selectors, subprocess, sys, threading, time
 
@@ -56,6 +58,9 @@ def oom_first():
         f.write("1000")
 
 
+STOPPED = []  # set when --budget ran out
+
+
 def run_shard(idx, cases, a, extra):
     path = os.path.join(a.out, "shard-%d.csv" % idx)
     done = set()
@@ -73,6 +78,8 @@ def run_shard(idx, cases, a, extra):
                 f.write("\n".join(todo) + "\n")
             base = VK_ARGS if os.path.basename(a.deqp).startswith("deqp-vk") else MESA_CI_ARGS  # Mesa CI gives deqp-vk no GL/surface args
             cmd = [a.deqp, "--deqp-caselist-file=" + cl, "--deqp-log-filename=" + os.path.join(a.out, "shard-%d.qpa" % idx)] + base + extra
+            if a.deadline and time.time() >= a.deadline:
+                STOPPED.append(idx); break
             wait_for_memory()
             ooms0 = memcg_oom_kills()
             p = subprocess.Popen(cmd, cwd=os.path.dirname(a.deqp), preexec_fn=oom_first, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -83,7 +90,16 @@ def run_shard(idx, cases, a, extra):
             seen = set()  # reported (or crashed) in this process; dEQP runs in tree order, not caselist order
             rest = lambda extra=(): [c for c in todo if c not in seen and c not in extra]
             while True:
-                if not sel.select(timeout=a.timeout):
+                wait = a.timeout
+                if a.deadline:
+                    left = a.deadline - time.time()
+                    if left <= 0:  # budget used up: stop between results, the current case runs again on resume
+                        p.kill(); p.wait(); STOPPED.append(idx); todo = []
+                        break
+                    wait = min(wait, left)
+                if not sel.select(timeout=wait):
+                    if a.deadline and time.time() >= a.deadline:
+                        continue
                     p.kill(); p.wait()
                     if cur:
                         w.writerow([cur, "Timeout", "%.1f" % (time.time() - t0), "no output for %ds" % a.timeout]); fo.flush()
@@ -140,6 +156,7 @@ def main():
     ap.add_argument("--deqp", required=True); ap.add_argument("--caselist", required=True)
     ap.add_argument("--out", required=True); ap.add_argument("--jobs", type=int, default=3)
     ap.add_argument("--timeout", type=int, default=120)
+    ap.add_argument("--budget", type=int, default=0)
     a, extra = ap.parse_known_args()
     try:  # keep the runner alive under memcg OOM so kill counts and resume state stay coherent
         with open("/proc/self/oom_score_adj", "w") as f:
@@ -151,7 +168,11 @@ def main():
     cases = [l.strip() for l in open(a.caselist) if l.strip() and not l.startswith("#")]
     shards = [cases[i::a.jobs] for i in range(a.jobs)]
     th = [threading.Thread(target=run_shard, args=(i, s, a, extra)) for i, s in enumerate(shards)]
-    t0 = time.time(); [t.start() for t in th]; [t.join() for t in th]
+    t0 = time.time(); a.deadline = t0 + a.budget if a.budget > 0 else None
+    [t.start() for t in th]; [t.join() for t in th]
+    if STOPPED:
+        print("BUDGET-STOP after %.0f s (shards %s); resume with the same command" % (time.time() - t0, sorted(STOPPED)))
+        sys.exit(3)
     res = {}
     for i in range(a.jobs):
         with open(os.path.join(a.out, "shard-%d.csv" % i)) as f:

@@ -68,3 +68,21 @@ diag, cases-sg (7 subgroup cases), cases-frag-a/b (the 7 long frag cases, wall t
 2. frag cases: if they Pass with t= values, record the durations in 4c (long jobs, kernel fix); if they still abort
    with `gpu sched timeout`, the kernel in use lacks e544ddb00.
 3. Subset: `cmp.txt` REGRESSIONS must stay 0; FIXED lists what the CLPER fix gained.
+
+## Job 14 result and the INSTR_INVALID_ENC fixes (2026-11-06, agent gpu-invalid-enc)
+Job 14 on c38 (done/14-vk-hangs.summary.md): fork d1/d4/d5/d6 OK, every probe with a ballot (d2 ballot, d3 elect, d7
+any/all, d8 CTS elect) faults `js fault, js=1, status=INSTR_INVALID_ENC` at any local size -> **WMASK is not executable
+on the G31** (G71/G72/G31 = BIFROST_LIMITED_CLPER: old CLPER only, no WMASK). The 7 frag cases PASS on c38 (4-5 s each,
+the soft-stop kernel fix; finding 1 confirmed), subset REGRESSIONS 0 with 4 FIXED; 12 subgroup Crashes remained (all
+elect/barrier cases go through ballot), subset1 12 js faults; ocl/gles regression chunks PASS.
+* Fix ab1caa7378f "pan/bi: lower ballot without WMASK on limited-CLPER GPUs": ballot = OR over lanes 0-3 of
+  (CLPER_OLD(pred, lane) & (1 << lane)) (inactive lanes read 0, bools are 0/~0). Host dumps: no WMASK in d2/d3/d7/d8
+  nor in dEQP-VK.subgroups basic/ballot_broadcast/clustered/vote/ballot_other cases; CLPER_OLD only, no CLPER.i32.
+* Job 09's samplerless float CL_A UNORM_INT8 1Dbuffer fault (other half of the task) is fixed by 0e274280595 (see
+  impl-opencl-fixes.md): A8_UNORM attribute (texel buffer) faults the G31; gallium now honours PAN_BIND_TEXEL_BUFFER.
+* Build: build-cl and build-host-shim rebuilt at 0e274280595. Runner job harness/runner-queue/52-gpu-invalid-enc.md
+  (package harness/research/gpu-invalid-enc/runner/, results gpu-invalid-enc/logs/runner/, deploys /root/opiz2-mesa/vk2).
+* Next step (fresh agent after job 52): 8a 0 INSTR_INVALID_ENC + 2b values + cases-sg Pass + 5b 0 subgroup STILL ->
+  task done, copy into impl-gpu-spec.md 4c. If d2 values are wrong but no fault: CLPER_OLD of an inactive lane is not
+  zero -> AND with a ballot of the lane being active (e.g. gate by lane_id < active count). If a fault remains, read
+  the trace.tgz shader of that tag for the faulting clause.

@@ -515,3 +515,15 @@ The image uses Ubuntu's mesa 26.2.4-1ubuntu1, so ship the branch as Debian patch
 3. When Ubuntu moves to 26.2.6, the 12 stable cherry-picks drop out; the remaining ones are the two upstream main
    cherry-picks and our five patches (SEG_ADD RA, subgroup size, trailing barrier, texture_buffers, sw_copy). Ours are AI-generated:
    per the user, they stay in our fork and are not sent to Mesa without asking.
+
+### INSTR_INVALID_ENC in job 09 sl (2026-11-06, agent gpu-invalid-enc)
+- The only failing samplerless subtest, `[CL_A CL_UNORM_INT8 1] ... 1Dbuffer`, runs the same kernel as every passing
+  format (host dump via t_sl1db.py 329 float 0x10B1 0x10D2: LEA_ATTR_IMM + LD_CVT.f32.v4 + TEXC, nothing format
+  specific); the only difference is the texel-buffer attribute descriptor `Format (v7): A8 UNORM 000A`. A8_UNORM is a
+  texture-only format on v7 (pan_format.c marks it VTR___, no _B texel-buffer flag; panvk already respects that, GL ES
+  never asks), and v7 has no 000R component order to read it as R8. Root cause: panfrost_is_format_supported() ignored
+  the target, so rusticl got A8 for CL_MEM_OBJECT_IMAGE1D_BUFFER.
+- Fix 0e274280595 "panfrost: require the texel-buffer flag for PIPE_BUFFER sampler views". Host check: 1D-buffer
+  formats now = 1D formats minus CL_A UNORM_INT8 (and the RGB formats rusticl already excluded); CL_A 1D/2D/3D images
+  unchanged; clCreateImage(IMAGE1D_BUFFER, CL_A UNORM_INT8) = -10. Board check: job 52 chunk sl (+ 0 INSTR_INVALID_ENC).
+

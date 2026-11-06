@@ -11,10 +11,11 @@ encoder probes, passes v4l2-compliance, encodes raw NV12 test clips (all-intra a
 H.264 that the host ffmpeg decodes without errors with the right frame count and a sane PSNR, that the board's own
 hardware decoder decodes the same streams bit-exactly, and that no IOMMU fault or engine timeout happens.
 
-Precondition (coordinator): merge `fix/sunxi-h616-venc` at f35cdf390 into `test-cumulative`, build the next cumulative
-kernel and serve it as kernel-check/vdec-serve/Image.<tag> + modules-<tag>.tgz. The script installs the NEWEST
+Precondition (coordinator): `fix/sunxi-h616-venc` at c307dd053 (f35cdf390 encoder + ac009bb5b/c307dd053 "register
+the encoder's own media entities") merged into `test-cumulative` and built: c29 is the first such kernel (c26-c28
+hang in every MEDIA_IOC_G_TOPOLOGY, job 32). Served as kernel-check/vdec-serve/Image.<tag> + modules-<tag>.tgz + DTB. The script installs the NEWEST
 cumulative tag (last line of kernel-check/cumulative-kernels.txt) via harness/research/vdec-perf/install-kernel.sh
-with the one-shot fallback armed; the HTTP server on 10.56.0.1:8643 must be up. It checks that f35cdf390 is an
+with the one-shot fallback armed; the HTTP server on 10.56.0.1:8643 must be up. It checks that c307dd053 is an
 ancestor of the tag's commit and that the booted kernel logged `cedrus ... Encoder registered as /dev/videoN`;
 otherwise it writes BLOCKED and exits 2 (report that, not a FAIL). The test tool
 (harness/research/ve-encoder/tools/out/h264enc-test, static aarch64, built by tools/build.sh) and the raw clips
@@ -26,13 +27,19 @@ compliance + five encodes + hardware decodes (~2 min), restore (~1 min). Resumab
 logs/runner-venc/state. The stock kernel vmlinuz-7.3.1-edge-sunxi64 is restored at the end and before every lock
 hand-over.
 
+Every board step announces itself (`STEP <name>` in chunk-venc.txt: probe, topology, enc-info, compliance, encode rN,
+hwdec rN, dmesg) and runs under its own `timeout -k 5`. On a stall the host logs `STALL ... in step '<name>'`, collects
+files/stall-diag-venc.txt (D/R tasks, their /proc/PID/stack, dmesg tail) over a fresh ssh session and restores through
+restore-kernel.sh (a reboot with a stuck task takes up to ~6 min; the script waits 500 s). Report a stall as FAIL
+(STALL) with the step name and the first 40 lines of stall-diag-venc.txt.
+
 Fail fast: the serial log and the chunk's dmesg are watched for `Unable to handle|Oops|WARNING:|workqueue lockup|
 iommu.*fault|Page fault|frame processing timed out`; a hit ends the job (exit 3, lines in logs/runner-venc/OOPS):
 report FAIL (OOPS) with the OOPS content and the last 10 lines of runner.log. An IOMMU fault here means the encoder
 read or wrote through an unmapped address: report the lines verbatim (they name the master and the address).
 
 Results: harness/research/ve-encoder/logs/runner-venc/: runner.log, results.txt (one line per value: `venc <run> <key>
-<value>`), chunk-venc.txt, files/venc/{kernel.txt,nodes.txt,dmesg-probe.txt,enc-all.txt,enc-ctrls.txt,enc-fmt-*.txt,
+<value>`), chunk-venc.txt, files/venc/{kernel.txt,nodes.txt,probe.txt,dmesg-probe.txt,enc-D.txt,dec-D.txt,enc-all.txt,enc-ctrls.txt,enc-fmt-*.txt,
 compliance.txt,r1..r5.txt (encoder log),r1..r5.h264 (the streams),r1..r5.ffmpeg-err.txt,r1..r5.psnr.txt,
 r1..r5.hwdec.txt,dmesg-chunk.txt}, OOPS / BLOCKED only when they happened.
 
@@ -46,6 +53,11 @@ and the last 10 lines of runner.log); 1 = setup or lock error.
 ## Checks (mechanical, all on results.txt unless stated)
 1. Probe: `venc all probe_registered 1` and `venc all encoder_node 1` -> PASS, else FAIL (report files/venc/dmesg-probe.txt
    and nodes.txt). Report the `kernel: ` and `kernel encoder: ` lines of runner.log and `venc all controls` (expected 21).
+   Media controller (the job 32 hang): `venc all boot_warnings 0` (no kernel WARNING at boot; job 32 had the
+   mc-device.c:619 one twice; on a FAIL report the first 40 lines of files/venc/boot-warnings.txt), `venc all media_node /dev/mediaN` (not `none`), `venc all media_info 1` (v4l2-ctl -D on
+   the encoder prints "Media Driver Info": the topology ioctl answered) and `venc all dec_D_rc 0` (same on the decoder
+   node) -> PASS, else FAIL with the values, the `venc all media` lines and files/venc/enc-D.txt (first 20 lines).
+   `media_info 0` with enc-D.txt ending in `RC 124` or `RC 137` = the topology hang is back.
 2. Compliance: `venc all compliance_failed 0` -> PASS; a number > 0 -> FAIL, report every `fail:` line of
    files/venc/compliance.txt (first 20) and the `Total` line; `venc all compliance SKIP` -> SKIP (v4l2-compliance not on
    the board), report as SKIP, not FAIL. Report `venc all compliance_warnings`.

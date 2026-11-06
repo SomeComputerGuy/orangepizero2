@@ -12,7 +12,7 @@
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/g2d; V=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh
 J=${1:?job: g2d}
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR -o ConnectTimeout=8 -o ServerAliveInterval=15 -o ServerAliveCountMax=8)
 OUT=$S/logs/runner-$J; mkdir -p $OUT/files $OUT/ref; touch $OUT/state; rm -f $OUT/BLOCKED $OUT/OOPS
 case $J in
   g2d) CHUNKS="g2d"; CT=1200; STALL=240 ;;
@@ -21,6 +21,8 @@ esac
 T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
 want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || exit 1
 FIX=04964f921                        # fix/sunxi-h616-g2d HEAD (armbian-build); the kernel must have it
+FIX_MC=c307dd053                     # fix/sunxi-h616-venc HEAD: cedrus media entities (+ series.conf entry). Before it (c26-c28) every
+                                     # MEDIA_IOC_G_TOPOLOGY (v4l2-ctl -D on /dev/video0 or 1) spun forever: jobs 29/32 stalled on it (c29+)
 TOOL=$S/tool/out/g2dconv; HOSTTOOL=$S/tool/out/g2dconv-host; CMP=$S/tool/g2dcmp.py
 P=/root/g2d/g2dconv
 R=/root/g2dtest                           # board results dir
@@ -85,12 +87,12 @@ gst-rgb2nv12  bgrx XR24 640x480 NV12 NV12 640x480 6 0
 gst-nv122rgb  nv12 NV12 640x480 BGRx XR24 320x240 10 2
 "
 log() { echo "$(date '+%F %T') $*" | tee -a $OUT/runner.log; }
-waitup() { for i in $(seq 1 60); do sleep 5; $SSH -n true 2>/dev/null && return 0; done; return 1; }
+waitup() { for i in $(seq 1 ${1:-60}); do sleep 5; $SSH -n true 2>/dev/null && return 0; done; return 1; }   # waitup [tries of 5 s]
 acquire() { OWN=runner-g2d-$J-$(date +%s); out=$($H/harness/board-lock.sh acquire $OWN) || { log "lock: $out"; exit 1; }
   case $out in *"already held"*) log "lock already held by $OWN"; exit 1;; esac; log "$out"; }
 release() { [ -n "$OWN" ] && $H/harness/board-lock.sh release $OWN | tee -a $OUT/runner.log; OWN=""; }
 restore() { $V/restore-kernel.sh | tee -a $OUT/runner.log   # Image, DTB (.stock), modules (.good), reboot
-  sleep 15; if waitup; then log "restored: $($SSH -n 'uname -rv; readlink /boot/Image; readlink /boot/dtb/allwinner/sun50i-h616-orangepi-zero2.dtb' | tr '\n' ' ')"
+  sleep 15; if waitup 100; then log "restored: $($SSH -n 'uname -rv; readlink /boot/Image; readlink /boot/dtb/allwinner/sun50i-h616-orangepi-zero2.dtb' | tr '\n' ' ')"   # a reboot with a stuck task waits out the stop timeouts (~6 min, job 29)
   else log "BOARD UNREACHABLE after restore reboot"; echo "board unreachable after restore" > $OUT/BLOCKED; fi; }
 evidence() { # evidence <tag> <dt-node regex> <unused> <module> <lsmod regex> <driver glob>: what a blocked kernel looks like, into files/blocked-$1/
   local d=$OUT/files/blocked-$1; mkdir -p $d
@@ -111,6 +113,7 @@ ship_client() { # the test client: ship it only when the board copy differs
 boot_trial() { # install the newest cumulative kernel with the fallback armed; it must contain the G2D commit
   local c; c=$(awk -v t=$T '$1==t{print $3}' $H/kernel-check/cumulative-kernels.txt)
   git -C $H/wt-cumulative merge-base --is-ancestor $FIX "$c" 2>/dev/null || blocked "kernel $T ($c) lacks the G2D commit $FIX"
+  git -C $H/wt-cumulative merge-base --is-ancestor $FIX_MC "$c" 2>/dev/null || blocked "kernel $T ($c) lacks the cedrus media-entity fix $FIX_MC (v4l2-ctl would hang)"
   on_stock
   $V/install-kernel.sh $T 2>&1 | tail -3 | tee -a $OUT/runner.log
   $SSH -n 'sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'; sleep 15
@@ -137,47 +140,60 @@ make_refs() { # host side: the destination-format reference of every case (same 
 chunk_script() { # board script of a chunk ($1 = chunk name); ends with ROUND-DONE
   cat <<EOS
 set -u; D=$R/$1; rm -rf \$D; mkdir -p \$D/out \$D/in; cd \$D
+step() { echo "STEP \$*"; }   # every step announces itself (the host names the step on a stall) and runs under its own timeout
 uname -v > kernel.txt; cat /proc/cmdline > cmdline.txt
 n1=\$(dmesg | wc -l); echo DMESG-START \$n1
-# --- probe ---
+# --- probe (sysfs only: no V4L2 ioctl before the device is known, job 29 hung in v4l2-ctl -D on the cedrus nodes) ---
+step probe
 dmesg | grep -i 'g2d' > probe-dmesg.txt; echo "driver_lines \$(grep -ci 'sun50i-g2d' probe-dmesg.txt)" | tee probe.txt
 echo "iommu_group \$(ls -d /sys/kernel/iommu_groups/*/devices/1480000.g2d 2>/dev/null | wc -l)" | tee -a probe.txt
 cat /sys/kernel/debug/clk/g2d/clk_rate 2>/dev/null | sed 's/^/clk_rate /' | tee -a probe.txt
-DEV=""; for v in /dev/video*; do v4l2-ctl -d \$v -D 2>/dev/null | grep -q 'Driver name *: sun50i-g2d' && DEV=\$v && break; done
+echo "boot_warnings \$(dmesg | grep -c 'WARNING:')" | tee -a probe.txt; dmesg | grep -B2 -A16 'WARNING:' > boot-warnings.txt
+DEV=""; for v in /sys/class/video4linux/video*; do grep -qx 'sun50i-g2d' \$v/name 2>/dev/null && DEV=/dev/\$(basename \$v) && break; done
 echo "device \${DEV:-none}" | tee -a probe.txt
 [ -n "\$DEV" ] || { echo NO-DEVICE; dmesg | tail -n +\$((n1+1)) > dmesg-chunk.txt; echo ROUND-DONE; exit 0; }
-v4l2-ctl -d \$DEV -D --list-formats-out --list-formats > formats.txt 2>&1
+step formats
+timeout -k 5 20 v4l2-ctl -d \$DEV -D --list-formats-out --list-formats > formats.txt 2>&1
 echo "formats_out \$(sed -n '/Output/,/Capture/p' formats.txt | grep -c "^\s*\[")" | tee -a probe.txt
 echo "formats_cap \$(sed -n '/Capture/,\$p' formats.txt | grep -c "^\s*\[")" | tee -a probe.txt
+# the cedrus decoder node shares the board: its media topology must answer (the c26/c27 hang, fixed by ac009bb5b)
+step cedrus-topology
+echo "cedrus_D_rc \$(timeout -k 5 20 v4l2-ctl -d /dev/video0 -D > cedrus-D.txt 2>&1; echo \$?)" | tee -a probe.txt
 # --- compliance ---
-timeout 300 v4l2-compliance -d \$DEV > compliance.txt 2>&1; echo "RC \$?" >> compliance.txt
+step compliance
+timeout -k 5 300 v4l2-compliance -d \$DEV > compliance.txt 2>&1; echo "RC \$?" >> compliance.txt
 grep -E '^Total for' compliance.txt | sed 's/^/COMPLIANCE: /'
-timeout 300 v4l2-compliance -s -d \$DEV > compliance-s.txt 2>&1; echo "RC \$?" >> compliance-s.txt
+step compliance-s
+timeout -k 5 300 v4l2-compliance -s -d \$DEV > compliance-s.txt 2>&1; echo "RC \$?" >> compliance-s.txt
 grep -E '^Total for' compliance-s.txt | sed 's/^/COMPLIANCE-S: /'
 # --- conversions: inputs generated once per (format, size, colour space) ---
 gen() { local f=in/\$1-\$2-\$3.raw; [ -f \$f ] || $P gen \$1 \$2 \$f -c \$3 > /dev/null; echo \$f; }
 conv() { local name=\$1 fi=\$2 si=\$3 fo=\$4 so=\$5 cs=\$6 n=\$7 in
+  step conv \$name
   in=\$(gen \$fi \$si \$cs)
-  timeout 120 $P conv -d \$DEV -n \$n -c \$cs -i \$in \$fi \$si -o out/\$name.raw \$fo \$so > \$name.txt 2>&1; echo "RC \$?" >> \$name.txt
+  timeout -k 5 120 $P conv -d \$DEV -n \$n -c \$cs -i \$in \$fi \$si -o out/\$name.raw \$fo \$so > \$name.txt 2>&1; echo "RC \$?" >> \$name.txt
   echo "== \$name: \$(grep -E '^(TIME|RESULT|RC)' \$name.txt | tr '\n' ' ')"; }
 while read -r name fi si fo so cs tol border n; do [ -n "\$name" ] || continue; conv \$name \$fi \$si \$fo \$so \$cs \$n; done <<'CASES'
 $CASES
 CASES
 # --- GStreamer v4l2convert (fresh registry so the plugin probes this kernel's devices) ---
+step gst-inspect
 export GST_REGISTRY=/tmp/g2d-gstreg.bin; rm -f \$GST_REGISTRY
-gst-inspect-1.0 v4l2convert > gst-inspect.txt 2>&1; echo "RC \$?" >> gst-inspect.txt
+timeout -k 5 120 gst-inspect-1.0 v4l2convert > gst-inspect.txt 2>&1; echo "RC \$?" >> gst-inspect.txt
 echo "element \$(grep -c 'Long-name' gst-inspect.txt)" | tee gst.txt
 echo "device \$(grep -E 'Device path|device  *:' gst-inspect.txt | head -1 | sed 's/.*: //;s/ .*//')" | tee -a gst.txt
 echo "device_expected \$DEV" | tee -a gst.txt
 gstrun() { local name=\$1 gfi=\$2 fi=\$3 si=\$4 gfo=\$5 fo=\$6 so=\$7 in w h wo ho
+  step gst \$name
   in=\$(gen \$fi \$si 601); w=\${si%x*}; h=\${si#*x}; wo=\${so%x*}; ho=\${so#*x}
-  timeout 120 gst-launch-1.0 -q filesrc location=\$in ! rawvideoparse format=\$gfi width=\$w height=\$h framerate=1/1 ! \
+  timeout -k 5 120 gst-launch-1.0 -q filesrc location=\$in ! rawvideoparse format=\$gfi width=\$w height=\$h framerate=1/1 ! \
     v4l2convert ! video/x-raw,format=\$gfo,width=\$wo,height=\$ho ! filesink location=out/\$name.raw > \$name.txt 2>&1; echo "RC \$?" >> \$name.txt
   echo "size \$(stat -c %s out/\$name.raw 2>/dev/null || echo 0)" >> \$name.txt
   echo "== \$name: \$(grep -E '^(RC|size)' \$name.txt | tr '\n' ' ')"; }
 while read -r name gfi fi si gfo fo so tol border; do [ -n "\$name" ] || continue; gstrun \$name \$gfi \$fi \$si \$gfo \$fo \$so; done <<'GST'
 $GST
 GST
+step dmesg
 rm -rf in
 dmesg | tail -n +\$((n1+1)) > dmesg-chunk.txt
 grep -E 'g2d|iommu|v4l|videobuf|$OOPS' dmesg-chunk.txt | tail -60 | sed 's/^/DMESG: /'
@@ -219,6 +235,12 @@ extract() { # host side: one line per run and key into $OUT/results.txt (chunk r
   echo "$c all iommu_faults $(grep -ciE 'iommu.*fault|page fault' $d/dmesg-chunk.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
   echo "$c all g2d_timeouts $(grep -ci 'g2d.*timed out' $d/dmesg-chunk.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
   echo "$c all g2d_dmesg_lines $(grep -ci 'g2d' $d/dmesg-chunk.txt 2>/dev/null || echo 0)" >> $OUT/results.txt; }
+stall_diag() { # a fresh ssh session (ConnectTimeout) after a stall: which tasks are stuck and where, for the next agent
+  local d=$OUT/files/stall-diag-$1.txt; mkdir -p $OUT/files
+  timeout 120 $SSH -n 'echo "== uptime"; uptime; echo "== D/R tasks"; ps -eo pid,stat,etime,wchan:32,comm | awk "NR==1 || (\$2 ~ /^[DR]/ && \$5 != \"ps\")"
+    for p in $(ps -eo pid=,stat=,comm= | awk "\$2 ~ /^[DR]/ && \$3 != \"ps\" {print \$1}"); do echo "== /proc/$p/stack $(cat /proc/$p/comm 2>/dev/null)"; cat /proc/$p/stack 2>&1 | head -30; done
+    echo "== dmesg tail"; dmesg | tail -80' > $d 2>&1
+  log "stall diagnostics: $d ($(grep -c . $d 2>/dev/null) lines)"; }
 oops_fail() { log "OOPS during chunk $1 ($2): $(head -3 $OUT/OOPS | tr '\n' ' ')"; restore; release; log "job $J ABORTED (exit 3)"; exit 3; }
 run_chunk() { # run_chunk <chunk>: remote script under timeout + stall watchdog; output to $OUT/chunk-<c>.txt
   local c=$1 f=$OUT/chunk-$1.txt oops=""
@@ -231,7 +253,7 @@ run_chunk() { # run_chunk <chunk>: remote script under timeout + stall watchdog;
     if [ -f $SER ] && tail -c +$((soff+1)) $SER | grep -qE "$OOPS"; then
       tail -c +$((soff+1)) $SER | grep -E "$OOPS|Call trace|pc :|lr :" | head -40 > $OUT/OOPS
       log "OOPS on the serial log during chunk $c, killing ssh $p"; kill $p; echo OOPS >> $f; oops=serial; break; fi
-    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill $p; echo STALLED >> $f; break; fi
+    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s in step '$(grep '^STEP' $f | tail -1 | cut -c6-)', killing ssh $p"; kill $p; echo "STALLED in step $(grep '^STEP' $f | tail -1 | cut -c6-)" >> $f; stall_diag $c; break; fi
   done; wait $p 2>/dev/null
   mkdir -p $OUT/files/$c; scp -q -r "${K[@]}" root@10.56.0.107:$R/$c/. $OUT/files/$c/ 2>/dev/null
   if [ -z "$oops" ] && grep -qE "$OOPS" $OUT/files/$c/dmesg-chunk.txt 2>/dev/null; then grep -E "$OOPS|Call trace|pc :|lr :" $OUT/files/$c/dmesg-chunk.txt | head -40 > $OUT/OOPS; oops=dmesg; fi

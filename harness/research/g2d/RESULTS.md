@@ -13,8 +13,9 @@ State file of the task (datasheet item W25, docs/datasheet-checklist.md 2.5.3). 
   4. `arm64: dts: allwinner: h616: Add the G2D node` (g2d@1480000, SPI 90, clocks bus/mod/mbus, iommus = <&iommu 6>).
 - Host checks: full kernel build (kernel-check/work-g2d), W=1 on the driver and the CCU file, dtc, dt_binding_check +
   CHECK_DTBS: see "Host checks".
-- Board: NOT TESTED yet. Runner job `harness/runner-queue/26-g2d.md`, package `runner/{g2d-job.sh,HANDOFF.md}`, test tool
-  `tool/` (g2dconv.c for the board and the host, g2dcmp.py). Results will land in `logs/runner-g2d/`.
+- Board: NOT TESTED yet (job 26 BLOCKED by the DTB install, job 29 STALLED by the cedrus encoder's media bug; neither
+  reached a G2D ioctl). Runner job `harness/runner-queue/33-g2d.md` (c29+), package `runner/{g2d-job.sh,HANDOFF.md}`,
+  test tool `tool/` (g2dconv.c for the board and the host, g2dcmp.py). Results land in `logs/runner-g2d/`.
 - Patch sources of truth: `src/sun50i-g2d/*`, `src/allwinner,sun50i-h616-g2d.yaml`, generated into the worktree by
   `src/mkpatches.py` (string edits of the post-series files in kernel-check/work-cumul). Re-run it after editing src/.
 
@@ -104,3 +105,28 @@ YUV source and for every size change) -> blender pipe 0 in COPY mode, ROP pass-t
   (DT node status, devices_deferred, modinfo, lsmod, platform drivers).
 - Re-queued as harness/runner-queue/29-g2d.md (kernel 04964f921 unchanged; c26 has it). Next: a fresh agent judges job 29
   with "What job 26 decides" above.
+
+## Job 29 (2026-11-06, c27): STALLED, root cause = cedrus encoder media bug (kernel, not the G2D; package hardened)
+- Summary harness/runner-queue/done/29-g2d.summary.md: probe PASS (bound, iommu group, 300 MHz), then the chunk's first
+  `v4l2-ctl -d /dev/video0 -D` (the device-discovery loop over /dev/video*) never returned; stall watchdog after 240 s;
+  the restore reboot took ~6 min ("BOARD UNREACHABLE" is only the 300 s wait of the old restore()).
+- Root cause (also job 32-ve-encoder, same minute-one hang): the cedrus encoder patch f35cdf390 (c26/c27) called
+  `v4l2_m2m_register_media_controller()` a second time on the shared M2M device. The helper owns one sink/proc entity
+  set per M2M device, so the call re-registered them (the boot `WARNING: mc-device.c:619 media_device_register_entity`
+  x2 with cedrus_probe in the trace) and, because media_entity_pads_init() and media_device_register_entity() both
+  list_add_tail() the pads of an already registered entity, the media device's pad list ended with the sink pad linked
+  to itself (simulated step by step: `... KP -> KP -> KP ...`). MEDIA_IOC_G_TOPOLOGY, which v4l2-ctl -D/--all and
+  v4l2-compliance issue on any node of the media device, then loops forever in media_device_get_topology() with the
+  graph mutex held: unkillable (CONFIG_PREEMPT keeps the box alive, no softlockup detector in this config), so every
+  later V4L2 media access blocks and `systemctl reboot` waits out the stop timeouts.
+- Kernel fix: fix/sunxi-h616-venc ac009bb5b "media: cedrus: register the encoder's own media entities" (+ c307dd053
+  series.conf entry; c28 was built before it and lacks the fix), merged into test-cumulative 3d88bb858 = **c29**.
+- Package fixes (runner/g2d-job.sh): the G2D node is found through /sys/class/video4linux/*/name (no ioctl on foreign
+  nodes); every step prints `STEP <name>` and runs under `timeout -k 5`; `boot_warnings` and `cedrus_D_rc` (v4l2-ctl -D
+  on the cedrus decoder, i.e. the topology ioctl) are recorded in probe.txt; on a stall the host logs the step name,
+  collects files/stall-diag-g2d.txt (D/R tasks + /proc/PID/stack + dmesg tail) and the restore wait is 500 s; the
+  kernel must also contain c307dd053 (BLOCKED otherwise); ssh (harness/ssh.sh and the scp options) has
+  ConnectTimeout + ServerAliveInterval. harness/serial.log turned out to carry a second board's console (another Zero2
+  on the PM-debug U-Boot, with rtcwake cycles at 04:44/04:45/05:08): its lines are not ours; the OOPS watch on that
+  file can misfire.
+- Re-queued as harness/runner-queue/33-g2d.md. Next: a fresh agent judges job 33 with "What job 26 decides" above.

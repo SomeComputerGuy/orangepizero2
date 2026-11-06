@@ -3,7 +3,11 @@
 Task state file (AGENT-RULES "Budget"). Plan: `PLAN.md` section 4. Acceptance: `SPEC.md`, docs/datasheet-checklist.md W22.
 Memory: project-ve-encoder.md. Updated 2026-11-06 by the ve-encoder agent (first implementation task).
 
-## State: IMPLEMENTED, NOT BOARD-TESTED (runner job 27 queued)
+## State: IMPLEMENTED, NOT BOARD-TESTED (runner job 34 queued; jobs 27 and 32 never reached an encode)
+
+- 2026-11-06 (stall agent): job 32 on c27 hung in the first `v4l2-ctl --all` on /dev/video1. Root cause in this patch
+  set, fixed by **ac009bb5b + c307dd053** on fix/sunxi-h616-venc (merged into test-cumulative 3d88bb858 = c29):
+  see "Job 32" at the end. The paragraph below describes f35cdf390.
 
 - armbian-build branch **`fix/sunxi-h616-venc`** at **f35cdf390** (worktree `wt-venc`, from test-cumulative eb446f8cb),
   pushed to `fork` only. For the coordinator to merge into test-cumulative (next cumulative kernel, c24+).
@@ -52,10 +56,40 @@ Diagnostics by symptom are in PLAN.md 4.2 step 1.
 
 ## Open items / next step
 
-- **Next step: coordinator merges f35cdf390 into test-cumulative, builds/serves the kernel, the runner runs job 27.**
+- **Next step: the runner runs job 34 (harness/runner-queue/34-ve-encoder.md) on c29 or later.**
   Then a fresh agent reads `logs/runner-venc/results.txt` + the summary and fixes what failed (PLAN 4.2 step 1), or,
   on PASS, continues with PLAN 4.2 steps 2-4 (CABAC A/B, NV21/YUV420 input, RC statistics).
 - docs/status.md "Video encode" row and item 9 are the coordinator's to update (GAP -> IN PROGRESS, branch + job 27).
 - W22 (4096x4096, CBR/VBR 256k-100M, ROI x8, MJPEG): PLAN 4.2 steps 5-6; CBR/CQ already exist in the core.
 
 (The armbian commit f35cdf390 message names the job as 26; it was renumbered to 27 because 26-g2d.md took the number first.)
+
+## Job 32 (2026-11-06, c27): STALLED, root cause = the encoder's media entities registered twice (fixed, c29)
+- Summary harness/runner-queue/done/32-ve-encoder.summary.md: probe PASS ("Encoder registered as /dev/video1"), MEDIA
+  line empty, dmesg-probe.txt shows `cedrus_probe+0x398/0x440` twice (the trace of the boot WARNING at
+  drivers/media/mc/mc-device.c:619 `WARN_ON(entity->graph_obj.mdev != NULL)` in media_device_register_entity()), then
+  `v4l2-ctl -d /dev/video1 --all` produced nothing (enc-all.txt empty) for 180 s; the restore reboot took ~6 min.
+- Root cause: cedrus_probe() called `v4l2_m2m_register_media_controller(dev->m2m_dev, &dev->vfd_enc, ...)` after the
+  decoder's call on the same M2M device. The helper keeps ONE sink entity, ONE proc entity and their pads in
+  `struct v4l2_m2m_dev` (and reuses `source_pad` for the new source entity): the second call re-registers the
+  decoder's sink/proc (WARN_ON x2) and re-adds their pads to `mdev->pads` from both media_entity_pads_init() (mdev
+  already set) and media_device_register_entity(). list_add_tail() of a node that is already the list tail links it
+  to itself: the pad list becomes `source, proc0, proc1, sink, sink, sink, ...`. MEDIA_IOC_G_TOPOLOGY (first thing
+  v4l2-ctl -D/--all and v4l2-compliance do on a node with a media device, decoder or encoder) spins forever in
+  media_device_get_topology() under graph_mutex: unkillable, no console message (CONFIG_PREEMPT, no softlockup
+  detector), every later media access blocks, reboot waits out the unit stop timeouts. The same hang took down job
+  29-g2d (its device-discovery loop ran v4l2-ctl -D on /dev/video0 first). The empty MEDIA line is the broken
+  topology too (and /sys/class/media/*/model was checked with the wrong path pattern; now recorded verbatim).
+- Fix (kernel): `patches.media/h616-venc/media-cedrus-register-the-encoder-s-own-media-entities.patch`
+  (ac009bb5b; c307dd053 adds the series.conf line that ac009bb5b forgot, so c28 lacks the fix and c29 is the first
+  kernel with it): the encoder gets its own source (the vdev entity), proc (MEDIA_ENT_F_PROC_VIDEO_ENCODER) and sink
+  entities, pads and V4L interface node on the same media device, created and removed like the helper's
+  (`cedrus_enc_register_media()/cedrus_enc_unregister_media()` in cedrus.c, storage in struct cedrus_dev). The
+  single M2M device (job serialisation on the engine) is unchanged. Compile-checked W=1; built into c29.
+- Fix (package, runner/venc-job.sh): nodes from /sys/class/video4linux/*/name (cedrus-enc / cedrus), media node and
+  model recorded, `STEP` lines + `timeout -k 5` on every step, new probe values boot_warnings / media_node /
+  media_info (v4l2-ctl -D on the encoder prints "Media Driver Info") / dec_D_rc, stall diagnostics
+  (files/stall-diag-venc.txt), restore through restore-kernel.sh (DTB too), 500 s restore wait, FIX=c307dd053,
+  ssh ConnectTimeout + ServerAlive (harness/ssh.sh).
+- Re-queued as harness/runner-queue/34-ve-encoder.md. Next: a fresh agent reads results.txt + the summary (PLAN 4.2
+  step 1 symptom table).

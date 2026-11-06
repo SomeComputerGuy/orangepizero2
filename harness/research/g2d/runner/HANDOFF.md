@@ -18,7 +18,8 @@ kernel-check/cumulative-kernels.txt) via harness/research/vdec-perf/install-kern
 the HTTP server on 10.56.0.1:8643 must be up (ship.sh). install-kernel.sh also installs the tag's Zero2 DTB
 (kernel-check/vdec-serve/sun50i-h616-orangepi-zero2.dtb.<tag>, staged by cumul-build.sh): job 26 was BLOCKED because
 the stock DTB has no g2d@1480000 node and only Image + modules were installed. The script checks that the branch head
-(FIX in the script) is an ancestor of the tag's commit, that the booted DTB has the tag's md5, and that the booted
+(FIX in the script) and the cedrus media-entity fix c307dd053 (FIX_MC, fix/sunxi-h616-venc; c29 is the first kernel
+with it) are ancestors of the tag's commit, that the booted DTB has the tag's md5, and that the booted
 kernel has the driver bound at /sys/bus/platform/drivers/sun50i-g2d/1480000.g2d; otherwise it writes BLOCKED and
 exits 2 (report that, not a FAIL, with the first 30 lines of files/blocked-<tag>/state.txt: DT node, devices_deferred,
 modinfo; files/blocked-<tag>/dmesg.txt is the full dmesg). The restore goes through
@@ -29,6 +30,14 @@ DEV or TEST: DEV-length, about 12 min: install + reboot (~3 min), compliance (~1
 2048x2048 and three 1080p ones (~3 min, the board generates the inputs), 2 gst runs (~1 min), copy-back of ~20 MB of
 outputs (~1 min), restore (~1 min). Resumable: re-running skips chunks listed in logs/runner-g2d/state (one chunk).
 The stock kernel vmlinuz-7.3.1-edge-sunxi64 is restored at the end and before every lock hand-over.
+
+Job 29 (c27) stalled in the first `v4l2-ctl -D`: not the G2D, but the cedrus encoder patch had registered its media
+entities twice and every MEDIA_IOC_G_TOPOLOGY spun forever in the kernel (fixed by c307dd053). Since then every board
+step announces itself (`STEP <name>` in chunk-g2d.txt) and runs under its own `timeout -k 5`; the device is found
+through sysfs, not by ioctl. On a stall the host logs `STALL ... in step '<name>'`, collects
+files/stall-diag-g2d.txt (D/R tasks, their /proc/PID/stack, dmesg tail) over a fresh ssh session, and restores
+(a reboot with a stuck task takes up to ~6 min; the script waits 500 s). Report a stall as FAIL (STALL) with the step
+name and the first 40 lines of stall-diag-g2d.txt.
 
 Fail fast: the serial log and the chunk's dmesg are watched for `Unable to handle|Oops|WARNING:|workqueue
 lockup|iommu.*fault|Page fault|hung task`; a hit ends the job (exit 3, lines in logs/runner-g2d/OOPS): report FAIL
@@ -48,6 +57,10 @@ and the last 10 lines of runner.log); 1 = setup or lock error.
 2. Probe: `g2d probe driver_lines` >= 1, `g2d probe iommu_group 1`, `g2d probe device /dev/videoN` (not `none`) ->
    PASS, else FAIL (report files/g2d/probe-dmesg.txt). Also report `g2d probe clk_rate` (expected 300000000),
    `formats_out` and `formats_cap` (expected 18 each). If `device none`: every later check is FAIL (NO-DEVICE).
+   `g2d probe boot_warnings 0` -> PASS, else FAIL (a kernel WARNING at boot; report the value and the first 40 lines
+   of files/g2d/boot-warnings.txt, which holds every WARNING with its trace).
+   `g2d probe cedrus_D_rc 0` -> PASS (the cedrus decoder's media topology answers; 124 or 137 = the c26/c27 hang is
+   back, FAIL, report files/g2d/cedrus-D.txt).
 3. Compliance: `g2d compliance failed 0` and `g2d compliance rc 0` -> PASS, else FAIL: report `succeeded`, `failed`,
    `warnings` and every `g2d compliance FAILLINE` line. `g2d compliance-s failed` / `succeeded` / `warnings` (the
    streaming variant) are informational: report them and the FAILLINE lines, not pass/fail.

@@ -1,0 +1,9 @@
+#38 SMP PREEMPT Fri Nov  6 10:29:47 UTC 2026
+DMESG-START 663
+TRACE-ON
+caselist /root/oclfix/advblend2/caselists/deqp-fbfetch.txt, 146 cases, 17 s
+Pass                   146
+
+CHUNK-RC 0
+TRACE: TIMEDOUT 0
+ROUND-DONE

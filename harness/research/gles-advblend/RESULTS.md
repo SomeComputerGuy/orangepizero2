@@ -1,6 +1,7 @@
 # KHR-GLES31 blend_equation_advanced test_coherency.mixedSequence on the Zero2 (Mali-G31, Bifrost v7.0)
 
 State file of the gles-advblend task (agent 2026-11-05). Memory: project-gles-advblend.md.
+**Status: DONE 2026-11-06** (job 50 on c38 ALL PASS; fix = kernel soft-stop series; Mesa dc7266d584b reverted, 5d7c3e57df1).
 
 ## Problem
 `KHR-GLES31.core.blend_equation_advanced.test_coherency.mixedSequence` fails (87/88 of the group pass; 5/5 reruns fail,
@@ -35,7 +36,7 @@ Rule: the extension stays on; no cap hides it.
     (gl_nir_lower_blend_equation_advanced forces uses_sample_shading and pan_shader_prepare_rsd copies it into the
     partial RSD; the v9+ JM path and panvk gate it on the sample count).
 
-## Fix (mesa-work/mesa-cl, branch panfrost-opencl-fixes, commit dc7266d584b, Generated-by: LLM)
+## Fix (mesa-work/mesa-cl, branch panfrost-opencl-fixes, commit dc7266d584b, Generated-by: LLM) -- REVERTED (5d7c3e57df1), not the cause
 `panfrost: don't describe tilebuffer-reading fragments as opaque (v6/v7)`: for fragment shaders whose outputs_read
 includes a render target, the blend descriptor uses the fixed-function mode with the existing replace equation (when the
 format is blendable and the equation is fixed-function capable; opaque otherwise), alpha_zero_nop/alpha_one_store stay
@@ -94,7 +95,21 @@ vdec-perf/restore-kernel.sh; ftrace count of panfrost_job_timedout per chunk (tr
 wall time, `TO=` cumulative watchdog hits on every TAG line); `gpu sched timeout` in repro/khr-adv is now a FAIL check.
 Results: logs/runner2/ (job 48's stay in logs/runner/).
 
-## Open / next step
+## Result of job 50 (c38, 2026-11-06): DONE
+- ALL PASS (summary harness/runner-queue/done/50-gles-advblend.summary.md, logs logs/runner2/): fork-mixed x3, -x8,
+  -256, -barrier, multiply PASS with TO > 0 (the soft-stop path ran) and no `gpu sched timeout`; mixedSequence
+  Fail -> Pass (khr-adv 88/88), no regressions in deqp-fbfetch/-ms/-fbo, khr-ms, gles3 blend a/b; deqp-fbo
+  no_attachments.maximums.all Fail -> Pass (the other long job). 0 faults, stock kernel restored.
+- sys-mixed (system Mesa 26.2.4) and every knob-* variant (the old descriptors) PASS too, so dc7266d584b is not needed.
+- **Fix = the kernel soft-stop/resume series** (e544ddb00 + 0b7e3a208 + e17629bba, test-cumulative c27+). The image
+  kernel must carry it (it is not upstream).
+- **dc7266d584b reverted** in mesa-work/mesa-cl branch panfrost-opencl-fixes: 5d7c3e57df1 (Generated-by: LLM; nothing
+  else used the PAN_DBG_FBFETCH_OPAQUE/OVERDRAW/PERSAMPLE_1X knobs; 02df5721016 is independent). build-cl rebuilt
+  incrementally (rc 0), build-host-shim too; build-arm64 (mesa main) never had it. runner/gles-advblend.sh still checks
+  FORK=dc7266d584b by ancestry: the package is retired, do not rerun it as is.
+- Deferred (perf): the fork is ~10 % slower than system Mesa on the 44-draw job (build-cl is debugoptimized).
+
+## Open / next step (before job 50, kept for the record)
 - Job 50. Fresh agent after it:
   - fork-mixed* PASS, TO > 0, no `gpu sched timeout`, mixedSequence Pass -> DONE (kernel series = fix; record it in
     impl-gpu-spec.md and the memory file). Then look at the knob/sys lines: if sys-mixed and knob-all PASS too,

@@ -1,0 +1,2 @@
+caselist /root/oclfix/advblend2/caselists/khr-adv.txt, 88 cases, 6 s
+Pass                   88

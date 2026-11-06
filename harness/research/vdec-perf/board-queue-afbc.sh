@@ -6,6 +6,7 @@
 # references (vdec-perf/afbc/). Results in /root/afbc/*.txt; the first mismatching frame of each case in /root/afbc/dump.
 cd /root/vdec-streams || exit 1
 U=http://10.56.0.1:8643/afbc; A=/root/afbc; D=$A/dump; FIFO=/tmp/afbc.fifo; mkdir -p $A $D
+rm -f /root/afbc/dump/* /root/afbc/*.txt   # no stale results from an earlier round
 F="$A/ffmpeg-afbc -hide_banner -nostats -loglevel error -hwaccel v4l2request -hwaccel_output_format drm_prime"
 for f in ffmpeg-afbc avs2dec-afbc afbc-gpu-check hevc-main-2160p60.mkv.nv12.framemd5 vp9-p2-2160p60.webm.p010le.framemd5 \
          hevc-main10-2160p60.mkv.p010le.framemd5 vp9-p0-2160p60.webm.nv12.framemd5 cctv4k-10bit.p010.framemd5; do
@@ -18,7 +19,10 @@ curl -sS -m 300 -o /tmp/cc.avs2 $U/cctv4k-10bit.avs2
 . /root/opiz2-mesa/main/env.sh
 echo "kernel $(uname -rv) ve-clk $(cat /sys/kernel/debug/clk/ve/clk_rate 2>/dev/null) mesa $(ls /root/opiz2-mesa/main/lib/libgallium* 2>/dev/null | head -1) uptime $(cut -d" " -f1 /proc/uptime)"
 df -h /tmp /root | tail -2 | sed 's/^/[df] /'; free -m | head -2 | tail -1 | sed 's/^/[mem] /'
-echo "== GL smoke test"; $A/afbc-gpu-check -v /dev/null 2>&1 | grep -E 'GL_RENDERER|^EGL |^done|afbc-gpu-check:' | sed 's/^/[gl] /'
+echo "== GL smoke test"; $A/afbc-gpu-check -v /dev/null > $A/probe.txt 2>&1
+grep -E 'GL_RENDERER|^EGL |^done|afbc-gpu-check:|^probe' $A/probe.txt | sed 's/^/[gl] /'
+# job 49: every import failed with EGL_BAD_MATCH, i.e. panfrost listed no plane count for the modifier. The probe reads
+# the GPU's AFBC_FEATURES (Mesa pan_query_afbc(): nonzero = AFBC omitted from this G31) and the EGL modifier lists.
 # run <name> <ref> <layout> <max-frames|0> <decoder command...>  (the decoder writes the dump to $FIFO)
 run() {
   local n=$1 ref=$2 lay=$3 max=$4 t0 ck rc crc; shift 4
@@ -31,7 +35,7 @@ run() {
   for i in $(seq 1 180); do kill -0 $ck 2>/dev/null || break; sleep 1; done; kill $ck 2>/dev/null
   wait $ck; crc=$?
   echo "[$n] dec rc $rc check rc $crc $(( $(date +%s) - t0 )) s | $(grep -E '^done' $A/$n.check.txt) | $(grep -E '^input|^import' $A/$n.check.txt | tr '\n' ' ')"
-  grep -E 'FAIL|afbc-gpu-check:|rror|^hdr|wrote' $A/$n.check.txt | head -6 | sed "s/^/[$n] /"
+  grep -E 'FAIL|afbc-gpu-check:|rror|^hdr|wrote|^import-failed|^probe: YU' $A/$n.check.txt | head -16 | sed "s/^/[$n] /"
   grep -v '^frame' $A/$n.dec.txt | tail -3 | sed "s/^/[$n dec] /"
   rm -f $FIFO
 }
@@ -39,12 +43,16 @@ frames() { local f=$1; [ "$f" = 0 ] && echo 100000 || echo $f; }
 CKOPT=(-H)
 echo "== quick validation: H.265 8-bit AS12 vs NV12 reference, 60 frames"
 run hevc8q hevc-main-2160p60.mkv.nv12.framemd5 nv12 60 env V4L2REQUEST_PIXFMT=AS12 $F -i hevc-main-2160p60.mkv -frames:v 60 -f null -
+if grep -q 'gpu-afbc no' $A/probe.txt; then   # hevc8q above kept the raw header block (dump/frame-0.afbc-head)
+  echo "afbc: NOT TESTABLE on the GPU: this Mali-G31 has no AFBC (AFBC_FEATURES != 0), Mesa rejects every AFBC import"
+  ls -la $D | sed 's/^/[dump] /'; echo ROUND-DONE; exit 0
+fi
 tq=$(grep -oE '[0-9.]+ s \(gpu' $A/hevc8q.check.txt | cut -d' ' -f1); ok=$(grep -c '60 compared, 60 matched' $A/hevc8q.check.txt)
 per=$(python3 -c "print(int(float('${tq:-9999}')*1000/60))"); echo "quick: ok=$ok per-frame ${per} ms"
 if [ "$ok" != 1 ]; then
   echo "== quick validation failed: diagnostics (3 frames each)"
   CKOPT=(-H -v); run diag-split hevc-main-2160p60.mkv.nv12.framemd5 nv12 3 env V4L2REQUEST_PIXFMT=AS12 $F -i hevc-main-2160p60.mkv -frames:v 3 -f null -
-  CKOPT=(-H -M 0800000000000401); run diag-nosplit hevc-main-2160p60.mkv.nv12.framemd5 nv12 3 env V4L2REQUEST_PIXFMT=AS12 $F -i hevc-main-2160p60.mkv -frames:v 3 -f null -
+  CKOPT=(-H -M 0800000000000041); run diag-nosplit hevc-main-2160p60.mkv.nv12.framemd5 nv12 3 env V4L2REQUEST_PIXFMT=AS12 $F -i hevc-main-2160p60.mkv -frames:v 3 -f null -
   CKOPT=(-H -e); run diag-ext hevc-main-2160p60.mkv.nv12.framemd5 nv12 3 env V4L2REQUEST_PIXFMT=AS12 $F -i hevc-main-2160p60.mkv -frames:v 3 -f null -
   CKOPT=(-H -l i420); run diag-i420 hevc-main-2160p60.mkv.nv12.framemd5 i420 3 env V4L2REQUEST_PIXFMT=AS12 $F -i hevc-main-2160p60.mkv -frames:v 3 -f null -
   MAX=60

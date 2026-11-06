@@ -42,6 +42,17 @@ nothing deployed it.
   that line (do not build Mesa yourself). `BLOCKED: main deploy mismatch` -> BLOCKED, report the line.
 - If a chunk still prints `[env] BLOCKED`, report "afbc blocked: Mesa fork missing on the board" (BLOCKED, not FAIL).
 
+- Exit 1 with "stale checker" before the lock = package not ready: report BLOCKED with that line.
+
+Probe (job 51; job 49 failed every import with EGL 0x3009 = EGL_BAD_MATCH). Copy these lines of the FIRST chunk
+verbatim into the summary: `[gl] probe: gpu prod-id ...`, `[gl] probe: dma-buf format YU08 ...`, `... YU10 ...`,
+`[gl] probe: YU08 modifiers ...`, `[gl] probe: YU10 modifiers ...`, every `[hevc8q] import-failed: ...` and
+`[hevc8q] hdr frame 0 sb ...` line, and the file names in files/ (frame-0.afbc-head is a binary: copy it, do not commit).
+- If a chunk prints `afbc: NOT TESTABLE on the GPU`, the verdict of the whole job is **NOT TESTABLE (GPU has no
+  AFBC)**, not FAIL and not INCONCLUSIVE; the other checks below do not apply. Every chunk then ends after hevc8q
+  (seconds), which is expected.
+- Otherwise go on with the checks below.
+
 Checks, per `chunk-<case>.txt`:
 - PASS if the `[gl] GL_RENDERER` line does not contain `Mesa 26.2.4-1ubuntu1`, i.e. the system Mesa is not in use.
 - PASS if the line `quick: ok=1` is present. If it is `ok=0`, report every case as INCONCLUSIVE, not FAIL.

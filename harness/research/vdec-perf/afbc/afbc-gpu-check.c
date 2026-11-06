@@ -36,7 +36,10 @@
  * Cross-build (host):
  *   aarch64-linux-gnu-gcc -O2 -std=gnu11 -I<mesa>/include -I<kernel-uapi> \
  *       -o afbc-gpu-check afbc-gpu-check.c -ldl
- * Exit status 0 when every compared frame matched, 1 otherwise.
+ * At start it prints "probe:" lines: the GPU's AFBC_FEATURES (nonzero = AFBC omitted from this Mali, Mesa then
+ * lists no AFBC modifier) and the EGL modifier lists of YU08/YU10. On an import failure it prints "import-failed: <class>"
+ * and, with -D, keeps the header block + 64 KiB of frame N as <dir>/frame-N.afbc-head.
+ * Exit status 0 when every compared frame matched, 1 otherwise, 2 on setup or import failure.
  */
 #define _GNU_SOURCE
 #include <dlfcn.h>
@@ -418,6 +421,22 @@ static void header_stats(const uint8_t *buf, size_t size, unsigned int w,
 	uint32_t omin = UINT32_MAX, omax = 0, endmax = 0;
 	unsigned int sub_uncomp = depth > 8 ? 30 : 24; /* 4x4 subblock bytes */
 
+	if (frame == 0) {
+		/* raw header words of superblocks 0..3, the start of row 1 and the last one */
+		const unsigned int idx[] = { 0, 1, 2, 3, tw, tw * th - 1 };
+
+		for (i = 0; i < 6; i++) {
+			const uint8_t *hd = buf + 16 * idx[i];
+
+			if (16 * (size_t)idx[i] + 16 > size)
+				continue;
+			printf("hdr frame 0 sb %u:", idx[i]);
+			for (j = 0; j < 16; j++)
+				printf(" %02x", hd[j]);
+			printf("\n");
+		}
+	}
+
 	for (i = 0; i < tw * th; i++) {
 		const uint8_t *hd = buf + 16 * i;
 		uint32_t off = hd[0] | hd[1] << 8 | hd[2] << 16 | (uint32_t)hd[3] << 24;
@@ -579,6 +598,71 @@ static void usage(void)
 	exit(2);
 }
 
+/* ------------------------------------------------------------------ */
+/* Probe: does this GPU/Mesa accept AFBC YUV at all? (job 49: every     */
+/* import failed with EGL_BAD_MATCH = no plane count for the modifier,  */
+/* i.e. panfrost did not list the modifier for the fourcc)              */
+
+static uint64_t gpu_param(uint32_t param, bool *ok)
+{
+	struct drm_panfrost_get_param gp = { .param = param };
+
+	*ok = ioctl(drm_fd, DRM_IOCTL_PANFROST_GET_PARAM, &gp) == 0;
+	return gp.value;
+}
+
+/* Prints "probe: ..." lines; returns 1 if the GPU has AFBC (AFBC_FEATURES == 0, Mesa pan_query_afbc()), 0 if not,
+ * -1 if the parameter cannot be read. */
+static int probe(EGLDisplay dpy)
+{
+	typedef EGLBoolean (*qf_t)(EGLDisplay, EGLint, EGLint *, EGLint *);
+	typedef EGLBoolean (*qm_t)(EGLDisplay, EGLint, EGLint, EGLuint64KHR *, EGLBoolean *, EGLint *);
+	qf_t qf = (qf_t)gpa("eglQueryDmaBufFormatsEXT");
+	qm_t qm = (qm_t)gpa("eglQueryDmaBufModifiersEXT");
+	static const uint32_t fcc[] = { DRM_FORMAT_YUV420_8BIT, DRM_FORMAT_YUV420_10BIT };
+	bool ok, ok2;
+	uint64_t afbc = gpu_param(DRM_PANFROST_PARAM_AFBC_FEATURES, &ok);
+	uint64_t prod = gpu_param(DRM_PANFROST_PARAM_GPU_PROD_ID, &ok2);
+	int has = ok ? afbc == 0 : -1;
+	EGLint n = 0, i, k;
+
+	printf("probe: gpu prod-id 0x%" PRIx64 "%s, AFBC_FEATURES %s0x%" PRIx64 " -> gpu-afbc %s\n", prod,
+	       ok2 ? "" : " (query failed)", ok ? "" : "(query failed) ", afbc,
+	       has > 0 ? "yes" : has == 0 ? "no" : "unknown");
+	if (qf && qf(dpy, 0, NULL, &n) && n > 0) {
+		EGLint *f = calloc(n, sizeof(*f));
+
+		qf(dpy, n, f, &n);
+		for (k = 0; k < 2; k++) {
+			for (i = 0; i < n && (uint32_t)f[i] != fcc[k]; i++)
+				;
+			printf("probe: dma-buf format %c%c%c%c %s\n", fcc[k] & 0xff, (fcc[k] >> 8) & 0xff,
+			       (fcc[k] >> 16) & 0xff, fcc[k] >> 24, i < n ? "listed" : "not listed");
+		}
+		free(f);
+	} else {
+		printf("probe: eglQueryDmaBufFormatsEXT failed\n");
+	}
+	for (k = 0; k < 2 && qm; k++) {
+		EGLuint64KHR mods[64];
+		EGLBoolean ext[64];
+		EGLint m = 0;
+		char line[2048];
+		int len;
+
+		if (!qm(dpy, fcc[k], 64, mods, ext, &m))
+			m = -1;
+		len = snprintf(line, sizeof(line), "probe: %c%c%c%c modifiers (%d):", fcc[k] & 0xff,
+			       (fcc[k] >> 8) & 0xff, (fcc[k] >> 16) & 0xff, fcc[k] >> 24, m);
+		for (i = 0; i < m && len < (int)sizeof(line) - 32; i++)
+			len += snprintf(line + len, sizeof(line) - len, " 0x%016" PRIx64 "%s",
+					(uint64_t)mods[i], ext[i] ? "(ext)" : "");
+		printf("%s\n", line);
+	}
+	fflush(stdout);
+	return has;
+}
+
 int main(int argc, char **argv)
 {
 	const char *ref = NULL, *dumpdir = NULL, *layout_opt = NULL;
@@ -598,6 +682,7 @@ int main(int argc, char **argv)
 	size_t raw_cap = 0;
 	double t0 = now(), tgpu = 0, tcpu = 0;
 	enum layout lay = L_P010;
+	int gpu_afbc;
 
 	while ((opt = getopt(argc, argv, "r:l:m:D:d:Hevp:M:")) != -1) {
 		switch (opt) {
@@ -653,6 +738,7 @@ int main(int argc, char **argv)
 			die("eglMakeCurrent failed: 0x%x", p_eglGetError());
 		fprintf(stderr, "GL_RENDERER %s, %s\n", p_glGetString(GL_RENDERER),
 			p_glGetString(GL_VERSION));
+		gpu_afbc = probe(dpy);
 	}
 	{
 		char *fs;
@@ -810,8 +896,30 @@ int main(int argc, char **argv)
 				printf("import ok: pitch %u\n", pitches[i]);
 			}
 		}
-		if (img == EGL_NO_IMAGE_KHR)
+		if (img == EGL_NO_IMAGE_KHR) {
+			if (dumpdir) {
+				/* header block + 64 KiB of body: enough to check the VE's header layout offline */
+				size_t n = (size_t)tw * th * 16 + 65536;
+				char path[512];
+				FILE *o;
+
+				snprintf(path, sizeof(path), "%s/frame-%u.afbc-head", dumpdir, frames);
+				o = fopen(path, "wb");
+				if (o) {
+					fwrite(&hd, sizeof(hd), 1, o);
+					fwrite(raw, 1, n < hd.size ? n : hd.size, o);
+					fclose(o);
+					printf("  wrote %s\n", path);
+				}
+			}
+			if (!hstats)
+				header_stats(raw, hd.size, w, h, depth, frames);
+			printf("import-failed: %s\n", gpu_afbc == 0 ?
+			       "gpu-has-no-afbc (AFBC_FEATURES != 0: Mesa lists no AFBC modifier on this GPU)" :
+			       "modifier-or-layout (GPU has AFBC; see the probe modifier list and MESA errors)");
+			fflush(stdout);
 			die("dma-buf import failed for every pitch");
+		}
 
 		p_glGenTextures(1, &tex);
 		p_glActiveTexture(GL_TEXTURE0);

@@ -51,6 +51,32 @@ The board jobs are packaged in runner/ (vdec-job.sh + HANDOFF.md). Job files: ha
      checked on the board, runner.log `deployed main ok`; exits 1 before the lock if build-arm64 is not built from
      mesa HEAD; build-arm64 rebuilt from 15bd751e896). restore() now uses restore-kernel.sh (Image, DTB, modules).
      Requeued as runner job 49-afbc.
+   - 2026-11-06: job 49 (c38, fork 15bd751e896 deployed, GL_RENDERER = fork): every import EGL 0x3009 at every pitch,
+     all cases INCONCLUSIVE. Root cause analysis (Mesa main/mesa-cl source + host drm-shim run):
+     - EGL_BAD_MATCH comes from dri2_from_dma_bufs(): dri2_get_modifier_num_planes() returned 0, i.e.
+       panfrost_is_dmabuf_modifier_supported(0x0800000000000061, Y8U8V8_420_UNORM_PACKED) was false. A pitch or layout
+       problem would be BAD_ALLOC plus a `WSI pitch ...` Mesa error, and no such error was logged.
+     - The modifier is correct: 16x16|SPARSE|SPLIT is what cedrus AS12/AS01 and the DE33 AFBC planes use (FFmpeg 0312),
+       it is in PAN_SUPPORTED_MODIFIERS, and pan_afbc_check_params() accepts it for YUV420_6C8/6C10 on v7. On the host
+       drm-shim (fake G31 0x7093, AFBC_FEATURES 0) the same checker lists YU08/YU10 with 0x...42, 0x...341, 0x...41 and
+       0x...61, so the dri/panfrost import path works when the GPU has AFBC.
+     - Remaining cause: pan_query_afbc() is false on the board, i.e. this G31 reports AFBC_FEATURES != 0 (AFBC left
+       out of the H616 integration; the H616 manual lists "Supports AFBC buffer" only for the DE). Then Mesa lists no
+       AFBC modifier at all and rejects every import, which is correct: the GPU cannot read AFBC. Not proven yet: job 51.
+     - The 87.8 fps AVS2 AFBC rate (impl-vdec-main10-perf.md §9.7) was decode throughput only; no earlier run ever
+       imported an AFBC capture into EGL, so nothing changed between runs.
+     - Package changes for job 51: afbc-gpu-check prints `probe:` lines (AFBC_FEATURES via PANFROST_GET_PARAM,
+       eglQueryDmaBufFormats/ModifiersEXT for YU08/YU10), `import-failed: <class>`, raw header words of superblocks
+       0-3/row 1/last, and keeps the header block + 64 KiB (`dump/frame-0.afbc-head`) on an import failure;
+       board-queue-afbc.sh stops after hevc8q with `afbc: NOT TESTABLE on the GPU` when the probe says gpu-afbc no;
+       diag-nosplit used 0x401 (16x16|DB, never advertised), now 0x41 (16x16|SPARSE); stale dumps/results removed at
+       start; vdec-job.sh refuses a served checker without the probe. Served binary kernel-check/vdec-serve/afbc/
+       afbc-gpu-check md5 see the queue file.
+     - Job 49's logs moved to logs/runner-afbc-job49/ (job 51 writes a fresh logs/runner-afbc/).
+     - Next (fresh agent after job 51): gpu-afbc no -> the GPU route is closed (NOT TESTABLE, not a VE failure); the
+       bit-exact check of native AFBC capture then needs another decoder (DE33 writeback of an AFBC layer at 1:1 with
+       the CSC bypassed, if the DE33 allows YUV writeback, or a software AFBC decoder checked against the header dump).
+       gpu-afbc yes but import still fails -> the probe's modifier list and the MESA errors in files/hevc8q.check.txt.
    - The checker's header stats also printed "body offsets ... out-of-range 31779". Re-check its header parsing
      (afbc/afbc-gpu-check.c -H) if the import works and frames still mismatch.
    - Tooling and method: commit 58d5407, kernel-check/afbc-dumps/report-draft.md (§10/§10.1, to be appended to

@@ -1,0 +1,2 @@
+FIXED dEQP-GLES31.functional.fbo.no_attachments.maximums.all Fail -> Pass
+SUMMARY cases=118 {'NotSupported': 41, 'Pass': 77} REGRESSIONS=0 FIXED=1 CHANGED=0 MISSING=0

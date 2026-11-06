@@ -1,0 +1,10 @@
+#38 SMP PREEMPT Fri Nov  6 10:29:47 UTC 2026
+DMESG-START 663
+TRACE-ON
+caselist /root/oclfix/advblend2/caselists/deqp-fbo.txt, 118 cases, 10 s
+NotSupported           41
+Pass                   77
+
+CHUNK-RC 0
+TRACE: TIMEDOUT 9
+ROUND-DONE

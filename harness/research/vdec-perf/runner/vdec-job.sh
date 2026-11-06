@@ -53,6 +53,8 @@ if [ $J = afbc ]; then   # host-side precondition: the build exists and is curre
   [ -f $MW/build-arm64/src/gallium/targets/dri/$MLIB ] || { echo "missing build: mesa-work/build-arm64 $MLIB (run: . mesa-work/tools/env.sh; ninja -C mesa-work/build-arm64)"; exit 1; }
   mh=$(git -C $MW/mesa rev-parse --short=10 HEAD)
   strings $MW/build-arm64/src/gallium/targets/dri/$MLIB | grep -q "(git-$mh)" || { echo "mesa-work/build-arm64 is not built from mesa HEAD $mh (run: . mesa-work/tools/env.sh; ninja -C mesa-work/build-arm64)"; exit 1; }
+  # job 51: the served checker must carry the AFBC probe (AFBC_FEATURES + EGL modifier lists)
+  strings $H/kernel-check/vdec-serve/afbc/afbc-gpu-check | grep -q "gpu-afbc" || { echo "stale checker: kernel-check/vdec-serve/afbc/afbc-gpu-check has no probe (cross-build vdec-perf/afbc/afbc-gpu-check.c)"; exit 1; }
 fi
 deploy_main() { # afbc: fork build -> /root/opiz2-mesa/main, verified by md5
   $MW/tools/deploy.sh build-arm64 main 2>&1 | tail -1 | tee -a $OUT/runner.log

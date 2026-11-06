@@ -383,6 +383,10 @@ Full queue via `gpu-rerun.sh` (561 min), then the extras unit (MemoryMax=800M).
   1405 StartupError (no ES 3.2 context, expected).
 - **OOM cases run alone under an 800 MB memcg: both Pass.** They only OOM when the whole queue shares the board's
   memory, so they are not a driver bug; record as "run alone on 1 GB boards".
+- **2026-11-06: mixedSequence FIXED (DONE).** Cause: the 44-draw fragment job runs ~0.7 s, longer than panfrost's 500 ms
+  job watchdog; the reset dropped the rest of the frame. The kernel soft-stop/resume series (e544ddb00 + 0b7e3a208 +
+  e17629bba, test-cumulative c27+) fixes it: job 50 on c38 passes with system Mesa and the fork; no Mesa change
+  (dc7266d584b reverted). State: gles-advblend/RESULTS.md.
 - **`KHR-GLES31.core.blend_equation_advanced.test_coherency.mixedSequence`: Fail 5/5 alone.** Deterministic, so a real
   panfrost/G31 blend_equation_advanced_coherent bug, not flakiness. Goes into the OpenCL/compiler work item
   (status.md item 3) as a GLES bug to fix or to stop advertising coherency.

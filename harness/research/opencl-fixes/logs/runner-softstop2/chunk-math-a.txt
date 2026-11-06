@@ -1,0 +1,382 @@
+#25 SMP PREEMPT Fri Nov  6 04:18:02 UTC 2026
+DMESG-START 742
+TRACE-ON
+	acos	acosh	acospi	add	asin	asinh	asinpi	assignment	atan	atan2	atan2pi	atanh	atanpi	cbrt	ceil	cos	cosh	cospi	divide	erf	erfc	exp	exp10	exp2	expm1	fabs	fdim	floor	fma	fmax	fmin	fmod	fract	frexp	hypot	ilogb	isequal	isfinite	isgreater	isgreaterequal	isinf	isless	islessequal	islessgreater	isnan	isnormal	isnotequal	isordered	isunordered	ldexp	lgamma	lgamma_r	log	log10sizeof( void*) = 8
+ARCH:	aarch64
+system name = Linux
+node name   = orangepizero2
+release     = 7.3.1
+version     = #25 SMP PREEMPT Fri Nov  6 04:18:02 UTC 2026
+machine     = aarch64
+
+*** WARNING: Testing in Wimpy mode!                     ***
+*** Wimpy mode is not sufficient to verify correctness. ***
+*** Wimpy Reduction Factor: 32                          ***
+
+   	                                           	  max_ulps
+-----------------------------------------------------------------------------------------------------------
+
+**************************
+***    !! WARNING !!   ***
+*** Wimpy mode enabled ***
+**************************
+
+ Initializing random seed to 0.
+Requesting Default device based on command line for platform index 0 and device index 0
+Compute Device Name = Mali-G31 MC1 (Panfrost), Compute Device Vendor = Arm, Compute Device Version = OpenCL 3.0 , CL C Version = OpenCL C 1.2 
+Device latest conformance version passed: v0000-01-01-00
+Supports single precision denormals: NO
+sizeof( void*) = 8  (host)
+sizeof( void*) = 8  (device)
+*** PreventSleep() is not implemented on this platform.
+
+Compute Device info:
+	Platform Version: OpenCL 3.1 
+	Device Name: Mali-G31 MC1 (Panfrost)
+	Vendor: Arm
+	Device Version: OpenCL 3.0 
+	CL C Version: OpenCL C 1.2 
+	Driver Version: 26.2.4 (git-9049a3c5f2)
+	Device Frequency: 800 MHz
+	Subnormal values supported for floats? NO
+	Correctly rounded divide and sqrt supported for floats? NO
+	Testing with FTZ mode ON for floats? YES
+	Testing single precision? YES
+	Testing fast relaxed math? YES
+	Fast relaxed math has derived implementations? YES
+	Testing double precision? NO
+	Testing half precision? YES
+	Is Embedded? NO
+	Tininess is detected before rounding? NO
+	Worker threads: 4
+	Testing vector sizes:	1	2	3	4	8	16
+	Verbose? NO
+
+
+acos...
+  1:            acos fp32  rlx................Wimp pass	    1.39 @ -0x1.104cp-1
+  2:            acos fp32     ................Wimp pass	    1.39 @ -0x1.104cp-1
+  3:            acos fp16     .Wimp pass	    0.55 @ -0x1.cp-15
+acos passed
+acosh...
+  4:           acosh fp32     ...........
+ERROR: acosh: nan ulp error at 0x1p-7 (0x3c000000): *nan vs. 0x1.0a2724p+2
+.  5:           acosh fp16     .Wimp pass	    0.00 @ 0x0p+0
+acosh FAILED
+acospi...
+  6:          acospi fp32     ................Wimp pass	    1.79 @ 0x1.daeap-1
+  7:          acospi fp16     .Wimp pass	    0.00 @ 0x0p+0
+acospi passed
+asin...
+  8:            asin fp32  rlx................Wimp pass	    0.78 @ -0x1.027ep-1
+  9:            asin fp32     ......
+ERROR: asin: -4503599627370496.000000 ulp error at -0x1p-79 (0x98000000): *-0x1p-79 vs. -0x1p-51
+ 10:            asin fp16     .Wimp pass	    0.00 @ 0x0p+0
+asin FAILED
+asinh...
+ 11:           asinh fp32     ...............
+ERROR: asinh: 1099494850560.000000 ulp error at 0x1p-123 (0x02000000): *0x1p-123 vs. 0x1p-107
+ 12:           asinh fp16     .Wimp pass	    0.00 @ 0x0p+0
+asinh FAILED
+asinpi...
+ 13:          asinpi fp32     ...........
+ERROR: asinpi: nan ulp error at 0x1p-11 (0x3a000000): *0x1.45f308p-13 vs. nan
+. 14:          asinpi fp16     .Wimp pass	    0.00 @ 0x0p+0
+asinpi FAILED
+atan...
+ 15:            atan fp32  rlx................Wimp pass	281474959933440.00 @ -0x1p-55
+ 16:            atan fp32     ....
+ERROR: atan: -1093821333504.000000 ulp error at -0x1p-19 (0xb6000000): *-0x1p-19 vs. -0x1.fd5baap-4
+ 17:            atan fp16     .Wimp pass	    0.00 @ 0x0p+0
+atan FAILED
+atanh...
+ 18:           atanh fp32     ................Wimp pass	    1.15 @ 0x1.0142p-1
+ 19:           atanh fp16     .Wimp pass	    0.00 @ 0x0p+0
+atanh passed
+atanpi...
+ 20:          atanpi fp32     
+ERROR: atanpi2: -nan ulp error at -0x1p+101 (0xf2000000): *-0x1p-1 vs. -nan
+. 21:          atanpi fp16     .Wimp pass	    0.00 @ 0x0p+0
+atanpi FAILED
+atan2...
+ 22:           atan2 fp32     ................Wimp pass	    6.00 @ {-0x1.8p-147, 0x1p+0}
+ 23:           atan2 fp16     
+ERROR: atan28: 79.367012 ulp error at {-0x1.308p-15 (0x8261), -0x1.78p-19 (0x802f)}
+Expected: -0x1.a5cp+0  (half 0xbe97) 
+Actual: -0x1.92p+0 (half 0xbe48) at index: 795
+
+ERROR: atan28: -582.797791 ulp error at {-0x1.9dp-15 (0x833a), 0x1.088p-15 (0x0211)}
+Expected: -0x1.004p+0  (half 0xbc01) 
+Actual: -0x1.92p+0 (half 0xbe48) at index: 2187
+
+ERROR: atan28: -268.416260 ulp error at {-0x1.458p-15 (0x828b), 0x1.5ep-17 (0x00af)}
+Expected: -0x1.4fp+0  (half 0xbd3c) 
+Actual: -0x1.92p+0 (half 0xbe48) at index: 827
+
+ERROR: atan28: -608.198425 ulp error at {0x1.69p-16 (0x0169), -0x1.bf8p-15 (0x837f)}
+Expected: 0x1.61p+1  (half 0x4184) 
+Actual: 0x1.92p+0 (half 0x3e48) at index: 1163
+ERROR: ThreadPool_Do: TestHalf failed
+! (CL_DEVICE_NOT_FOUND from /home/aruni/orangepizero2/harness/research/gpu-src/dl-opencl-cts-43111c0c/OpenCL-CTS/test_conformance/math_brute_force/binary_half.cpp:698)
+atan2 FAILED
+atan2pi...
+ 24:         atan2pi fp32     ..........
+ERROR: atan2pi3: -nan ulp error at {0x1.472a3p+120 (0x7ba39518), -0x1.34a3cep+77 (0xe61a51e7)}: *0x1p-1 vs. -nan (0xffffdead) at index: 0
+. 25:         atan2pi fp16     
+ERROR: atan2pi8: -104.174324 ulp error at {-0x1.19p-15 (0x8232), 0x1.68p-19 (0x002d)}
+Expected: -0x1.e6p-2  (half 0xb798) 
+Actual: -0x1p-1 (half 0xb800) at index: 9219
+
+ERROR: atan2pi8: -984.189880 ulp error at {0x1.fp-20 (0x001f), -0x1.fbp-16 (0x81fb)}
+Expected: 0x1.f6p-1  (half 0x3bd8) 
+Actual: 0x1p-1 (half 0x3800) at index: 10371
+
+ERROR: atan2pi8: 1024.000000 ulp error at {-0x1.74p-18 (0x805d), 0x1.efp-16 (0x01ef)}
+Expected: -0x1.e44p-5  (half 0xab91) 
+Actual: -0x1p-1 (half 0xb800) at index: 1731
+
+ERROR: atan2pi8: 1024.000000 ulp error at {-0x1.3ap-15 (0x8274), 0x1.67p-15 (0x02ce)}
+Expected: -0x1.d48p-3  (half 0xb352) 
+Actual: -0x1p-1 (half 0xb800) at index: 2859
+ERROR: ThreadPool_Do: TestHalf failed
+! (CL_DEVICE_NOT_FOUND from /home/aruni/orangepizero2/harness/research/gpu-src/dl-opencl-cts-43111c0c/OpenCL-CTS/test_conformance/math_brute_force/binary_half.cpp:698)
+atan2pi FAILED
+cbrt...
+ 26:            cbrt fp32     ........
+ERROR: cbrt3: -nan ulp error at 0x1.008p+85 (0x6a004000): *0x1.42bfe8p+28 vs. -nan
+. 27:            cbrt fp16     .Wimp pass	    0.00 @ 0x0p+0
+cbrt FAILED
+ceil...
+ 28:            ceil fp32     ................Wimp pass	    0.00 @ 0x0p+0
+ 29:            ceil fp16     .Wimp pass	    0.00 @ 0x0p+0
+ceil passed
+cos...
+ 30:             cos fp32  rlx...
+ERROR: cos3: nan ulp error at -0x1p+1 (0xc0000000): *-0x1.aa2266p-2 vs. nan
+ 31:             cos fp32     
+ERROR: cos2: -nan ulp error at -0x1.583p+115 (0xf92c1800): *0x1.f6ad7p-1 vs. -nan
+ 32:             cos fp16     .Wimp pass	    0.00 @ 0x0p+0
+cos FAILED
+cosh...
+ 33:            cosh fp32     ................Wimp pass	    2.15 @ -0x1.0686p+1
+ 34:            cosh fp16     .Wimp pass	    0.00 @ 0x0p+0
+cosh passed
+cospi...
+ 35:           cospi fp32  rlx................Wimp pass	    1.87 @ 0x1.addep-2
+ 36:           cospi fp32     
+ERROR: cospi: -nan ulp error at -0x1p+101 (0xf2000000): *0x1p+0 vs. -nan
+. 37:           cospi fp16     .Wimp pass	    0.00 @ 0x0p+0
+cospi FAILED
+exp...
+ 38:             exp fp32  rlx
+ERROR: exp: inf ulp error at -0x1p+125 (0xfe000000): *0x0p+0 vs. 0x1p+0
+ 39:             exp fp32     ..........
+ERROR: exp3: -nan ulp error at 0x1.e88p+33 (0x50744000): *inf vs. -nan
+ 40:             exp fp16     .Wimp pass	    1.89 @ -0x1p+4
+exp FAILED
+exp2...
+ 41:            exp2 fp32  rlx
+ERROR: exp2: inf ulp error at -0x1p+113 (0xf8000000): *0x0p+0 vs. 0x1.0078p-7
+ 42:            exp2 fp32     ................Wimp pass	    2.99 @ -0x1.26d6p+7
+ 43:            exp2 fp16     .Wimp pass	    1.00 @ -0x1.8p+4
+exp2 FAILED
+exp10...
+ 44:           exp10 fp32  rlx................Wimp pass	8371538.50 @ -0x1.2f72p+5
+ 45:           exp10 fp32     ....
+ERROR: exp103: -nan ulp error at -0x1.008p-31 (0xb0004000): *0x1p+0 vs. -nan
+ 46:           exp10 fp16     .Wimp pass	    1.68 @ -0x1.cp+2
+exp10 FAILED
+expm1...
+ 47:           expm1 fp32     ..............
+ERROR: expm13: -nan ulp error at 0x1p-99 (0x0e000000): *0x1p-99 vs. -nan
+. 48:           expm1 fp16     .Wimp pass	    0.00 @ 0x0p+0
+expm1 FAILED
+fabs...
+ 49:            fabs fp32     .
+ERROR: fabs: 1099494850560.000000 ulp error at -0x1p+65 (0xe0000000): *0x1p+65 vs. 0x1p+81
+ 50:            fabs fp16     .Wimp pass	    0.00 @ 0x0p+0
+fabs FAILED
+fdim...
+ 51:            fdim fp32     ................Wimp pass	    0.00 @ {0x0p+0, 0x0p+0}
+ 52:            fdim fp16     ................Wimp pass	    0.00 @ {0x0p+0, 0x0p+0}
+fdim passed
+floor...
+ 53:           floor fp32     ..........
+ERROR: floor: 281474959933440.000000 ulp error at 0x1p+49 (0x58000000): *0x1p+49 vs. 0x1p+73
+ 54:           floor fp16     .Wimp pass	    0.00 @ 0x0p+0
+floor FAILED
+fma...
+ 55:             fma fp32     Test Error: not all special cases tested!
+................Wimp pass	    0.00 @ {0x0p+0, 0x0p+0, 0x0p+0}
+ 56:             fma fp16     ................Wimp pass	    0.00 @ {0x0p+0, 0x0p+0, 0x0p+0}
+fma passed
+fmax...
+ 57:            fmax fp32     ................Wimp pass	    0.00 @ {0x0p+0, 0x0p+0}
+ 58:            fmax fp16     ................Wimp pass	    0.00 @ {0x0p+0, 0x0p+0}
+fmax passed
+fmin...
+ 59:            fmin fp32     ................Wimp pass	    0.00 @ {0x0p+0, 0x0p+0}
+ 60:            fmin fp16     ................Wimp pass	    0.00 @ {0x0p+0, 0x0p+0}
+fmin passed
+fmod...
+ 61:            fmod fp32     ................Wimp pass	    0.00 @ {0x0p+0, 0x0p+0}
+ 62:            fmod fp16     ................Wimp pass	    0.00 @ {0x0p+0, 0x0p+0}
+fmod passed
+fract...
+ 63:           fract fp32     ................Wimp pass	{    0.00,     0.00} @ {0x0p+0, 0x0p+0}
+ 64:           fract fp16     .Wimp pass	{    0.00,     0.00} @ {0x0p+0, 0x0p+0}
+fract passed
+frexp...
+ 65:           frexp fp32     ................Wimp pass	{    0.00, 0} @ {0x0p+0, 0x0p+0}
+ 66:           frexp fp16     .Wimp pass	{    0.00, 0} @ {0x0p+0, 0x0p+0}
+frexp passed
+hypot...
+ 67:           hypot fp32     ...........
+ERROR: hypot: -15800560.000000 ulp error at {-0x1.e231ep+55 (0xdb7118f0), -0x1.bc2abp-1 (0xbf5e1558)}: *0x1.e231ep+55 vs. 0x1.e0bdbcp-38 (0x2cf05ede) at index: 0
+ 68:           hypot fp16     .....
+ERROR: hypot: 221849.968750 ulp error at {0x1.f94p+7 (0x5be5), -0x1.02cp+3 (0xc80b)}
+Expected: 0x1.f98p+7  (half 0x5be6) 
+Actual: 0x1.b54p+14 (half 0x76d5) at index: 0
+ERROR: ThreadPool_Do: TestHalf failed
+! (CL_DEVICE_NOT_FOUND from /home/aruni/orangepizero2/harness/research/gpu-src/dl-opencl-cts-43111c0c/OpenCL-CTS/test_conformance/math_brute_force/binary_half.cpp:698)
+hypot FAILED
+ilogb...
+ 69:           ilogb fp32     ................Wimp pass
+ 70:           ilogb fp16     .Wimp pass
+ilogb passed
+isequal...
+ 71:         isequal fp32     .....
+ERROR: isequal: 1 ulp error at {-0x1.9bb66ep-69, -0x1.cdf2dcp+60}: *0x00000000 vs. 0x00000001 (index: 129585)
+ 72:         isequal fp16     ................Wimp pass
+isequal FAILED
+isfinite...
+ 73:        isfinite fp32     ............
+ERROR: isfinite: 8532 ulp error at 0x1p-15: *1 vs. -8531
+ 74:        isfinite fp16     .Wimp pass
+isfinite FAILED
+isgreater...
+ 75:       isgreater fp32     .......
+ERROR: isgreater: 8531 ulp error at {-0x1.f4deeap+62, -0x1.176442p-65}: *0x00000000 vs. 0xffffdead (index: 0)
+ 76:       isgreater fp16     ................Wimp pass
+isgreater FAILED
+isgreaterequal...
+ 77:  isgreaterequal fp32     ...........
+ERROR: isgreaterequal: 8531 ulp error at {-0x1.ad092cp+95, 0x1.b65902p+120}: *0x00000000 vs. 0xffffdead (index: 0)
+ 78:  isgreaterequal fp16     ................Wimp pass
+isgreaterequal FAILED
+isinf...
+ 79:           isinf fp32     .........
+ERROR: isinf4: 8531 ulp error at 0x1p+65: *0 vs. -8531
+ 80:           isinf fp16     .Wimp pass
+isinf FAILED
+isless...
+ 81:          isless fp32     ................Wimp pass
+ 82:          isless fp16     ................Wimp pass
+isless passed
+islessequal...
+ 83:     islessequal fp32     ................Wimp pass
+ 84:     islessequal fp16     ............
+ERROR: islessequal: 21283 ulp error at {0x1.f74p-11 (0x13dd), 0x1.92cp+15 (0x7a4b)}
+Expected: 0xffffffff 
+Actual: 0xffffacdc (index: 0)
+ERROR: ThreadPool_Do: TestHalf failed
+! (CL_DEVICE_NOT_FOUND from /home/aruni/orangepizero2/harness/research/gpu-src/dl-opencl-cts-43111c0c/OpenCL-CTS/test_conformance/math_brute_force/macro_binary_half.cpp:473)
+islessequal FAILED
+islessgreater...
+ 85:   islessgreater fp32     ................Wimp pass
+ 86:   islessgreater fp16     ................Wimp pass
+islessgreater passed
+isnan...
+ 87:           isnan fp32     ................Wimp pass
+ 88:           isnan fp16     .Wimp pass
+isnan passed
+isnormal...
+ 89:        isnormal fp32     ................Wimp pass
+ 90:        isnormal fp16     .Wimp pass
+isnormal passed
+isnotequal...
+ 91:      isnotequal fp32     ................Wimp pass
+ 92:      isnotequal fp16     ................Wimp pass
+isnotequal passed
+isordered...
+ 93:       isordered fp32     ................Wimp pass
+ 94:       isordered fp16     .........
+ERROR: isordered: 1 ulp error at {nan (0x7f9c), -0x1.d88p+12 (0xef62)}
+Expected: 0x0000 
+Actual: 0x0001 (index: 9)
+ERROR: ThreadPool_Do: TestHalf failed
+! (CL_DEVICE_NOT_FOUND from /home/aruni/orangepizero2/harness/research/gpu-src/dl-opencl-cts-43111c0c/OpenCL-CTS/test_conformance/math_brute_force/macro_binary_half.cpp:473)
+isordered FAILED
+isunordered...
+ 95:     isunordered fp32     ....
+ERROR: isunordered: 8531 ulp error at {-0x1.1c14c4p-34, 0x1.91885p-119}: *0x00000000 vs. 0xffffdead (index: 0)
+ 96:     isunordered fp16     ................Wimp pass
+isunordered FAILED
+ldexp...
+ 97:           ldexp fp32     .........
+ERROR: ldexp3: -nan ulp error at {0x1.f6f002p-85 (0x157b7801), 889555143}: *inf (0x7f800000) vs. -nan (0xffffdead) at index: 0
+ 98:           ldexp fp16     ................Wimp pass	    0.00 @ {0x0p+0, 0}
+ldexp FAILED
+lgamma...
+ 99:          lgamma fp32     
+ERROR: lgamma2: -nan ulp error at -0x1p+113 (0xf8000000): *inf vs. -nan
+
+ERROR: lgamma2: -nan ulp error at -0x1.7a8p+120 (0xfbbd4000): *inf vs. -nan
+100:          lgamma fp16     .Wimp pass	     inf @ -inf
+lgamma FAILED
+lgamma_r...
+101:        lgamma_r fp32     ................Wimp pass	{     inf, 1} @ {0x1.008p-140, 0x0p+0}
+102:        lgamma_r fp16     .Wimp pass	{1099511627776.00, 1} @ {0x1p+0, 0x0p+0}
+lgamma_r passed
+log...
+103:             log fp32  rlx............
+ERROR: log: 7268175.000000 ulp error at 0x1p-31 (0x30000000): *-0x1.57cd0ep+4 vs. -0x1.e7f9c2p+2
+104:             log fp32     .........
+ERROR: log4: 2907270.250000 ulp error at 0x1p+85 (0x6a000000): *0x1.d7571p+5 vs. 0x1.18080ep+6
+105:             log fp16     .Wimp pass	    1.49 @ 0x1.6p+5
+log FAILED
+log10...
+106:           log10 fp32  rlx.............
+ERROR: log103: -nan ulp error at 0x1.e8ap-38 (0x2cf45000): *-0x1.6511a6p+3 vs. -nan
+107:           log10 fp32     ................Wimp pass	    0.56 @ 0x1.e00ap-1
+108:           log10 fp16     .Wimp pass	    0.00 @ 0x0p+0
+log10 FAILED
+add...
+109:             add fp32     
+ERROR: add3: -nan ulp error at {0x1.ec8cecp-24, 0x1.409a66p-31}: *0x1.ef0e2p-24 vs. -nan (0xffffdead) at index: 0
+110:             add fp16     .............
+ERROR: add: -1020021.062500 ulp error at {-0x1.e1p+6 (0xd784), -0x1.bd4p-2 (0xb6f5)}
+Expected: -0x1.e2cp+6  (half 0xd78b) 
+Actual: -0x1.f3p+15 (half 0xfbcc) at index: 0
+ERROR: ThreadPool_Do: TestHalf failed
+! (CL_DEVICE_NOT_FOUND from /home/aruni/orangepizero2/harness/research/gpu-src/dl-opencl-cts-43111c0c/OpenCL-CTS/test_conformance/math_brute_force/binary_operator_half.cpp:586)
+add FAILED
+divide...
+111:          divide fp32  rlx................Wimp pass	    2.00 @ {0x1.dd23fp-13, -0x1.e0d436p+18}
+112:          divide fp32     ................Wimp pass	    1.64 @ {-0x1.d87bbep+15, 0x1.e00aa8p+10}
+113:          divide fp16     ................Wimp pass	    1.00 @ {0x1.a5p-14, 0x1.a5p+10}
+divide passed
+assignment...
+114:      assignment fp32     ................Wimp pass	    0.00 @ 0x0p+0
+115:      assignment fp16     .Wimp pass	    0.00 @ 0x0p+0
+assignment passed
+erf...
+116:             erf fp32     
+ERROR: erf2: -nan ulp error at -0x1p+117 (0xfa000000): *-0x1p+0 vs. -nan
+117:             erf fp16     .Wimp pass	    0.00 @ 0x0p+0
+erf FAILED
+erfc...
+118:            erfc fp32     ................Wimp pass	   15.96 @ 0x1.3c34p+3
+119:            erfc fp16     .Wimp pass	    1.91 @ 0x1.ep+1
+erfc passed
+FAILED 38 of 119 sub-tests.
+FAILED 32 of 54 tests.
+ThreadPool: thread 2 exiting.
+ThreadPool: thread 3 exiting.
+ThreadPool: thread 0 exiting.
+ThreadPool: thread 1 exiting.
+Thread pool exited in a orderly fashion.
+*** ResumeSleep() is not implemented on this platform.
+CHUNK-RC 1
+ROUND-DONE
+TRACE: TIMEDOUT 0

@@ -1,0 +1,7 @@
+#25 SMP PREEMPT Fri Nov  6 04:18:02 UTC 2026
+DMESG-START 742
+TRACE-ON
+Integer Ops                              Pass     rc=0 PASSED 59 of 59 tests.
+CHUNK-RC 0
+ROUND-DONE
+TRACE: TIMEDOUT 3

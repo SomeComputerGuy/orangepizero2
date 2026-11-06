@@ -1,0 +1,25 @@
+#25 SMP PREEMPT Fri Nov  6 04:18:02 UTC 2026
+DMESG-START 742
+TRACE-ON
+INTOPS 1: quick_long_math...
+INTOPS 1: quick_long_math passed
+INTOPS 1: quick_ulong_math...
+INTOPS 1: quick_ulong_math passed
+INTOPS 1: PASSED sub-test.
+INTOPS 1: PASSED 2 of 2 tests.
+INTOPS 1: t=28s
+INTOPS 2: quick_long_math...
+INTOPS 2: quick_long_math passed
+INTOPS 2: quick_ulong_math...
+INTOPS 2: quick_ulong_math passed
+INTOPS 2: PASSED sub-test.
+INTOPS 2: PASSED 2 of 2 tests.
+INTOPS 2: t=22s
+TDIM: quick_2d_explicit_local...
+TDIM: quick_2d_explicit_local passed
+TDIM: PASSED sub-test.
+TDIM: PASSED test.
+TDIM: t=154s
+CHUNK-RC 0
+ROUND-DONE
+TRACE: TIMEDOUT 101

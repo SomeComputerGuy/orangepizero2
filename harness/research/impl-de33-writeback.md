@@ -110,3 +110,36 @@ frames_torn == frames_bad == fence_errors == 0, wb_jobs_delta == wb_done_delta, 
   parameters and the connector separately and collects files/blocked-<tag>/ (dmesg, DT nodes, devices_deferred, DRM classes).
 - Re-queued as harness/runner-queue/30-de33-writeback.md (kernel 6dbed6c18 unchanged; c26 has it). Next: fresh agent judges
   job 30 with HANDOFF checks 0-8.
+
+### Job 30 (2026-11-06, c27): FAIL, two -EINVALs, analysed; fixes in c35, re-queued as job 40
+- Summary harness/runner-queue/done/30-de33-writeback.summary.md, logs logs/runner-wb/files/wb/. Connector present and
+  reaching the CRTC (checks 1, 2 PASS); every flip+writeback commit -EINVAL; xr30 "dumb buffer: Invalid argument"; no job
+  ever reached the driver (wb_jobs_delta 0).
+- -EINVAL 1 (flip + writeback), TEST BUG: kms-wb set the writeback connector's CRTC_ID first in the writeback commit, without
+  DRM_MODE_ATOMIC_ALLOW_MODESET. Attaching a connector to a CRTC sets connectors_changed (update_connector_routing,
+  drm_atomic_helper.c), i.e. a full modeset, and drm_atomic_check_only refuses it ("requires full modeset"). Fix:
+  harness/kms-wb/kms-wb.c attaches the writeback connector in its initial modeset commit; writeback commits then change
+  only WRITEBACK_FB_ID/fence. Commit failures are now reported as `RESULT capture N commit_error <errno>` /
+  `flip N commit_error` / `modeset_commit_error` / `capture_buffer_error` (job 30 printed them as fence_error -1).
+- -EINVAL 2 (xr30 capture buffer), KERNEL BUG: the dumb buffer itself was fine (bpp 32); ADDFB2 failed in
+  drm_gem_fb_init_with_funcs(): drm_any_plane_has_format() - no sun4i plane has XRGB2101010 (DE3 VI layers only have
+  the ARGB2101010 orders), so the writeback-only format was unusable. The hardware does write it (vendor de_wb.c
+  DISP_FORMAT_A2R10G10B10 "equal x2p10p10p10"). Fix 300d79df7 (patches.armbian/drm-sun4i-accept-framebuffers-in-
+  writeback-only-formats.patch): sun4i_fb_create creates linear fbs in a format only a writeback connector offers without
+  that check; planes still reject them in the atomic check.
+- Found on the way, KERNEL BUG: drm_atomic_helper_commit_tail_rpm() calls the writeback atomic_commit from
+  commit_modeset_enables(), BEFORE commit_planes (the driver comment said after). A vblank between the two started the
+  capture on the previous frame (not caught by the solid/flips checks: it gives a pure frame of the other colour). Fix
+  30706dcc8 (drm-sun4i-de33-writeback-start-a-capture-after-its-commit-is-latched.patch): jobs queued unarmed;
+  sun50i_mixer_latch_commit() arms them with mixer->latch_seq under the latch lock (sun50i_wb_arm()); the vblank starts an
+  armed job only when latch_flushed_seq >= its seq. Lock order latch_lock -> wb->lock (the IRQ never nests them).
+- Package fixes: results.txt flips labels were shifted by one pair (awk loop started at $3); now `flips_requested` + pairs
+  from $4. wb-job.sh job name wb40 (logs/runner-wb40, job 30's kept), FIX=30706dcc8, ssh step timeouts (120 s, chunk 560 s,
+  install 900, restore 600, scp 300) + the existing 120 s stall watchdog. HANDOFF: check 5 XR30 buffer creation is now
+  pass/fail (pixels informational), commit errno lines fail checks 3/4/6.
+- Branch fix/sunxi-h616-de33-wb-fb-formats (fork): 300d79df7 + 30706dcc8, W=1 clean, merged into test-cumulative:
+  c34 = ed36b239c (300d79df7 only, Image md5 e40a7ba3152f13fad9f03d6165c38177, superseded), c35 = 30cee6952 (both,
+  871 patches 0 failed, Image md5 f3ec40c60dfbc0bfa94fdcf53ec9169b). Pushed to fork, verified with ls-remote.
+- Queued: harness/runner-queue/40-de33-writeback.md (`wb-job.sh wb40`, needs c35+). Next: fresh agent judges
+  done/40-de33-writeback.summary.md with HANDOFF checks 0-8. If check 3 fails now with real captures, see "If check 3
+  fails" above (mux value / capture window).

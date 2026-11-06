@@ -1,5 +1,5 @@
 #!/bin/bash
-# Runner package for the DE33 writeback connector check: wb-job.sh wb
+# Runner package for the DE33 writeback connector check: wb-job.sh wb40 (job 40; "wb" = jobs 21/30, logs kept)
 # Self-contained: board lock (fresh owner name), one chunk "wb" on the newest cumulative kernel (installed with the
 # one-shot fallback armed through harness/research/vdec-perf/install-kernel.sh; it must contain the writeback commit,
 # else BLOCKED), HDMI-A-1 forced on at 1024x768@60 (no sink), harness/kms-wb/out/kms-wb: probe, solid-colour and
@@ -10,17 +10,18 @@
 # chunks listed in $OUT/state. Exit 0 = chunk ran (judge with HANDOFF.md "Checks"); 2 = blocked ($OUT/BLOCKED);
 # 3 = Oops/WARN on the serial log or in dmesg (lines in $OUT/OOPS); 1 = setup or lock error.
 set -u
-H=/home/aruni/orangepizero2; S=$H/harness/research/de33-writeback; V=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh
-J=${1:?job: wb}
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+H=/home/aruni/orangepizero2; S=$H/harness/research/de33-writeback; V=$H/harness/research/vdec-perf; SSH="timeout 120 $H/harness/ssh.sh"   # every board command: ServerAlive (ssh.sh) + a 120 s step timeout
+J=${1:?job: wb40 (wb = the job 21/30 run, kept for its logs)}
+K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR
+   -o ConnectTimeout=8 -o ServerAliveInterval=15 -o ServerAliveCountMax=8)
 OUT=$S/logs/runner-$J; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED $OUT/OOPS
 case $J in
-  wb) CHUNKS="wb"; CT=500; STALL=120 ;;
+  wb|wb40) CHUNKS="wb"; CT=500; STALL=120 ;;
   *) echo "unknown job $J"; exit 1 ;;
 esac
 T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
 want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || exit 1
-FIX=6dbed6c18                              # fix/sunxi-h616-de33-writeback HEAD (armbian-build); the kernel must have it
+FIX=30706dcc8                              # fix/sunxi-h616-de33-wb-fb-formats HEAD (on top of 6dbed6c18); the kernel must have it
 CLIENT=$H/harness/kms-wb/out/kms-wb       # built by harness/kms-wb/build.sh
 P=/root/wb/kms-wb
 R=/root/wbtest                            # board results dir
@@ -33,7 +34,7 @@ waitup() { for i in $(seq 1 60); do sleep 5; $SSH -n true 2>/dev/null && return 
 acquire() { OWN=runner-wb-$J-$(date +%s); out=$($H/harness/board-lock.sh acquire $OWN) || { log "lock: $out"; exit 1; }
   case $out in *"already held"*) log "lock already held by $OWN"; exit 1;; esac; log "$out"; }
 release() { [ -n "$OWN" ] && $H/harness/board-lock.sh release $OWN | tee -a $OUT/runner.log; OWN=""; }
-restore() { $V/restore-kernel.sh | tee -a $OUT/runner.log   # Image, DTB (.stock), modules (.good), reboot
+restore() { timeout 600 $V/restore-kernel.sh | tee -a $OUT/runner.log   # Image, DTB (.stock), modules (.good), reboot
   sleep 15; if waitup; then log "restored: $($SSH -n 'uname -rv; readlink /boot/Image; readlink /boot/dtb/allwinner/sun50i-h616-orangepi-zero2.dtb' | tr '\n' ' ')"
   else log "BOARD UNREACHABLE after restore reboot"; echo "board unreachable after restore" > $OUT/BLOCKED; fi; }
 evidence() { # evidence <tag> <dt-node regex> <unused> <module> <lsmod regex> <driver glob>: what a blocked kernel looks like, into files/blocked-$1/
@@ -50,13 +51,13 @@ ship_client() { # the test client: ship it only when the board copy differs
   local want_sha have_sha; want_sha=$(sha256sum < $CLIENT | cut -d' ' -f1)
   have_sha=$($SSH -n "sha256sum < $P 2>/dev/null | cut -d' ' -f1")
   [ "$want_sha" = "$have_sha" ] && { log "client on the board is current ($want_sha)"; return; }
-  $V/ship.sh $CLIENT $P 2>&1 | tail -1 | tee -a $OUT/runner.log; $SSH -n "chmod +x $P; mkdir -p $R"
+  timeout 300 $V/ship.sh $CLIENT $P 2>&1 | tail -1 | tee -a $OUT/runner.log; $SSH -n "chmod +x $P; mkdir -p $R"
   have_sha=$($SSH -n "sha256sum < $P | cut -d' ' -f1"); [ "$want_sha" = "$have_sha" ] || blocked "client ship failed"; }
 boot_trial() { # install the newest cumulative kernel with the fallback armed; it must contain the writeback commit
   local c; c=$(awk -v t=$T '$1==t{print $3}' $H/kernel-check/cumulative-kernels.txt)
   git -C $H/wt-cumulative merge-base --is-ancestor $FIX "$c" 2>/dev/null || blocked "kernel $T ($c) lacks the DE33 writeback commit $FIX"
   on_stock
-  $V/install-kernel.sh $T 2>&1 | tail -3 | tee -a $OUT/runner.log
+  timeout 900 $V/install-kernel.sh $T 2>&1 | tail -3 | tee -a $OUT/runner.log
   $SSH -n 'sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'; sleep 15
   waitup || { log "trial kernel did not come up (the fallback reverts on the next boot)"; echo "trial boot failed" > $OUT/BLOCKED; release; exit 2; }
   [ "$($SSH -n 'md5sum < /boot/$(readlink /boot/Image) | cut -c1-32')" = "$want" ] || blocked "$T Image md5 mismatch after install"
@@ -122,7 +123,11 @@ extract() { # host side: one line per run and key into $OUT/results.txt (chunk r
       /^RESULT capture [0-9]+ pixels / { for (i = 1; i <= NF; i++) { if ($i == "mismatches") m = $(i+1); if ($i == "max_dev") dv = $(i+1); if ($i == "fence_ms") fm = $(i+1) }
                                          print c, r, "capture" $3 "_mismatches", m; print c, r, "capture" $3 "_max_dev", dv; print c, r, "capture" $3 "_fence_ms", fm }
       /^RESULT capture [0-9]+ fence_error / { print c, r, "capture" $3 "_fence_error", $5 }
-      /^RESULT flips / { for (i = 1; i <= NF; i += 2) if (i > 1) print c, r, $i, $(i+1) }
+      /^RESULT capture [0-9]+ commit_error / { print c, r, "capture" $3 "_commit_errno", $5 }
+      /^RESULT capture_buffer_error / { print c, r, "capture_buffer_errno", $3 }
+      /^RESULT modeset_commit_error / { print c, r, "modeset_commit_errno", $3 }
+      /^RESULT flip [0-9]+ commit_error / { print c, r, "flip_commit_errno", $5; print c, r, "flip_commit_error_at", $3 }
+      /^RESULT flips / { print c, r, "flips_requested", $3; for (i = 4; i < NF; i += 2) print c, r, $i, $(i+1) }
       /^RESULT flip_rate / { print c, r, "flip_rate", $3; print c, r, "seq_gaps", $5 }
       /^RESULT commit_phase / { for (i = 1; i <= NF; i++) if ($i == "outside_blanking") { print c, r, "commits_outside_blanking", $(i+1); print c, r, "commits_counted", $(i+3) } }
       /^RESULT first_torn_flip / { print c, r, "first_torn_flip", $3 }' $d/$r.txt >> $OUT/results.txt
@@ -144,7 +149,7 @@ run_chunk() { # run_chunk <chunk>: remote script under timeout + stall watchdog;
   local c=$1 f=$OUT/chunk-$1.txt oops=""
   chunk_script $c | $SSH "mkdir -p $R; cat > $R/chunk-$c.sh" || { log "chunk $c: cannot write the board script"; return; }
   local soff=$(stat -c %s $SER 2>/dev/null || echo 0)
-  $SSH -n "timeout $CT bash $R/chunk-$c.sh" > $f 2>&1 & local p=$!
+  timeout $((CT + 60)) $H/harness/ssh.sh -n "timeout $CT bash $R/chunk-$c.sh" > $f 2>&1 & local p=$!
   local last=$(date +%s) sz=0
   while kill -0 $p 2>/dev/null; do sleep 10
     n=$(stat -c %s $f); [ "$n" != "$sz" ] && { sz=$n; last=$(date +%s); }
@@ -153,7 +158,7 @@ run_chunk() { # run_chunk <chunk>: remote script under timeout + stall watchdog;
       log "OOPS on the serial log during chunk $c, killing ssh $p"; kill $p; echo OOPS >> $f; oops=serial; break; fi
     if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill $p; echo STALLED >> $f; break; fi
   done; wait $p 2>/dev/null
-  mkdir -p $OUT/files/$c; scp -q -r "${K[@]}" root@10.56.0.107:$R/$c/. $OUT/files/$c/ 2>/dev/null
+  mkdir -p $OUT/files/$c; timeout 300 scp -q -r "${K[@]}" root@10.56.0.107:$R/$c/. $OUT/files/$c/ 2>/dev/null || log "scp of $R/$c failed or timed out" 
   if [ -z "$oops" ] && grep -qE "$OOPS" $OUT/files/$c/dmesg-chunk.txt 2>/dev/null; then grep -E "$OOPS|Call trace|pc :|lr :" $OUT/files/$c/dmesg-chunk.txt | head -40 > $OUT/OOPS; oops=dmesg; fi
   extract $c
   [ -n "$oops" ] && oops_fail $c $oops

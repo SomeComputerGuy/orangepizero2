@@ -69,6 +69,7 @@ static struct {
 };
 
 static volatile sig_atomic_t quit;
+static int commit_errno;	/* errno of the last failed atomic commit */
 
 static double now_s(void)
 {
@@ -572,6 +573,14 @@ static int commit(struct kms *k, uint32_t src_fb, struct dumb *cap, int32_t *fen
 		drmModeAtomicAddProperty(req, k->crtc_id, k->c_mode, k->mode_blob);
 		drmModeAtomicAddProperty(req, k->crtc_id, k->c_active, 1);
 		drmModeAtomicAddProperty(req, k->conn_id, k->k_crtc, k->crtc_id);
+		/*
+		 * Attach the writeback connector here, in the modeset: adding a
+		 * connector to a CRTC changes its connector set, which is a full
+		 * modeset, so a later flip commit that attached it would fail
+		 * with -EINVAL without ALLOW_MODESET (job 30). From here the
+		 * writeback commits only set WRITEBACK_FB_ID and the fence.
+		 */
+		drmModeAtomicAddProperty(req, k->wb_id, k->w_crtc, k->crtc_id);
 		flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
 	}
 	if (cap) {
@@ -585,6 +594,8 @@ static int commit(struct kms *k, uint32_t src_fb, struct dumb *cap, int32_t *fen
 		flags |= DRM_MODE_PAGE_FLIP_EVENT | DRM_MODE_ATOMIC_NONBLOCK;
 	ret = drmModeAtomicCommit(k->fd, req, flags, NULL);
 	if (ret)
+		commit_errno = errno;
+	if (ret)
 		fprintf(stderr, "atomic commit (%s%s): %s\n",
 			k->modeset_done ? "flip" : "modeset", cap ? " + writeback" : "",
 			strerror(errno));
@@ -594,7 +605,10 @@ static int commit(struct kms *k, uint32_t src_fb, struct dumb *cap, int32_t *fen
 	return ret;
 }
 
-/* one blocking capture of the current frame into @cap; 0 = fence signalled ok */
+/*
+ * one blocking capture of the current frame into @cap; 0 = fence signalled ok,
+ * -1000 = the commit failed (errno in commit_errno), else a fence error
+ */
 static int capture_once(struct kms *k, uint32_t src_fb, struct dumb *cap, double *ms)
 {
 	int32_t fence = -1;
@@ -604,7 +618,7 @@ static int capture_once(struct kms *k, uint32_t src_fb, struct dumb *cap, double
 	poison(cap);
 	t0 = now_s();
 	if (commit(k, src_fb, cap, &fence, false))
-		return -1;
+		return -1000;
 	if (fence < 0) {
 		fprintf(stderr, "no out fence returned\n");
 		return -1;
@@ -648,16 +662,22 @@ static int cmd_static(bool bars, uint32_t solid)
 		fprintf(stderr, "bars compare needs XR24 capture\n");
 		return 2;
 	}
-	if (dumb_create(&K, &src, DRM_FORMAT_XRGB8888, w, h) ||
-	    dumb_create(&K, &cap, o.wb_fmt, w, h)) {
-		perror("dumb buffer");
+	if (dumb_create(&K, &src, DRM_FORMAT_XRGB8888, w, h)) {
+		perror("dumb buffer (source)");
+		return 2;
+	}
+	if (dumb_create(&K, &cap, o.wb_fmt, w, h)) {
+		printf("RESULT capture_buffer_error %d\n", errno);
+		perror("dumb buffer (capture)");
 		return 2;
 	}
 	fill_xr24(&src, bars, solid);
 
 	/* show it first, without a job: the first capture is of a settled frame */
-	if (commit(&K, src.fb_id, NULL, NULL, false))
+	if (commit(&K, src.fb_id, NULL, NULL, false)) {
+		printf("RESULT modeset_commit_error %d\n", commit_errno);
 		return 2;
+	}
 	usleep(50000);
 
 	for (int i = 0; i < o.repeat && !quit; i++) {
@@ -666,6 +686,11 @@ static int cmd_static(bool bars, uint32_t solid)
 		char name[32];
 
 		ret = capture_once(&K, src.fb_id, &cap, &ms);
+		if (ret == -1000) {
+			printf("RESULT capture %d commit_error %d\n", i, commit_errno);
+			fails++;
+			continue;
+		}
 		if (ret) {
 			printf("RESULT capture %d fence_error %d\n", i, ret);
 			fails++;
@@ -788,8 +813,10 @@ static int cmd_flips(int n)
 		fence[i] = -1;
 	}
 
-	if (commit(&K, src[0].fb_id, NULL, NULL, false))
+	if (commit(&K, src[0].fb_id, NULL, NULL, false)) {
+		printf("RESULT modeset_commit_error %d\n", commit_errno);
 		return 2;
+	}
 	usleep(50000);
 
 	for (int i = 0; i <= n && !quit; i++) {
@@ -801,6 +828,7 @@ static int cmd_flips(int n)
 			poison(&cap[s]);
 			t_commit = now_s();
 			if (commit(&K, src[i & 1].fb_id, &cap[s], &fence[s], true)) {
+				printf("RESULT flip %d commit_error %d\n", i, commit_errno);
 				ret = 2;
 				break;
 			}

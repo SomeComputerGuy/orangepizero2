@@ -117,3 +117,10 @@ override 1.1 (system), job 52 fork vk-subset (override 1.1).
    subgroup_extended_types, float_controls2) are the likely new failures. Fix in the fork, rerun only the failing
    cases (a small caselist through deqp-run.py) rather than the full 14+ h run.
 4. Then record the result in impl-gpu-spec.md 4c / the spec row, and hand step 3 (1.2+ scope) to the coordinator.
+
+## Coordinator note 2026-11-06 23:50 (job 68 chunk 2)
+Paused by the coordinator (PAUSE file) for image integration; 1/64 parts done (part-00: 16333 Pass, 34410 NotSupported,
+0 Fail/Crash/Hang, 0 regressions). Resume = same command. Open: --check 3 (d9) FAILs with no reason printed while
+3b (d10) PASSes (max core 0 < count 1, max warp 127 = WarpMaxIDARM); likely the d9 check's core-count vs
+shaderCoreCount condition. Next code agent: fix the check (or the probe) and make it print the failing condition.
+Summary: harness/runner-queue/done/68-vk11-main.chunk2.summary.md.

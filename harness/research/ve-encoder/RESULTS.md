@@ -16,7 +16,9 @@ Memory: project-ve-encoder.md. Updated 2026-11-06 by the ve-encoder agent (first
     `cedrus_engine_switch_reset()`. Kconfig selects `V4L2_H264` + `V4L2_H264_ENC`.
   - `media-cedrus-enable-H-264-encoding-on-the-H616.patch`: `CEDRUS_CAPABILITY_H264_ENC` + the 0x12011 flags.
   - Build: W=1 clean for drivers/media/v4l2-core and drivers/staging/media/sunxi/cedrus (kernel-check/work-venc,
-    linux-sunxi64-edge config: `CONFIG_V4L2_H264_ENC=y`). Full image build log: kernel-check/run-venc-all.log.
+    linux-sunxi64-edge config: `CONFIG_V4L2_H264_ENC=y`). Full build (kernel-check/build-kernel.sh, ARMBIAN=wt-venc,
+    WORK=kernel-check/work-venc): 856 patches applied, 0 failed, Image+modules+dtbs exit 0, 0 C warnings
+    (kernel-check/run-venc-all.log).
 - Project repo: `harness/research/ve-encoder/{PLAN.md (re-planned), RESULTS.md, runner/{venc-job.sh,HANDOFF.md},
   tools/{h264enc-test.c,build.sh}}`, `harness/runner-queue/27-ve-encoder.md`. Test tool binary `tools/out/h264enc-test`
   (static aarch64, built against the patched tree's uAPI headers; rebuild with `tools/build.sh`).

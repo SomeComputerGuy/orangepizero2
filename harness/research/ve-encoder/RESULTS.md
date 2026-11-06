@@ -3,7 +3,13 @@
 Task state file (AGENT-RULES "Budget"). Plan: `PLAN.md` section 4. Acceptance: `SPEC.md`, docs/datasheet-checklist.md W22.
 Memory: project-ve-encoder.md. Updated 2026-11-06 by the ve-encoder agent (first implementation task).
 
-## State: IMPLEMENTED, NOT BOARD-TESTED (runner job 34 queued; jobs 27 and 32 never reached an encode)
+## State: FIRST ENCODES FAULTED (job 34, c29); IOMMU root cause fixed in c30, runner job 35 queued
+
+- 2026-11-06 (job 34 fix agent): job 34 on c29 probed and passed the topology checks, then every picture faulted
+  (`Page fault for 0x0 (master 3, dir rd, L1 page table)` + `frame processing timed out!`, 0-byte streams) and
+  v4l2-compliance had 4 failures. Root cause and fixes: **201516cc5 + 4d9a200e8** on fix/sunxi-h616-venc (merged into
+  test-cumulative 1d1c9e149 = **c30**, Image md5 9723454c0c955ab5dbc6193c29d78436, 864 patches, 0 failed, 0 C
+  warnings): see "Job 34" at the end. Runner job 35 (harness/runner-queue/35-ve-encoder.md) re-runs the package on c30.
 
 - 2026-11-06 (stall agent): job 32 on c27 hung in the first `v4l2-ctl --all` on /dev/video1. Root cause in this patch
   set, fixed by **ac009bb5b + c307dd053** on fix/sunxi-h616-venc (merged into test-cumulative 3d88bb858 = c29):
@@ -56,9 +62,12 @@ Diagnostics by symptom are in PLAN.md 4.2 step 1.
 
 ## Open items / next step
 
-- **Next step: the runner runs job 34 (harness/runner-queue/34-ve-encoder.md) on c29 or later.**
+- **Next step: the runner runs job 35 (harness/runner-queue/35-ve-encoder.md) on c30 or later.**
   Then a fresh agent reads `logs/runner-venc/results.txt` + the summary and fixes what failed (PLAN 4.2 step 1), or,
-  on PASS, continues with PLAN 4.2 steps 2-4 (CABAC A/B, NV21/YUV420 input, RC statistics).
+  on PASS, continues with PLAN 4.2 steps 2-4 (CABAC A/B, NV21/YUV420 input, RC statistics). If an IOMMU fault remains,
+  its address tells which buffer: a fault inside/just past one of the aux regions = that region is too small (double it);
+  a fault at 0 again = yet another address register (the ISP output 0xa70/0xa74 and 0xb9c's neighbours are the
+  remaining unwritten ones); a fault at a non-zero address = a programmed buffer read past its end (recon/sub-pixel).
 - docs/status.md "Video encode" row and item 9 are the coordinator's to update (GAP -> IN PROGRESS, branch + job 27).
 - W22 (4096x4096, CBR/VBR 256k-100M, ROI x8, MJPEG): PLAN 4.2 steps 5-6; CBR/CQ already exist in the core.
 
@@ -93,3 +102,44 @@ Diagnostics by symptom are in PLAN.md 4.2 step 1.
   ssh ConnectTimeout + ServerAlive (harness/ssh.sh).
 - Re-queued as harness/runner-queue/34-ve-encoder.md. Next: a fresh agent reads results.txt + the summary (PLAN 4.2
   step 1 symptom table).
+
+## Job 34 (2026-11-06, c29): FAIL, root cause = the engine reads through address registers left at 0 (fixed, c30)
+- Summary harness/runner-queue/done/34-ve-encoder.summary.md, logs logs/runner-venc/ (files/venc/compliance.txt, r1-r5.txt,
+  dmesg-chunk.txt). PASS: boot_warnings 0, media_info 1, dec_D_rc 0 (the job 32 hang is gone), 21 controls, probe.
+  FAIL: media_node none; compliance_failed 4; r1-r5 rc 6 (tool: "frame 0: timeout waiting for the encoder"), 0-byte
+  .h264; dmesg per encode `sun50i-iommu 30f0000.iommu: Page fault for 0x0000000000000000 (master 3, dir rd, L1 page
+  table, status 0x8)` then, 2.0 s later, `cedrus 1c0e000.video-codec: frame processing timed out!`.
+- Root cause (kernel). The headers went through the bit writer fine (no -110 from the sync-idle/put-bits polls), the
+  fault comes right after the ENC_START trigger, on the first (I) picture already. The engine (IOMMU master 3) read an
+  IOVA in the first MiB, i.e. through an address register holding 0: the setup, following the vendor sequence (BliKVM
+  record, PLAN 1.6), wrote 0xb60 (motion vector buffer) = 0 and 0xbc4 (deblocking buffer) = 0 and never wrote 0xb9c
+  (rate control buffer, vendor writes it only with RC on), 0xbc8 (temporal filter counts) or 0xba8/0xbac (REF1); the
+  per-picture encoder reset clears them all. Without an IOMMU (vendor stack, BliKVM lab, V3s) a read of physical 0 is
+  harmless and invisible (the lab only detected writes), so the record says "0xb60 = 0, nothing is written for it".
+  Behind the IOMMU it is an L1 fault, the IRQ handler (iommu-sun50i-reset-the-sibling-masters patch) resets the master,
+  the picture never finishes, the 2 s watchdog fires. The prefetch-walk faults (bit 31, c411b37fb) are already
+  suppressed in c29, so this was a real access. Reference with an IOMMU: the T527 driver (dl/sunxi-venc-t527) gives
+  0xb60 (UNK_BUF), 0xb9c (SCRATCH_BUF) and 0xbc4 (LINE_BUF) real buffers at every size ("frame-sized is safe"), and the
+  older A20/H3 map (jemk) had a 0xb60 buffer of ALIGN(W,4)*H*8 bytes.
+- Fix (kernel) `patches.media/h616-venc/media-cedrus-enc-give-every-encoder-address-register-a-buffer.patch`
+  (201516cc5): one `struct cedrus_enc_h264_aux` allocation per context at start_streaming with regions for 0xb60
+  (2 x ALIGN(W,4)*H*8), 0xb9c (2 x (12*H + 500)), 0xbc4 (2 x 8*W*16) and 0xbc8 (another 0xb60-sized region), programmed
+  before every picture through cedrus_enc_addr() (>> 8 on the H616); REF1 Y/C point at the reference picture. New
+  define VE_ENC_AVC_RC_BUF_ADDR (0xb9c). IOMMU stays on, every master translated. For 1080p the allocation is 12 pages.
+- Compliance (kernel) `media-cedrus-enc-fix-the-v4l2-compliance-failures.patch` (4d9a200e8, + series.conf lines):
+  TRY_FMT/S_FMT `!pix.sizeimage`: the tool sends a format of all ones (createInvalidFmt), sizeimage 0xffffffff aligned
+  up to 256 wrapped to 0 -> clamp to CEDRUS_ENC_CODED_MAX_SIZE = 64 MiB (also keeps STM_BIT_MAX = size*8 in 32 bits).
+  SUBSCRIBE_EVENT: V4L2_CID_MIN_BUFFERS_FOR_OUTPUT is for stateful encoders only (v4l2-test-controls.cpp:1184), nothing
+  read it -> dropped, **20 controls**. G/S_PARM (v4l2-test-formats.cpp:1445 `node->is_m2m && !is_stateful_enc`): kept,
+  the stateless encode uAPI needs the frame rate for the SPS VUI and the core's rate control and the OPi5 Hantro/VEPU580
+  encoders fail the same test (orangepi5 codec-quality RESULTS.md); v4l2-compliance 1.32 predates the uAPI. Expected
+  after the fix: Failed: 1, and the package's `compliance_unexpected` (fail lines other than formats.cpp(1445)) = 0.
+  The two `Failed to setup encoding job: -22` at 45 s are the compliance "Requests" test queuing requests without the
+  SPS/PPS/encode controls (the core refuses, the test passes): expected; the decoder logs the same for a bad request.
+- Fix (package): media node looked up in /sys/bus/media/devices (media devices are on a bus; the tool itself found
+  /dev/media0), fallback /dev/media0; `compliance_unexpected`; `dmesg_encode_failed` over the encode steps only
+  (files/venc/dmesg-encodes.txt, DMESG-ENCODES-START marker); FIX=4d9a200e8; HANDOFF checks 1, 2, 7 updated.
+- Build: c30 = test-cumulative 1d1c9e149 (merge of 4d9a200e8), kernel-check/run-cumul-c30.log: 864 patches applied,
+  0 failed, build exit 0, 0 C warnings; Image md5 9723454c0c955ab5dbc6193c29d78436. cedrus dir compile-checked W=1 too.
+- Re-queued as harness/runner-queue/35-ve-encoder.md. Code: compare against the T527 per-frame sequence
+  (dl/sunxi-venc-t527/sunxi-venc/sunxi_venc_h264.c) for anything else that differs once the first picture completes.

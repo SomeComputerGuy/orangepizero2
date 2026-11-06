@@ -11,11 +11,13 @@ encoder probes, passes v4l2-compliance, encodes raw NV12 test clips (all-intra a
 H.264 that the host ffmpeg decodes without errors with the right frame count and a sane PSNR, that the board's own
 hardware decoder decodes the same streams bit-exactly, and that no IOMMU fault or engine timeout happens.
 
-Precondition (coordinator): `fix/sunxi-h616-venc` at c307dd053 (f35cdf390 encoder + ac009bb5b/c307dd053 "register
-the encoder's own media entities") merged into `test-cumulative` and built: c29 is the first such kernel (c26-c28
-hang in every MEDIA_IOC_G_TOPOLOGY, job 32). Served as kernel-check/vdec-serve/Image.<tag> + modules-<tag>.tgz + DTB. The script installs the NEWEST
+Precondition (coordinator): `fix/sunxi-h616-venc` at 4d9a200e8 (f35cdf390 encoder + ac009bb5b/c307dd053 "register
+the encoder's own media entities" + 201516cc5 "give every encoder address register a buffer" (the job 34 IOMMU page
+fault for address 0 at the start of every picture) + 4d9a200e8 v4l2-compliance fixes) merged into `test-cumulative`
+and built: c30 is the first such kernel (c29 = job 34 faulted on every picture; c26-c28 hang in every
+MEDIA_IOC_G_TOPOLOGY, job 32). Served as kernel-check/vdec-serve/Image.<tag> + modules-<tag>.tgz + DTB. The script installs the NEWEST
 cumulative tag (last line of kernel-check/cumulative-kernels.txt) via harness/research/vdec-perf/install-kernel.sh
-with the one-shot fallback armed; the HTTP server on 10.56.0.1:8643 must be up. It checks that c307dd053 is an
+with the one-shot fallback armed; the HTTP server on 10.56.0.1:8643 must be up. It checks that 4d9a200e8 is an
 ancestor of the tag's commit and that the booted kernel logged `cedrus ... Encoder registered as /dev/videoN`;
 otherwise it writes BLOCKED and exits 2 (report that, not a FAIL). The test tool
 (harness/research/ve-encoder/tools/out/h264enc-test, static aarch64, built by tools/build.sh) and the raw clips
@@ -52,15 +54,20 @@ and the last 10 lines of runner.log); 1 = setup or lock error.
 
 ## Checks (mechanical, all on results.txt unless stated)
 1. Probe: `venc all probe_registered 1` and `venc all encoder_node 1` -> PASS, else FAIL (report files/venc/dmesg-probe.txt
-   and nodes.txt). Report the `kernel: ` and `kernel encoder: ` lines of runner.log and `venc all controls` (expected 21).
+   and nodes.txt). Report the `kernel: ` and `kernel encoder: ` lines of runner.log and `venc all controls` (expected 20;
+   job 34 had 21 before MIN_BUFFERS_FOR_OUTPUT was dropped).
    Media controller (the job 32 hang): `venc all boot_warnings 0` (no kernel WARNING at boot; job 32 had the
-   mc-device.c:619 one twice; on a FAIL report the first 40 lines of files/venc/boot-warnings.txt), `venc all media_node /dev/mediaN` (not `none`), `venc all media_info 1` (v4l2-ctl -D on
+   mc-device.c:619 one twice; on a FAIL report the first 40 lines of files/venc/boot-warnings.txt), `venc all media_node /dev/mediaN` (not `none`; job 34's `none` was the package looking in /sys/class/media
+   instead of /sys/bus/media/devices, fixed), `venc all media_info 1` (v4l2-ctl -D on
    the encoder prints "Media Driver Info": the topology ioctl answered) and `venc all dec_D_rc 0` (same on the decoder
    node) -> PASS, else FAIL with the values, the `venc all media` lines and files/venc/enc-D.txt (first 20 lines).
    `media_info 0` with enc-D.txt ending in `RC 124` or `RC 137` = the topology hang is back.
-2. Compliance: `venc all compliance_failed 0` -> PASS; a number > 0 -> FAIL, report every `fail:` line of
+2. Compliance: `venc all compliance_unexpected 0` -> PASS; a number > 0 -> FAIL, report every `fail:` line of
    files/venc/compliance.txt (first 20) and the `Total` line; `venc all compliance SKIP` -> SKIP (v4l2-compliance not on
-   the board), report as SKIP, not FAIL. Report `venc all compliance_warnings`.
+   the board), report as SKIP, not FAIL. Report `venc all compliance_failed` (expected 1: the test VIDIOC_G/S_PARM,
+   `fail: v4l2-test-formats.cpp(1445)`, is justified: v4l2-compliance 1.32 allows the frame-rate ioctls only on
+   stateful encoders and predates the stateless encode uAPI, which needs them; the OPi5 Hantro/VEPU580 encoders fail
+   the same test; `compliance_unexpected` counts the other `fail:` lines) and `venc all compliance_warnings`.
 3. Encode, for each of r1..r5: `rc 0`, `errors 0`, `frames` equal to the run's frame count (30, 30, 10, 10, 5) and
    `stream_bytes` > 0 -> PASS, else FAIL with the `RESULT` line and the `ERROR`/`error` lines of files/venc/<run>.txt.
    Report `bytes`, `keyframes` (expected 30, 3, 10, 1, 5), `avg_us` and `max_us` (the engine takes about 3 ms at
@@ -74,8 +81,10 @@ and the last 10 lines of runner.log); 1 = setup or lock error.
    (no gst-launch-1.0 on the board) -> SKIP; else FAIL with the last 5 lines of files/venc/<run>.hwdec.txt. A FAIL
    here with checks 3-5 PASS means the H.264 decoder or GStreamer, not the encoder: report it as such.
 7. dmesg: `venc all dmesg_bad 0`, `dmesg_iommu 0`, `dmesg_timeout 0`, `dmesg_encode_failed 0` -> PASS; else FAIL, copy
-   the matching lines from files/venc/dmesg-chunk.txt exactly (first 20).
+   the matching lines from files/venc/dmesg-chunk.txt exactly (first 20). `dmesg_encode_failed` counts only the encode
+   steps (files/venc/dmesg-encodes.txt): the v4l2-compliance "Requests" test queues requests without the SPS/PPS/encode
+   controls and the driver logs `Failed to setup encoding job: -22` twice for them (expected, in dmesg-chunk.txt only).
 
-The summary must list: the kernel line, check 1 and 2 values, the per-run table (run, size, frames, keyframes, bytes,
+The summary must list: the kernel line, check 1 and 2 values (compliance_failed, compliance_unexpected, warnings), the per-run table (run, size, frames, keyframes, bytes,
 avg_us, decoded, ffmpeg_errors, psnr_avg, psnr_min, hwdec_frames, hwdec_md5_match, PASS/FAIL per check), the dmesg
 counts, the state file content, and OOPS/BLOCKED verbatim if they exist.

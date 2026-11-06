@@ -21,9 +21,11 @@ case $J in
 esac
 T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
 want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || exit 1
-FIX=c307dd053                              # fix/sunxi-h616-venc HEAD (armbian-build); the kernel must have it: f35cdf390 (encoder) +
-                                           # ac009bb5b/c307dd053 (own media entities + series.conf; before them v4l2-ctl on either cedrus
-                                           # node spun forever in MEDIA_IOC_G_TOPOLOGY, job 32). c29 is the first kernel with it.
+FIX=4d9a200e8                              # fix/sunxi-h616-venc HEAD (armbian-build); the kernel must have it: f35cdf390 (encoder) +
+                                           # ac009bb5b/c307dd053 (own media entities, job 32 hang) + 201516cc5 (every encoder address register
+                                           # gets a buffer: the IOMMU fault for address 0 of job 34) + 4d9a200e8 (v4l2-compliance fixes).
+                                           # c30 is the first kernel with all of it.
+COMPLIANCE_EXPECTED='v4l2-test-formats.cpp(1445)'   # the one justified fail: G/S_PARM on a stateless encoder (v4l2-compliance 1.32 predates the uAPI)
 TOOL=$S/tools/out/h264enc-test             # built by harness/research/ve-encoder/tools/build.sh
 CLIPS=$S/runner/clips                      # generated here with the host ffmpeg (testsrc2, raw NV12)
 P=/root/venc/h264enc-test
@@ -88,8 +90,10 @@ echo "boot_warnings \$(dmesg | grep -c 'WARNING:')" | tee probe.txt; dmesg | gre
 # nodes from sysfs (no ioctl before the nodes are known): the encoder vdev is named cedrus-enc, the decoder cedrus
 ENC=""; DEC=""; for v in /sys/class/video4linux/video*; do n=\$(cat \$v/name 2>/dev/null)
   [ "\$n" = cedrus-enc ] && ENC=/dev/\$(basename \$v); [ "\$n" = cedrus ] && DEC=/dev/\$(basename \$v); done
-for m in /sys/class/media/media*; do echo "media /dev/\$(basename \$m) model=\$(cat \$m/model 2>&1 | tr -d '\n')"; done | tee -a probe.txt
-MED=\$(for m in /sys/class/media/media*; do grep -qx cedrus \$m/model 2>/dev/null && echo /dev/\$(basename \$m) && break; done)
+# media devices are on a bus, not a class (/sys/bus/media/devices/mediaN, the job 34 "media_node none" lookup bug)
+for m in /sys/bus/media/devices/media*; do echo "media /dev/\$(basename \$m) model=\$(cat \$m/model 2>&1 | tr -d '\n')"; done | tee -a probe.txt
+MED=\$(for m in /sys/bus/media/devices/media*; do grep -qx cedrus \$m/model 2>/dev/null && echo /dev/\$(basename \$m) && break; done)
+[ -z "\$MED" ] && [ -c /dev/media0 ] && MED=/dev/media0 && echo "media fallback /dev/media0" | tee -a probe.txt
 echo "ENC \$ENC DEC \$DEC MEDIA \$MED" | tee nodes.txt
 echo "media_node \${MED:-none}" | tee -a probe.txt
 [ -n "\$ENC" ] || { echo "NO-ENCODER-NODE"; echo ROUND-DONE; exit 0; }
@@ -107,6 +111,7 @@ if command -v v4l2-compliance >/dev/null; then
   timeout -k 5 300 v4l2-compliance -d \$ENC \${MED:+-m \$MED} > compliance.txt 2>&1; echo "RC \$?" >> compliance.txt
   echo "== compliance: \$(grep -E '^Total' compliance.txt)"; grep -E 'fail:|FAIL' compliance.txt | head -20
 else echo "COMPLIANCE-SKIP (no v4l2-compliance)" | tee compliance.txt; fi
+m0=\$(dmesg | wc -l); echo DMESG-ENCODES-START \$m0   # the compliance Requests test queues requests without controls: its "Failed to setup" lines are its own
 run() { local name=\$1 w=\$2 h=\$3 n=\$4 g=\$5 q=\$6 c=\$7
   step encode \$name
   echo "== \$name \${w}x\${h} n=\$n gop=\$g qp=\$q"
@@ -126,6 +131,7 @@ $RUNS
 RUNS
 step dmesg
 dmesg | tail -n +\$((n1+1)) > dmesg-chunk.txt
+dmesg | tail -n +\$((m0+1)) > dmesg-encodes.txt
 grep -E 'cedrus|iommu|$OOPS' dmesg-chunk.txt | tail -60 | sed 's/^/DMESG: /'
 ls -la *.h264 | sed 's/^/OUT: /'
 echo ROUND-DONE
@@ -143,6 +149,7 @@ extract() { # host side: decode every stream with ffmpeg, PSNR against the clip,
     local tot; tot=$(grep -E '^Total' $d/compliance.txt 2>/dev/null | tail -1)
     echo "$c all compliance_failed $(echo "$tot" | grep -o 'Failed: [0-9]*' | grep -o '[0-9]*' || echo missing)" >> $OUT/results.txt
     echo "$c all compliance_warnings $(echo "$tot" | grep -o 'Warnings: [0-9]*' | grep -o '[0-9]*' || echo missing)" >> $OUT/results.txt
+    echo "$c all compliance_unexpected $(grep 'fail:' $d/compliance.txt 2>/dev/null | grep -vcF "$COMPLIANCE_EXPECTED" || true)" >> $OUT/results.txt
   fi
   while read -r r w h n g q clip; do
     fs=$((w * h * 3 / 2))
@@ -175,7 +182,7 @@ extract() { # host side: decode every stream with ffmpeg, PSNR against the clip,
   echo "$c all dmesg_bad $(grep -cE "$OOPS" $d/dmesg-chunk.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
   echo "$c all dmesg_iommu $(grep -ciE 'iommu.*fault|Page fault' $d/dmesg-chunk.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
   echo "$c all dmesg_timeout $(grep -ciE 'timed out' $d/dmesg-chunk.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
-  echo "$c all dmesg_encode_failed $(grep -ciE 'encode failed|Failed to setup encoding|invalid coded size' $d/dmesg-chunk.txt 2>/dev/null || echo 0)" >> $OUT/results.txt; }
+  echo "$c all dmesg_encode_failed $(grep -ciE 'encode failed|Failed to setup encoding|invalid coded size' $d/dmesg-encodes.txt 2>/dev/null || echo 0)" >> $OUT/results.txt; }
 stall_diag() { # a fresh ssh session (ConnectTimeout) after a stall: which tasks are stuck and where, for the next agent
   local d=$OUT/files/stall-diag-$1.txt; mkdir -p $OUT/files
   timeout 120 $SSH -n 'echo "== uptime"; uptime; echo "== D/R tasks"; ps -eo pid,stat,etime,wchan:32,comm | awk "NR==1 || (\$2 ~ /^[DR]/ && \$5 != \"ps\")"

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Runner package for the DE33 writeback connector check: wb-job.sh wb40 (job 40; "wb" = jobs 21/30, logs kept)
+# Runner package for the DE33 writeback connector check: wb-job.sh wb42 (job 42; wb41/wb40/"wb" = jobs 41/40/21+30, logs kept)
 # Self-contained: board lock (fresh owner name), one chunk "wb" on the newest cumulative kernel (installed with the
 # one-shot fallback armed through harness/research/vdec-perf/install-kernel.sh; it must contain the writeback commit,
 # else BLOCKED), HDMI-A-1 forced on at 1024x768@60 (no sink), harness/kms-wb/out/kms-wb: probe, solid-colour and
@@ -11,13 +11,14 @@
 # 3 = Oops/WARN on the serial log or in dmesg (lines in $OUT/OOPS); 1 = setup or lock error.
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/de33-writeback; V=$H/harness/research/vdec-perf; SSH="timeout 120 $H/harness/ssh.sh"   # every board command: ServerAlive (ssh.sh) + a 120 s step timeout
-J=${1:?job: wb41 (flips rerun) or wb40 (wb = the job 21/30 run, kept for its logs)}
+J=${1:?job: wb42 (flips at display rate), wb41 (flips rerun) or wb40 (wb = the job 21/30 run, kept for its logs)}
 K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR
    -o ConnectTimeout=8 -o ServerAliveInterval=15 -o ServerAliveCountMax=8)
 OUT=$S/logs/runner-$J; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED $OUT/OOPS
 case $J in
   wb|wb40) CHUNKS="wb"; CT=500; STALL=120; RUNS="probe solid1 solid2 solid3 solid4 bars nv12 xr30 flips-d0 flips-d4 flips-d12" ;;
   wb41) CHUNKS="wb"; CT=400; STALL=120; RUNS="probe solid1 flips-d0 flips-d4 flips-d12" ;;   # job 41: flips rerun (client fix) + solid sanity
+  wb42) CHUNKS="wb"; CT=400; STALL=120; RUNS="probe solid1 flips-d0 flips-d4 flips-d12" ;;   # job 42: flips with a client that keeps up (sampled row check)
   *) echo "unknown job $J"; exit 1 ;;
 esac
 T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
@@ -80,6 +81,9 @@ uname -v > kernel.txt; cat /proc/cmdline > cmdline.txt
 n1=\$(dmesg | wc -l); echo DMESG-START \$n1
 params() { for f in /sys/module/sun8i_mixer/parameters/de33_wb_* /sys/module/sun8i_mixer/parameters/de33_latch_*; do [ -f "\$f" ] && echo "\$(basename \$f)=\$(cat \$f)"; done; true; }
 params > params-boot.txt
+cat /proc/sys/kernel/printk > printk.txt
+# IRQ / cpufreq data around each flips run (job 41: 3 latch flushes found the beam ~7 ms late)
+diag() { cat /proc/interrupts > \$1.irq; t=0; for f in /sys/devices/system/cpu/cpufreq/policy*/stats/total_trans; do [ -f "\$f" ] && t=\$((t + \$(cat \$f))); done; echo \$t > \$1.cpufreq_trans; true; }
 ls /sys/class/drm/ | grep -i 'card[0-9]-' | tr '\n' ' ' > connectors.txt; echo >> connectors.txt
 # force the HDMI connector on (no sink): DRM offers its built-in modes, 1024x768 among them
 for c in /sys/class/drm/card*-HDMI-A-1; do echo on > \$c/status; done; sleep 2
@@ -87,10 +91,10 @@ for c in /sys/class/drm/card*-HDMI-A-1; do echo "\$c status=\$(cat \$c/status) m
 grep -q 1024x768 connectors.txt || echo MODE-UNAVAILABLE | tee -a connectors.txt
 run() { local name=\$1; shift
   case " $RUNS " in *" \$name "*) ;; *) return 0 ;; esac   # only the runs of this job
-  params > \$name.params.before
+  params > \$name.params.before; diag \$name.before
   timeout 90 $P -c HDMI-A-1 -m $MODE -o \$D/dump "\$@" > \$name.txt 2>&1; echo "RC \$?" >> \$name.txt
-  params > \$name.params.after
-  echo "== \$name: $P $*"; grep -E "^RESULT (probe|writeback_|wb_|mode|solid|bars|flips|flip_rate|commit_phase|first_torn|capture [0-9]+ (pixels|fence))|^RC |error|Error|failed" \$name.txt | head -40; }
+  params > \$name.params.after; diag \$name.after
+  echo "== \$name: $P $*"; grep -E "^RESULT (probe|writeback_|wb_|mode|solid|bars|flips|flip_rate|frames_wrong|seq_gap_max|commit_phase|commit_ioctl|fence_wait|check|poison|first_torn|capture [0-9]+ (pixels|fence))|^RC |error|Error|failed|WRONG_FRAME|FULL_MISMATCH" \$name.txt | head -40; }
 run probe probe
 run solid1 solid 3c7ab4
 run solid2 solid c81e5a
@@ -131,7 +135,10 @@ extract() { # host side: one line per run and key into $OUT/results.txt (chunk r
       /^RESULT flip [0-9]+ commit_error / { print c, r, "flip_commit_errno", $5; print c, r, "flip_commit_error_at", $3 }
       /^RESULT flips / { print c, r, "flips_requested", $3; for (i = 4; i < NF; i += 2) print c, r, $i, $(i+1) }
       /^RESULT flip_rate / { print c, r, "flip_rate", $3; print c, r, "seq_gaps", $5 }
-      /^RESULT commit_phase / { for (i = 1; i <= NF; i++) if ($i == "outside_blanking") { print c, r, "commits_outside_blanking", $(i+1); print c, r, "commits_counted", $(i+3) } }
+      /^RESULT (frames_wrong|seq_gap_max) / { for (i = 2; i < NF; i += 2) print c, r, $i, $(i+1) }
+      /^RESULT (commit_ioctl|fence_wait|check|poison) / { print c, r, $2 "_mean_ms", $4; print c, r, $2 "_max_ms", $6 }
+      /^RESULT commit_phase / { print c, r, "commit_phase_mean_ms", $4; print c, r, "commit_phase_max_ms", $6
+                                for (i = 1; i <= NF; i++) if ($i == "outside_blanking") { print c, r, "commits_outside_blanking", $(i+1); print c, r, "commits_counted", $(i+3) } }
       /^RESULT first_torn_flip / { print c, r, "first_torn_flip", $3 }' $d/$r.txt >> $OUT/results.txt
     for k in jobs done failed busy_frames; do
       a=$(grep "^de33_wb_$k=" $d/$r.params.after 2>/dev/null | cut -d= -f2); b=$(grep "^de33_wb_$k=" $d/$r.params.before 2>/dev/null | cut -d= -f2)
@@ -141,11 +148,13 @@ extract() { # host side: one line per run and key into $OUT/results.txt (chunk r
       a=$(grep "^de33_latch_$k=" $d/$r.params.after 2>/dev/null | cut -d= -f2); b=$(grep "^de33_latch_$k=" $d/$r.params.before 2>/dev/null | cut -d= -f2)
       [ -n "$a" ] && echo "$c $r latch_${k}_delta $((a - b))" >> $OUT/results.txt
     done
+    a=$(grep "^de33_latch_line_max=" $d/$r.params.after 2>/dev/null | cut -d= -f2); [ -n "$a" ] && echo "$c $r latch_line_max_after $a" >> $OUT/results.txt
+    a=$(cat $d/$r.after.cpufreq_trans 2>/dev/null); b=$(cat $d/$r.before.cpufreq_trans 2>/dev/null); [ -n "$a" ] && [ -n "$b" ] && echo "$c $r cpufreq_trans_delta $((a - b))" >> $OUT/results.txt
     a=$(grep "^de33_wb_status_last=" $d/$r.params.after 2>/dev/null | cut -d= -f2); [ -n "$a" ] && echo "$c $r wb_status_last $a" >> $OUT/results.txt
   done
   grep -q MODE-UNAVAILABLE $d/connectors.txt 2>/dev/null && echo "$c all mode_unavailable 1" >> $OUT/results.txt
-  echo "$c all dmesg_bad $(grep -cE "$OOPS" $d/dmesg-chunk.txt 2>/dev/null || echo 0)" >> $OUT/results.txt
-  echo "$c all dmesg_iommu $(grep -ciE 'iommu' $d/dmesg-chunk.txt 2>/dev/null || echo 0)" >> $OUT/results.txt; }
+  k=$(grep -cE "$OOPS" $d/dmesg-chunk.txt 2>/dev/null); echo "$c all dmesg_bad ${k:-0}" >> $OUT/results.txt   # grep -c prints 0 itself (no extra line)
+  k=$(grep -ciE 'iommu' $d/dmesg-chunk.txt 2>/dev/null); echo "$c all dmesg_iommu ${k:-0}" >> $OUT/results.txt; }
 oops_fail() { log "OOPS during chunk $1 ($2): $(head -3 $OUT/OOPS | tr '\n' ' ')"; restore; release; log "job $J ABORTED (exit 3)"; exit 3; }
 run_chunk() { # run_chunk <chunk>: remote script under timeout + stall watchdog; output to $OUT/chunk-<c>.txt
   local c=$1 f=$OUT/chunk-$1.txt oops=""

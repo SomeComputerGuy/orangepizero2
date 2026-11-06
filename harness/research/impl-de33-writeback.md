@@ -162,3 +162,46 @@ frames_torn == frames_bad == fence_errors == 0, wb_jobs_delta == wb_done_delta, 
 - Queued: harness/runner-queue/41-de33-writeback.md (`wb-job.sh wb41`, kernel c35 unchanged, logs/runner-wb41).
   Next: fresh agent judges done/41-*.summary.md; a real TORN/BAD frame or seq gaps there is a kernel latch/timing issue
   (see job 19 display tearing and 30706dcc8), not the client.
+
+### Job 41 (2026-11-06, c35): checks 0-3, 7, 8 PASS; check 6 FAIL = test-client speed (not the kernel), fixed; re-queued as job 42
+- Summary harness/runner-queue/done/41-de33-writeback.summary.md, logs logs/runner-wb41/. Crash fixed (rc 0). All three
+  flips runs: 300 flips, 300 captures, torn 0, bad 0, fence_errors 0, A/B 150/150, jobs == done == 300, failed 0,
+  busy_frames 0; but flip_rate 7.5/7.4/6.7 and seq_gaps 298, commit_phase mean 129/133/141 ms.
+- Cause (TEST artefact): commit_phase = time from flip event i-1 to commit i. In that window the client waited the previous
+  capture's fence and classify()'d the whole 1024x768 capture, 786432 32-bit reads through the dumb-buffer mmap, which
+  the DMA GEM helpers map write-combined (uncached): ~150 ns per read = ~120 ms per frame, plus a 3 MiB poison memset.
+  Evidence: the phase grows exactly by the -D delay (129 -> 133 (+4) -> 141 (+12) ms), i.e. a constant ~129 ms of client
+  work per flip; the kernel side shows no stall: every capture done by the next vblank (busy_frames 0), solid fences
+  21.5 ms (start at the next vblank + one frame), job 19 flipped at 60/s with the same latch without the per-pixel check.
+  seq_gaps counts flip events whose vblank sequence advanced by more than 1, so with one flip per ~8 frames every flip is
+  a gap (298 of 299): expected for that client. HANDOFF's "flip_rate 29-31: one capture per two frames" was wrong too:
+  sun50i_wb_vblank() completes the running job and starts the next armed job in the same vblank, so the hardware does one
+  capture per frame (60/s) with a flip per frame.
+- Kernel commit path reviewed: nonblocking commit; the writeback job is queued unarmed, armed in the latch commit, started
+  by the vblank that flushes its registers; nothing waits for the writeback fence in commit_tail (the out fence is
+  signalled from the IRQ). No kernel change.
+- latch_flushes_late_delta 0/2/1: de33_latch_line_max went 7 -> 369 (d4) -> 370 (d12) = the TCON vblank interrupt was
+  serviced ~334 lines (~6.9 ms) after vsync on 3 of 914 flushes (the flush is written at once then, counted, by design).
+  Only in the -D runs (client sleeping between bursts of uncached reads), never in job 19 (0 of 1800). Not a writeback
+  effect: the flush is the same 16 words / <= 11 us, and a late flush cannot tear a capture (the capture starts after the
+  flush, at the next frame); it can tear one displayed HDMI frame. The ~7 ms IRQ-off source is not identified (candidates:
+  cpufreq/PLL transitions on load changes; serial console output is ruled out by loglevel=1 unless something prints at
+  emerg level). Job 42 records /proc/interrupts and cpufreq total_trans per run (data). Belongs to the display-tearing
+  task (work list), not W23.
+- Noted (work list, display-tearing, low): sun4i_tcon_handler() sends the flip event before the engine's vblank_quirk
+  flushes the latch, so in principle a very fast client could commit the next frame while the flush of this one is still
+  running on another CPU (de33_latch_coalesced would count it). Window a few us; 0 coalesced in jobs 19/41.
+- Fix (harness/kms-wb/kms-wb.c, sha256 677c4b9e...): flips commits flip i right after flip i-1's event (or -D us after the
+  event's vblank timestamp, clock_nanosleep absolute), then checks the capture of flip i-2 (finished at the same vblank)
+  and poisons the buffer of flip i+1 while flip i waits; ring of 6; the in-run check reads every 32nd pixel of every row +
+  the last pixel (rows of both colours = TORN, any other value = BAD); new frames_wrong (capture colour != its flip's
+  colour, catches a capture of the previous frame), full pixel check of the last 6 captures (full_checked/full_mismatch),
+  and timings commit_ioctl/fence_wait/check/poison, seq_gap_max, first_gap_flip, commits_after_frame. Host-tested
+  classify (pure/torn/last-pixel/poisoned rows). wb-job.sh: job wb42, per-run /proc/interrupts + cpufreq trans,
+  latch_line_max_after, new keys extracted (host-tested on a synthetic output), duplicate dmesg count line fixed.
+  HANDOFF check 6: flip_rate 58.5-61.5, seq_gaps <= 3 (job 19 baseline: up to 1 per 600 also on stock), frames_wrong 0,
+  full_mismatch 0.
+- Queued: harness/runner-queue/42-de33-writeback.md (`wb-job.sh wb42`, kernel c35 unchanged, logs/runner-wb42). Next:
+  fresh agent judges done/42-*.summary.md. If flip_rate is still low: look at commit_ioctl_* (kernel blocking in the ioctl),
+  fence_wait_* (capture not finished by the next vblank), check_/poison_* (client). frames_wrong > 0 = 30706dcc8 arming
+  off by a frame (kernel). Green -> docs/datasheet-checklist.md W23 "Write-back" row -> implemented.

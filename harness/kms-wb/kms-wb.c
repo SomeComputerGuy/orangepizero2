@@ -48,7 +48,8 @@
 #define DRM_MODE_CONNECTOR_WRITEBACK 18
 #endif
 
-#define RING		4
+#define RING		6	/* flips capture buffers */
+#define CHECK_STEP	32	/* flips: every 32nd pixel of a row (+ the last) */
 #define FENCE_TIMEOUT_MS 2000
 
 static struct {
@@ -719,8 +720,18 @@ static int cmd_static(bool bars, uint32_t solid)
 }
 
 /* classify a captured XR24 frame against the two flip colours */
-static void classify(struct dumb *c, uint32_t a, uint32_t b, int *rows_a, int *rows_b,
-		     int *rows_other, int *boundary)
+/*
+ * Row classification of a flips capture. The capture buffers are dumb
+ * buffers, mapped write-combined (uncached) by the DMA GEM helpers: a CPU
+ * read costs a DRAM round trip. Job 41 classified every pixel of every
+ * 1024x768 capture (786432 uncached reads, ~120 ms per frame), which held
+ * the flip loop to ~7 flips/s (seq_gaps 298 of 299) and hid what the
+ * hardware does. @step > 1 reads only every step-th pixel of a row plus the
+ * row's last pixel: a torn frame is still caught (whole rows of both
+ * colours), as is an unwritten (poisoned) region. @step 1 = every pixel.
+ */
+static void classify(struct dumb *c, uint32_t a, uint32_t b, int step, int *rows_a,
+		     int *rows_b, int *rows_other, int *boundary)
 {
 	int last = -1;
 
@@ -728,22 +739,32 @@ static void classify(struct dumb *c, uint32_t a, uint32_t b, int *rows_a, int *r
 	*boundary = -1;
 	for (int y = 0; y < c->h; y++) {
 		uint32_t *row = (uint32_t *)(c->map + y * c->pitch);
-		int na = 0, nb = 0;
+		int na = 0, nb = 0, nr = 0;
 
-		for (int x = 0; x < c->w; x++) {
+		for (int x = 0; x < c->w; x += step) {
 			uint32_t p = row[x] & 0xffffff;
 
+			nr++;
 			if (p == a)
 				na++;
 			else if (p == b)
 				nb++;
 		}
-		if (na == c->w) {
+		if (step > 1 && (c->w - 1) % step) {
+			uint32_t p = row[c->w - 1] & 0xffffff;
+
+			nr++;
+			if (p == a)
+				na++;
+			else if (p == b)
+				nb++;
+		}
+		if (na == nr) {
 			(*rows_a)++;
 			if (last == 1 && *boundary < 0)
 				*boundary = y;
 			last = 0;
-		} else if (nb == c->w) {
+		} else if (nb == nr) {
 			(*rows_b)++;
 			if (last == 0 && *boundary < 0)
 				*boundary = y;
@@ -774,32 +795,129 @@ static void flip_handler(int fd, unsigned int seq, unsigned int sec, unsigned in
 	ev->t = sec + usec * 1e-6;
 }
 
+struct stat_ms {
+	int n;
+	double sum, max;
+};
+
+static void stat_add(struct stat_ms *s, double ms)
+{
+	s->n++;
+	s->sum += ms;
+	if (ms > s->max)
+		s->max = ms;
+}
+
+static void stat_print(const char *key, const struct stat_ms *s)
+{
+	printf("RESULT %s mean_ms %.3f max_ms %.3f n %d\n", key,
+	       s->n ? s->sum / s->n : 0.0, s->max, s->n);
+}
+
+/* sleep until CLOCK_MONOTONIC time @t (s); DRM event times are CLOCK_MONOTONIC */
+static void sleep_until(double t)
+{
+	struct timespec ts = { .tv_sec = (time_t)t,
+			       .tv_nsec = (long)((t - (time_t)t) * 1e9) };
+
+	while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, NULL) == EINTR && !quit)
+		;
+}
+
+struct flips_ctx {
+	struct dumb cap[RING];
+	int32_t fence[RING];
+	uint32_t col[2];
+	int frames, pure[2], torn, bad, ferr, wrong, first_torn;
+	struct stat_ms fence_wait, check;
+};
+
+/* wait for and classify the capture of flip @i (sampled rows) */
+static void flips_check(struct flips_ctx *f, int i)
+{
+	int s = i % RING, status, ra, rb, ro, boundary;
+	double t0 = now_s();
+
+	if (fence_wait(f->fence[s], FENCE_TIMEOUT_MS, &status) || status < 0) {
+		printf("RESULT flip %d fence_error status=%d\n", i, status);
+		f->ferr++;
+		goto out;
+	}
+	stat_add(&f->fence_wait, (now_s() - t0) * 1e3);
+	t0 = now_s();
+	classify(&f->cap[s], f->col[0], f->col[1], CHECK_STEP, &ra, &rb, &ro, &boundary);
+	stat_add(&f->check, (now_s() - t0) * 1e3);
+	f->frames++;
+	if (ro) {
+		f->bad++;
+		printf("RESULT flip %d BAD rows_a %d rows_b %d rows_other %d first_bad_row %d\n",
+		       i, ra, rb, ro, boundary);
+		if (f->first_torn < 0)
+			f->first_torn = i;
+		if (f->bad <= 3) {
+			char name[32];
+
+			snprintf(name, sizeof(name), "bad-%d", i);
+			dump(&f->cap[s], name);
+		}
+	} else if (ra && rb) {
+		f->torn++;
+		printf("RESULT flip %d TORN rows_a %d rows_b %d boundary_row %d\n",
+		       i, ra, rb, boundary);
+		if (f->first_torn < 0)
+			f->first_torn = i;
+		if (f->torn <= 3) {
+			char name[32];
+
+			snprintf(name, sizeof(name), "torn-%d", i);
+			dump(&f->cap[s], name);
+		}
+	} else {
+		/* the expected colour: flip i shows col[i & 1] */
+		f->pure[rb ? 1 : 0]++;
+		if ((rb ? 1 : 0) != (i & 1)) {
+			printf("RESULT flip %d WRONG_FRAME got %c\n", i, rb ? 'b' : 'a');
+			f->wrong++;
+		}
+	}
+out:
+	close(f->fence[s]);
+	f->fence[s] = -1;
+}
+
 /*
  * N page flips between two solid colours, each with a writeback job into a
- * ring of capture buffers. The fence of flip i-1 is waited for after the
- * flip event of flip i, so one capture is in flight while the next frame
- * is committed. A frame holding rows of both colours (or anything else) is
- * torn.
+ * ring of capture buffers. Flip i is committed right after the flip event of
+ * flip i-1 (or -D us after that event's timestamp); the capture of flip i-2,
+ * complete since that same vblank, is then checked, and the buffer of flip
+ * i+1 poisoned, while flip i waits for its vblank. So the client keeps up
+ * with the display and the run measures the driver: one flip and one
+ * capture per frame (the RT-WB finishes a capture by the next vblank, where
+ * the driver starts the next one). After the run the last RING captures are
+ * compared in full (every pixel).
  */
 static int cmd_flips(int n)
 {
-	const uint32_t col[2] = { 0x40c0e0, 0xe04020 };
-	struct dumb src[2], cap[RING];
-	int32_t fence[RING];
+	static struct flips_ctx f;
+	struct dumb src[2];
 	int ret = kms_init(&K, false);
-	int w, h, frames = 0, pure[2] = { 0 }, torn = 0, bad = 0, ferr = 0, gaps = 0;
-	int first_torn = -1;
+	int w, h, gaps = 0, gap_max = 0, first_gap = -1, late = 0, full = 0, full_bad = 0;
 	drmEventContext ev = { .version = 3, .page_flip_handler2 = flip_handler };
 	struct flip_ev fe = { 0 };
 	uint32_t last_seq = 0;
-	double t_first = 0, t_last = 0, t_commit = 0, phase_sum = 0, phase_max = 0;
+	double t_first = 0, t_last = 0, t_commit, phase_sum = 0, phase_max = 0;
 	int phase_n = 0, phase_outside = 0;
-	double vbl_ms;
+	struct stat_ms ioctl_ms = { 0 }, poison_ms = { 0 };
+	double vbl_ms, frame_ms;
 
 	if (ret)
 		return ret;
+	f.col[0] = 0x40c0e0;
+	f.col[1] = 0xe04020;
+	f.first_torn = -1;
 	vbl_ms = (K.mode.vtotal - K.mode.vdisplay) * (double)K.mode.htotal /
 		 (K.mode.clock * 1e3) * 1e3;
+	frame_ms = K.mode.vtotal * (double)K.mode.htotal / (K.mode.clock * 1e3) * 1e3;
 	if (o.wb_fmt != DRM_FORMAT_XRGB8888) {
 		fprintf(stderr, "flips needs XR24 capture\n");
 		return 2;
@@ -811,14 +929,14 @@ static int cmd_flips(int n)
 			perror("dumb buffer");
 			return 2;
 		}
-		fill_xr24(&src[i], false, col[i]);
+		fill_xr24(&src[i], false, f.col[i]);
 	}
 	for (int i = 0; i < RING; i++) {
-		if (dumb_create(&K, &cap[i], DRM_FORMAT_XRGB8888, w, h)) {
+		if (dumb_create(&K, &f.cap[i], DRM_FORMAT_XRGB8888, w, h)) {
 			perror("dumb buffer");
 			return 2;
 		}
-		fence[i] = -1;
+		f.fence[i] = -1;
 	}
 
 	if (commit(&K, src[0].fb_id, NULL, NULL, NULL)) {
@@ -826,22 +944,14 @@ static int cmd_flips(int n)
 		return 2;
 	}
 	usleep(50000);
+	poison(&f.cap[0]);
 
-	for (int i = 0; i <= n && !quit; i++) {
-		if (i < n) {
-			int s = i % RING;
+	for (int i = 0; i < n && !quit; i++) {
+		int s = i % RING;
+		double t0;
 
-			if (o.commit_delay_us && i)
-				usleep(o.commit_delay_us);
-			poison(&cap[s]);
-			t_commit = now_s();
-			fe.done = false;
-			if (commit(&K, src[i & 1].fb_id, &cap[s], &fence[s], &fe)) {
-				printf("RESULT flip %d commit_error %d\n", i, commit_errno);
-				ret = 2;
-				break;
-			}
-			/* flip event of this commit */
+		if (i > 0) {
+			/* the flip event of flip i-1 */
 			while (!fe.done && !quit) {
 				struct pollfd pfd = { .fd = K.fd, .events = POLLIN };
 
@@ -852,82 +962,113 @@ static int cmd_flips(int n)
 				}
 				drmHandleEvent(K.fd, &ev);
 			}
-			if (fe.done) {
-				if (!t_first)
-					t_first = fe.t;
-				if (last_seq && fe.seq - last_seq > 1)
-					gaps++;
-				last_seq = fe.seq;
-				if (t_last) {
-					double ph = (t_commit - t_last) * 1e3;
+			if (!fe.done)
+				break;
+			if (!t_first)
+				t_first = fe.t;
+			if (last_seq && fe.seq - last_seq > 1) {
+				gaps++;
+				if ((int)(fe.seq - last_seq - 1) > gap_max)
+					gap_max = fe.seq - last_seq - 1;
+				if (first_gap < 0)
+					first_gap = i - 1;
+			}
+			last_seq = fe.seq;
+			t_last = fe.t;
+			if (o.commit_delay_us)
+				sleep_until(fe.t + o.commit_delay_us * 1e-6);
+		}
 
-					if (ph >= 0) {
-						phase_n++;
-						phase_sum += ph;
-						if (ph > phase_max)
-							phase_max = ph;
-						if (ph > vbl_ms)
-							phase_outside++;
-					}
-				}
-				t_last = fe.t;
+		t_commit = now_s();
+		fe.done = false;
+		if (commit(&K, src[i & 1].fb_id, &f.cap[s], &f.fence[s], &fe)) {
+			printf("RESULT flip %d commit_error %d\n", i, commit_errno);
+			ret = 2;
+			break;
+		}
+		stat_add(&ioctl_ms, (now_s() - t_commit) * 1e3);
+		if (i > 0) {
+			double ph = (t_commit - t_last) * 1e3;
+
+			if (ph >= 0) {
+				phase_n++;
+				phase_sum += ph;
+				if (ph > phase_max)
+					phase_max = ph;
+				if (ph > vbl_ms)
+					phase_outside++;
+				if (ph > frame_ms)
+					late++;
 			}
 		}
-		if (i > 0) {
-			/* the capture of the previous flip */
-			int s = (i - 1) % RING, status, ra, rb, ro, boundary;
 
-			if (fence_wait(fence[s], FENCE_TIMEOUT_MS, &status) || status < 0) {
-				printf("RESULT flip %d fence_error status=%d\n", i - 1, status);
-				ferr++;
-			} else {
-				classify(&cap[s], col[0], col[1], &ra, &rb, &ro, &boundary);
-				frames++;
-				if (ro) {
-					bad++;
-					printf("RESULT flip %d BAD rows_a %d rows_b %d rows_other %d first_bad_row %d\n",
-					       i - 1, ra, rb, ro, boundary);
-					if (first_torn < 0)
-						first_torn = i - 1;
-					if (bad <= 3) {
-						char name[32];
+		/* while flip i waits for its vblank */
+		if (i >= 2)
+			flips_check(&f, i - 2);
+		if (i + 1 < n) {
+			t0 = now_s();
+			poison(&f.cap[(i + 1) % RING]);
+			stat_add(&poison_ms, (now_s() - t0) * 1e3);
+		}
+	}
 
-						snprintf(name, sizeof(name), "bad-%d", i - 1);
-						dump(&cap[s], name);
-					}
-				} else if (ra && rb) {
-					torn++;
-					printf("RESULT flip %d TORN rows_a %d rows_b %d boundary_row %d\n",
-					       i - 1, ra, rb, boundary);
-					if (first_torn < 0)
-						first_torn = i - 1;
-					if (torn <= 3) {
-						char name[32];
+	/* the last flip's event, then the captures not checked yet */
+	while (ret == 0 && !fe.done && !quit) {
+		struct pollfd pfd = { .fd = K.fd, .events = POLLIN };
 
-						snprintf(name, sizeof(name), "torn-%d", i - 1);
-						dump(&cap[s], name);
-					}
-				} else {
-					pure[rb ? 1 : 0]++;
-				}
-			}
-			close(fence[s]);
-			fence[s] = -1;
+		if (poll(&pfd, 1, 1000) <= 0) {
+			fprintf(stderr, "flip event timed out\n");
+			break;
+		}
+		drmHandleEvent(K.fd, &ev);
+	}
+	if (fe.done) {
+		if (last_seq && fe.seq - last_seq > 1) {
+			gaps++;
+			if ((int)(fe.seq - last_seq - 1) > gap_max)
+				gap_max = fe.seq - last_seq - 1;
+			if (first_gap < 0)
+				first_gap = n - 1;
+		}
+		t_last = fe.t;
+	}
+	for (int i = n - 2 < 0 ? 0 : n - 2; i < n; i++)
+		if (f.fence[i % RING] >= 0)
+			flips_check(&f, i);
+
+	/* the last RING captures, every pixel (their buffers were poisoned in full) */
+	for (int i = n - RING < 0 ? 0 : n - RING; i < n && ret == 0 && !quit; i++) {
+		int ra, rb, ro, boundary;
+
+		classify(&f.cap[i % RING], f.col[0], f.col[1], 1, &ra, &rb, &ro, &boundary);
+		full++;
+		if (ro || (ra && rb) || (rb ? 1 : 0) != (i & 1)) {
+			full_bad++;
+			printf("RESULT flip %d FULL_MISMATCH rows_a %d rows_b %d rows_other %d first_row %d\n",
+			       i, ra, rb, ro, boundary);
 		}
 	}
 
 	printf("RESULT flips %d frames_captured %d frames_a %d frames_b %d frames_torn %d frames_bad %d fence_errors %d\n",
-	       n, frames, pure[0], pure[1], torn, bad, ferr);
+	       n, f.frames, f.pure[0], f.pure[1], f.torn, f.bad, f.ferr);
+	printf("RESULT frames_wrong %d full_checked %d full_mismatch %d check_step %d\n",
+	       f.wrong, full, full_bad, CHECK_STEP);
 	printf("RESULT flip_rate %.3f seq_gaps %d\n",
 	       t_last > t_first ? (n - 1) / (t_last - t_first) : 0.0, gaps);
+	printf("RESULT seq_gap_max %d first_gap_flip %d commits_after_frame %d frame_ms %.3f\n",
+	       gap_max, first_gap, late, frame_ms);
 	if (phase_n)
 		printf("RESULT commit_phase mean_ms %.3f max_ms %.3f outside_blanking %d of %d blanking_ms %.3f\n",
 		       phase_sum / phase_n, phase_max, phase_outside, phase_n, vbl_ms);
-	if (first_torn >= 0)
-		printf("RESULT first_torn_flip %d\n", first_torn);
+	stat_print("commit_ioctl", &ioctl_ms);
+	stat_print("fence_wait", &f.fence_wait);
+	stat_print("check", &f.check);
+	stat_print("poison", &poison_ms);
+	if (f.first_torn >= 0)
+		printf("RESULT first_torn_flip %d\n", f.first_torn);
 	if (ret)
 		return ret;
-	return (torn || bad || ferr || frames < n - 1) ? 1 : 0;
+	return (f.torn || f.bad || f.ferr || f.wrong || full_bad || f.frames < n - 1) ? 1 : 0;
 }
 
 /* ------------------------------------------------------------- main */
@@ -948,8 +1089,8 @@ static void usage(void)
 "  -w, --wb-format FOURCC  capture format: XR24 (default), NV12, XR30\n"
 "  -t, --tolerance N       per-component tolerance for NV12/XR30 (3)\n"
 "  -r, --repeat N          captures per static image (3)\n"
-"  -D, --commit-delay US   flips: sleep US us after each flip event before the\n"
-"                          next commit (puts the commit into the active video)\n"
+"  -D, --commit-delay US   flips: commit US us after each flip event's vblank\n"
+"                          timestamp (puts the commit into the active video)\n"
 "  -o, --dump DIR          write mismatching captures as DIR/<name>.raw\n");
 	exit(2);
 }

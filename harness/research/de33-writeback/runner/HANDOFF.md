@@ -1,6 +1,15 @@
-# DE33 writeback connector runner jobs wb41 (queue job 41) and wb40 (queue job 40): handoff
+# DE33 writeback connector runner jobs wb42 (queue job 42), wb41 (job 41) and wb40 (job 40): handoff
 
-Command (job 41): `bash harness/research/de33-writeback/runner/wb-job.sh wb41` (results in logs/runner-wb41/)
+Command (job 42): `bash harness/research/de33-writeback/runner/wb-job.sh wb42` (results in logs/runner-wb42/)
+
+Job 42 = job 41 again (same runs: probe, solid1, flips-d0, flips-d4, flips-d12; about 5 min) with a test client that keeps
+up with the display. Job 41 (c35): checks 0-3, 7, 8 PASS; check 6 FAIL only on `seq_gaps 298` (flip_rate ~7/s): every
+captured frame was correct (300/300, torn 0, bad 0), but the client compared every pixel of every capture through an
+uncached mapping (~120 ms per frame), so it committed one flip every ~8 frames. Test-client artefact, not the kernel
+(the kernel counters show one capture finished by the next vblank every time: busy_frames 0). The client now checks
+every row at every 32nd pixel during the run and the last 6 captures pixel by pixel after it, and also checks that each
+capture shows the colour of its own flip (`frames_wrong`). For job 42 checks 0, 1, 2, 6, 7, 8 apply as written; check 3
+applies to solid1 only; checks 4 and 5 are NOT RUN (report "not run (job 40 PASS)"). In check 6 use the job 42 limits.
 
 Job 41 = the flips part of job 40 plus a solid sanity: runs probe, solid1, flips-d0, flips-d4, flips-d12 only (about 5 min).
 Job 40 (c35): checks 0-5, 7, 8 PASS; check 6 FAIL because the test client crashed (rc 139, SIGSEGV) on the first flip
@@ -43,17 +52,17 @@ DEV or TEST: DEV-length, job 41 about 5 min (5 runs), job 40 about 7 min: instal
 solid 3c7ab4, c81e5a, 000000, ffffff (3 XR24 captures each); bars (3 XR24 captures); nv12 (NV12 capture, tolerance 3);
 xr30 (XRGB2101010 capture, tolerance 4, informational); flips-d0, flips-d4, flips-d12 (300 page flips between 40c0e0 and
 e04020 with one capture per flip, the commit issued right after the flip event, 4 ms after it (inside the active video, ~line
-190 of 806) and 12 ms after it). Resumable: re-running skips chunks listed in logs/runner-wb40/state. Every board command has a step timeout (ssh 120 s,
+190 of 806) and 12 ms after it). Resumable: re-running skips chunks listed in logs/runner-<job>/state. Every board command has a step timeout (ssh 120 s,
 the chunk 560 s, install 900 s, restore 600 s, scp 300 s) and the chunk has a stall watchdog (no output for 120 s = killed). The stock kernel
 vmlinuz-7.3.1-edge-sunxi64 is restored at the end and before every lock hand-over.
 
 Fail fast: the serial log and the chunk's dmesg are watched for `Unable to handle|Oops|WARNING:|flip_done timed out|vblank
-wait timed out|workqueue lockup|iommu.*fault|Page fault`; a hit ends the job (exit 3, lines in logs/runner-wb40/OOPS): report
+wait timed out|workqueue lockup|iommu.*fault|Page fault`; a hit ends the job (exit 3, lines in logs/runner-<job>/OOPS): report
 FAIL (OOPS) with the OOPS content and the last 10 lines of runner.log. An IOMMU fault here means the write-back wrote through
 an unmapped address: report it verbatim.
 
-Results: harness/research/de33-writeback/logs/runner-wb40/: runner.log, results.txt (one line per value: `wb <run> <key>
-<value>`), chunk-wb.txt, files/wb/{kernel.txt,connectors.txt,<run>.txt,<run>.params.before/.after,dmesg-chunk.txt,dump/*.raw
+Results: harness/research/de33-writeback/logs/runner-<job>/ (<job> = wb42 for job 42): runner.log, results.txt (one line per value: `wb <run> <key>
+<value>`), chunk-wb.txt, files/wb/{kernel.txt,connectors.txt,printk.txt,<run>.txt,<run>.params.before/.after,<run>.{before,after}.{irq,cpufreq_trans},dmesg-chunk.txt,dump/*.raw
 (mismatching captures, raw pixels)}, OOPS / BLOCKED only when they happened.
 
 Exit codes: 0 = chunk ran, judge with the checks below; 3 = Oops/WARN/IOMMU fault, FAIL; 2 = blocked (report BLOCKED and
@@ -80,12 +89,20 @@ files/wb/<run>.txt that contain `atomic commit` or `dumb buffer`.
    informational: report `captures_failed`, `capture<N>_mismatches`, `capture<N>_max_dev` (top 8 bits of each 10-bit
    component vs the 8-bit source, tolerance 4), `capture<N>_commit_errno` / `capture<N>_fence_error` if present.
 6. Tearing (the picture-level check), for flips-d0, flips-d4 AND flips-d12: `rc 0`, `flips_requested 300`,
-   `frames_captured` >= 298 (of 300),
-   `frames_torn 0`, `frames_bad 0`, `fence_errors 0`, `seq_gaps 0` -> PASS. Any miss -> FAIL with the values, the
-   `first_torn_flip` and the `RESULT flip <n> TORN ...` lines (first 5) from files/wb/<run>.txt. Also report
-   `flip_rate` (expected 29-31: one capture completes per two frames), `frames_a`, `frames_b`, and for d4/d12
-   `commits_outside_blanking` of `commits_counted` (expected: all outside, the commit was placed in the active video on
-   purpose), plus `latch_flushes_late_delta` (expected 0: the latch wrote every frame in the blanking).
+   `frames_captured` >= 298 (of 300), `frames_torn 0`, `frames_bad 0`, `fence_errors 0`, and (job 42; the runs of
+   jobs 40/41 have no such keys, judge them on the keys before) `frames_wrong 0`, `full_checked 6`,
+   `full_mismatch 0`, `flip_rate` between 58.5 and 61.5, `seq_gaps` <= 3 -> PASS. Any miss -> FAIL with the values,
+   the `first_torn_flip` and the first 5 lines of files/wb/<run>.txt that contain `TORN`, `BAD`, `WRONG_FRAME` or
+   `FULL_MISMATCH`. Limits: the driver captures one frame per vblank (a capture started at vblank N finishes by vblank
+   N+1, where the next one starts), so one flip with one capture per frame (60/s at 1024x768@60) is what the hardware
+   does; job 19 (flips without writeback) measured 59.9-60.05 flips/s with up to 1 seq gap per 600 flips on the stock
+   kernel too (a scheduling hiccup of the client), hence <= 3 of 300.
+   Report as data (no pass/fail): `frames_a`, `frames_b`, `seq_gap_max`, `first_gap_flip`, `commits_after_frame`,
+   `commit_phase_mean_ms`/`_max_ms`, `commit_ioctl_mean_ms`/`_max_ms`, `fence_wait_mean_ms`/`_max_ms`,
+   `check_mean_ms`/`_max_ms`, `poison_mean_ms`/`_max_ms`, `commits_outside_blanking` of `commits_counted` (d4/d12:
+   expected all outside, the commit is placed 4/12 ms after the flip event on purpose), `latch_flushes_late_delta`,
+   `latch_line_max_after` and `cpufreq_trans_delta` (job 41 had 0/2/1 late flushes, line_max 369-370 = the vblank
+   interrupt serviced ~7 ms after vsync; data for the display-tearing task, not a writeback check).
 7. Kernel counters, per run: `wb_jobs_delta` == `wb_done_delta` and `wb_failed_delta 0` -> PASS, else FAIL with the
    values; report `wb_busy_frames_delta` (data: captures not finished by the next vblank) and `wb_status_last`.
 8. dmesg: `wb all dmesg_bad 0` -> PASS; else FAIL, copy the matching lines from files/wb/dmesg-chunk.txt exactly. Report

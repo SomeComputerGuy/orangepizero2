@@ -129,6 +129,10 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
      all 8000-byte pings in 11 of 19 rounds.
    - JPEG greyscale decode (probe run 11-03; result to fold in).
    - Display tearing.
+     Open (2026-11-06, from W23 job 41): 3 of 914 DE33 latch flushes serviced ~7 ms after vsync (de33_latch_line_max
+     369-370, only in the -D flips runs; job 19 had 0 of 1800); IRQ-off source unknown (job 42 records
+     /proc/interrupts + cpufreq trans). Also: sun4i_tcon_handler() sends the flip event before the latch flush
+     (vblank_quirk), a us-wide race with a next commit (coalesced 0 so far). Details: impl-de33-writeback.md "Job 41".
    - panfrost: `WARN panfrost_mmu_map+0xcc` (panfrost_mmu.c:478) 5x when the 2 gles31 OOM cases hit the memcg limit;
      the map failure should return an error, not WARN. Kernel fix on a fix/* branch.
    - panfrost: KHR-GLES31 blend_equation_advanced mixedSequence fails 5/5 (coherent blend), with item 3.

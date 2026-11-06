@@ -1,0 +1,19 @@
+[   51.890777] hdmi-audio-codec hdmi-audio-codec.5.auto: HDMI: Unknown ELD version 0
+[   51.899956] Console: switching to colour frame buffer device 128x48
+[   51.918342] sun4i-drm display-engine: [drm] fb0: sun4i-drmdrmfb frame buffer device
+[   54.791336] hdmi-audio-codec hdmi-audio-codec.5.auto: HDMI: Unknown ELD version 0
+[   65.747642] hdmi-audio-codec hdmi-audio-codec.5.auto: HDMI: Unknown ELD version 0
+[   68.843356] hdmi-audio-codec hdmi-audio-codec.5.auto: HDMI: Unknown ELD version 0
+[   79.801640] hdmi-audio-codec hdmi-audio-codec.5.auto: HDMI: Unknown ELD version 0
+[   82.644613] hdmi-audio-codec hdmi-audio-codec.5.auto: HDMI: Unknown ELD version 0
+[   93.601607] hdmi-audio-codec hdmi-audio-codec.5.auto: HDMI: Unknown ELD version 0
+[   96.439942] hdmi-audio-codec hdmi-audio-codec.5.auto: HDMI: Unknown ELD version 0
+[  117.411759] hdmi-audio-codec hdmi-audio-codec.5.auto: HDMI: Unknown ELD version 0
+[  127.350910] hdmi-audio-codec hdmi-audio-codec.5.auto: HDMI: Unknown ELD version 0
+[  129.307339] hdmi-audio-codec hdmi-audio-codec.5.auto: HDMI: Unknown ELD version 0
+[  139.262587] hdmi-audio-codec hdmi-audio-codec.5.auto: HDMI: Unknown ELD version 0
+[  141.219586] hdmi-audio-codec hdmi-audio-codec.5.auto: HDMI: Unknown ELD version 0
+[  151.131989] hdmi-audio-codec hdmi-audio-codec.5.auto: HDMI: Unknown ELD version 0
+[  153.087826] hdmi-audio-codec hdmi-audio-codec.5.auto: HDMI: Unknown ELD version 0
+[  163.092076] hdmi-audio-codec hdmi-audio-codec.5.auto: HDMI: Unknown ELD version 0
+[  165.049310] hdmi-audio-codec hdmi-audio-codec.5.auto: HDMI: Unknown ELD version 0

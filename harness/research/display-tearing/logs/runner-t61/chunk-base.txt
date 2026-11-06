@@ -1,0 +1,179 @@
+DMESG-START 663
+/sys/class/drm/card0-HDMI-A-1 status=connected modes: 1024x768 800x600 800x600 848x480 640x480 
+RESULT selftest pass fails 0
+RC 0
+== probe: /root/wb/kms-wb probe
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT probe ok
+RC 0
+== t-d0: /root/wb/kms-wb tear 600
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT tear flips 600 frames_checked 600 ok 600 wrong 0 stale 0 early 0 mixed 0 bad 0 fence_errors 0
+RESULT event_order events_got 600 unheld 0 unflushed 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+RESULT flip_rate 60.004 seq_gaps 0
+RESULT seq_gap_max 0 first_gap_flip -1 frame_ms 16.666
+RESULT commit_phase mean_ms 0.291 max_ms 0.427 outside_blanking 0 of 599 blanking_ms 0.786
+== t-d4: /root/wb/kms-wb -D 4000 tear 600
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT tear flips 600 frames_checked 600 ok 600 wrong 0 stale 0 early 0 mixed 0 bad 0 fence_errors 0
+RESULT event_order events_got 600 unheld 0 unflushed 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+RESULT flip_rate 60.003 seq_gaps 0
+RESULT seq_gap_max 0 first_gap_flip -1 frame_ms 16.666
+RESULT commit_phase mean_ms 4.079 max_ms 4.112 outside_blanking 599 of 599 blanking_ms 0.786
+== t-d12: /root/wb/kms-wb -D 12000 tear 600
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT tear flips 600 frames_checked 600 ok 600 wrong 0 stale 0 early 0 mixed 0 bad 0 fence_errors 0
+RESULT event_order events_got 600 unheld 0 unflushed 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+RESULT flip_rate 60.004 seq_gaps 0
+RESULT seq_gap_max 0 first_gap_flip -1 frame_ms 16.666
+RESULT commit_phase mean_ms 12.143 max_ms 12.202 outside_blanking 599 of 599 blanking_ms 0.786
+== t-rand: /root/wb/kms-wb -D -1 tear 1200
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT tear flips 1200 frames_checked 1200 ok 1200 wrong 0 stale 0 early 0 mixed 0 bad 0 fence_errors 0
+RESULT event_order events_got 1200 unheld 0 unflushed 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+RESULT flip_rate 59.954 seq_gaps 1
+RESULT seq_gap_max 1 first_gap_flip 204 frame_ms 16.666
+RESULT commit_phase mean_ms 7.490 max_ms 14.838 outside_blanking 1158 of 1199 blanking_ms 0.786
+== burst1: /root/wb/kms-wb -D 4000 tear 60
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT tear flips 60 frames_checked 60 ok 60 wrong 0 stale 0 early 0 mixed 0 bad 0 fence_errors 0
+RESULT event_order events_got 60 unheld 0 unflushed 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+RESULT flip_rate 60.004 seq_gaps 0
+RESULT seq_gap_max 0 first_gap_flip -1 frame_ms 16.666
+RESULT commit_phase mean_ms 4.079 max_ms 4.086 outside_blanking 59 of 59 blanking_ms 0.786
+== burst2: /root/wb/kms-wb -D 4000 tear 60
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT tear flips 60 frames_checked 60 ok 60 wrong 0 stale 0 early 0 mixed 0 bad 0 fence_errors 0
+RESULT event_order events_got 60 unheld 0 unflushed 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+RESULT flip_rate 60.004 seq_gaps 0
+RESULT seq_gap_max 0 first_gap_flip -1 frame_ms 16.666
+RESULT commit_phase mean_ms 4.078 max_ms 4.085 outside_blanking 59 of 59 blanking_ms 0.786
+== burst3: /root/wb/kms-wb -D 4000 tear 60
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT tear flips 60 frames_checked 60 ok 60 wrong 0 stale 0 early 0 mixed 0 bad 0 fence_errors 0
+RESULT event_order events_got 60 unheld 0 unflushed 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+RESULT flip_rate 60.004 seq_gaps 0
+RESULT seq_gap_max 0 first_gap_flip -1 frame_ms 16.666
+RESULT commit_phase mean_ms 4.078 max_ms 4.088 outside_blanking 59 of 59 blanking_ms 0.786
+== burst4: /root/wb/kms-wb -D 4000 tear 60
+RESULT selftest stale step 1 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest stale step 32 verdict WRONG want WRONG boundary -1 bad_rows 0
+RESULT selftest torn300 step 1 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest torn300 step 32 verdict MIXED want MIXED boundary 300 bad_rows 0
+RESULT selftest shift4 step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest shift4 step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 1 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest poison step 32 verdict BAD want BAD boundary -1 bad_rows 768
+RESULT selftest halfrow400 step 1 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest halfrow400 step 32 verdict BAD want BAD boundary -1 bad_rows 1
+RESULT selftest row500 step 1 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest row500 step 32 verdict MIXED want MIXED boundary 500 bad_rows 0
+RESULT selftest pass fails 0
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT tear flips 60 frames_checked 60 ok 60 wrong 0 stale 0 early 0 mixed 0 bad 0 fence_errors 0
+RESULT event_order events_got 60 unheld 0 unflushed 0
+RESULT tear_full full_checked 6 full_bad 0 check_step 32
+RESULT flip_rate 60.008 seq_gaps 0
+RESULT seq_gap_max 0 first_gap_flip -1 frame_ms 16.666
+RESULT commit_phase mean_ms 4.145 max_ms 5.719 outside_blanking 59 of 59 blanking_ms 0.786
+DMESG: [   51.918342] sun4i-drm display-engine: [drm] fb0: sun4i-drmdrmfb frame buffer device
+DUMPS: 0
+ROUND-DONE

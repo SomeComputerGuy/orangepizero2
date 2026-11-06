@@ -78,16 +78,17 @@ Image branch stonking-orangepizero2 = 90b5e7da2 (c36a2e787 + AFBC compose, wb re
 872 patches 0 failed, pushed to fork 2026-11-06). Desktop FFmpeg 0320 compose crop added (rev 5, 81d1c2a).
 
 ### A. Running
-- Job 58-tearing-wb on c43 (2026-11-06): NO tearing in 14 runs (0 mixed/wrong/bad, ok==flips, 0 late/forced latch
-  flushes, 60.003 fps, IRQ re-enable bursts clean), but check 6 FAIL: de33_latch_events stayed 0, so the held-flip-event
-  path never ran; check 7 NOT TESTED (VE load package bug, ffmpeg input read error). Code agent on it -> c44 + job 59.
-  Info: under memory load 49-56 fps with seq_gaps (no tearing). State: harness/research/display-tearing/RESULTS.md.
+- Nothing on the board. User's image build (90b5e7da2) running.
+- DONE 2026-11-06: DE33 tearing + writeback, job 62 PASS on c47 (2dc70409e): 0 torn/wrong/stale captures in all runs, events
+  held 100 %, 0 late/forced latches (base), every lost capture accounted by reason (kernel == client), VE+mem load real.
+  Branch fix/sunxi-h616-de33-latch-event: 8af646391, 93b00281a (display), 3e0255e2f, 906968398, 825596b48 (writeback).
+  -> NEXT BUILD: cherry-pick these 5 into stonking after 20e682fc2's copy. State: harness/research/display-tearing/RESULTS.md.
 
 ### B. Image integration (after the user's current build_all; the main armbian-build checkout stays untouched until then)
 1. Cherry-pick the board-PASS kernel fixes into stonking-orangepizero2 (-x, build-check):
    8b1f787fe H.265 AFBC compose offset (job 54) · 20e682fc2 writeback retry (job 55) · 950c46035 cedrus JPEG drain on
    DEC_CMD_STOP + fbba781aa S_FMT with CAPTURE buffers left (job 57; fixes every v4l2sl* resolution change since c10)
-   DONE 2026-11-06 = 90b5e7da2. Tearing fix (93b00281a) NOT yet: job 59 2 early captures under VE+mem load, agent on it.
+   DONE 2026-11-06 = 90b5e7da2 (in the running build). Tearing+writeback (job 62 PASS) = next build, see A.
 2. gst-plugins-good1.0 patches 0101 (1:4:0:0 JPEG colorimetry) + 0102 (sysmem when the peer answers ANY) into
    scripts/build-media-debs.sh; keep the MARGINAL rank for v4l2jpegdec, fix its "hangs" comment in image-integration.patch.
 3. DONE: FFmpeg compose crop = patches/ffmpeg/0320 (applies fuzz 0 on the image series), ffmpeg rev 5.

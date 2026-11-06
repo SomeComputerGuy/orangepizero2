@@ -11,12 +11,13 @@
 # 3 = Oops/WARN on the serial log or in dmesg (lines in $OUT/OOPS); 1 = setup or lock error.
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/de33-writeback; V=$H/harness/research/vdec-perf; SSH="timeout 120 $H/harness/ssh.sh"   # every board command: ServerAlive (ssh.sh) + a 120 s step timeout
-J=${1:?job: wb40 (wb = the job 21/30 run, kept for its logs)}
+J=${1:?job: wb41 (flips rerun) or wb40 (wb = the job 21/30 run, kept for its logs)}
 K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR
    -o ConnectTimeout=8 -o ServerAliveInterval=15 -o ServerAliveCountMax=8)
 OUT=$S/logs/runner-$J; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED $OUT/OOPS
 case $J in
-  wb|wb40) CHUNKS="wb"; CT=500; STALL=120 ;;
+  wb|wb40) CHUNKS="wb"; CT=500; STALL=120; RUNS="probe solid1 solid2 solid3 solid4 bars nv12 xr30 flips-d0 flips-d4 flips-d12" ;;
+  wb41) CHUNKS="wb"; CT=400; STALL=120; RUNS="probe solid1 flips-d0 flips-d4 flips-d12" ;;   # job 41: flips rerun (client fix) + solid sanity
   *) echo "unknown job $J"; exit 1 ;;
 esac
 T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
@@ -85,6 +86,7 @@ for c in /sys/class/drm/card*-HDMI-A-1; do echo on > \$c/status; done; sleep 2
 for c in /sys/class/drm/card*-HDMI-A-1; do echo "\$c status=\$(cat \$c/status) modes: \$(tr '\n' ' ' < \$c/modes)"; done | tee -a connectors.txt
 grep -q 1024x768 connectors.txt || echo MODE-UNAVAILABLE | tee -a connectors.txt
 run() { local name=\$1; shift
+  case " $RUNS " in *" \$name "*) ;; *) return 0 ;; esac   # only the runs of this job
   params > \$name.params.before
   timeout 90 $P -c HDMI-A-1 -m $MODE -o \$D/dump "\$@" > \$name.txt 2>&1; echo "RC \$?" >> \$name.txt
   params > \$name.params.after
@@ -109,7 +111,7 @@ EOS
 }
 extract() { # host side: one line per run and key into $OUT/results.txt (chunk run key value)
   local c=$1 d=$OUT/files/$1 r k
-  for r in probe solid1 solid2 solid3 solid4 bars nv12 xr30 flips-d0 flips-d4 flips-d12; do
+  for r in $RUNS; do
     [ -f $d/$r.txt ] || { echo "$c $r missing 1" >> $OUT/results.txt; continue; }
     awk -v c=$c -v r=$r '
       /^RC / { print c, r, "rc", $2 }

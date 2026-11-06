@@ -143,3 +143,22 @@ frames_torn == frames_bad == fence_errors == 0, wb_jobs_delta == wb_done_delta, 
 - Queued: harness/runner-queue/40-de33-writeback.md (`wb-job.sh wb40`, needs c35+). Next: fresh agent judges
   done/40-de33-writeback.summary.md with HANDOFF checks 0-8. If check 3 fails now with real captures, see "If check 3
   fails" above (mux value / capture window).
+
+### Job 40 (2026-11-06, c35): checks 0-5, 7, 8 PASS; check 6 FAIL = test-client crash, fixed; re-queued as job 41
+- PASS: probe (14 formats incl. XR30/NV12/NV21/YU12), solid1-4 + bars pixel-exact (fence 18.9-33.4 ms), NV12 max_dev 0,
+  XR30 mismatches 0 (10-bit path verified at 8-bit depth), counters jobs==done, failed 0, dmesg clean. Kernel side done
+  for static captures; 300d79df7 + 30706dcc8 confirmed.
+- Check 6 FAIL: flips-d0/d4/d12 all rc 139 (SIGSEGV), output only "RC 139", 1 wb job done / 0 failed per run.
+  Cause (TEST bug, kms-wb): commit() called drmModeAtomicCommit(..., NULL) as the page-flip event user data while the
+  flips path set DRM_MODE_PAGE_FLIP_EVENT; drmHandleEvent() hands that user data to flip_handler(), which wrote
+  ev->done through NULL on the first flip event (after the first writeback commit: hence exactly 1 job done). The
+  RESULT lines were lost because stdout to a file is fully buffered. Not a kernel problem: the commit, the flip event
+  and the out fence all arrived (the crash is in the event handler, before any fence handling).
+- Fix: commit() takes the event user data (void *event, &fe from cmd_flips; fe.done reset before the commit),
+  flip_handler ignores NULL data, stdout line-buffered. Client sha256 a30d348af2a0... (job 41 file has it).
+- wb-job.sh: per-job RUNS list; `wb41` = probe, solid1, flips-d0/d4/d12 (CT 400 s); extract loops over RUNS
+  (host-tested on a synthetic flips output; board script rendered + bash -n). HANDOFF: job 41 notes at the top
+  (checks 0,1,2,3 solid1,6,7,8; 4/5 not run).
+- Queued: harness/runner-queue/41-de33-writeback.md (`wb-job.sh wb41`, kernel c35 unchanged, logs/runner-wb41).
+  Next: fresh agent judges done/41-*.summary.md; a real TORN/BAD frame or seq gaps there is a kernel latch/timing issue
+  (see job 19 display tearing and 30706dcc8), not the client.

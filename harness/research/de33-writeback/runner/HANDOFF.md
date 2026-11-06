@@ -1,6 +1,14 @@
-# DE33 writeback connector runner job wb40 (queue job 40): handoff
+# DE33 writeback connector runner jobs wb41 (queue job 41) and wb40 (queue job 40): handoff
 
-Command: `bash harness/research/de33-writeback/runner/wb-job.sh wb40`
+Command (job 41): `bash harness/research/de33-writeback/runner/wb-job.sh wb41` (results in logs/runner-wb41/)
+
+Job 41 = the flips part of job 40 plus a solid sanity: runs probe, solid1, flips-d0, flips-d4, flips-d12 only (about 5 min).
+Job 40 (c35): checks 0-5, 7, 8 PASS; check 6 FAIL because the test client crashed (rc 139, SIGSEGV) on the first flip
+event: it committed the flips with NULL as the page-flip event's user data and its event handler wrote through it. Fixed in
+harness/kms-wb (the flip commit passes its event struct; stdout is line-buffered so a crash keeps the RESULT lines).
+For wb41: checks 0, 1, 2, 6, 7, 8 apply as written; check 3 applies to solid1 only (no solid2-4/bars runs); checks 4 and 5
+are NOT RUN (no nv12/xr30 runs; job 40 passed them), report them as "not run (job 40 PASS)".
+A `missing 1` line for a run of this job means that run's output file was not copied: FAIL for that run's check.
 
 Why job 40 (after job 30 on c27, FAIL): every flip+writeback commit returned -EINVAL and the XR30 capture buffer could
 not be created. Causes: (1) test bug: kms-wb attached the writeback connector to the CRTC in the first writeback commit;
@@ -31,7 +39,7 @@ dmesg, files/blocked-connector/drm-classes.txt the DRM class list). The restore 
 harness/research/vdec-perf/restore-kernel.sh (Image, DTB, modules). The client
 is shipped to /root/wb/kms-wb if the board copy differs. The board must start on the stock image kernel.
 
-DEV or TEST: DEV-length, about 7 min: install + reboot (~3 min), 11 short runs (~1.5 min), restore (~1 min). Runs: probe;
+DEV or TEST: DEV-length, job 41 about 5 min (5 runs), job 40 about 7 min: install + reboot (~3 min), 11 short runs (~1.5 min), restore (~1 min). Runs: probe;
 solid 3c7ab4, c81e5a, 000000, ffffff (3 XR24 captures each); bars (3 XR24 captures); nv12 (NV12 capture, tolerance 3);
 xr30 (XRGB2101010 capture, tolerance 4, informational); flips-d0, flips-d4, flips-d12 (300 page flips between 40c0e0 and
 e04020 with one capture per flip, the commit issued right after the flip event, 4 ms after it (inside the active video, ~line

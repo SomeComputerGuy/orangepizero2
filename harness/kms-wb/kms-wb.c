@@ -550,8 +550,14 @@ static int fence_wait(int fd, int timeout_ms, int *status)
 	return 0;
 }
 
+/*
+ * @event: the page-flip event's user data (non-NULL = nonblocking commit with
+ * DRM_MODE_PAGE_FLIP_EVENT); drmHandleEvent() hands it to flip_handler(),
+ * so it must point at the caller's struct flip_ev (job 40: NULL here made
+ * flip_handler() write through a NULL pointer on the first flip event).
+ */
 static int commit(struct kms *k, uint32_t src_fb, struct dumb *cap, int32_t *fence_fd,
-		  bool event)
+		  void *event)
 {
 	drmModeAtomicReq *req = drmModeAtomicAlloc();
 	uint32_t flags = 0;
@@ -592,7 +598,7 @@ static int commit(struct kms *k, uint32_t src_fb, struct dumb *cap, int32_t *fen
 	}
 	if (event)
 		flags |= DRM_MODE_PAGE_FLIP_EVENT | DRM_MODE_ATOMIC_NONBLOCK;
-	ret = drmModeAtomicCommit(k->fd, req, flags, NULL);
+	ret = drmModeAtomicCommit(k->fd, req, flags, event);
 	if (ret)
 		commit_errno = errno;
 	if (ret)
@@ -617,7 +623,7 @@ static int capture_once(struct kms *k, uint32_t src_fb, struct dumb *cap, double
 
 	poison(cap);
 	t0 = now_s();
-	if (commit(k, src_fb, cap, &fence, false))
+	if (commit(k, src_fb, cap, &fence, NULL))
 		return -1000;
 	if (fence < 0) {
 		fprintf(stderr, "no out fence returned\n");
@@ -674,7 +680,7 @@ static int cmd_static(bool bars, uint32_t solid)
 	fill_xr24(&src, bars, solid);
 
 	/* show it first, without a job: the first capture is of a settled frame */
-	if (commit(&K, src.fb_id, NULL, NULL, false)) {
+	if (commit(&K, src.fb_id, NULL, NULL, NULL)) {
 		printf("RESULT modeset_commit_error %d\n", commit_errno);
 		return 2;
 	}
@@ -761,6 +767,8 @@ static void flip_handler(int fd, unsigned int seq, unsigned int sec, unsigned in
 {
 	struct flip_ev *ev = data;
 
+	if (!ev)	/* an event of a commit without user data: not ours */
+		return;
 	ev->done = true;
 	ev->seq = seq;
 	ev->t = sec + usec * 1e-6;
@@ -782,7 +790,7 @@ static int cmd_flips(int n)
 	int w, h, frames = 0, pure[2] = { 0 }, torn = 0, bad = 0, ferr = 0, gaps = 0;
 	int first_torn = -1;
 	drmEventContext ev = { .version = 3, .page_flip_handler2 = flip_handler };
-	struct flip_ev fe;
+	struct flip_ev fe = { 0 };
 	uint32_t last_seq = 0;
 	double t_first = 0, t_last = 0, t_commit = 0, phase_sum = 0, phase_max = 0;
 	int phase_n = 0, phase_outside = 0;
@@ -813,7 +821,7 @@ static int cmd_flips(int n)
 		fence[i] = -1;
 	}
 
-	if (commit(&K, src[0].fb_id, NULL, NULL, false)) {
+	if (commit(&K, src[0].fb_id, NULL, NULL, NULL)) {
 		printf("RESULT modeset_commit_error %d\n", commit_errno);
 		return 2;
 	}
@@ -827,13 +835,13 @@ static int cmd_flips(int n)
 				usleep(o.commit_delay_us);
 			poison(&cap[s]);
 			t_commit = now_s();
-			if (commit(&K, src[i & 1].fb_id, &cap[s], &fence[s], true)) {
+			fe.done = false;
+			if (commit(&K, src[i & 1].fb_id, &cap[s], &fence[s], &fe)) {
 				printf("RESULT flip %d commit_error %d\n", i, commit_errno);
 				ret = 2;
 				break;
 			}
 			/* flip event of this commit */
-			fe.done = false;
 			while (!fe.done && !quit) {
 				struct pollfd pfd = { .fd = K.fd, .events = POLLIN };
 
@@ -978,6 +986,8 @@ int main(int argc, char **argv)
 	}
 	if (optind >= argc)
 		usage();
+	/* stdout is a file on the board: line-buffer it so a crash keeps the RESULT lines */
+	setvbuf(stdout, NULL, _IOLBF, 0);
 	signal(SIGINT, on_signal);
 	signal(SIGTERM, on_signal);
 

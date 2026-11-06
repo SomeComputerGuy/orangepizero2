@@ -1,14 +1,63 @@
 # kbase GLES 3.2 reference traces: state (status.md work list item 8)
 
-Updated 2026-11-06 22:00 (fix agent after runner job 64). Background, tools, port notes: ../impl-gles32-arm-traces.md.
+Background, tools, port notes: ../impl-gles32-arm-traces.md.
 
 ## Current state
-- Runner job **65-kbase-traces3** queued (harness/runner-queue/65-kbase-traces3.md; package runner/kbase-traces.sh v3 +
-  runner/HANDOFF.md, checks 1-15). Kernel c48 (b82264f81, unchanged); bifrost_kbase.ko **v3** rebuilt for c48
-  (md5 16dd6b84d7c75dd958fcd2fc2adb77da, kernel-check/kbase-trial/build-c48-v3.log, tag refreshed). Results will land in
-  harness/research/arm-blob/traces/runner-j65/ (git-ignored). Job 64 results stay in .../runner-j64/.
-- Rendering (OOM + DATA_INVALID) is NOT fixed yet: job 64's trace held no GPU memory, so there was nothing to decode.
-  Job 65 gathers exactly the missing data (see "Job 65 design"). Unload reset: fix under test in job 65.
+Updated 2026-11-06 22:50 (fix agent after runner job 65).
+- **Rendering root cause found (job 65 data): the blob writes AFBC colour render targets, and this G31 has no AFBC.**
+  Runner job **66-kbase-traces4** queued (harness/runner-queue/66-kbase-traces4.md; package runner/kbase-traces.sh v4 +
+  runner/HANDOFF.md, checks 1-19). It tests the fix (blob config: AFBC off) and then takes the traces under it.
+  Kernel c48 (b82264f81, unchanged); bifrost_kbase.ko **v4** for c48 (md5 aa7e170386c6672fe001d95daff25f30,
+  kernel-check/kbase-trial/build-c48-v4.log, tag refreshed). Results: harness/research/arm-blob/traces/runner-j66/.
+- Unload/bind reset: FIXED (job 65 checks 14/15 PASS, U-Boot SPL count 2 = no reset).
+
+## Job 65 (c48, 2026-11-06 21:33) findings
+1. Memory captured (46 submits decode). The POST lines' `exception_status 0x1 / fault_ptr 0x872aec5d` are a red
+   herring: those are the headers of jobs that completed (0x1 = DONE); 0x872aec5d is the same stale word in every DONE
+   header (the GPU leaves the fault-pointer field undefined on success). The faulting job is the SECOND fragment job of
+   each chain (the one at JS_HEAD in the `sunxi diag` line, e.g. 0x1afe39240, reached via `Next` of the atom's first
+   fragment job). Its header after the fault: exception_status **0x20258** (DATA_INVALID 0x58), fault pointer
+   **0x1afe38680** = FBD 0x1afe385c0 + 0xc0 = the **colour render target descriptor** (v7 FBD: 0x80 parameters + 0x40
+   ZS/CRC extension, then the RTs).
+2. That RT is `AFBC RGB Color Render Target 0` (Writeback Block Format AFBC, header 0x1afe62000, body 0x1afe62100).
+   Over all submit-*-post.txt files, fragment jobs by status and RT format: **18x 0x20258 AFBC, 18x 0x1 (DONE) Linear,
+   2x 0x0 (not run) AFBC**: every AFBC RT faults, every linear RT completes. The first fragment job of each chain (1x2
+   pre-frame with a linear, write-less RT) is DONE. Tiler context/heap are fine: heap descriptor at 0x1afe38540 holds
+   base 0x1b0000000 .. top 0x1b5000000, which is exactly the JIT region the kernel wrote (JITADDR id 1/2 = 0x1b0000000),
+   so the JIT/tiler hypothesis is ruled out.
+3. Why: this H616 G31 reports AFBC_FEATURES 0x10001 (job 51: AFBC not implemented; Mesa's pan_query_afbc() is false and
+   panfrost never uses AFBC here). kbase (this g25p0) exports no AFBC property to user space (KBASE_GPUPROP_* has no AFBC
+   entry; GPU_CONTROL__AFBC_FEATURES is only in the regmap), and the blob decides AFBC from the product ID (G31 =
+   AFBC-capable in Arm's tables). So the GPU rejects the AFBC RT with DATA_INVALID and the blob reports
+   GL_OUT_OF_MEMORY. No kernel/glue fix can change the blob's choice; the fix is the blob's own config.
+4. Blob config mechanism (host analysis of libmali g24p0: strings, objdump, and gles32probe under qemu-aarch64 with a
+   getenv/fopen hook, /tmp only): options are NOT read from the environment; the blob reads key=value files named by
+   `MALI_PLATFORM_CONFIG` (default ./mali_platform.config) and `MALI_DEBUG_CONFIG` (default ./mali_debug.config) into
+   one table ("Successfully parsed N environment variable(s) from <file>" on stderr), stripping an optional `MALI_`
+   key prefix (strncmp(name, "MALI_", 5) in both the parser and the lookup). Relevant bool options (type 1, default
+   0): GLES_DISABLE_TEXTURE_AFBC, GLES_DISABLE_SURFACE_AFBC, GLES_DISABLE_CRC, GLES_FORCE_LINEAR_LAYOUT_UNCOMPRESSED_TEXTURE.
+   The probe renders to a texture FBO, so TEXTURE_AFBC is the one that matters. Not yet board-verified that a release
+   blob honours them (the option table carries a per-option flag that is 0 for these and 1 for e.g.
+   CMAR_OPTIMIZE_FOR_LATENCY; meaning unknown, possibly "platform-config allowed"): job 66 tries them via both files.
+   For the traces this matches panfrost on this GPU (no AFBC either), so the GS/tess reference is not distorted.
+5. Load/unload noise (fixed in kbase.ko v4, port-7.3-v4.py, run by port-7.3.py at its end): `-ENXIO IRQ JOB/MMU/GPU not
+   found` = the upper-case name lookup with platform_get_irq_byname() logging before the lower-case fallback (DT uses
+   job/mmu/gpu) -> _optional variant; `__alloc_workqueue` WARNING = mali_mmu%u (also Mali reset, kbase_event,
+   job_fault_resume) with neither WQ_PERCPU nor WQ_UNBOUND -> WQ_PERCPU (the old default); unload `_regulator_disable`
+   "unbalanced disables" + WARN_ON at mali_kbase_runtime_pm.c:75 = the glue enabled the supply only if
+   regulator_is_enabled() was false (it is already on: shared/boot-on), but disabled it whenever it was on -> per-consumer
+   bitmask of what kbase itself enabled (regulators and clocks). Remaining, harmless: `usage count unexpectedly non zero
+   1` (panfrost_remove's leaked runtime-PM get) and the WQ_NAME_LEN truncation notice.
+
+## Job 66 design (what it decides)
+- New step `afbc` (after info): basic case under /root/armblob/cfg/v0..v3.config (v0 empty control; v1 TEXTURE+SURFACE
+  AFBC off; v2 + CRC off; v3 + forced linear textures), each with MALI_PLATFORM_CONFIG and MALI_DEBUG_CONFIG set;
+  `VARIANT vN rc .. faults .. cfg [..] basic: lit pixels ..` lines + BLOB stderr lines (shows the "parsed" message).
+  SELECTED = first of v1..v3 that renders (v3 if none); probe and trace run under it (CONFIG line in their step files).
+- Checks 16-19: no IRQ/WARNING lines at load, a variant renders, no AFBC RT in the decoded trace, no WARNING at unload.
+- If no variant renders: the VARIANT/BLOB lines and the trace's `INFO rt:` line tell whether the blob ignored the
+  config (still AFBC RTs) or something else faults (linear RTs faulting); next step then = find the gate on these
+  options in the blob (the per-option flag, MALI_CDBG_PERMISSIONS) or an AFBC-capability input it does read.
 
 ## Job 64 (c48, 2026-11-06 21:07) findings
 1. Load/probe/trace all ran (TRACE-RC 0 now); every case again 0/4096 lit pixels, glError 0x505 (gs_layer1 0x0: the
@@ -69,6 +118,8 @@ Updated 2026-11-06 22:00 (fix agent after runner job 64). Background, tools, por
 - Module: `bash kernel-check/kbase-trial/port/build.sh` (under kernel-check/.locks/kernel-build.lock), then
   `echo "c48 <Image md5>" > .../bifrost_kbase.ko.tag`. Port script changes go to kbase-port/port-7.3.py (tracked) and
   kernel-check/kbase-trial/port/; apply only the new block to the already-ported src (the old reps are not idempotent).
+  v4+: new blocks go in their own file (kbase-port/port-7.3-v4.py, run alone: `python3 -I port-7.3-v4.py
+  kernel-check/kbase-trial/src/drivers/gpu/arm/bifrost`); port-7.3.py exec()s it at its end for a fresh tree.
 - kbtrace.so: `aarch64-linux-gnu-gcc -O2 -Wall -shared -fPIC -o kbtrace.so kbtrace.c -ldl -lpthread`.
 - kbdecode (host): B=kernel-check/kbase-trial/mesa-decode/build G=$B/src/panfrost/genxml;
   `gcc -O2 -Wall -I. -o kbdecode kbdecode.c -Wl,--start-group $G/libpanfrost_decode.a $G/libpandecode-arch-v*.a
@@ -120,8 +171,6 @@ Updated 2026-11-06 22:00 (fix agent after runner job 64). Background, tools, por
   AGENT-RULES.md / RUNNER.md: "Host key verification failed" = BLOCKED, no known_hosts edits by runners.
 
 ## Next step
-Wait for job 65's summary. Then (fresh agent): if check 13 PASS, start from files/trace/decoded/index.txt POST/JITADDR
-lines and submit-0000-post.txt (clear-only frame) in runner-j65; fix the cause (kernel JIT write/sync, or whatever field
-fault_ptr points at) in port-7.3.py and queue the next run. If 14/15 PASS, the unload is fixed (mark it in this file and
-status.md item 8); if not, the PM/GENPD/CLK lines + serial.txt show where. Item 8 step 2 (GS/tess observations) only
-once the blob renders.
+Wait for job 66's summary. Then (fresh agent): if check 17 PASS and probe/trace render, item 8 step 2 (GS/tess
+observations from files/trace/decoded under the selected config) and record the selected variant here; if checks 16/19
+PASS, the load/unload noise is gone. If no variant renders, see "Job 66 design" last point.

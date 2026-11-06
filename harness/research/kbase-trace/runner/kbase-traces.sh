@@ -14,6 +14,14 @@
 # rate-limited `sunxi diag: slot N status 0x.. head .. tail ..` line per job fault; (c) `unload` (rmmod + runtime-PM /
 # genpd / clock state before and after) and `bind` (panfrost rebind) are separate steps and are now real checks.
 # Results: arm-blob/traces/runner-j65/.
+# v4 (runner job 66, 2026-11-06), after job 65: cause of the fragment DATA_INVALID_FAULT found in job 65's memory: every
+# failing fragment job (18/18) has an AFBC colour render target (fault_ptr = FBD + 0xc0 = the RT descriptor), every
+# fragment job with a linear RT (18/18) completes. This G31 has no AFBC (AFBC_FEATURES 0x10001, job 51), kbase exports no
+# AFBC property and the blob picks AFBC from the product ID. New step `afbc`: the basic case under four blob config
+# files (MALI_PLATFORM_CONFIG / MALI_DEBUG_CONFIG; v0 none, v1 GLES_DISABLE_TEXTURE_AFBC + GLES_DISABLE_SURFACE_AFBC,
+# v2 + GLES_DISABLE_CRC, v3 + GLES_FORCE_LINEAR_LAYOUT_UNCOMPRESSED_TEXTURE); probe and trace then run under the first
+# variant (v1..v3) that renders (v3 if none). bifrost_kbase.ko v4: no -ENXIO IRQ lines, no workqueue WARNING at load,
+# no unbalanced regulator disable at unload (port-7.3-v4.py). Results: arm-blob/traces/runner-j66/.
 # Self-contained: board lock (fresh owner name per acquire), install the newest cumulative kernel with the one-shot
 # fallback armed (harness/research/vdec-perf/install-kernel.sh, like the vdec/OpenCL jobs; it must carry the BTF dedup
 # fix bd60a159b), stage bifrost_kbase.ko + the blob + the tools in /root/armblob (runtime files only: nothing is
@@ -34,12 +42,18 @@ SERIAL=$H/harness/serial.log
 KO=$H/kernel-check/kbase-trial/src/drivers/gpu/arm/bifrost/bifrost_kbase.ko
 BLOB=$A/dl/libmali-bifrost-g31-g24p0-gbm.so
 BTFFIX=bd60a159b                          # iommu-sun55i: drop the stale iommu_dma_cookie copy (kbase BTF validates only with it)
-OUT=${KBT_OUT:-$A/traces/runner-j65}      # results (arm-blob/ is git-ignored: blob-derived traces never get committed)
+OUT=${KBT_OUT:-$A/traces/runner-j66}      # results (arm-blob/ is git-ignored: blob-derived traces never get committed)
 R=/root/armblob                           # board work dir
 ENV="LD_LIBRARY_PATH=$R/lib"
 TESTS="basic gs_pass gs_amp gs_inv tess_tri tess_gs tess_quad gs_xfb gs_layer"
 RGBA="basic gs_pass gs_amp gs_inv tess_tri tess_gs tess_quad gs_xfb gs_layer0 gs_layer1"
-STEPS="load info probe trace unload bind"
+STEPS="load info afbc probe trace unload bind"
+VARIANTS="v0 v1 v2 v3"
+# blob config (key=value per line; the blob strips an optional MALI_ prefix): v0 = control, v1..v3 = AFBC off (+CRC off, +linear)
+vcfg() { case $1 in v0) ;; v1) printf "GLES_DISABLE_TEXTURE_AFBC=1\nGLES_DISABLE_SURFACE_AFBC=1\n";;
+  v2) vcfg v1; echo GLES_DISABLE_CRC=1;; v3) vcfg v2; echo GLES_FORCE_LINEAR_LAYOUT_UNCOMPRESSED_TEXTURE=1;; esac; }
+# probe/trace: blob config of the variant the afbc step selected ($R/out/afbc/SELECTED)
+CFGENV="CFG=\$(cat $R/out/afbc/SELECTED 2>/dev/null || echo v3); echo CONFIG \$CFG; cat $R/cfg/\$CFG.config; export MALI_PLATFORM_CONFIG=$R/cfg/\$CFG.config MALI_DEBUG_CONFIG=$R/cfg/\$CFG.config"
 GPUDEV=/sys/bus/platform/devices/1800000.gpu
 # board-side snippet: runtime PM, genpd and clock state of the GPU (unload/bind steps)
 PMSTATE="echo PM: status=\$(cat $GPUDEV/power/runtime_status 2>/dev/null) usage=\$(cat $GPUDEV/power/runtime_usage 2>/dev/null) driver=\$(basename \$(readlink $GPUDEV/driver) 2>/dev/null)
@@ -74,7 +88,17 @@ test -e /sys/kernel/btf/bifrost_kbase && echo MODULE-BTF-PRESENT || echo MODULE-
 ls /sys/class/misc/mali0/device/ 2>/dev/null | head -40" ;;
     info)  body="cat /sys/class/misc/mali0/device/gpuinfo 2>/dev/null; cat /sys/class/misc/mali0/device/power_policy 2>/dev/null
 cat /sys/kernel/debug/clk/gpu0/clk_rate 2>/dev/null; cat /sys/kernel/debug/regulator/regulator_summary 2>/dev/null | grep -i -A2 dcdc" ;;
+    afbc)  body="rm -rf $R/out/afbc; mkdir -p $R/out/afbc; sel=''
+for v in $VARIANTS; do mkdir -p $R/out/afbc/\$v; cd $R/out/afbc/\$v; n=\$(dmesg | wc -l)
+  MALI_PLATFORM_CONFIG=$R/cfg/\$v.config MALI_DEBUG_CONFIG=$R/cfg/\$v.config $ENV timeout 60 $R/gles32probe $R/out/afbc/\$v basic > run.txt 2>&1; rc=\$?
+  b=\$(grep -m1 '^basic: lit pixels' info.txt 2>/dev/null)
+  echo \"VARIANT \$v rc \$rc faults \$(dmesg | tail -n +\$((n+1)) | grep -c DATA_INVALID) cfg [\$(tr '\\n' ' ' < $R/cfg/\$v.config)] \${b:-no basic line}\"
+  grep -m3 -i -E 'config|error|warn' run.txt | sed 's/^/BLOB: /'
+  [ -z \"\$sel\" ] && [ \$v != v0 ] && echo \"\$b\" | grep -q 'lit pixels [1-9]' && sel=\$v
+done
+echo \${sel:-v3} > $R/out/afbc/SELECTED; echo SELECTED \${sel:-v3} \$([ -n \"\$sel\" ] && echo renders || echo none-rendered)" ;;
     probe) body="rm -rf $R/out/probe; mkdir -p $R/out/probe; cd $R/out/probe
+$CFGENV
 n=\$(dmesg | wc -l)
 # job 16: every case rendered nothing (glError 0x505 GL_OUT_OF_MEMORY, fragment-slot DATA_INVALID_FAULT): sample the
 # per-context kbase debugfs (JIT counters, atoms, allocations, the blob's mem_profile) while the probe runs
@@ -97,6 +121,7 @@ echo AFTER-BIND; $PMSTATE
 dmesg | tail -n +\$((n+1)) | sed 's/^/DMESG: /'
 echo DRI: \$(ls /dev/dri | tr '\\n' ' ')" ;;
     trace) body="rm -rf $R/out/trace; mkdir -p $R/out/trace; cd $R/out/trace
+$CFGENV
 n=\$(dmesg | wc -l); $ENV KBTRACE_OUT=$R/out/trace/kbtrace.bin LD_PRELOAD=$R/kbtrace.so timeout 300 $R/gles32probe $R/out/trace; echo TRACE-RC \$?
 ls -la; tail -25 info.txt
 dmesg | tail -n +\$((n+1)) | sed 's/^/DMESG: /'" ;;
@@ -132,7 +157,16 @@ checks() { # mechanical checks from the results (HANDOFF.md); prints PASS/FAIL l
   grep -q '^MALI0-PRESENT' $f 2>/dev/null && p "/dev/mali0 present" || fl "/dev/mali0 missing"
   grep -q '^MODULE-BTF-PRESENT' $f 2>/dev/null && p "/sys/kernel/btf/bifrost_kbase present" || fl "/sys/kernel/btf/bifrost_kbase missing"
   n=$(grep -c -E 'Kernel DDK version' $OUT/dmesg-load.txt 2>/dev/null); [ "${n:-0}" -ge 1 ] && p "kbase probed: $(grep -E 'Kernel DDK version|sunxi glue' $OUT/dmesg-load.txt | head -2 | tr '\n' ' ')" || fl "no 'Kernel DDK version' in dmesg-load.txt"
+  # v4: load noise fixed in kbase.ko v4 (port-7.3-v4.py)
+  n=$(grep -c -E 'IRQ (JOB|MMU|GPU) not found' $OUT/dmesg-load.txt 2>/dev/null); [ -f $OUT/dmesg-load.txt ] && [ "${n:-0}" = 0 ] && p "load: no 'IRQ ... not found' lines" || fl "load: 'IRQ ... not found' lines: ${n:-no dmesg-load.txt}"
+  n=$(grep -c -E 'WARNING:|Call trace' $OUT/dmesg-load.txt 2>/dev/null); [ -f $OUT/dmesg-load.txt ] && [ "${n:-0}" = 0 ] && p "load: no WARNING/Call trace in dmesg-load.txt" || { fl "load: WARNING/Call trace lines in dmesg-load.txt: ${n:-no file}"; grep -E 'WARNING:|workqueue' $OUT/dmesg-load.txt 2>/dev/null | head -3; }
+  # v4: AFBC variants (the fix under test): v1..v3 disable AFBC in the blob config; v0 is the control
+  f=$OUT/step-afbc.txt
+  grep -q '^STEP-DONE' $f 2>/dev/null && p "step afbc finished" || fl "step afbc did not finish (no STEP-DONE)"
+  grep '^VARIANT ' $f 2>/dev/null | sed 's/^/INFO afbc: /'; grep '^BLOB: ' $f 2>/dev/null | head -8 | sed 's/^/INFO afbc /'
+  grep -q '^SELECTED v[1-3] renders' $f 2>/dev/null && p "afbc: $(grep '^SELECTED' $f)" || fl "afbc: no variant rendered ($(grep '^SELECTED' $f 2>/dev/null || echo no SELECTED line))"
   for s in probe trace; do f=$OUT/step-$s.txt
+    grep '^CONFIG ' $f 2>/dev/null | sed "s/^/INFO $s blob /"
     grep -q '^STEP-DONE' $f 2>/dev/null && p "step $s finished" || fl "step $s did not finish (no STEP-DONE)"
     grep -q "^${s^^}-RC 0" $f 2>/dev/null && p "gles32probe ($s) rc 0" || fl "gles32probe ($s) rc: $(grep "^${s^^}-RC" $f 2>/dev/null || echo missing)"
     [ -s $OUT/files/$s/info.txt ] && grep -q '^done' $OUT/files/$s/info.txt && p "files/$s/info.txt complete" || fl "files/$s/info.txt missing or incomplete"
@@ -142,6 +176,7 @@ checks() { # mechanical checks from the results (HANDOFF.md); prints PASS/FAIL l
   done
   [ -s $OUT/files/trace/kbtrace.bin ] && p "files/trace/kbtrace.bin $(stat -c %s $OUT/files/trace/kbtrace.bin) bytes" || fl "files/trace/kbtrace.bin missing or empty"
   [ -s $OUT/files/trace/decoded/index.txt ] && p "decoded: $(ls $OUT/files/trace/decoded | grep -c '^submit-') submits, index.txt $(wc -l < $OUT/files/trace/decoded/index.txt) lines" || fl "files/trace/decoded/index.txt missing (kbdecode)"
+  grep -E '^[a-z_0-9]+: lit pixels' $OUT/files/probe/info.txt 2>/dev/null | sed 's/^/INFO probe case: /'
   for s in probe trace; do n=$(grep -m1 '^basic: lit pixels' $OUT/files/$s/info.txt 2>/dev/null)
     echo "$n" | grep -q 'lit pixels [1-9]' && p "$s: basic case rendered ($n)" || fl "$s: basic case did not render (${n:-no basic line})"; done
   # runner.log lines carry a date prefix, so match ' restored: ' (job 16's '^restored: ' could never match)
@@ -150,6 +185,11 @@ checks() { # mechanical checks from the results (HANDOFF.md); prints PASS/FAIL l
   # v3: the trace now holds the GPU memory: the fragment job headers decode (job 64: every header read as zero)
   n=$(grep -l 'Type: Fragment' $OUT/files/trace/decoded/submit-*.txt 2>/dev/null | wc -l)
   [ "$n" -ge 1 ] && p "trace memory captured: $n submit files decode a fragment job" || fl "trace memory not captured: no 'Type: Fragment' in files/trace/decoded/submit-*.txt"
+  # v4: render-target block format of every fragment job vs its status after the run (job 65: AFBC 18/18 faulted)
+  n=$(for x in $OUT/files/trace/decoded/submit-*.txt; do awk '/^Job Header/{es=""} /^  Exception Status/{es=$3} /^  Type: Fragment/{fr=1} /Writeback Block Format/{if(fr){print es, $4; fr=0}}' $x; done 2>/dev/null | sort | uniq -c | tr '\n' ';')
+  echo "INFO rt: fragment RT format by job status (count status format): ${n:-none}"
+  n=$(cat $OUT/files/trace/decoded/submit-*.txt 2>/dev/null | grep -c 'Writeback Block Format: AFBC')
+  [ -s $OUT/files/trace/decoded/index.txt ] && [ "${n:-0}" = 0 ] && p "trace: no AFBC render target in the decoded submits" || fl "trace: AFBC render targets in the decoded submits: ${n:-no decode}"
   f=$OUT/files/trace/decoded/index.txt
   if [ -f $f ]; then grep -m8 -E ' POST atom ' $f | sed 's/^ */INFO post: /'; grep -m4 -E 'JIT_ALLOC ' $f | sed 's/^ */INFO jit: /'
     grep -m6 -E ' JITADDR ' $f | sed 's/^ */INFO jitaddr: /'; fi
@@ -160,6 +200,7 @@ checks() { # mechanical checks from the results (HANDOFF.md); prints PASS/FAIL l
     grep -q '^RMMOD-RC 0' $f && grep -q '^STEP-DONE' $f && p "unload: rmmod rc 0, step finished" || fl "unload: $(grep -E '^RMMOD-RC|^STALLED' $f | tr '\n' ' ')$(grep -q '^STEP-DONE' $f || echo '(no STEP-DONE: board hung or reset)')"
     grep -q 'sunxi glue: reset asserted' $OUT/dmesg-unload.txt 2>/dev/null && p "unload: glue term ran ($(grep -o 'sunxi glue: reset asserted.*' $OUT/dmesg-unload.txt | head -1))" || fl "unload: no 'sunxi glue: reset asserted' line in dmesg-unload.txt (old kbase.ko?)"
     grep -E '^(PM|GENPD|CLK):|^(BEFORE|AFTER)-' $f | sed 's/^/INFO unload /'
+    n=$(grep -c -E 'WARNING:|unbalanced' $OUT/dmesg-unload.txt 2>/dev/null); [ "${n:-0}" = 0 ] && p "unload: no WARNING/unbalanced lines (kbase.ko v4)" || fl "unload: WARNING/unbalanced lines in dmesg-unload.txt: $n"
     grep -E 'Unhandled|Oops|BUG:|WARNING:|Call trace|Internal error|SError|hung|mali|panfrost' $OUT/dmesg-unload.txt 2>/dev/null | head -20 | sed 's/^/INFO unload /'
   else fl "unload: step not run"; fi
   f=$OUT/step-bind.txt
@@ -228,6 +269,7 @@ stage() { # /root/armblob: module + blob via ship.sh (HTTP pieces, sha256-checke
   [ "$(S1 -n "md5sum < $R/lib/libmali.so.1 2>/dev/null | cut -c1-32")" = "$blobmd5" ] && log "stage: libmali.so.1 already on the board" || \
     { $V/ship.sh $BLOB $R/lib/libmali.so.1 2>&1 | tail -1 | tee -a $OUT/runner.log; [ "$(S1 -n "md5sum < $R/lib/libmali.so.1 | cut -c1-32")" = "$blobmd5" ] || blocked "libmali.so.1 md5 mismatch after ship"; }
   scp -q "${K[@]}" $T/kbtrace.so $T/gles32probe root@10.56.0.107:$R/ || blocked "cannot copy kbtrace.so / gles32probe"
+  for v in $VARIANTS; do vcfg $v | T1=30 S1 "mkdir -p $R/cfg; cat > $R/cfg/$v.config" || blocked "cannot write $R/cfg/$v.config"; done
   S1 -n "cd $R/lib; for l in libEGL.so.1 libGLESv2.so.2 libGLESv1_CM.so.1 libgbm.so.1 libOpenCL.so.1; do ln -sf libmali.so.1 \$l; done; chmod +x $R/gles32probe; modinfo -F vermagic $R/bifrost_kbase.ko" | sed 's/^/stage: board vermagic /' | tee -a $OUT/runner.log; }
 kbase_up() { S1 -n 'test -e /dev/mali0'; }
 SER0=$(stat -c %s $SERIAL 2>/dev/null || echo 0)
@@ -239,6 +281,10 @@ else run_step load 120 60 || blocked "step load did not finish"
   kbase_up || { log "kbase did not come up; dmesg:"; cat $OUT/dmesg-load.txt | tail -20 | tee -a $OUT/runner.log; restore; release; log "job $J end: kbase load failed"; exit 0; }
 fi
 grep -qx info $OUT/state || run_step info 60 30
+if ! grep -qx afbc $OUT/state || [ ! -s $OUT/files/afbc/SELECTED ]; then kbase_up || blocked "/dev/mali0 vanished before step afbc"
+  sed -i '/^afbc$/d' $OUT/state; run_step afbc 330 120
+  mkdir -p $OUT/files/afbc; scp -q -r "${K[@]}" root@10.56.0.107:$R/out/afbc/. $OUT/files/afbc/ 2>/dev/null || log "fetch afbc: scp failed"
+  log "afbc: $(grep '^SELECTED' $OUT/step-afbc.txt)"; fi
 for s in probe trace; do
   grep -qx $s $OUT/state && [ -s $OUT/files/$s/info.txt ] && continue
   kbase_up || blocked "/dev/mali0 vanished before step $s"

@@ -109,3 +109,5 @@ rep(J, '\t\t\t\tcompletion_code =\n\t\t\t\t\tkbase_reg_read32(kbdev, JOB_SLOT_OF
        '\t\t\t\t\t\t\t     i, completion_code,\n'
        '\t\t\t\t\t\t\t     (unsigned long long)kbase_reg_read64(kbdev, JOB_SLOT_OFFSET(i, HEAD)),\n'
        '\t\t\t\t\t\t\t     (unsigned long long)kbase_reg_read64(kbdev, JOB_SLOT_OFFSET(i, TAIL)));\n')
+# --- v4 (after runner job 65): IRQ lookup / workqueue / unbalanced-regulator noise: see port-7.3-v4.py
+exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'port-7.3-v4.py')).read())

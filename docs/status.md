@@ -112,6 +112,9 @@ build-checked 878 patches, 0 failed, 0 warnings, pushed to fork 2026-11-06). Des
    job 16's hang = board reset during rmmod + panfrost rebind. Runner job 64-kbase-traces2 queued (c48).
    NEW: under kbase every blob probe case rendered nothing (GL_OUT_OF_MEMORY, fragment DATA_INVALID_FAULT): analyse
    job 64's trace + kctx debugfs (harness/research/kbase-trace/RESULTS.md).
+   2026-11-06 job 65: unload/rebind reset FIXED; rendering cause = blob writes AFBC render targets on this AFBC-less G31
+   (AFBC_FEATURES 0x10001); fix = blob config GLES_DISABLE_TEXTURE/SURFACE_AFBC; load/unload WARNINGs fixed in kbase v4.
+   Runner job 66-kbase-traces4 queued (c48).
 9. JPEG greyscale decode: fold in the 11-03 probe result.
 10. MPEG-4 ASP 3840x2160 decode acceptance test (datasheet-checklist).
 11. Datasheet W-items W22, W26, W12, W24, W29 (docs/datasheet-checklist.md; harness/research/datasheet-w/RESULTS.md).

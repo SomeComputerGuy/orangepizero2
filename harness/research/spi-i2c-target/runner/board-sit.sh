@@ -1,6 +1,6 @@
 #!/bin/bash
 # board-sit.sh: mechanical checks for datasheet item W33 (SPI target mode in spi-sun6i, I2C target mode in
-# i2c-mv64xxx), runner job 31 (job 20 reworked). Runs on the Zero2 as root. Three modes:
+# i2c-mv64xxx), runner job 43 (jobs 20/31 reworked). Runs on the Zero2 as root. Three modes:
 #   board-sit.sh wiring             on the STOCK kernel, before the overlays: finds out with GPIO whether the
 #                                   loopback jumpers are fitted (drives one end, reads the other; both levels
 #                                   must follow). Prints WIRED_SPI=0|1 and WIRED_I2C=0|1.
@@ -51,32 +51,41 @@ echo "overlays: $(grep -E '^(user_)?overlays=' /boot/armbianEnv.txt | tr '\n' ' 
 
 if [ "$MODE" = checks-i2c ]; then
   WI=$W; info "wired: I2C=$WI"
-  # ---- I2C target (TWI3 = i2c-3 with slave-24c02 at 0x64; TWI2 = i2c-2 as the loopback host) ----
-  if [ -e /dev/i2c-3 ]; then f=$(python3 $D/i2c_funcs.py 3 2>&1)
-    if [ $(( f & 0x20 )) -ne 0 ] 2>/dev/null; then res W33-i2c-target-func PASS "i2c-3 funcs $f has I2C_FUNC_SLAVE"; else res W33-i2c-target-func FAIL "i2c-3 funcs '$f' lacks I2C_FUNC_SLAVE (0x20)"; fi
-  else res W33-i2c-target-func FAIL "no /dev/i2c-3 (i2c3 did not probe with the sit-i2c3-slave overlay)"; evidence 5002c00 i2c@5002c00; fi
-  dev=/sys/bus/i2c/devices/3-1064
+  # ---- I2C target (TWI3 5002c00 with slave-24c02 at 0x64; TWI2 5002800 as the loopback host) ----
+  # Job 31: TWI3 probed but was not /dev/i2c-3 (no i2cN aliases in the Zero2 DT -> dynamic bus numbers). The bus
+  # numbers are now read from sysfs (adapter under the controller's platform device); the aliases (armbian-build
+  # c6ce58c59) must make them 3 and 2, checked as W33-i2c-bus-number.
+  busof() { local a; a=$(ls -d /sys/bus/platform/devices/$1/i2c-* 2>/dev/null | head -1); [ -n "$a" ] && echo ${a##*/i2c-}; }
+  B3=$(busof 5002c00.i2c); B2=$(busof 5002800.i2c)
+  info "adapters: $(for a in /sys/bus/i2c/devices/i2c-*; do [ -e $a/name ] && echo -n "${a##*/}=$(cat $a/name) "; done)"
+  info "5002c00.i2c driver: $(basename "$(readlink /sys/bus/platform/devices/5002c00.i2c/driver 2>/dev/null)" 2>/dev/null) bus: ${B3:-none}; 5002800.i2c bus: ${B2:-none}"
+  if [ "$B3" = 3 ] && [ "$B2" = 2 ]; then res W33-i2c-bus-number PASS "TWI3 5002c00 = i2c-3, TWI2 5002800 = i2c-2 (i2c aliases)"
+  else res W33-i2c-bus-number FAIL "TWI3 5002c00 = i2c-${B3:-none} (want 3), TWI2 5002800 = i2c-${B2:-none} (want 2)"; fi
+  if [ -n "$B3" ] && [ -e /dev/i2c-$B3 ]; then f=$(python3 $D/i2c_funcs.py $B3 2>&1)
+    if [ $(( f & 0x20 )) -ne 0 ] 2>/dev/null; then res W33-i2c-target-func PASS "i2c-$B3 funcs $f has I2C_FUNC_SLAVE"; else res W33-i2c-target-func FAIL "i2c-$B3 funcs '$f' lacks I2C_FUNC_SLAVE (0x20)"; fi
+  else res W33-i2c-target-func FAIL "no adapter under 5002c00.i2c (i2c3 did not probe with the sit-i2c3-slave overlay)"; evidence 5002c00 i2c@5002c00; B3=none; fi
+  dev=/sys/bus/i2c/devices/$B3-1064
   if [ -d $dev ]; then drv=$(basename "$(readlink $dev/driver 2>/dev/null)"); sz=$(stat -c %s $dev/slave-eeprom 2>/dev/null)
-    if [ "$drv" = i2c-slave-eeprom ] && [ "$sz" = 256 ]; then res W33-i2c-slave-eeprom-bind PASS "3-1064 driver $drv, slave-eeprom $sz bytes"
-    else res W33-i2c-slave-eeprom-bind FAIL "3-1064 driver='$drv' slave-eeprom size='$sz' (reg_target failed?)"; fi
+    if [ "$drv" = i2c-slave-eeprom ] && [ "$sz" = 256 ]; then res W33-i2c-slave-eeprom-bind PASS "$B3-1064 driver $drv, slave-eeprom $sz bytes"
+    else res W33-i2c-slave-eeprom-bind FAIL "$B3-1064 driver='$drv' slave-eeprom size='$sz' (reg_target failed?)"; fi
   else res W33-i2c-slave-eeprom-bind FAIL "no $dev"; fi
   # the same controller still works as a host with the target registered (scan of an otherwise empty bus returns)
-  t0=$(date +%s); out=$(timeout 60 i2cdetect -y -r 3 2>&1); rc=$?; dt=$(( $(date +%s) - t0 ))
+  t0=$(date +%s); out=$(timeout 60 i2cdetect -y -r $B3 2>&1); rc=$?; dt=$(( $(date +%s) - t0 ))
   echo "$out" > i2cdetect-3.txt
-  if [ $rc = 0 ]; then res W33-i2c-host-with-target PASS "i2cdetect -y -r 3 rc 0 in ${dt}s"; else res W33-i2c-host-with-target FAIL "i2cdetect -y -r 3 rc $rc in ${dt}s: $(echo "$out" | tail -1)"; fi
-  info "i2cdetect 3 found: $(echo "$out" | tail -n +2 | tr -s ' ' '\n' | grep -E '^[0-9a-f]{2}$' | tr '\n' ' ')"
+  if [ $rc = 0 ]; then res W33-i2c-host-with-target PASS "i2cdetect -y -r $B3 rc 0 in ${dt}s"; else res W33-i2c-host-with-target FAIL "i2cdetect -y -r $B3 rc $rc in ${dt}s: $(echo "$out" | tail -1)"; fi
+  info "i2cdetect $B3 found: $(echo "$out" | tail -n +2 | tr -s ' ' '\n' | grep -E '^[0-9a-f]{2}$' | tr '\n' ' ')"
   if [ "$WI" = 1 ]; then
-    if [ -e /dev/i2c-2 ]; then
-      o=$(timeout 30 python3 $D/i2c_loop.py 2 0x64 16 2>&1); rc=$?
-      [ $rc = 0 ] && res W33-i2c-loopback-16 PASS "i2c-2 -> 0x64: $o" || res W33-i2c-loopback-16 FAIL "rc $rc: $o"
-      o=$(timeout 30 python3 $D/i2c_loop.py 2 0x64 200 2>&1); rc=$?
+    if [ -n "$B2" ] && [ -e /dev/i2c-$B2 ]; then
+      o=$(timeout 30 python3 $D/i2c_loop.py $B2 0x64 16 2>&1); rc=$?
+      [ $rc = 0 ] && res W33-i2c-loopback-16 PASS "i2c-$B2 -> 0x64: $o" || res W33-i2c-loopback-16 FAIL "rc $rc: $o"
+      o=$(timeout 30 python3 $D/i2c_loop.py $B2 0x64 200 2>&1); rc=$?
       [ $rc = 0 ] && res W33-i2c-loopback-200 PASS "200 bytes round trip" || res W33-i2c-loopback-200 FAIL "rc $rc: ${o:0:120}"
       # the backend saw the bytes: slave-eeprom holds the 16-byte pattern at 0 after the 200-byte run (same prefix)
       want=$(python3 -c "print(bytes((0xa5+7*i)&0xff for i in range(16)).hex())"); got=$(dd if=$dev/slave-eeprom bs=1 count=16 2>/dev/null | xxd -p | tr -d '\n')
       [ "$got" = "$want" ] && res W33-i2c-slave-eeprom-content PASS "$got" || res W33-i2c-slave-eeprom-content FAIL "sysfs $got want $want"
-      o=$(timeout 10 i2cset -y 2 0x64 0xf0 0x5a 2>&1; timeout 10 i2cget -y 2 0x64 0xf0 2>&1 | tail -1)
+      o=$(timeout 10 i2cset -y $B2 0x64 0xf0 0x5a 2>&1; timeout 10 i2cget -y $B2 0x64 0xf0 2>&1 | tail -1)
       case "$o" in *0x5a) res W33-i2c-loopback-i2cset PASS "i2cset/i2cget 0xf0 -> $o";; *) res W33-i2c-loopback-i2cset FAIL "$o";; esac
-    else res W33-i2c-loopback-16 FAIL "no /dev/i2c-2 (sit-i2c2-ph overlay missing)"; evidence 5002800 i2c@5002800; fi
+    else res W33-i2c-loopback-16 FAIL "no adapter under 5002800.i2c (sit-i2c2-ph overlay missing)"; evidence 5002800 i2c@5002800; fi
   else
     res W33-i2c-loopback-16 SKIP "NOT TESTED: no jumpers pin 5 PH4<->pin 8 PH2, pin 3 PH5<->pin 10 PH3 detected"
   fi

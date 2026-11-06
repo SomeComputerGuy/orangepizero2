@@ -1,4 +1,4 @@
-# Runner job 31-spi-i2c-target: handoff (DEV, about 12 min incl. three reboots)
+# Runner job 43-spi-i2c-target: handoff (DEV, about 12 min incl. three reboots)
 
 Command: `bash harness/research/spi-i2c-target/runner/sit-job.sh`
 
@@ -8,9 +8,13 @@ were applied in one boot and spi1-target (CS0) and i2c3 (SDA) both use PH5 = hea
 never probed; (b) `echo spidev > .../slave` registers a device the spidev driver never binds (its id table has
 "spi-dev", not "spidev"). Now the SPI and the I2C overlay sets boot separately and the spi1-target overlay carries the
 spidev handler as its "slave" child (armbian-build commit 85e6dcb38, branch fix/sunxi-h616-spi1-target-spidev).
+Job 31 (c27): SPI set all PASS; I2C set 3 FAIL because TWI3 probed but was not /dev/i2c-3: the Zero2 DT had no
+i2cN aliases, so overlay-enabled TWIs got dynamic bus numbers. Fixed by armbian-build c6ce58c59
+(fix/sunxi-h616-zero-i2c-aliases, i2c0..i2c5 aliases, in c36+). board-sit.sh now reads the bus numbers from sysfs
+(adapter under 5002c00.i2c / 5002800.i2c) and checks the numbering separately (W33-i2c-bus-number).
 Kernel requirement: the newest cumulative kernel (kernel-check/cumulative-kernels.txt last line) must contain BOTH the
-commit titled "h616 SPI and TWI target" (03961fad0, in c22+) AND 85e6dcb38 (the overlay fix; to be merged by the
-coordinator); otherwise the script exits 2 with BLOCKED naming the missing one: report "not ready", not FAIL. Also
+commit titled "h616 SPI and TWI target" (03961fad0, in c22+) AND 85e6dcb38 (the overlay fix) AND c6ce58c59 (i2c aliases; its DTB must have
+`i2c3 = "/soc/i2c@5002c00"` in /aliases); otherwise the script exits 2 with BLOCKED naming the missing one: report "not ready", not FAIL. Also
 required: install-kernel.sh with the DTB step (project repo, this commit) and kernel-check/vdec-serve/
 sun50i-h616-orangepi-zero2.dtb.<tag> for that tag (cumul-build.sh stages it).
 1. Chunk `wiring`, on the STOCK kernel: `board-sit.sh wiring` drives one end of each loopback jumper position with
@@ -32,17 +36,17 @@ install-kernel.sh/ship.sh). No monitor, no other servers. Board tools used: pyth
 
 Results: `harness/research/spi-i2c-target/logs/runner/`: `runner.log`, `wiring.txt`, `checks.txt` (all CHECK/INFO
 lines of both sets; also `checks-spi.txt`, `checks-i2c.txt`), `dmesg-spi.txt`, `dmesg-i2c.txt`, `board/*` (raw
-outputs), `BLOCKED` (only when blocked). Job 20's results were moved to `logs/job20/`.
+outputs), `BLOCKED` (only when blocked). Job 20's and job 31's results are in `logs/job20/` and `logs/job31/`.
 
 Exit codes: 0 = ran and the board is back on the stock kernel (judge with the checks below); 2 = blocked (report
 `BLOCKED` + the last 10 lines of runner.log as "not ready"); 1 = setup or lock error.
 
 ## Checks (all in checks.txt)
 - PASS if `grep -c ROUND-DONE checks.txt` = 2 (one per set).
-- Every line `CHECK <item> PASS|FAIL|SKIP <value>` is one result; the summary lists ALL of them verbatim (9 to 15
+- Every line `CHECK <item> PASS|FAIL|SKIP <value>` is one result; the summary lists ALL of them verbatim (10 to 16
   lines). PASS/FAIL is decided on the line. `SKIP` lines are NOT TESTED (no jumpers), reported as such, never FAIL.
 - Overall: PASS if `grep -c 'CHECK .* FAIL' checks.txt` = 0.
-- Items without jumpers (always decided): W33-i2c-target-func, W33-i2c-slave-eeprom-bind, W33-i2c-host-with-target,
+- Items without jumpers (always decided): W33-i2c-bus-number, W33-i2c-target-func, W33-i2c-slave-eeprom-bind, W33-i2c-host-with-target,
   W33-spi-target-probe, W33-spi-target-spidev, W33-spi-target-abort, W33-spi-target-unregister,
   W33-spi-target-reregister.
 - Items that need jumpers (PASS/FAIL only when wiring.txt says WIRED_*=1, else SKIP): W33-i2c-loopback-16,
@@ -54,5 +58,5 @@ Exit codes: 0 = ran and the board is back on the stock kernel (judge with the ch
   and end with `0` (no sit- overlay left).
 
 The summary must list: the `WIRED_SPI`/`WIRED_I2C` lines, the two `kernel:` and `overlays:` lines from checks.txt (one
-per set), every CHECK line, the `INFO dmesg spi:` and `INFO dmesg i2c:` lines, any `INFO evidence` lines, the `restored:`
+per set), every CHECK line, the `INFO adapters:` and `INFO 5002c00.i2c driver:` lines, the `INFO dmesg spi:` and `INFO dmesg i2c:` lines, any `INFO evidence` lines, the `restored:`
 line, and the dmesg lines above.

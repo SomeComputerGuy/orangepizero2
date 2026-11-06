@@ -75,3 +75,20 @@ Without jumpers those are `SKIP NOT TESTED`, never FAIL.
 - Also: install-kernel.sh now installs the tag's DTB (found by jobs 21/26) and the restore goes through restore-kernel.sh;
   the two sets each verify the DTB md5.
 - Re-queued as harness/runner-queue/31-spi-i2c-target.md: requires 03961fad0 AND 85e6dcb38 in the newest cumulative kernel.
+
+## Job 31 (2026-11-06, c27): SPI set PASS (5 PASS, loopback SKIP), I2C set 3 FAIL (logs/job31/)
+- FAIL items: W33-i2c-target-func "no /dev/i2c-3", W33-i2c-slave-eeprom-bind "no 3-1064", W33-i2c-host-with-target.
+  Evidence: 5002c00 status okay, overlay applied, not deferred, no dmesg line for 5002c00.
+- Root cause (code, not the driver): the Zero2/Zero3 DT (sun50i-h616-orangepi-zero.dtsi) has no `i2cN` aliases, so the
+  I2C core gives every adapter a dynamic number in probe order (CONFIG_I2C_MV64XXX=y; the DW-HDMI DDC adapter takes one
+  too). TWI3 did probe (mv64xxx is silent on success; status okay + built-in driver + not deferred), but as i2c-0..2,
+  and board-sit.sh hard-coded bus 3 / device 3-1064. Job 20's "cannot claim PH5" message shows the same driver probing.
+  Vendor BSP (sun50iw9p1.dtsi) fixes the numbers with twi0..twi5 aliases (twi5 = R_TWI 7081400); the overlay text and
+  the Orange Pi manual name the buses after the controller.
+- Fix: armbian-build `fix/sunxi-h616-zero-i2c-aliases` **c6ce58c59** (patches.armbian/
+  arm64-dts-sun50i-h616-orangepi-zero-add-i2c-aliases.patch after the mmc-aliases patch: i2c0..i2c4 = TWI0..4,
+  i2c5 = r_i2c; disabled nodes get no adapter, HDMI DDC now numbers from 6). Merged into test-cumulative 95fa41f2a = c36.
+- Package: board-sit.sh reads the bus numbers from sysfs (/sys/bus/platform/devices/5002c00.i2c/i2c-N, 5002800.i2c),
+  prints `INFO adapters:`, new check W33-i2c-bus-number (TWI3 = i2c-3, TWI2 = i2c-2); sit-job.sh precheck needs
+  c6ce58c59 and the i2c3 alias in the served DTB. Re-queued as harness/runner-queue/43-spi-i2c-target.md.
+- Next (fresh agent after job 43): any FAIL -> fix; with the user's jumpers rerun for the loopback items.

@@ -1,0 +1,5 @@
+DMESG-START 742
+driver_lines 2
+iommu_group 1
+clk_rate 300000000
+STALLED

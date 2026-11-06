@@ -1,5 +1,5 @@
 #!/bin/bash
-# Runner package: bit-exact check of the cedrus AFBC capture through the DE33 (job 53). afbc-wb-job.sh j53
+# Runner package: bit-exact check of the cedrus AFBC capture through the DE33 (job 53, rerun 54). afbc-wb-job.sh j54
 # The H616 Mali-G31 has no AFBC (job 51), so each decoded frame is shown 1:1 on the DE33 VI plane (FBD = the AFBC
 # decompressor) and the composed frame is captured with the DE33 writeback connector (XR30), once from the linear
 # decode (NV12/P010) and once from the AFBC decode (AS12/AS01) of the same stream, same plane setup; harness/afbc-wb
@@ -14,13 +14,19 @@
 # 1 = setup or lock error.
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/afbc-wb; V=$H/harness/research/vdec-perf; SSH="timeout 120 $H/harness/ssh.sh"
-J=${1:?job: j53}
+J=${1:?job: j53 or j54}
 K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR
    -o ConnectTimeout=8 -o ServerAliveInterval=15 -o ServerAliveCountMax=8)
 OUT=$S/logs/runner-$J; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED $OUT/OOPS
 # case: name stream linear-fmt afbc-fmt frames wb-fmt extra-options (synthetic = syn-*: tile 64 band 10 + source md5s)
 CASES="syn-hevc8 syn-hevc10 syn-vp9p0 syn-vp9p2 syn-hevc8-xr24 real-hevc10 real-hevc8 real-vp9p2 real-vp9p0"
-case $J in j53) ;; *) echo "unknown job $J"; exit 1 ;; esac
+FIX2=""                                    # j54: also the cedrus H.265 AFBC compose-offset commit
+case $J in
+  j53) ;;
+  j54) FIX2=8b1f787fe                     # fix/sunxi-cedrus-h265-afbc-compose
+       CASES="$CASES real-vp9p0-y4" ;;     # + a window at a 4-line (not 16-aligned) plane offset, informational
+  *) echo "unknown job $J"; exit 1 ;;
+esac
 spec() { case $1 in
   syn-hevc8)      echo "syn-hevc8.mkv NV12 AS12 24 XR30" ;;
   syn-hevc10)     echo "syn-hevc10.mkv P010 AS01 24 XR30" ;;
@@ -31,6 +37,7 @@ spec() { case $1 in
   real-hevc8)     echo "hevc-main-2160p60.mkv NV12 AS12 12 XR30" ;;
   real-vp9p2)     echo "vp9-p2-2160p60.webm P010 AS01 12 XR30" ;;
   real-vp9p0)     echo "vp9-p0-2160p60.webm NV12 AS12 12 XR30" ;;
+  real-vp9p0-y4)  echo "vp9-p0-2160p60.webm NV12 AS12 12 XR30 1408,708" ;;
 esac; }
 CT=420; STALL=240                          # per case: board timeout, watchdog (no output for STALL s)
 T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
@@ -69,6 +76,7 @@ prepare() { # client + synthetic streams; the 4K streams must already be on the 
 boot_trial() { # install the newest cumulative kernel with the fallback armed; it must contain the writeback commit
   local c; c=$(awk -v t=$T '$1==t{print $3}' $H/kernel-check/cumulative-kernels.txt)
   git -C $H/wt-cumulative merge-base --is-ancestor $FIX "$c" 2>/dev/null || blocked "kernel $T ($c) lacks the DE33 writeback commit $FIX"
+  [ -z "$FIX2" ] || git -C $H/wt-cumulative merge-base --is-ancestor $FIX2 "$c" 2>/dev/null || blocked "kernel $T ($c) lacks the cedrus H.265 AFBC compose commit $FIX2"
   on_stock
   timeout 900 $V/install-kernel.sh $T 2>&1 | tail -3 | tee -a $OUT/runner.log; BOOTED=1
   $SSH -n 'sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'; sleep 15
@@ -82,10 +90,10 @@ boot_trial() { # install the newest cumulative kernel with the fallback armed; i
   log "kernel $T dtb ok ($dh), writeback present"; }
 others_waiting() { ls $H/harness/queue/board.wait 2>/dev/null | grep -v "\.$OWN\." | grep -q .; }
 case_script() { # board script of one case ($1); ends with ROUND-DONE
-  local c=$1 st lin af n wf src ms opt=""; set -- $(spec $c); st=$1 lin=$2 af=$3 n=$4 wf=$5
+  local c=$1 st lin af n wf cr src ms opt=""; set -- $(spec $c); st=$1 lin=$2 af=$3 n=$4 wf=$5 cr=${6:-1408,704}
   case $c in
     syn-*)  src="$R/streams/$st"; opt="--tile 64 --band 10"; ms="--src-md5 $R/streams/${st%.*}.srcmd5" ;;
-    real-*) src="$RS/$st"; opt="--crop 1408,704"; ms="" ;;   # 1024x768 window in the middle of the 4K frame, 64-aligned
+    real-*) src="$RS/$st"; opt="--crop $cr"; ms="" ;;   # 1024x768 window in the middle of the 4K frame, 64-aligned (y4: 4 lower)
   esac
   cat <<EOS
 set -u; D=$R/$c; REF=/dev/shm/afbcwb-ref; rm -rf \$D \$REF; mkdir -p \$D/dump \$REF; cd \$D
@@ -98,10 +106,10 @@ for k in /sys/class/drm/card*-HDMI-A-1; do echo "\$k status=\$(cat \$k/status) m
 grep -q 1024x768 connector.txt || echo MODE-UNAVAILABLE | tee -a connector.txt
 echo "== linear $lin"
 timeout 180 $P -i $src -f $lin -n $n -w $wf $opt $ms --save \$REF > linear.txt 2>&1; echo "RC \$?" >> linear.txt
-grep -E '^RESULT (summary|src_md5 |verdict|stream|crtc|fb |mode_unavailable|.*error)|^RC ' linear.txt | head -20
+grep -E '^RESULT (summary|src_md5 |verdict|stream|crtc|fb |mode_unavailable|.*error|frame [0-9]+ pic_offset)|^RC ' linear.txt | head -20
 echo "== afbc $af"
 timeout 180 $P -i $src -f $af -n $n -w $wf $opt --ref \$REF -o \$D/dump > afbc.txt 2>&1; echo "RC \$?" >> afbc.txt
-grep -E '^RESULT (summary|compare|interior|edge_dist|verdict|stream|fb |mode_unavailable|.*error)|^RC ' afbc.txt | head -20
+grep -E '^RESULT (summary|compare|interior|edge_dist|verdict|stream|fb |mode_unavailable|.*error|frame [0-9]+ pic_offset)|^RC ' afbc.txt | head -20
 rm -rf \$REF
 params > params.after
 for k in /sys/class/drm/card*-HDMI-A-1; do echo detect > \$k/status; done
@@ -125,7 +133,9 @@ extract() { # host side: "case pass key value" lines into $OUT/results.txt
       /^RESULT verdict / { print c, p, "verdict", $3 }
       /^RESULT fb .* format / { for (i = 1; i <= NF; i++) if ($i == "format") f = $(i+1) " " $(i+3); print c, p, "fb_format_modifier", f }
       /^RESULT [a-z_]*_error / { print c, p, $2, $3 }
-      /^RESULT frame [0-9]+ wb_error / { print c, p, "wb_error_frame" $3, $5 "/" $6 }' $d/$p.txt | sort -u -k1,3 >> $OUT/results.txt
+      /^RESULT frame [0-9]+ wb_error / { print c, p, "wb_error_frame" $3, $5 "/" $6 }
+      /^RESULT frame [0-9]+ pic_offset / { po = po (po == "" ? "" : ";") $5 }
+      END { print c, p, "pic_offset", (po == "" ? "none" : po) }' $d/$p.txt | sort -u -k1,3 >> $OUT/results.txt
   done
   for k in jobs done failed; do
     a=$(grep "^de33_wb_$k=" $d/params.after 2>/dev/null | cut -d= -f2); b=$(grep "^de33_wb_$k=" $d/params.before 2>/dev/null | cut -d= -f2)

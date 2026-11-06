@@ -35,17 +35,52 @@ connector (jobs 40-42 PASS on c35, XR24/XR30/NV12 pixel-exact) captures the comp
 harness/runner-queue/53-afbc-wb.md -> runner/afbc-wb-job.sh j53, HANDOFF.md checks 0-6, verdict PASS / FAIL (AFBC
 differs) / INCONCLUSIVE (linear reference wrong) / FAIL (kernel) / NOT TESTED. Logs: logs/runner-j53/.
 
-## State
-- 2026-11-06: package built and queued as job 53 (kernel c38 or newer, unchanged). Not run yet.
+## Job 53 result (c38) and root cause (2026-11-06)
+- Verdict FAIL for syn-hevc8/-hevc10/-hevc8-xr24 (~360k of 371712 interior px wrong per frame), PASS for syn-vp9p0/p2.
+  Summary: harness/runner-queue/done/53-afbc-wb.summary.md; logs/runner-j53/.
+- Dump analysis (host, files/*/dump/f00{0,1}.{afbc,linear}.cap, converted to Y/Cb/Cr, shift search +-20 rows/+-8 cols):
+  every HEVC AFBC capture (synthetic 8/10-bit, xr24, real-hevc10 4K window) is best matched by the linear capture
+  moved DOWN by exactly 4 rows (Y mean |d| 0.37 vs 30 for the next shift); VP9 best at shift 0. With the 4-row shift
+  the HEVC tile interiors are bit-identical (raw XR30 words, frames 0 and 1: 0 of 367488 interior px differ for
+  syn-hevc8, syn-hevc10, syn-hevc8-xr24). AFBC rows 0-3 are a flat fill; the last 4 picture rows are cut off.
+- So the AFBC data is correct; the H.265 decoder writes its AFBC surface 4 lines down (picture row 0 = surface row 4).
+  Hardware property of the H.265 VE AFBC writer, not configurable: the vendor library (libcedarc androidq_64
+  libawh265.so DWARF) inlines HevcInitAfbcInfo(pHevcDec, pRef, pAfbcHeader, nTopCrop=4, header_layout 1,
+  yuv_transform 0, block_split 1, mb 16) and computes block_height = (height + 4 + 15) >> 4 (disasm 0x1a564); its
+  display driver gets top_crop via the sunxi_metadata AFBC header and programs FBD_SRC_CROP. No VE register for it
+  (the only bEnableAfbcFlag-dependent register write in HevcDecodeOneSlice is the frame-info chroma address). The
+  Armbian/Jernej AFBC sizes already use "height + 4" for this. Mainline sun50i_afbc.c writes FBD_SRC_CROP = 0 and
+  knows nothing about the codec, so LibreELEC presumably shows H.265 AFBC 4 lines low as well (not checked).
+- Vendor libawvp9HwAL / libawavs2 also pass top_crop 4 (location lists DW_OP_lit4), but our VP9 is measured 0
+  (H616 VP9 output differs from that library's target). AVS2 AFBC offset is UNVERIFIED (open item).
 
-## Next (fresh agent, after done/53-afbc-wb.summary.md)
-- PASS: AFBC capture of cedrus is bit-exact for HEVC 8/10 and VP9 P0/P2 (luma everywhere, chroma per tile); update
-  docs/status.md AFBC item and the vdec RESULTS open item 2; real-* numbers go into the note.
-- FAIL check 3 with mismatches everywhere and max_dev 1: likely an 8->10-bit expansion difference FBD vs linear fetch
-  (not an AFBC data error); confirm with the dumps (files/<case>/dump/*.cap, packed XR30 1024x768, x bits cleared) by
-  splitting the R/G/B differences; a real AFBC error shows as 16x16-block-shaped regions.
-- FAIL check 3 only at distance < 10 in edge_dist_hist cannot happen (those pixels are outside the interior); if the
-  histogram has mass at distance >= 10 inside tiles, compare per channel: chroma-only differences = phase/filter reach
-  larger than assumed (raise --band and rerun), luma differences = real AFBC decode error.
-- INCONCLUSIVE (src_md5 mismatch): cedrus lossless decode bug (HEVC transquant bypass / VP9 lossless) - separate item
-  for the work list; the AFBC compare is still valid where captures matched.
+## Fix (c39)
+- Kernel: armbian-build fix/sunxi-cedrus-h265-afbc-compose 8b1f787fe (worktree wt-afbc-hevc, off test-cumulative
+  76bd27766): patches.media/h616-vdec/media-cedrus-report-the-H-265-AFBC-picture-offset-in-the-compose-rectangle.patch
+  (end of series.conf): VIDIOC_G/S_SELECTION on CAPTURE, COMPOSE(_DEFAULT) = (0, top, w, h), COMPOSE_BOUNDS/PADDED =
+  (0, 0, w, h + top), top = 4 for H.265 + AS12/AS01 capture, else 0 (S_SELECTION returns the fixed rectangle). No DRM
+  change: the plane source rectangle (FBD_LAY_CROP) carries the offset. Merged into test-cumulative d67f25b42 = c39.
+- FFmpeg (kernel-check/ffmpeg-afbc/src/ffmpeg, local, diff in harness/afbc-wb/ffmpeg-v4l2request-compose.diff):
+  hwcontext_v4l2request queries G_SELECTION(COMPOSE) after the CAPTURE G_FMT; the hwaccel post_process makes the
+  frame width/height + left/top and crop_left/crop_top += left/top (hwaccel crop: right/bottom applied, left/top kept
+  for the consumer). Upstream-able idea for Jernej's v4l2request fork (not sent).
+- afbc-wb.c: framebuffer = frame width x height (whole surface), plane source window at crop + frame crop_left/top;
+  prints `RESULT frame N pic_offset X,Y fb WxH` (frame 0 and on change). Client sha256 in the job file.
+- Package: runner/afbc-wb-job.sh j54 (requires 8b1f787fe in the kernel, extracts pic_offset, adds informational case
+  real-vp9p0-y4 = window at 1408,708 to show a non-16-aligned FBD_LAY_CROP works); HANDOFF.md check 7 (pic_offset).
+
+## State
+- 2026-11-06: c39 built (test-cumulative d67f25b42, Image md5 b74f1af053066a48ab7ac8a5bae26005, 875 patches, 0 warnings); job 54 queued (harness/runner-queue/54-afbc-wb-rerun.md). Not run yet.
+- Separate item (not fixed): real-hevc8 LINEAR pass (4K H.265 8-bit NV12) had writeback wb_error -5 on frames 2, 6, 8
+  (wb_jobs 48 vs done 45, dmesg clean). Only that case; likely the writeback missing its frame under 4K NV12 VE+DE
+  memory load. On the work list; rerun shows whether it repeats.
+- Open: AVS2 AFBC picture offset (vendor says 4; avs2dec-afbc path, not covered by this job).
+
+## Next (fresh agent, after done/54-afbc-wb-rerun.summary.md)
+- PASS: AFBC capture of cedrus is bit-exact for HEVC 8/10 and VP9 P0/P2; update docs/status.md AFBC item, vdec
+  RESULTS open item 2, memory project-vdec.md; real-* numbers go into the note.
+- check 7 fails with `afbc pic_offset 0,0` on HEVC: the kernel lacks the selection (wrong kernel) or FFmpeg in the
+  client is stale (check the client sha).
+- pic_offset 0,4 but interior mismatches remain: compare dumps with the 4-row-shift script logic above (shift
+  search); if a residual shift appears, the FBD applies LAY_CROP only in 16-line steps -> program the sub-superblock
+  part via FBD_SRC_CROP in sun50i_afbc.c (real-vp9p0-y4 vs real-vp9p0 shows this independent of HEVC).

@@ -391,8 +391,11 @@ static int fence_wait(int fd, int timeout_ms)
 	return 0;
 }
 
-/* blocking commit of @fb_id on the plane (first call: modeset, primary off, wb attached) */
-static int commit_plane(struct kms *k, uint32_t fb_id)
+/*
+ * blocking commit of @fb_id on the plane (first call: modeset, primary off, wb attached); the source window
+ * starts at @sx,@sy in the framebuffer
+ */
+static int commit_plane(struct kms *k, uint32_t fb_id, unsigned int sx, unsigned int sy)
 {
 	drmModeAtomicReq *req = drmModeAtomicAlloc();
 	uint32_t flags = 0, w = k->mode.hdisplay, h = k->mode.vdisplay;
@@ -400,8 +403,8 @@ static int commit_plane(struct kms *k, uint32_t fb_id)
 
 	drmModeAtomicAddProperty(req, k->plane_id, k->p_fb, fb_id);
 	drmModeAtomicAddProperty(req, k->plane_id, k->p_crtc, k->crtc_id);
-	drmModeAtomicAddProperty(req, k->plane_id, k->p_sx, (uint64_t)o.crop_x << 16);
-	drmModeAtomicAddProperty(req, k->plane_id, k->p_sy, (uint64_t)o.crop_y << 16);
+	drmModeAtomicAddProperty(req, k->plane_id, k->p_sx, (uint64_t)sx << 16);
+	drmModeAtomicAddProperty(req, k->plane_id, k->p_sy, (uint64_t)sy << 16);
 	drmModeAtomicAddProperty(req, k->plane_id, k->p_sw, (uint64_t)w << 16);
 	drmModeAtomicAddProperty(req, k->plane_id, k->p_sh, (uint64_t)h << 16);
 	drmModeAtomicAddProperty(req, k->plane_id, k->p_cx, 0);
@@ -711,6 +714,7 @@ int main(int argc, char **argv)
 	struct dumb cap;
 	uint32_t *c1, *c2, *ref, mask;
 	int c, ret, stream, w, h, bits, frame = 0, dumps = 0;
+	size_t pic_x = 0, pic_y = 0;
 	bool afbc, flushing = false;
 	long repeat_bad = 0, src_bad = 0, src_ok = 0, wb_err = 0, fmt_bad = 0, fbd_bad = 0;
 	long exact = 0, int_exact = 0, compared = 0, ref_missing = 0, mism_sum = 0, mism_int_sum = 0;
@@ -839,8 +843,17 @@ int main(int argc, char **argv)
 				       frame < n_src_md5 ? src_md5[frame] : "-");
 			}
 		}
+		/*
+		 * The picture may start at an offset in the buffer (FFmpeg crop_left/crop_top from the V4L2 compose
+		 * rectangle: 4 lines for Cedrus H.265 AFBC); the framebuffer covers the whole surface.
+		 */
+		if (!frame || f->crop_left != pic_x || f->crop_top != pic_y)
+			printf("RESULT frame %d pic_offset %u,%u fb %dx%d\n", frame, (unsigned int)f->crop_left,
+			       (unsigned int)f->crop_top, f->width, f->height);
+		pic_x = f->crop_left;
+		pic_y = f->crop_top;
 		fb_id = fb_for_desc(&K, d, f->width, f->height);
-		if (!fb_id || commit_plane(&K, fb_id)) {
+		if (!fb_id || commit_plane(&K, fb_id, o.crop_x + pic_x, o.crop_y + pic_y)) {
 			av_frame_unref(f);
 			printf("RESULT verdict setup_error at frame %d\n", frame);
 			return 2;

@@ -14,6 +14,9 @@ Acceptance: docs/spec-checklist.md, docs/datasheet-checklist.md. Status/work lis
   (harness/jpegtest/jpeg-slot.sh pattern). Never leave it unbootable.
 - Board access: `harness/ssh.sh` (root@10.56.0.107 via enx68da73af6279 / 10.56.0.1). Serial: /dev/ttyOPIZ2 only
   (= ttyUSB1); our logger writes harness/serial.log.
+  Packages source harness/ssh-opts.sh for scp (same options: keepalive, ConnectTimeout, BatchMode, harness/known_hosts
+  with StrictHostKeyChecking=accept-new, scp overall timeout, kill_pid for watchdogs). Plain `ssh root@10.56.0.107`
+  uses ~/.ssh/known_hosts, which still holds the pre-2026-11-04-reflash key: use harness/ssh.sh.
 - NEVER touch /dev/ttyUSB0, enp130s0, or the Meross plug 192.168.107.245 (another project's). Power only with
   scripts/board-power.py ("Test Plug 2"), and only if the board answers neither ssh nor serial.
 - Never `pkill -f` a pattern that matches your own command line; kill by exact PID.

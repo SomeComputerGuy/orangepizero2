@@ -9,7 +9,7 @@
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/opencl-fixes; MW=$H/mesa-work; SSH=$H/harness/ssh.sh
 J=mesa2
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 OUT=$S/logs/runner-$J; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED
 CHUNKS="sl basic-a basic-b basic-c basic-d f2d-r2d f2d-r2da f2d-w f2d-rw imgA imgB imgC imgD reg"; CT=870; STALL=870
 FORK=a0a4534b14d                          # mesa-cl commit the build must contain (rusticl sw_copy fix on top of the rest)
@@ -83,7 +83,7 @@ run_chunk() { # run_chunk <chunk>: remote command under timeout + stall watchdog
   local last=$(date +%s) sz=0
   while kill -0 $p 2>/dev/null; do sleep 20
     n=$(stat -c %s $f); [ "$n" != "$sz" ] && { sz=$n; last=$(date +%s); }
-    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill $p; echo STALLED >> $f; break; fi
+    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill_pid $p; echo STALLED >> $f; break; fi
   done; wait $p 2>/dev/null
   case $c in sl|img*|reg) mkdir -p $OUT/files/$c; scp -q -r "${K[@]}" root@10.56.0.107:$R/opencl-mesa/. $OUT/files/$c/ 2>/dev/null ;; esac
   grep '^DMESG: ' $f > $OUT/dmesg-$c.txt

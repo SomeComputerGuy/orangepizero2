@@ -8,7 +8,7 @@
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/iommu-faults; SSH=$H/harness/ssh.sh; VP=$H/harness/research/vdec-perf
 CK=$H/kernel-check/cumulative-kernels.txt; FIX=c411b37fb65185fff26763471f3e15220f8c450a
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 OUT=$S/logs/runner-iommu-faults; mkdir -p $OUT; touch $OUT/state; rm -f $OUT/BLOCKED
 CT=900; STALL=400; STOCK=vmlinuz-7.3.1-edge-sunxi64
 OWN=""
@@ -41,7 +41,7 @@ run_chunk() { # run_chunk <stock|fixed>: board script under timeout + stall watc
   local last=$(date +%s) sz=0
   while kill -0 $p 2>/dev/null; do sleep 20
     n=$(stat -c %s $f); [ "$n" != "$sz" ] && { sz=$n; last=$(date +%s); }
-    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill $p; echo STALLED >> $f; break; fi
+    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill_pid $p; echo STALLED >> $f; break; fi
   done; wait $p 2>/dev/null
   $SSH -n 'echo detect > /sys/class/drm/card0-HDMI-A-1/status 2>/dev/null; dmesg | grep -iE "iommu|fault|timed out|oops|bug:" | tail -30' > $OUT/dmesg-$c.txt 2>&1
   grep -q ROUND-DONE $f && { echo $c >> $OUT/state; log "chunk $c done"; } || log "chunk $c ended without ROUND-DONE"; }

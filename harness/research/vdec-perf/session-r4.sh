@@ -2,7 +2,7 @@
 # Round 4 session on cumulative kernel <tag>: install (fallback armed), run board-queue-r4.sh (parts A, B), reboot with
 # iommu.passthrough=1 cma=640M (armbianEnv extraargs, backed up), run part C, restore armbianEnv + image kernel, verify.
 H=/home/aruni/orangepizero2; S=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh; T=${1:?tag}; O=$S/logs/queue-r4
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 mkdir -p $O
 waitup() { for i in $(seq 1 150); do sleep 5; $SSH -n true 2>/dev/null && return 0; done; return 1; }
 reboot_() { $SSH -n 'sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'; sleep 15; waitup; }

@@ -12,7 +12,7 @@
 # Other jobs on the same package (run-upsize.sh) set OUT (results dir) and JOB (check-results.py mode) and pass chunks.
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/vp9-vectors; VP=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 CHUNKS=${*:-c1 c2 c3 c5 c4}; CT=1200; STALL=300; JOB=${JOB:-full}
 GOOD=vp90-2-00-quantizer-00.webm  # the pre-flight vector (board-fluster.sh pre)
 OUT=${OUT:-$S/logs/runner}; mkdir -p $OUT; touch $OUT/state; rm -f $OUT/BLOCKED
@@ -64,7 +64,7 @@ run_chunk() { # remote board-fluster.sh under timeout + stall watchdog; output t
   local last=$(date +%s) sz=0
   while kill -0 $p 2>/dev/null; do sleep 20
     n=$(stat -c %s $f); [ "$n" != "$sz" ] && { sz=$n; last=$(date +%s); }
-    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill $p; echo STALLED >> $f; break; fi
+    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill_pid $p; echo STALLED >> $f; break; fi
   done; wait $p 2>/dev/null
   mkdir -p $OUT/out; scp -q "${K[@]}" "root@10.56.0.107:/root/vp9/out/*" $OUT/out/ 2>/dev/null
   $SSH -n 'dmesg | grep -iE "cedrus|timed out|iommu|fault|oops|bug:|alloc fail" | tail -40' > $OUT/dmesg-$c.txt 2>&1

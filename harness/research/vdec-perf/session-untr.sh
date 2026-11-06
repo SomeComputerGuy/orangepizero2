@@ -3,7 +3,7 @@
 # A: default DT. B: overlay vdec-untranslated + cma=640M (sizing). C: overlay + the measured CMA size (md5 + memory
 # pressure). armbianEnv.txt is backed up and restored, the overlay file removed, the image kernel restored.
 H=/home/aruni/orangepizero2; S=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh; T=${1:?tag}; O=$S/logs/queue-untr
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 OWN=vdec-untr; mkdir -p $O; : > $O/round.txt
 [[ $T =~ ^c[0-9]+$ ]] && T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)
 waitup() { for i in $(seq 1 150); do sleep 5; $SSH -n true 2>/dev/null && return 0; done; return 1; }

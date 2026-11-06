@@ -11,7 +11,7 @@
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/vk-hangs; MW=$H/mesa-work; V=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh
 J=vkhangs
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 OUT=$S/logs/runner; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED
 CHUNKS="diag cases-sg cases-frag-a cases-frag-b subset1 subset2 subset3 subset4 ocl gles"; CT=870; STALL=870
 FORK=b7a705442bd                          # mesa-cl commit the build must contain (CLPER_OLD for read_invocation)
@@ -126,7 +126,7 @@ run_chunk() { # run_chunk <chunk>: remote command under timeout + stall watchdog
   local last=$(date +%s) sz=0
   while kill -0 $p 2>/dev/null; do sleep 20
     n=$(stat -c %s $f); [ "$n" != "$sz" ] && { sz=$n; last=$(date +%s); }
-    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill $p; echo STALLED >> $f; break; fi
+    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill_pid $p; echo STALLED >> $f; break; fi
   done; wait $p 2>/dev/null
   mkdir -p $OUT/files/$c
   case $c in

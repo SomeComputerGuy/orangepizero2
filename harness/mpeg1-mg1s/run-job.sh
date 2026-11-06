@@ -11,7 +11,7 @@
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/mpeg1-mg1s; VP=$H/harness/research/vdec-perf; LD=$H/harness/research/legacy-dec
 SSH=$H/harness/ssh.sh; SERVE=$H/kernel-check/legacy-serve; U=http://10.56.0.1:8644
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 FIX=8140b4eeb241ea13b872edbe93dadac618de2130   # armbian-build fix/sunxi-cedrus-mpeg1-mg1s (MG1S uAPI + cedrus)
 BIN=$H/kernel-check/ffmpeg-deb/build-mg1s/ffmpeg; export BFF=/root/mg1s/ffmpeg   # static FFmpeg, shared set final 908ab79544
 CHUNKS=${*:-stock fmts compliance md5 dpic raw mpeg2}

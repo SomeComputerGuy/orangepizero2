@@ -14,8 +14,7 @@
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/display-tearing; V=$H/harness/research/vdec-perf; SSH="timeout 120 $H/harness/ssh.sh"
 J=t62
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR
-   -o ConnectTimeout=8 -o ServerAliveInterval=15 -o ServerAliveCountMax=8)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 OUT=$S/logs/runner-$J; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED $OUT/OOPS
 CHUNKS="base load"; CT=900; STALL=150
 T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
@@ -190,8 +189,8 @@ run_chunk() {
     n=$(stat -c %s $f); [ "$n" != "$sz" ] && { sz=$n; last=$(date +%s); }
     if [ -f $SER ] && tail -c +$((soff+1)) $SER | grep -v 'tearing-wb printk load' | grep -qE "$OOPS"; then
       tail -c +$((soff+1)) $SER | grep -E "$OOPS|Call trace|pc :|lr :" | head -40 > $OUT/OOPS
-      log "OOPS on the serial log during chunk $c, killing ssh $p"; kill $p; echo OOPS >> $f; oops=serial; break; fi
-    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill $p; echo STALLED >> $f; break; fi
+      log "OOPS on the serial log during chunk $c, killing ssh $p"; kill_pid $p; echo OOPS >> $f; oops=serial; break; fi
+    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill_pid $p; echo STALLED >> $f; break; fi
   done; wait $p 2>/dev/null
   mkdir -p $OUT/files/$c
   # text results only (no dump/*.raw captures, they are 3 MB each): every top-level file of the chunk dir

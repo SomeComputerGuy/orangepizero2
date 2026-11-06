@@ -1,5 +1,11 @@
 #!/bin/bash
 # Runner package: Arm kbase trial + libmali g24p0 GLES 3.2 reference traces (status.md item 8 step 1): kbase-traces.sh
+# v2 (runner job 64, 2026-11-06), after job 16: kbtrace.so no longer segfaults at the first mali ioctl (record before
+# init, kbtrace.c); every board call is bounded (harness/ssh-opts.sh keepalive, SSH_TIMEOUT on one-shot calls, the
+# step watchdog kills its own ssh by exact PID); the restore no longer does rmmod + panfrost rebind (job 16: the board
+# reset ~15 s into that call, a hard hang caught by the hardware watchdog, and the old keepalive-less ssh sat 1.5 h);
+# the module unload is now the separate diagnostic step `unload`, run only after all results are off the board, with
+# console loglevel 8 and the serial.log slice saved. Results: arm-blob/traces/runner-j64/.
 # Self-contained: board lock (fresh owner name per acquire), install the newest cumulative kernel with the one-shot
 # fallback armed (harness/research/vdec-perf/install-kernel.sh, like the vdec/OpenCL jobs; it must carry the BTF dedup
 # fix bd60a159b), stage bifrost_kbase.ko + the blob + the tools in /root/armblob (runtime files only: nothing is
@@ -14,28 +20,32 @@
 set -u
 H=/home/aruni/orangepizero2; T=$H/harness/research/kbase-trace; A=$H/harness/research/arm-blob; V=$H/harness/research/vdec-perf
 SSH=$H/harness/ssh.sh; J=kbase
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
+S1() { SSH_TIMEOUT=${T1:-90} $SSH "$@"; }   # one-shot board command: killed after T1 s (default 90)
+SERIAL=$H/harness/serial.log
 KO=$H/kernel-check/kbase-trial/src/drivers/gpu/arm/bifrost/bifrost_kbase.ko
 BLOB=$A/dl/libmali-bifrost-g31-g24p0-gbm.so
 BTFFIX=bd60a159b                          # iommu-sun55i: drop the stale iommu_dma_cookie copy (kbase BTF validates only with it)
-OUT=$A/traces/runner                      # results (arm-blob/ is git-ignored: blob-derived traces never get committed)
+OUT=${KBT_OUT:-$A/traces/runner-j64}      # results (arm-blob/ is git-ignored: blob-derived traces never get committed)
 R=/root/armblob                           # board work dir
 ENV="LD_LIBRARY_PATH=$R/lib"
 TESTS="basic gs_pass gs_amp gs_inv tess_tri tess_gs tess_quad gs_xfb gs_layer"
 RGBA="basic gs_pass gs_amp gs_inv tess_tri tess_gs tess_quad gs_xfb gs_layer0 gs_layer1"
-STEPS="load info probe trace"
+STEPS="load info probe trace unload"
 OWN=""
 mkdir -p $OUT/files; touch $OUT/state
 log() { echo "$(date '+%F %T') $*" | tee -a $OUT/runner.log; }
-waitup() { for i in $(seq 1 60); do sleep 5; $SSH -n true 2>/dev/null && return 0; done; return 1; }
+waitup() { for i in $(seq 1 60); do sleep 5; T1=20 S1 -n true 2>/dev/null && return 0; done; return 1; }
 acquire() { OWN=runner-$J-$(date +%s); out=$($H/harness/board-lock.sh acquire $OWN) || { log "lock: $out"; exit 1; }
   case $out in *"already held"*) log "lock already held by $OWN"; exit 1;; esac; log "$out"; }
 release() { [ -n "$OWN" ] && $H/harness/board-lock.sh release $OWN | tee -a $OUT/runner.log; OWN=""; }
-restore() { # panfrost back (kbase out), then the stock image kernel
-  log "restore: dri after rebind: $($SSH -n "rmmod bifrost_kbase 2>/dev/null; echo 1800000.gpu > /sys/bus/platform/drivers/panfrost/bind 2>/dev/null; sleep 1; ls /dev/dri" 2>&1 | tr '\n' ' ')"
-  $SSH -n 'ln -sfn vmlinuz-7.3.1-edge-sunxi64 /boot/Image; rm -f /boot/vdec-trial; sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'
-  sleep 15; if waitup; then log "restored: $($SSH -n 'uname -rv; readlink /boot/Image; ls /dev/dri | tr "\n" " "' | tr '\n' ' ')"
-  else log "BOARD UNREACHABLE after restore reboot"; echo "board unreachable after restore" > $OUT/BLOCKED; fi; }
+restore() { # the stock image kernel; the reboot drops kbase (no rmmod/rebind here, see the header)
+  waitup || { log "BOARD UNREACHABLE before restore"; echo "board unreachable before restore" > $OUT/BLOCKED; serial_save; return; }
+  T1=30 S1 -n 'ln -sfn vmlinuz-7.3.1-edge-sunxi64 /boot/Image; rm -f /boot/vdec-trial; sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'
+  sleep 15; if waitup; then log "restored: $(S1 -n 'uname -rv; readlink /boot/Image; ls /dev/dri | tr "\n" " "' | tr '\n' ' ')"
+  else log "BOARD UNREACHABLE after restore reboot"; echo "board unreachable after restore" > $OUT/BLOCKED; fi; serial_save; }
+serial_save() { # serial.log bytes written since this run started -> $OUT/serial.txt (kernel messages of a hang or reset)
+  [ -f $SERIAL ] && [ -n "${SER0:-}" ] && tail -c +$((SER0 + 1)) $SERIAL > $OUT/serial.txt 2>/dev/null; return 0; }
 blocked() { log "BLOCKED: $*"; echo "$*" > $OUT/BLOCKED; restore; release; exit 2; }
 step_script() { # print the board script of a step; it ends with STEP-DONE
   local body
@@ -52,9 +62,22 @@ ls /sys/class/misc/mali0/device/ 2>/dev/null | head -40" ;;
     info)  body="cat /sys/class/misc/mali0/device/gpuinfo 2>/dev/null; cat /sys/class/misc/mali0/device/power_policy 2>/dev/null
 cat /sys/kernel/debug/clk/gpu0/clk_rate 2>/dev/null; cat /sys/kernel/debug/regulator/regulator_summary 2>/dev/null | grep -i -A2 dcdc" ;;
     probe) body="rm -rf $R/out/probe; mkdir -p $R/out/probe; cd $R/out/probe
-n=\$(dmesg | wc -l); $ENV timeout 120 $R/gles32probe $R/out/probe; echo PROBE-RC \$?
+n=\$(dmesg | wc -l)
+# job 16: every case rendered nothing (glError 0x505 GL_OUT_OF_MEMORY, fragment-slot DATA_INVALID_FAULT): sample the
+# per-context kbase debugfs (JIT counters, atoms, allocations, the blob's mem_profile) while the probe runs
+mkdir -p kctx; ( while :; do for d in /sys/kernel/debug/mali0/ctx/*/; do [ -d \$d ] || continue
+  echo \"== \$(date +%T.%N) \$d \$(for f in mem_jit_count mem_jit_phys mem_jit_vm mem_jit_used; do echo \$f=\$(cat \$d\$f 2>/dev/null | tr '\\n' ' '); done)\"
+  for f in atoms mem_allocs mem_zones mem_profile; do cat \$d\$f > kctx/\$f.tmp 2>/dev/null && [ -s kctx/\$f.tmp ] && mv kctx/\$f.tmp kctx/\$f; done; done; sleep 0.3; done ) > kctx/jitstats.txt 2>&1 & SP=\$!
+$ENV timeout 120 $R/gles32probe $R/out/probe; echo PROBE-RC \$?
+kill \$SP; wait \$SP 2>/dev/null; rm -f kctx/*.tmp; echo KCTX-SAMPLES \$(grep -c '^==' kctx/jitstats.txt); ls kctx | tr '\\n' ' '; echo
 cat info.txt; ls -la
 dmesg | tail -n +\$((n+1)) | sed 's/^/DMESG: /'" ;;
+    unload) body="dmesg -n 8; sync; n=\$(dmesg | wc -l)
+echo RMMOD-START; timeout 40 rmmod bifrost_kbase; echo RMMOD-RC \$?
+dmesg | tail -n +\$((n+1)) | sed 's/^/DMESG: /'; n=\$(dmesg | wc -l); sync
+echo BIND-START; timeout 40 sh -c 'echo 1800000.gpu > /sys/bus/platform/drivers/panfrost/bind'; echo BIND-RC \$?; sleep 2
+dmesg | tail -n +\$((n+1)) | sed 's/^/DMESG: /'
+echo DRI: \$(ls /dev/dri)" ;;
     trace) body="rm -rf $R/out/trace; mkdir -p $R/out/trace; cd $R/out/trace
 n=\$(dmesg | wc -l); $ENV KBTRACE_OUT=$R/out/trace/kbtrace.bin LD_PRELOAD=$R/kbtrace.so timeout 300 $R/gles32probe $R/out/trace; echo TRACE-RC \$?
 ls -la; tail -25 info.txt
@@ -67,14 +90,16 @@ echo STEP-DONE
 EOS
 }
 run_step() { # run_step <step> <timeout s> <stall s>: remote command under timeout + stall watchdog; output to $OUT/step-<s>.txt
-  local s=$1 ct=$2 stall=$3 f=$OUT/step-$1.txt
-  step_script $s | $SSH "mkdir -p $R; cat > $R/step-$s.sh" || { log "step $s: cannot write the board script"; return 1; }
-  $SSH -n "timeout $ct bash $R/step-$s.sh" > $f 2>&1 & local p=$!
+  local s=$1 ct=$2 stall=$3 f=$OUT/step-$1.txt rc
+  step_script $s | T1=30 S1 "mkdir -p $R; cat > $R/step-$s.sh" || { log "step $s: cannot write the board script"; return 1; }
+  # bounds: board-side `timeout ct`; host-side SSH_TIMEOUT ct+60; keepalive ends it within 2 min if the board dies;
+  # stall watchdog below: no new output for `stall` s -> kill_pid of exactly this ssh (never pkill -f)
+  SSH_TIMEOUT=$((ct + 60)) $SSH -n "timeout $ct bash $R/step-$s.sh" > $f 2>&1 & local p=$!
   local last=$(date +%s) sz=0
-  while kill -0 $p 2>/dev/null; do sleep 10
+  while kill -0 $p 2>/dev/null; do sleep 5
     n=$(stat -c %s $f); [ "$n" != "$sz" ] && { sz=$n; last=$(date +%s); }
-    if [ $(( $(date +%s) - last )) -gt $stall ]; then log "STALL: step $s no output for $stall s, killing ssh $p"; kill $p; echo STALLED >> $f; break; fi
-  done; wait $p 2>/dev/null
+    if [ $(( $(date +%s) - last )) -gt $stall ]; then log "STALL: step $s no output for $stall s, killing ssh $p"; kill_pid $p; echo STALLED >> $f; break; fi
+  done; wait $p 2>/dev/null; rc=$?; [ $rc = 0 ] || log "step $s: ssh rc $rc (255 = connection lost, 124/137 = host timeout, 143 = watchdog)"
   grep '^DMESG: ' $f > $OUT/dmesg-$s.txt
   grep -q STEP-DONE $f && { echo $s >> $OUT/state; log "step $s done"; return 0; } || { log "step $s ended without STEP-DONE"; return 1; }; }
 checks() { # mechanical checks from the results (HANDOFF.md); prints PASS/FAIL lines, exit 1 if any FAIL
@@ -99,7 +124,16 @@ checks() { # mechanical checks from the results (HANDOFF.md); prints PASS/FAIL l
   done
   [ -s $OUT/files/trace/kbtrace.bin ] && p "files/trace/kbtrace.bin $(stat -c %s $OUT/files/trace/kbtrace.bin) bytes" || fl "files/trace/kbtrace.bin missing or empty"
   [ -s $OUT/files/trace/decoded/index.txt ] && p "decoded: $(ls $OUT/files/trace/decoded | grep -c '^submit-') submits, index.txt $(wc -l < $OUT/files/trace/decoded/index.txt) lines" || fl "files/trace/decoded/index.txt missing (kbdecode)"
-  grep -q '^restored: .*7.3.1-edge-sunxi64' $OUT/runner.log 2>/dev/null && grep '^restored: ' $OUT/runner.log | tail -1 | grep -q 'renderD128' && p "stock kernel restored, panfrost renderD128 back" || fl "stock kernel not restored or no renderD128: $(grep '^restored: ' $OUT/runner.log | tail -1)"
+  for s in probe trace; do n=$(grep -m1 '^basic: lit pixels' $OUT/files/$s/info.txt 2>/dev/null)
+    echo "$n" | grep -q 'lit pixels [1-9]' && p "$s: basic case rendered ($n)" || fl "$s: basic case did not render (${n:-no basic line})"; done
+  # runner.log lines carry a date prefix, so match ' restored: ' (job 16's '^restored: ' could never match)
+  n=$(grep ' restored: ' $OUT/runner.log 2>/dev/null | tail -1)
+  echo "$n" | grep -q '7.3.1-edge-sunxi64' && echo "$n" | grep -q 'renderD128' && p "stock kernel restored, panfrost renderD128 back" || fl "stock kernel not restored or no renderD128: ${n:-no restored line}"
+  f=$OUT/step-unload.txt   # diagnostic only: INFO lines, never FAIL
+  if [ -f $f ]; then echo "INFO unload: $(grep -E '^(RMMOD|BIND)-RC|^DRI:|^STALLED' $f | tr '\n' ' ')$(grep -q '^STEP-DONE' $f || echo '(no STEP-DONE: board hung or reset)')"
+    grep -E 'Unhandled|Oops|BUG:|WARNING:|Call trace|Internal error|SError|hung|mali|panfrost' $OUT/dmesg-unload.txt 2>/dev/null | head -20 | sed 's/^/INFO unload /'
+  else echo "INFO unload: step not run"; fi
+  grep -a -E 'Unhandled|Oops|BUG:|WARNING:|Call trace|Internal error|SError|rcu.*stall|watchdog|U-Boot SPL' $OUT/serial.txt 2>/dev/null | head -20 | sed 's/^/INFO serial /'
   [ -f $OUT/BLOCKED ] && fl "BLOCKED: $(cat $OUT/BLOCKED)"
   echo "state: $(tr '\n' ' ' < $OUT/state)"
   return $bad; }
@@ -120,6 +154,9 @@ git -C $H/wt-cumulative merge-base --is-ancestor $BTFFIX "$c" 2>/dev/null || { l
 # depend on vmlinux, so a .ko from an older tree carries stale distilled BTF (build.sh deletes the old .ko first).
 # A stale .ko is rebuilt here (host only, ccache, ~1 min) under the kernel build lock; a running kernel build = retry later.
 TREE=$H/kernel-check/work-cumul/linux-7.3.1
+if [ "$(cat $KO.tag 2>/dev/null)" = "$TAG $want" ] && [ "$(stat -c %Y $KO.tag)" -ge "$(stat -c %Y $KO)" ]; then
+  log "kbase.ko was built for $TAG ($KO.tag)"
+else
 [ "$(md5sum < $TREE/arch/arm64/boot/Image | cut -c1-32)" = "$want" ] || { log "kernel-check/work-cumul is not at $TAG (Image md5 differs: build in progress or newer tree?): retry later"; exit 1; }
 if [ "$(stat -c %Y $KO)" -lt "$(stat -c %Y $TREE/vmlinux)" ]; then
   log "$KO is older than the $TAG vmlinux: rebuilding with kernel-check/kbase-trial/port/build.sh"
@@ -128,34 +165,37 @@ if [ "$(stat -c %Y $KO)" -lt "$(stat -c %Y $TREE/vmlinux)" ]; then
   bash $H/kernel-check/kbase-trial/port/build.sh > $H/kernel-check/kbase-trial/build-$TAG.log 2>&1 || { log "kbase build failed: $(tail -3 $H/kernel-check/kbase-trial/build-$TAG.log | tr '\n' ' ')"; exit 1; }
   exec 9>&-; log "rebuilt: $(tail -1 $H/kernel-check/kbase-trial/build-$TAG.log)"
 fi
+echo "$TAG $want" > $KO.tag
+fi
 [ "$(modinfo -F vermagic $KO)" = "7.3.1 SMP preempt mod_unload aarch64" ] || { log "unexpected vermagic: $(modinfo -F vermagic $KO)"; exit 1; }
 komd5=$(md5sum < $KO | cut -c1-32); blobmd5=$(md5sum < $BLOB | cut -c1-32)
 log "job $J start, kernel $TAG ($c, Image md5 $want), kbase.ko md5 $komd5 ($(stat -c %y $KO | cut -c1-19)), blob md5 $blobmd5, done before: $(tr '\n' ' ' < $OUT/state)"
 boot_trial() { # install the newest cumulative kernel with the fallback armed (skip when it is already running)
-  local img; img=$($SSH -n 'readlink /boot/Image') || blocked "board does not answer ssh"
-  if [ "$img" = vmlinuz-7.3.1-vdec-$TAG ] && [ "$($SSH -n 'md5sum < /boot/$(readlink /boot/Image) | cut -c1-32')" = "$want" ]; then
-    log "board already on $TAG"; $SSH -n 'touch /run/vdec-ok'
+  local img; img=$(S1 -n 'readlink /boot/Image') || blocked "board does not answer ssh"
+  if [ "$img" = vmlinuz-7.3.1-vdec-$TAG ] && [ "$(S1 -n 'md5sum < /boot/$(readlink /boot/Image) | cut -c1-32')" = "$want" ]; then
+    log "board already on $TAG"; S1 -n 'touch /run/vdec-ok'
   else
     [ "$img" = vmlinuz-7.3.1-edge-sunxi64 ] || blocked "board not on the stock image kernel at start (Image -> $img)"
     $V/install-kernel.sh $TAG 2>&1 | tail -3 | tee -a $OUT/runner.log
-    $SSH -n 'sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'; sleep 15
+    T1=30 S1 -n 'sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'; sleep 15
     waitup || { log "trial kernel did not come up (the fallback reverts on the next boot)"; echo "trial boot failed" > $OUT/BLOCKED; release; exit 2; }
-    [ "$($SSH -n 'md5sum < /boot/$(readlink /boot/Image) | cut -c1-32')" = "$want" ] || blocked "$TAG Image md5 mismatch after install"
-    $SSH -n 'touch /run/vdec-ok'
+    [ "$(S1 -n 'md5sum < /boot/$(readlink /boot/Image) | cut -c1-32')" = "$want" ] || blocked "$TAG Image md5 mismatch after install"
+    S1 -n 'touch /run/vdec-ok'
   fi
-  $SSH -n 'uname -v' | sed 's/^/kernel: /' | tee -a $OUT/runner.log
-  $SSH -n 'test -e /sys/kernel/btf/vmlinux' && log "kernel fix: present ($TAG contains $BTFFIX, /sys/kernel/btf/vmlinux exists)" || blocked "/sys/kernel/btf/vmlinux missing on $TAG"
-  $SSH -n 'test -e /sys/bus/platform/drivers/panfrost/1800000.gpu' || blocked "panfrost is not bound to 1800000.gpu at start"; }
+  S1 -n 'uname -v' | sed 's/^/kernel: /' | tee -a $OUT/runner.log
+  S1 -n 'test -e /sys/kernel/btf/vmlinux' && log "kernel fix: present ($TAG contains $BTFFIX, /sys/kernel/btf/vmlinux exists)" || blocked "/sys/kernel/btf/vmlinux missing on $TAG"
+  S1 -n 'test -e /sys/bus/platform/drivers/panfrost/1800000.gpu' || blocked "panfrost is not bound to 1800000.gpu at start"; }
 stage() { # /root/armblob: module + blob via ship.sh (HTTP pieces, sha256-checked; skipped when the md5 already matches), tools via scp
-  $SSH -n "mkdir -p $R/lib $R/out"
-  [ "$($SSH -n "md5sum < $R/bifrost_kbase.ko 2>/dev/null | cut -c1-32")" = "$komd5" ] && log "stage: bifrost_kbase.ko already on the board" || \
-    { $V/ship.sh $KO $R/bifrost_kbase.ko 2>&1 | tail -1 | tee -a $OUT/runner.log; [ "$($SSH -n "md5sum < $R/bifrost_kbase.ko | cut -c1-32")" = "$komd5" ] || blocked "bifrost_kbase.ko md5 mismatch after ship"; }
-  [ "$($SSH -n "md5sum < $R/lib/libmali.so.1 2>/dev/null | cut -c1-32")" = "$blobmd5" ] && log "stage: libmali.so.1 already on the board" || \
-    { $V/ship.sh $BLOB $R/lib/libmali.so.1 2>&1 | tail -1 | tee -a $OUT/runner.log; [ "$($SSH -n "md5sum < $R/lib/libmali.so.1 | cut -c1-32")" = "$blobmd5" ] || blocked "libmali.so.1 md5 mismatch after ship"; }
+  S1 -n "mkdir -p $R/lib $R/out"
+  [ "$(S1 -n "md5sum < $R/bifrost_kbase.ko 2>/dev/null | cut -c1-32")" = "$komd5" ] && log "stage: bifrost_kbase.ko already on the board" || \
+    { $V/ship.sh $KO $R/bifrost_kbase.ko 2>&1 | tail -1 | tee -a $OUT/runner.log; [ "$(S1 -n "md5sum < $R/bifrost_kbase.ko | cut -c1-32")" = "$komd5" ] || blocked "bifrost_kbase.ko md5 mismatch after ship"; }
+  [ "$(S1 -n "md5sum < $R/lib/libmali.so.1 2>/dev/null | cut -c1-32")" = "$blobmd5" ] && log "stage: libmali.so.1 already on the board" || \
+    { $V/ship.sh $BLOB $R/lib/libmali.so.1 2>&1 | tail -1 | tee -a $OUT/runner.log; [ "$(S1 -n "md5sum < $R/lib/libmali.so.1 | cut -c1-32")" = "$blobmd5" ] || blocked "libmali.so.1 md5 mismatch after ship"; }
   scp -q "${K[@]}" $T/kbtrace.so $T/gles32probe root@10.56.0.107:$R/ || blocked "cannot copy kbtrace.so / gles32probe"
-  $SSH -n "cd $R/lib; for l in libEGL.so.1 libGLESv2.so.2 libGLESv1_CM.so.1 libgbm.so.1 libOpenCL.so.1; do ln -sf libmali.so.1 \$l; done; chmod +x $R/gles32probe; modinfo -F vermagic $R/bifrost_kbase.ko" | sed 's/^/stage: board vermagic /' | tee -a $OUT/runner.log; }
-kbase_up() { $SSH -n 'test -e /dev/mali0'; }
-trap 'release' EXIT
+  S1 -n "cd $R/lib; for l in libEGL.so.1 libGLESv2.so.2 libGLESv1_CM.so.1 libgbm.so.1 libOpenCL.so.1; do ln -sf libmali.so.1 \$l; done; chmod +x $R/gles32probe; modinfo -F vermagic $R/bifrost_kbase.ko" | sed 's/^/stage: board vermagic /' | tee -a $OUT/runner.log; }
+kbase_up() { S1 -n 'test -e /dev/mali0'; }
+SER0=$(stat -c %s $SERIAL 2>/dev/null || echo 0)
+trap 'serial_save; release' EXIT
 acquire; boot_trial; stage
 # load: idempotent (skipped when /dev/mali0 is already there from an earlier run on this boot)
 if kbase_up; then log "step load: kbase already loaded (/dev/mali0 present)"; grep -qx load $OUT/state || echo load >> $OUT/state
@@ -173,6 +213,10 @@ done
 # host-side decode of the trace (no board): index.txt + pandecode per submit
 if [ -s $OUT/files/trace/kbtrace.bin ]; then rm -rf $OUT/files/trace/decoded
   timeout 600 $T/kbdecode $OUT/files/trace/kbtrace.bin $OUT/files/trace/decoded > $OUT/kbdecode.txt 2>&1; log "kbdecode rc $? ($(ls $OUT/files/trace/decoded 2>/dev/null | grep -c '^submit-') submits)"; fi
+# diagnostic, only after every result is on the host: does kbase unload and panfrost rebind? (job 16: the board reset
+# ~15 s into rmmod + bind). Console loglevel 8 so an oops reaches serial.log; a reset is caught by the keepalive /
+# stall watchdog, then restore() waits for the board (the vdec fallback brings it back on the stock kernel).
+if ! grep -qx unload $OUT/state; then kbase_up && { log "step unload: rmmod bifrost_kbase + panfrost bind (diagnostic)"; run_step unload 100 60 || log "step unload did not finish: board hung or reset (see serial.txt)"; grep -qx unload $OUT/state || echo unload >> $OUT/state; }; fi
 restore; release
 log "job $J end: steps done: $(tr '\n' ' ' < $OUT/state)"
 [ -f $OUT/BLOCKED ] && exit 2; exit 0

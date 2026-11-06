@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# ssh to the Zero2 as root with the harness key. Usage: harness/ssh.sh [cmd...]
-# ConnectTimeout + ServerAlive (2 min): a session whose board side hangs or reboots ends with an error instead of
-# waiting forever (runner jobs 29/32, 2026-11-06).
-exec ssh -i "$(dirname "$0")/id_ed25519" -o StrictHostKeyChecking=no -o UserKnownHostsFile="$(dirname "$0")/known_hosts" -o ConnectTimeout=8 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 -o LogLevel=ERROR root@10.56.0.107 "$@"
+# ssh to the Zero2 as root with the harness key. Usage: [SSH_TIMEOUT=<s>] harness/ssh.sh [cmd...]
+# Options (keepalive, connect timeout, BatchMode, host-key file) live in harness/ssh-opts.sh, shared with the packages'
+# scp calls. SSH_TIMEOUT=<s>: overall limit for a one-shot command (KILL 10 s after); unset = no limit (long steps run
+# under their own board-side `timeout` and the package's stall watchdog). Either way the PID a caller gets for
+# `harness/ssh.sh ... &` is the process to kill (ssh itself, or timeout, which passes the signal on).
+. "$(dirname "$(readlink -f "$0")")/ssh-opts.sh"
+if [ -n "${SSH_TIMEOUT:-}" ]; then exec timeout --foreground -k 10 "$SSH_TIMEOUT" /usr/bin/ssh "${BOARD_SSH_OPTS[@]}" "$BOARD_ADDR" "$@"; fi
+exec /usr/bin/ssh "${BOARD_SSH_OPTS[@]}" "$BOARD_ADDR" "$@"

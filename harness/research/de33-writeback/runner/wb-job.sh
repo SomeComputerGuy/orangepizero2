@@ -12,8 +12,7 @@
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/de33-writeback; V=$H/harness/research/vdec-perf; SSH="timeout 120 $H/harness/ssh.sh"   # every board command: ServerAlive (ssh.sh) + a 120 s step timeout
 J=${1:?job: wb42 (flips at display rate), wb41 (flips rerun) or wb40 (wb = the job 21/30 run, kept for its logs)}
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR
-   -o ConnectTimeout=8 -o ServerAliveInterval=15 -o ServerAliveCountMax=8)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 OUT=$S/logs/runner-$J; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED $OUT/OOPS
 case $J in
   wb|wb40) CHUNKS="wb"; CT=500; STALL=120; RUNS="probe solid1 solid2 solid3 solid4 bars nv12 xr30 flips-d0 flips-d4 flips-d12" ;;
@@ -166,8 +165,8 @@ run_chunk() { # run_chunk <chunk>: remote script under timeout + stall watchdog;
     n=$(stat -c %s $f); [ "$n" != "$sz" ] && { sz=$n; last=$(date +%s); }
     if [ -f $SER ] && tail -c +$((soff+1)) $SER | grep -qE "$OOPS"; then
       tail -c +$((soff+1)) $SER | grep -E "$OOPS|Call trace|pc :|lr :" | head -40 > $OUT/OOPS
-      log "OOPS on the serial log during chunk $c, killing ssh $p"; kill $p; echo OOPS >> $f; oops=serial; break; fi
-    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill $p; echo STALLED >> $f; break; fi
+      log "OOPS on the serial log during chunk $c, killing ssh $p"; kill_pid $p; echo OOPS >> $f; oops=serial; break; fi
+    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill_pid $p; echo STALLED >> $f; break; fi
   done; wait $p 2>/dev/null
   mkdir -p $OUT/files/$c; timeout 300 scp -q -r "${K[@]}" root@10.56.0.107:$R/$c/. $OUT/files/$c/ 2>/dev/null || log "scp of $R/$c failed or timed out" 
   if [ -z "$oops" ] && grep -qE "$OOPS" $OUT/files/$c/dmesg-chunk.txt 2>/dev/null; then grep -E "$OOPS|Call trace|pc :|lr :" $OUT/files/$c/dmesg-chunk.txt | head -40 > $OUT/OOPS; oops=dmesg; fi

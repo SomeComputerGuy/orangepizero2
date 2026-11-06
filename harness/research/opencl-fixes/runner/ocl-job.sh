@@ -25,7 +25,7 @@
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/opencl-fixes; V=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh
 J=${1:?job: softstop2 | img3d}
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 OUT=$S/logs/runner-$J; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED
 case $J in
   softstop2) CHUNKS="stress vk vklong intops tdim math-a math-b reg img3d"; CT=870; STALL=870
@@ -250,8 +250,8 @@ run_chunk() { # run_chunk <chunk>: remote command under timeout + stall watchdog
     n=$(stat -c %s $f); [ "$n" != "$sz" ] && { sz=$n; last=$(date +%s); }
     if [ -f $SER ] && tail -c +$((soff+1)) $SER | grep -qE "$OOPS"; then
       tail -c +$((soff+1)) $SER | grep -E "$OOPS|Call trace|pc :|lr :| panfrost" | head -40 > $OUT/OOPS
-      log "OOPS on the serial log during chunk $c, killing ssh $p"; kill $p; echo OOPS >> $f; oops=serial; break; fi
-    if [ $(( $(date +%s) - last )) -gt $(ct_of $c) ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill $p; echo STALLED >> $f; break; fi
+      log "OOPS on the serial log during chunk $c, killing ssh $p"; kill_pid $p; echo OOPS >> $f; oops=serial; break; fi
+    if [ $(( $(date +%s) - last )) -gt $(ct_of $c) ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill_pid $p; echo STALLED >> $f; break; fi
   done; wait $p 2>/dev/null
   grep -q ROUND-DONE $f || echo "CUT-OFF (no ROUND-DONE: chunk limit $(ct_of $c) s, stall or Oops)" >> $f
   collect $c

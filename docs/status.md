@@ -107,8 +107,11 @@ build-checked 878 patches, 0 failed, 0 warnings, pushed to fork 2026-11-06). Des
    kernels); retest on the image kernel first. Jumbo fix 0e2765af5 (max_mtu 2018) is in the image.
 7. panfrost: WARN in panfrost_mmu_map under memcg OOM: WARN gone since da59f9208 (c39+); unwind fixes a524d09da in c48,
    runner job 63-panfrost-map-enomem queued (harness/research/panfrost-map-enomem/RESULTS.md).
-8. Job 16 kbase trace step segfault (rc 139); harness ssh needs ServerAlive + timeout seen by the stall watchdog
-   (kbase-traces.sh hung 1.5 h across a reboot).
+8. kbase traces: segfault = kbtrace.so bug (record before init), fixed + host self-test; harness ssh unified in
+   harness/ssh-opts.sh (keepalive, ConnectTimeout, BatchMode, accept-new on harness/known_hosts, scp timeout, kill_pid);
+   job 16's hang = board reset during rmmod + panfrost rebind. Runner job 64-kbase-traces2 queued (c48).
+   NEW: under kbase every blob probe case rendered nothing (GL_OUT_OF_MEMORY, fragment DATA_INVALID_FAULT): analyse
+   job 64's trace + kctx debugfs (harness/research/kbase-trace/RESULTS.md).
 9. JPEG greyscale decode: fold in the 11-03 probe result.
 10. MPEG-4 ASP 3840x2160 decode acceptance test (datasheet-checklist).
 11. Datasheet W-items W22, W26, W12, W24, W29 (docs/datasheet-checklist.md; harness/research/datasheet-w/RESULTS.md).

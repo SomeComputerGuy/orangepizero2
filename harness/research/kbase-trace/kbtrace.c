@@ -7,7 +7,11 @@
  * then decode the job chains offline (kbdecode.c).
  *
  * Env: KBTRACE_OUT=<file> (default kbtrace.<pid>.bin), KBTRACE_MAX_REGION_MB (default 128),
- *      KBTRACE_NO_POST=1 (skip the after-event snapshots).
+ *      KBTRACE_NO_POST=1 (skip the after-event snapshots), KBTRACE_DEV=<path prefix> (default /dev/mali; the host
+ *      self-test kbtrace-selftest.sh points it at a plain file).
+ * Runner job 16 (2026-11-05): SIGSEGV at the blob's first ioctl on /dev/mali0, before kbtrace.bin existed:
+ * is_mali() recorded KBT_OPEN through rec() while `out` was still NULL (init() ran only after the is_mali() check
+ * in ioctl()/mmap()). is_mali() now calls init() itself, under the lock, before the first record.
  * Markers: the traced program may call kbtrace_marker("text") (look it up with dlsym).
  */
 #define _GNU_SOURCE
@@ -42,6 +46,7 @@ static pthread_mutex_t lk = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 static FILE *out;
 static uint64_t max_region;
 static int no_post;
+static const char *devpfx = "/dev/mali";
 static uint64_t seq;
 static uint8_t *pagebuf;
 
@@ -50,6 +55,12 @@ static void *(*r_mmap)(void *, size_t, int, int, int, off_t);
 static int (*r_munmap)(void *, size_t);
 static ssize_t (*r_read)(int, void *, size_t);
 static int (*r_close)(int);
+
+__attribute__((constructor)) static void kbtrace_ctor(void)
+{
+	if (getenv("KBTRACE_DEV"))
+		devpfx = getenv("KBTRACE_DEV");
+}
 
 static void init(void)
 {
@@ -69,7 +80,9 @@ static void init(void)
 	max_region = (getenv("KBTRACE_MAX_REGION_MB") ? atoll(getenv("KBTRACE_MAX_REGION_MB")) : 128) << 20;
 	no_post = getenv("KBTRACE_NO_POST") != NULL;
 	pagebuf = malloc(1 << 20);
+	if (!pagebuf) { fputs("kbtrace: no memory for the page buffer\n", stderr); abort(); }
 	fwrite(KBT_MAGIC, 1, 8, out);
+	fflush(out);
 }
 
 static void rec(uint32_t type, const void *hdr, uint32_t hlen, const void *pay, uint32_t plen)
@@ -89,14 +102,25 @@ static int is_mali(int fd)
 		return 0;
 	if (malifd[fd])
 		return malifd[fd] == 1;
-	char p[64], l[128];
+	char p[64], l[256];
 	snprintf(p, sizeof p, "/proc/self/fd/%d", fd);
 	ssize_t n = readlink(p, l, sizeof l - 1);
 	if (n < 0) return 0;
 	l[n] = 0;
-	malifd[fd] = strncmp(l, "/dev/mali", 9) ? 2 : 1;
-	if (malifd[fd] == 1) rec(KBT_OPEN, &fd, 4, l, n);
-	return malifd[fd] == 1;
+	if (strncmp(l, devpfx, strlen(devpfx))) {
+		malifd[fd] = 2;
+		return 0;
+	}
+	/* first sight of a mali fd: open the trace file first (rec() writes to `out`) */
+	pthread_mutex_lock(&lk);
+	init();
+	if (malifd[fd] != 1) {
+		malifd[fd] = 1;
+		rec(KBT_OPEN, &fd, 4, l, n);
+		fflush(out);
+	}
+	pthread_mutex_unlock(&lk);
+	return 1;
 }
 
 /* read our own memory without faulting on unbacked (grow-on-GPF) pages */
@@ -118,9 +142,15 @@ static void snapshot(uint32_t why)
 			continue;
 		if (!g->shadow) {
 			g->shadow = calloc(1, g->len);
-			g->valid = calloc(1, g->len >> 12);
+			g->valid = calloc(1, (g->len + 4095) >> 12);
+			if (!g->shadow || !g->valid) {	/* out of memory: skip this region (marked by len 0 below) */
+				free(g->shadow); free(g->valid); g->shadow = NULL; g->valid = NULL;
+				struct kbt_mem h = { g->gpu, g->cpu, 0 };
+				rec(KBT_MEM, &h, sizeof h, NULL, 0);
+				continue;
+			}
 		}
-		for (uint64_t off = 0; off < g->len; off += 4096) {
+		for (uint64_t off = 0; off + 4096 <= g->len; off += 4096) {
 			uint8_t *pg = pagebuf;
 			if (safe_read(pg, g->cpu + off, 4096) != 4096)
 				continue;
@@ -129,7 +159,7 @@ static void snapshot(uint32_t why)
 			/* coalesce a run of changed pages */
 			uint64_t end = off + 4096;
 			memcpy(g->shadow + off, pg, 4096); g->valid[off >> 12] = 1;
-			while (end < g->len && end - off < (1 << 20)) {
+			while (end + 4096 <= g->len && end - off < (1 << 20)) {
 				uint8_t *p2 = pagebuf + (end - off);
 				if (safe_read(p2, g->cpu + end, 4096) != 4096) break;
 				if (g->valid[end >> 12] && !memcmp(p2, g->shadow + end, 4096)) break;

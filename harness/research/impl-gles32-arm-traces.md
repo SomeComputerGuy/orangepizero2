@@ -53,6 +53,8 @@ gs_layer (gl_Layer, 2-layer array); saves 64x64 readbacks + glGetProgramBinary).
 harness/research/arm-blob/traces/ (whole arm-blob/ now git-ignored; traces/ was not before).
 
 ## Open
+- 2026-11-06: state now in kbase-trace/RESULTS.md (job 16 analysis: kbtrace segfault fixed, blob renders nothing
+  under kbase, unload resets the board; runner job 64-kbase-traces2).
 - Trace session on c1: GL_VERSION/extensions, traces, first GS/tess lowering observations (compute pre-passes,
   memory layout) are all still TODO. glcts KHR-GLES32 with the blob would need an EGL shim (glcts on the board
   uses EGL_PLATFORM_SURFACELESS_MESA, the blob has only GBM).

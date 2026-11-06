@@ -17,7 +17,7 @@
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/gles-advblend; MW=$H/mesa-work; SSH=$H/harness/ssh.sh
 J=advblend2; V=$H/harness/research/vdec-perf
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 OUT=$S/logs/runner2; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED
 CHUNKS="repro khr-adv deqp-fbfetch deqp-ms khr-ms deqp-fbo gles3-blend-a gles3-blend-b"; CT=870; STALL=870
 FORK=dc7266d584b                          # mesa-cl commit the build must contain (descriptor change + debug knobs)
@@ -146,7 +146,7 @@ run_chunk() { # run_chunk <chunk>: remote command under timeout + stall watchdog
   local last=$(date +%s) sz=0
   while kill -0 $p 2>/dev/null; do sleep 20
     n=$(stat -c %s $f); [ "$n" != "$sz" ] && { sz=$n; last=$(date +%s); }
-    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill $p; echo STALLED >> $f; break; fi
+    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill_pid $p; echo STALLED >> $f; break; fi
   done; wait $p 2>/dev/null
   mkdir -p $OUT/files/$c
   case $c in

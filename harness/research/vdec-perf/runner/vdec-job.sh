@@ -11,7 +11,7 @@ H=/home/aruni/orangepizero2; S=$H/harness/research/vdec-perf; SSH=$H/harness/ssh
 # install-kernel.sh always installs the NEWEST cumulative tag for any c<N> (AGENT-RULES "Builds"), so the md5 check
 # must use that tag too (job 02 was blocked: it compared against the old c9 Image)
 CK=$H/kernel-check/cumulative-kernels.txt; T=$(tail -1 $CK | cut -d' ' -f1); FIX=fa73c3e5e80f5af2c77158bfa8d783ef6218a163
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 OUT=$S/logs/runner-$J; mkdir -p $OUT; touch $OUT/state; rm -f $OUT/BLOCKED
 case $J in
   t1f9)  BQ=board-queue-t1r.sh;  CHUNKS="1"; CT=900; STALL=600; ENV=""; FETCH="/root/avs2/out/*" ;;
@@ -69,7 +69,7 @@ run_chunk() { # run_chunk <chunk>: remote board script under timeout + stall wat
   local last=$(date +%s) sz=0
   while kill -0 $p 2>/dev/null; do sleep 20
     n=$(stat -c %s $f); [ "$n" != "$sz" ] && { sz=$n; last=$(date +%s); }
-    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill $p; echo STALLED >> $f; break; fi
+    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill_pid $p; echo STALLED >> $f; break; fi
   done; wait $p 2>/dev/null
   for g in $FETCH; do mkdir -p $OUT/files; scp -q "${K[@]}" "root@10.56.0.107:$g" $OUT/files/ 2>/dev/null; done
   $SSH -n 'dmesg | grep -iE "timed out|iommu|fault|oops|bug:|alloc fail|cma" | tail -20' > $OUT/dmesg-$c.txt 2>&1

@@ -8,7 +8,7 @@ set -e
 H=/home/aruni/orangepizero2; T=$H/harness/research/kbase-trace; A=$H/harness/research/arm-blob
 KO=$H/kernel-check/kbase-trial/src/drivers/gpu/arm/bifrost/bifrost_kbase.ko
 SSH=$H/harness/ssh.sh
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 B=root@10.56.0.107; R=/root/armblob
 ENV="LD_LIBRARY_PATH=$R/lib"
 case $1 in

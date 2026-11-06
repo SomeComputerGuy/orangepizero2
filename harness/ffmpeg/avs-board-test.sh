@@ -10,7 +10,7 @@ DL=$H/kernel-check/dl-avs1; REF=$H/kernel-check/avs1-refs-master
 B=/root/ffavs
 if [ "${2:-}" = copy ]; then
 	$SSH "mkdir -p $B"
-	scp -q -i "$H/harness/id_ed25519" -o StrictHostKeyChecking=no -o UserKnownHostsFile="$H/harness/known_hosts" \
+	. "$H/harness/ssh-opts.sh"; scp -q "${BOARD_SSH_OPTS[@]}" \
 		"$H/kernel-check/ffmpeg-deb/build-avs/ffmpeg" "$DL/fate-bunny/bunny.mp4" \
 		"$DL/fate-avsplus-1080i-testcard/avsplus-1080i-testcard.ts" "$DL/fate-cavs/cavs.mpg" \
 		"$DL/ffsamples-avsfileformat/AVSFileFormat.es" "root@10.56.0.107:$B/"

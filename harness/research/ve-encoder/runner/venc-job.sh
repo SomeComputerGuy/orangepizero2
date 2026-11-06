@@ -13,7 +13,7 @@
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/ve-encoder; V=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh
 J=${1:?job: venc}
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR -o ConnectTimeout=8 -o ServerAliveInterval=15 -o ServerAliveCountMax=8)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 OUT=$S/logs/runner-$J; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED $OUT/OOPS
 case $J in
   venc) CHUNKS="venc"; CT=900; STALL=180 ;;
@@ -258,8 +258,8 @@ run_chunk() { # run_chunk <chunk>: remote script under timeout + stall watchdog;
     n=$(stat -c %s $f); [ "$n" != "$sz" ] && { sz=$n; last=$(date +%s); }
     if [ -f $SER ] && tail -c +$((soff+1)) $SER | grep -qE "$OOPS"; then
       tail -c +$((soff+1)) $SER | grep -E "$OOPS|Call trace|pc :|lr :" | head -40 > $OUT/OOPS
-      log "OOPS on the serial log during chunk $c, killing ssh $p"; kill $p; echo OOPS >> $f; oops=serial; break; fi
-    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s in step '$(grep '^STEP' $f | tail -1 | cut -c6-)', killing ssh $p"; kill $p; echo "STALLED in step $(grep '^STEP' $f | tail -1 | cut -c6-)" >> $f; stall_diag $c; break; fi
+      log "OOPS on the serial log during chunk $c, killing ssh $p"; kill_pid $p; echo OOPS >> $f; oops=serial; break; fi
+    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s in step '$(grep '^STEP' $f | tail -1 | cut -c6-)', killing ssh $p"; kill_pid $p; echo "STALLED in step $(grep '^STEP' $f | tail -1 | cut -c6-)" >> $f; stall_diag $c; break; fi
   done; wait $p 2>/dev/null
   rm -rf $OUT/files/$c; mkdir -p $OUT/files/$c; scp -q -r "${K[@]}" root@10.56.0.107:$R/out/. $OUT/files/$c/ 2>/dev/null
   if [ -z "$oops" ] && grep -qE "$OOPS" $OUT/files/$c/dmesg-chunk.txt 2>/dev/null; then grep -E "$OOPS|Call trace|pc :|lr :" $OUT/files/$c/dmesg-chunk.txt | head -40 > $OUT/OOPS; oops=dmesg; fi

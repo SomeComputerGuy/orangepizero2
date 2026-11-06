@@ -3,7 +3,7 @@
 # control G/TRY/S sweep, and the AVS2 test1 "frame processing timed out" reproduction.
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/ssh.sh; D=$H/harness/research/cedrus-compliance
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 scp -q "${K[@]}" $D/ctrltry root@10.56.0.107:/root/
 $S "mkdir -p /root/avs2"; scp -q "${K[@]}" $H/kernel-check/vdec-serve/avs2/avs2dec root@10.56.0.107:/root/avs2/avs2dec
 $D/build-v4l2c-board.sh "$1"

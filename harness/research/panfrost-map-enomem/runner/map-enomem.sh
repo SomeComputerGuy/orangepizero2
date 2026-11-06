@@ -16,7 +16,7 @@
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/panfrost-map-enomem; MW=$H/mesa-work; SSH=$H/harness/ssh.sh
 J=mapenomem; V=$H/harness/research/vdec-perf
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 OUT=$S/logs/runner; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED
 CHUNKS="oom gles31-di gles31-compute khr-compute ocl"; CT=870; STALL=870
 KFIX=a524d09da                            # kernel: fix/sunxi-panfrost-mmu-map-enomem
@@ -127,7 +127,7 @@ run_chunk() { # run_chunk <chunk>: remote command under timeout + stall watchdog
   local last=$(date +%s) sz=0
   while kill -0 $p 2>/dev/null; do sleep 20
     n=$(stat -c %s $f); [ "$n" != "$sz" ] && { sz=$n; last=$(date +%s); }
-    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill $p; echo STALLED >> $f; break; fi
+    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: chunk $c no output for $STALL s, killing ssh $p"; kill_pid $p; echo STALLED >> $f; break; fi
   done; wait $p 2>/dev/null
   rm -rf $OUT/files/$c; mkdir -p $OUT/files/$c
   scp -q "${K[@]}" root@10.56.0.107:$B/dmesg-$c.full $OUT/files/$c/ 2>/dev/null

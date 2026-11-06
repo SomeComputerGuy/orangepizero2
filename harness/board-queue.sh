@@ -13,7 +13,7 @@
 # Restart: kill the old queue by exact PID (harness/queue/PID), then rerun harness/board-queue.sh.
 set -uo pipefail
 cd "$(dirname "$0")/.."
-TOP=$PWD; H=$TOP/harness; SSH=$H/ssh.sh
+TOP=$PWD; H=$TOP/harness; SSH=$H/ssh.sh; . $H/ssh-opts.sh   # BOARD_SSH_OPTS for scp
 IMG=$TOP/images/5bc4d01ed/Armbian-unofficial_26.11.0-trunk_Orangepizero2_stonking_edge_7.3.1_minimal.img.xz
 Q=$H/queue; mkdir -p "$Q/done"
 OUT=$Q/$(date +%Y%m%d-%H%M); mkdir -p "$OUT"; LOG=$OUT/queue.log; ln -sfn "$OUT" "$Q/current"; echo $$ > "$Q/PID"
@@ -78,7 +78,7 @@ step_eth() { # last: 70 min soak at 1G, then 10 min each forced 100/10 full dupl
       up=$(iperf3 -c 10.56.0.107 -t 15 -J 2>/dev/null | python3 -c 'import json,sys;print(round(json.load(sys.stdin)["end"]["sum_received"]["bits_per_second"]/1e6))' 2>/dev/null)
       dn=$(iperf3 -c 10.56.0.107 -t 15 -R -J 2>/dev/null | python3 -c 'import json,sys;print(round(json.load(sys.stdin)["end"]["sum_received"]["bits_per_second"]/1e6))' 2>/dev/null)
       pl=$(ping -c 50 -i 0.2 -s 8000 10.56.0.107 | grep -o '[0-9.]*% packet loss')
-      sc=$( { /usr/bin/time -f %e timeout 120 scp -q -i $H/id_ed25519 -o UserKnownHostsFile=$H/known_hosts "$OUT/blob" root@10.56.0.107:/tmp/blob; } 2>&1 | tail -1)
+      sc=$( { /usr/bin/time -f %e timeout 120 scp -q "${BOARD_SSH_OPTS[@]}" "$OUT/blob" root@10.56.0.107:/tmp/blob; } 2>&1 | tail -1)
       echo "$(date +%T) $2 host->board=${up}Mbit board->host=${dn}Mbit ping8000=$pl scp64M=${sc}s" >> "$OUT/eth.txt"
       [ $i -lt $1 ] && sleep 240
     done; }

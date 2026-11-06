@@ -5,7 +5,7 @@ cd /home/aruni/orangepizero2; B=$1; U=$2
 harness/board-lock.sh acquire opencl-fixes ${LOCKWAIT:-7200} || exit 1
 harness/ssh.sh "test -f /root/opiz2-mesa/cl/env.sh && test -d /root/oclfix" || DEPLOY=1
 [ -n "$DEPLOY" ] && MESA_ENV=/home/aruni/orangepizero2/mesa-work/tools/env-cl.sh mesa-work/tools/deploy.sh build-cl cl
-scp -q -i harness/id_ed25519 -o UserKnownHostsFile=harness/known_hosts mesa-work/oclfix/tests/*.py mesa-work/oclfix/tests/*.sh mesa-work/oclfix/tests/cl-*.txt mesa-work/oclfix/tests/lists/*.txt root@10.56.0.107:/root/opiz2-mesa/
+. harness/ssh-opts.sh; scp -q "${BOARD_SSH_OPTS[@]}" mesa-work/oclfix/tests/*.py mesa-work/oclfix/tests/*.sh mesa-work/oclfix/tests/cl-*.txt mesa-work/oclfix/tests/lists/*.txt root@10.56.0.107:/root/opiz2-mesa/
 harness/ssh.sh "systemd-run --unit=$U --collect -p MemoryMax=${MEMMAX:-700M} ${PROPS} ${SETENV:+--setenv=$SETENV} ${SETENV2:+--setenv=$SETENV2} sh /root/opiz2-mesa/$(basename $B) >/dev/null 2>&1"
 sleep 5; while harness/ssh.sh "systemctl is-active -q $U"; do sleep 30; done
 harness/ssh.sh "journalctl -u $U -o cat --since -3h | tail -20"

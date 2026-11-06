@@ -4,7 +4,7 @@
 # to c-board/<tag>/. Usage: session-compliance.sh <tag> <patched-src.tgz>
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/ssh.sh; D=$H/harness/research/cedrus-compliance
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 scp -q "${K[@]}" $D/ctrltry root@10.56.0.107:/root/
 $D/build-v4l2c-board.sh "$2"
 $S 'mkdir -p /root/cres; cd /root/cres; uname -rv | tee uname.txt

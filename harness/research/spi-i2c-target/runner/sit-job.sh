@@ -11,7 +11,7 @@
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/spi-i2c-target; SSH=$H/harness/ssh.sh; VP=$H/harness/research/vdec-perf
 CK=$H/kernel-check/cumulative-kernels.txt; SD=$H/kernel-check/spi-i2c-target
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 OUT=$S/logs/runner; mkdir -p $OUT/board; touch $OUT/state; rm -f $OUT/BLOCKED
 CT=600; STALL=300; STOCK=vmlinuz-7.3.1-edge-sunxi64; DTB=/boot/dtb/allwinner/sun50i-h616-orangepi-zero2.dtb
 UOV_spi="sit-spi1-target sit-spi-gpio-pc"; UOV_i2c="sit-i2c3-slave sit-i2c2-ph"
@@ -84,7 +84,7 @@ run_checks() { # run_checks <spi|i2c>: board-sit.sh checks-<set> <wired>, output
   local last=$(date +%s) sz=0
   while kill -0 $p 2>/dev/null; do sleep 15
     n=$(stat -c %s $OUT/checks-$set.txt); [ "$n" != "$sz" ] && { sz=$n; last=$(date +%s); }
-    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: no output for $STALL s, killing ssh $p"; kill $p; echo STALLED >> $OUT/checks-$set.txt; break; fi
+    if [ $(( $(date +%s) - last )) -gt $STALL ]; then log "STALL: no output for $STALL s, killing ssh $p"; kill_pid $p; echo STALLED >> $OUT/checks-$set.txt; break; fi
   done; wait $p 2>/dev/null
   cat $OUT/checks-$set.txt >> $f
   $SSH -n 'dmesg | grep -iE "spi|i2c|twi|pinctrl|fault|timed out|oops|bug:|warn|call trace" | grep -viE "ACPI|EFI|spi-nor|mtd" | tail -60' > $OUT/dmesg-$set.txt 2>&1

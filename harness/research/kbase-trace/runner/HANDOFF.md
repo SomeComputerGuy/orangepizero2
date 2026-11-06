@@ -1,69 +1,64 @@
-# kbase traces runner job (kbase-traces): handoff
+# kbase traces runner job v2 (runner job 64-kbase-traces2): handoff
 
 Command: `bash harness/research/kbase-trace/runner/kbase-traces.sh`
 Checks afterwards: `bash harness/research/kbase-trace/runner/kbase-traces.sh --check` (host only, prints one
-`PASS`/`FAIL` line per check below; exit 0 = no FAIL).
+`PASS`/`FAIL`/`INFO` line per check below; exit 0 = no FAIL; INFO lines never count as FAIL).
 
-Purpose: first board run of the Arm kbase trial for the GLES 3.2 reference traces (docs/status.md item 8 step 1,
-notes harness/research/impl-gles32-arm-traces.md, BTF fix harness/research/impl-btf-dedup.md). The out-of-tree
-`bifrost_kbase.ko` (built against kernel-check/work-cumul = the newest cumulative kernel; kernel-check/kbase-trial/,
-git-ignored) must load on that kernel with panfrost unbound at runtime, its BTF must validate (the c3 run failed with
-`failed to validate module [bifrost_kbase] BTF: -22`, fixed by bd60a159b, in c7+), `/dev/mali0` must appear, and the
-gles32probe GS/tessellation cases must run on the Arm libmali g24p0 blob plain and under the kbtrace.so LD_PRELOAD.
+Purpose: GLES 3.2 reference traces from the Arm libmali g24p0 blob on the out-of-tree Arm kbase (docs/status.md item 8
+step 1; notes harness/research/kbase-trace/RESULTS.md). Job 16 got kbase loaded and the plain probe running, but
+(a) the trace step segfaulted (TRACE-RC 139: a kbtrace.so bug, fixed and host-tested), (b) every probe case rendered
+nothing (glError 0x505, DATA_INVALID_FAULT on the fragment slot): this run samples the kbase per-context debugfs during
+the probe and the trace records the job chains for that analysis, (c) the restore's rmmod + panfrost rebind made the
+board reset and the old ssh then hung 1.5 h: the restore is now a plain reboot, the unload is a separate diagnostic
+step at the very end, and every ssh call is bounded.
 
-Kernel: the script installs the NEWEST cumulative tag (last line of kernel-check/cumulative-kernels.txt, served as
-kernel-check/vdec-serve/Image.<tag> + modules-<tag>.tgz) via harness/research/vdec-perf/install-kernel.sh with the
-one-shot fallback armed, as ocl-job.sh does; the HTTP server on 10.56.0.1:8643 must be up (install-kernel.sh and the
-module/blob transfer use it). The board must be on the stock image kernel (vmlinuz-7.3.1-edge-sunxi64) at the start,
-or already on that newest tag; anything else is BLOCKED. The stock kernel is restored at the end (also when blocked).
-Before touching the board the script checks on the host that the tag contains bd60a159b, that kernel-check/work-cumul
-is at that tag and that bifrost_kbase.ko is newer than its vmlinux; a stale .ko is rebuilt there automatically (ccache,
-~1 min; `kernel-check/kbase-trial/port/build.sh`). If it exits 1 with "retry later" (a kernel build is running or the
-tree is not at the served tag), run the command again after the next kernel build has finished; it is not a FAIL.
+Kernel: the script installs the NEWEST cumulative tag (last line of kernel-check/cumulative-kernels.txt; c48 at
+submission, kbase.ko already built for it: kernel-check/kbase-trial/.../bifrost_kbase.ko.tag) via
+harness/research/vdec-perf/install-kernel.sh with the one-shot fallback armed; the HTTP server on 10.56.0.1:8643 must be
+up. The board must be on the stock image kernel (vmlinuz-7.3.1-edge-sunxi64) at the start, or already on that newest
+tag; anything else is BLOCKED. The stock kernel is restored at the end (also when blocked). If a newer cN exists by then,
+the script rebuilds kbase.ko for it itself (~1 min) or exits 1 with "retry later" while a kernel build runs.
 
-Nothing is installed into the system: the module, the blob (`/root/armblob/lib/libmali.so.1`, Arm EULA: reference only,
-never in an image or a commit) and the tools live in /root/armblob on the board; the panfrost -> kbase switch is a
-runtime unbind/insmod and is undone (rmmod + bind) before the stock-kernel reboot.
+Nothing is installed into the system: module, blob (/root/armblob/lib/libmali.so.1, Arm EULA: reference only, never in
+an image or a commit) and tools live in /root/armblob; panfrost is unbound at runtime; the final reboot undoes it.
 
-DEV or TEST: short TEST, about 10-15 min in one chunk: install + reboot ~2 min, module (34 MB) + blob (56 MB) transfer
-~3 min the first time (skipped when the md5 already matches), load < 1 min, probe <= 2 min, trace <= 5 min, restore
-reboot ~2 min. Every board step runs under a host timeout and a stall watchdog (kill after 60-300 s without output).
-Resumable: re-running the command skips the steps listed in harness/research/arm-blob/traces/runner/state whose
+DEV or TEST: short TEST, one chunk of about 15 min: install + reboot ~2 min, module (34 MB) transfer ~1 min (the blob is
+already on the board, md5-skipped), load < 1 min, probe <= 3 min, trace <= 7 min, unload <= 2 min, restore reboot
+~2 min. If the board resets during `unload` add ~6 min (it comes back by itself; see check 12). Board lock: taken and
+released by the script. Every ssh is bounded (harness/ssh-opts.sh: keepalive 2 min, connect timeout, BatchMode; one-shot
+calls max 90 s; steps: board-side timeout + host timeout + stall watchdog killing its own ssh by PID).
+Resumable: re-running the command skips the steps listed in harness/research/arm-blob/traces/runner-j64/state whose
 output files are present (kbase is reloaded if the board rebooted in between).
 
-Results: harness/research/arm-blob/traces/runner/ (git-ignored directory, do not move the files into the repo):
-runner.log, step-<load|info|probe|trace>.txt, dmesg-<step>.txt, files/probe/ and files/trace/ (info.txt, <test>.rgba,
-<test>.progbin, and kbtrace.bin for trace), files/trace/decoded/ (host kbdecode: index.txt, submit-NNNN.txt),
-kbdecode.txt, BLOCKED (only when blocked).
+Results: harness/research/arm-blob/traces/runner-j64/ (git-ignored directory; do not move files into the repo):
+runner.log, step-<load|info|probe|trace|unload>.txt, dmesg-<step>.txt, serial.txt (serial.log slice of this run),
+files/probe/ (info.txt, <case>.rgba, <case>.progbin, kctx/: jitstats.txt, atoms, mem_allocs, mem_zones, mem_profile),
+files/trace/ (same + kbtrace.bin), files/trace/decoded/ (host kbdecode: index.txt, submit-NNNN.txt), kbdecode.txt,
+BLOCKED (only when blocked).
 
 Exit codes: 0 = the job ran, judge with `--check`; 2 = blocked (report BLOCKED and the last 10 lines of runner.log);
-1 = setup error or "retry later" (report the last 5 lines of runner.log; retry once after the next kernel build if it
-says retry later).
+1 = setup error or "retry later" (report the last 5 lines of runner.log; retry once after the running kernel build).
+"Host key verification failed" anywhere = BLOCKED (the board has new host keys); do not edit any known_hosts file.
 
-## Checks (mechanical; `--check` prints them, the greps are listed so the summary can quote the evidence)
-1. runner.log has a `kernel: ` line (uname -v) and `kernel fix: present` -> PASS. Report the kernel line.
-2. step-load.txt contains `PANFROST-UNBOUND` -> PASS (panfrost not bound); `PANFROST-STILL-BOUND` -> FAIL.
-3. step-load.txt contains `INSMOD-RC 0` -> PASS; any other INSMOD-RC -> FAIL, copy the `insmod:` error line.
-4. `grep -c -i -E "failed to validate module|BTF" dmesg-load.txt` is 0 -> PASS; any hit -> FAIL, copy the lines exactly.
-5. step-load.txt contains `MALI0-PRESENT` -> PASS; `MALI0-MISSING` -> FAIL.
-6. step-load.txt contains `MODULE-BTF-PRESENT` (/sys/kernel/btf/bifrost_kbase, the kernel accepted the module BTF)
-   -> PASS; else FAIL.
-7. dmesg-load.txt has a `Kernel DDK version` line -> PASS (kbase probed); report that line and the `sunxi glue` line.
-   If checks 3-7 FAIL, the probe/trace steps were skipped: report "kbase load failed" with the last 20 DMESG lines.
-8. probe and trace: step-<s>.txt ends with `STEP-DONE` and contains `PROBE-RC 0` / `TRACE-RC 0`; files/<s>/info.txt
-   ends with `done`; each of the 10 readbacks basic, gs_pass, gs_amp, gs_inv, tess_tri, tess_gs, tess_quad, gs_xfb,
-   gs_layer0, gs_layer1 exists as files/<s>/<name>.rgba and is non-empty; each of the 9 program binaries (same names,
-   gs_layer instead of gs_layer0/1) exists as files/<s>/<name>.progbin and is non-empty -> PASS per file. A missing or
-   empty file is FAIL for that file: list them; a non-zero RC means the blob crashed on the next case after the last
-   file written (that is the result the analysis agent needs, copy the last 5 lines of files/<s>/info.txt).
-9. files/trace/kbtrace.bin exists and is non-empty, and files/trace/decoded/index.txt exists -> PASS; report the
-   kbtrace.bin size and the number of submit-NNNN.txt files.
-10. dmesg: `grep -c -E "Unhandled|Oops|BUG:|WARNING:|Call trace|mali.*(fault|error)" dmesg-probe.txt dmesg-trace.txt`
-    is 0 for both -> PASS; any hit -> FAIL, copy the lines exactly.
-11. runner.log's last `restored: ` line mentions `7.3.1-edge-sunxi64` and `renderD128` -> PASS (stock kernel back,
-    panfrost bound again); else FAIL, and BLOCKED if the board is unreachable.
+## Checks (mechanical; `--check` prints them)
+1. runner.log has a `kernel: ` line and `kernel fix: present` -> PASS. Report the kernel line.
+2. step-load.txt `PANFROST-UNBOUND` -> PASS.   3. `INSMOD-RC 0` -> PASS (else copy the insmod error line).
+4. no `failed to validate module|BTF` line in dmesg-load.txt -> PASS.   5. `MALI0-PRESENT` -> PASS.
+6. `MODULE-BTF-PRESENT` -> PASS.   7. dmesg-load.txt `Kernel DDK version` -> PASS (report it + the `sunxi glue` line).
+   If 3-7 FAIL the probe/trace steps were skipped: report "kbase load failed" with the last 20 DMESG lines.
+8. probe and trace each: `STEP-DONE`, `PROBE-RC 0` / `TRACE-RC 0`, info.txt ends with `done`, the 10 .rgba and 9
+   .progbin files present and non-empty (list the missing ones; for a non-zero RC copy the last 5 lines of info.txt).
+9. probe and trace each: the `basic: lit pixels` line shows more than 0 lit pixels -> PASS. Job 16 had 0 (expected to
+   FAIL again unless the cause is gone: that is a result, not a package problem).
+10. files/trace/kbtrace.bin non-empty and files/trace/decoded/index.txt present -> PASS; report the size and the number
+    of submit-NNNN.txt files.
+11. dmesg-probe.txt / dmesg-trace.txt without `Unhandled|Oops|BUG:|WARNING:|Call trace|mali.*(fault|error)` -> PASS;
+    else FAIL: give the count per file and the first 5 lines (not all).
+12. the last ` restored: ` line in runner.log mentions `7.3.1-edge-sunxi64` and `renderD128` -> PASS.
+INFO lines (report verbatim, never FAIL): `INFO unload:` (RMMOD-RC, BIND-RC, DRI, or "no STEP-DONE: board hung or
+reset"), `INFO unload <dmesg line>`, `INFO serial <line>` (oops/reset lines from serial.txt).
 
-The summary must list: the kernel line, checks 2-7 with their values (the `insmod:` line and every BTF/validate dmesg
-line if any), the probe and trace RC lines, the list of missing/empty output files (or "all 19 + 19 present"), the
-`lit pixels` lines of files/probe/info.txt (one per case, short), the kbtrace.bin size and submit count, the dmesg
-counts of check 10, the restored line, and the state file content.
+The summary must list: the kernel line; checks 2-7 values; probe and trace RC lines; missing/empty files (or "all
+present"); the `lit pixels` line of each case of files/probe/info.txt (short); `KCTX-SAMPLES` from step-probe.txt and
+the line counts of files/probe/kctx/*; kbtrace.bin size and submit count; check 11 counts; the restored line; every
+INFO line; the state file content; the runner.log lines containing `STALL`, `ssh rc` or `UNREACHABLE` (or "none").

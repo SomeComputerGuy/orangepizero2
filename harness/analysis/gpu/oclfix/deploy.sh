@@ -24,5 +24,5 @@ for j in $MW/stage-$N/usr/share/vulkan/icd.d/panfrost_icd*.json; do [ -e "$j" ] 
   sed "s|\"library_path\": *\"[^\"]*libvulkan_panfrost.so\"|\"library_path\": \"/root/opiz2-mesa/$N/lib/libvulkan_panfrost.so\"|" "$j" > $T/panfrost_icd.json
   echo "export VK_DRIVER_FILES=/root/opiz2-mesa/$N/panfrost_icd.json" >> $T/env.sh; done
 H=/home/aruni/orangepizero2/harness
-rsync -a --delete -e "ssh -i $H/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/known_hosts -o LogLevel=ERROR" $T/ root@10.56.0.107:/root/opiz2-mesa/$N/
+. $H/ssh-opts.sh; timeout 900 rsync -a --delete -e "/usr/bin/ssh ${BOARD_SSH_OPTS[*]}" $T/ root@10.56.0.107:/root/opiz2-mesa/$N/
 du -sh $T

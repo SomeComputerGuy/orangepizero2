@@ -2,7 +2,7 @@
 # One board session for queue-depth round 1: acquire the lock, stage, run board-queue-r1.sh, fetch, release.
 # The lock is released on every exit path (board stays on the image kernel; the round restores all devmem knobs).
 H=/home/aruni/orangepizero2; S=$H/harness/research/vdec-perf; SSH=$H/harness/ssh.sh; O=$S/logs/queue-r1
-K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR)
+. $H/harness/ssh-opts.sh; K=("${BOARD_SSH_OPTS[@]}")   # shared ssh/scp options + scp timeout + kill_pid (harness/ssh-opts.sh)
 mkdir -p $O
 { out=$($H/harness/board-lock.sh acquire vdec-r1) || exit 1; echo "$out"; case $out in *"already held"*) echo "lock already held under this owner, stop"; exit 1;; esac; }
 trap '$H/harness/board-lock.sh release vdec-r1' EXIT

@@ -1,0 +1,7 @@
+2026-11-06 11:03:18 fork: dc7266d584b (contains dc7266d584b), libgallium c3eda0931fe14e1a292c98ad738a2c67
+2026-11-06 11:03:18 job advblend start, chunks: repro khr-adv deqp-fbfetch deqp-ms khr-ms deqp-fbo gles3-blend-a gles3-blend-b, done before: 
+2026-11-06 11:03:18 acquired by runner-advblend-1793962998
+kernel: #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026
+66M	/home/aruni/orangepizero2/mesa-work/deploy/gl1
+2026-11-06 11:03:37 BLOCKED: gl1 deploy mismatch (host  board )
+released by runner-advblend-1793962998

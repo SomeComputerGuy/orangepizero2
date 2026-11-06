@@ -82,7 +82,9 @@ Image branch stonking-orangepizero2 = 90b5e7da2 (c36a2e787 + AFBC compose, wb re
 - DONE 2026-11-06: DE33 tearing + writeback, job 62 PASS on c47 (2dc70409e): 0 torn/wrong/stale captures in all runs, events
   held 100 %, 0 late/forced latches (base), every lost capture accounted by reason (kernel == client), VE+mem load real.
   Branch fix/sunxi-h616-de33-latch-event: 8af646391, 93b00281a (display), 3e0255e2f, 906968398, 825596b48 (writeback).
-  -> NEXT BUILD: cherry-pick these 5 into stonking after 20e682fc2's copy. State: harness/research/display-tearing/RESULTS.md.
+  -> NEXT BUILD: cherry-pick these 5 into stonking after 20e682fc2's copy.
+- DONE 2026-11-06: panfrost failed-map unwind a524d09da (fix/sunxi-panfrost-mmu-map-enomem): job 63 PASS on c48 (6 memcg-OOM
+  rounds, OOM hit, 0 WARN/oops, GPU alive; GLES31/KHR/OpenCL 0 regressions, 2 drawelements cases OOM->Pass). -> NEXT BUILD too. State: harness/research/display-tearing/RESULTS.md.
 
 ### B. Image integration (after the user's current build_all; the main armbian-build checkout stays untouched until then)
 1. Cherry-pick the board-PASS kernel fixes into stonking-orangepizero2 (-x, build-check):

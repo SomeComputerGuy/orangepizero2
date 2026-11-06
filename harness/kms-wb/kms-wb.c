@@ -783,22 +783,82 @@ static void classify(struct dumb *c, uint32_t a, uint32_t b, int step, int *rows
 	}
 }
 
+/*
+ * Event-vs-flush ordering (tear, DE33 latch kernels): the kernel counts a
+ * held flip event (de33_latch_events, or de33_latch_events_now when the
+ * snapshot was already written) and the flush (de33_latch_flushes) under
+ * the latch lock BEFORE it sends the event. So when the k-th event of the
+ * run arrives, both counters must have moved by >= k since the start; an
+ * event sent before its flush (not held: the pre-fix path through
+ * sun4i_tcon_finish_page_flip()) leaves de33_latch_events behind (unheld).
+ * unflushed is the userspace view of the same thing (weaker: the flush
+ * follows the early send by microseconds).
+ */
+struct flip_order {
+	bool on;
+	long ev_base, fl_base;
+	int got, unheld, unflushed;
+};
+
+static long kparam(const char *name)
+{
+	char path[128], buf[32];
+	ssize_t r;
+	int fd;
+
+	snprintf(path, sizeof(path), "/sys/module/sun8i_mixer/parameters/%s", name);
+	fd = open(path, O_RDONLY);
+	if (fd < 0)
+		return -1;
+	r = read(fd, buf, sizeof(buf) - 1);
+	close(fd);
+	if (r <= 0)
+		return -1;
+	buf[r] = 0;
+	return strtol(buf, NULL, 10);
+}
+
+static long kparam_events(void)
+{
+	long a = kparam("de33_latch_events"), b = kparam("de33_latch_events_now");
+
+	return (a < 0 || b < 0) ? -1 : a + b;
+}
+
+static void flip_order_start(struct flip_order *fo)
+{
+	memset(fo, 0, sizeof(*fo));
+	fo->ev_base = kparam_events();
+	fo->fl_base = kparam("de33_latch_flushes");
+	fo->on = fo->ev_base >= 0 && fo->fl_base >= 0;
+}
+
 struct flip_ev {
 	bool done;
 	uint32_t seq;
 	double t;
+	struct flip_order *order;	/* NULL: no ordering check */
 };
 
 static void flip_handler(int fd, unsigned int seq, unsigned int sec, unsigned int usec,
 			 unsigned int crtc, void *data)
 {
 	struct flip_ev *ev = data;
+	struct flip_order *fo;
 
 	if (!ev)	/* an event of a commit without user data: not ours */
 		return;
 	ev->done = true;
 	ev->seq = seq;
 	ev->t = sec + usec * 1e-6;
+	fo = ev->order;
+	if (fo && fo->on) {
+		fo->got++;
+		if (kparam_events() - fo->ev_base < fo->got)
+			fo->unheld++;
+		if (kparam("de33_latch_flushes") - fo->fl_base < fo->got)
+			fo->unflushed++;
+	}
 }
 
 struct stat_ms {
@@ -1249,6 +1309,7 @@ static int cmd_tear(int n)
 	int phase_n = 0, phase_outside = 0;
 	drmEventContext ev = { .version = 3, .page_flip_handler2 = flip_handler };
 	struct flip_ev fe = { 0 };
+	struct flip_order fo;
 	uint32_t last_seq = 0, lcg = 12345;
 	double t_first = 0, t_last = 0, t_commit, phase_sum = 0, phase_max = 0, vbl_ms, frame_ms;
 	struct stat_ms ioctl_ms = { 0 }, fence_ms = { 0 }, check_ms = { 0 }, draw_ms = { 0 };
@@ -1298,6 +1359,8 @@ static int cmd_tear(int n)
 		usleep(100000);
 		tear_fill(b->map, b->pitch, w, h, TEAR_SRC - 1);
 	}
+	flip_order_start(&fo);
+	fe.order = &fo;
 
 	for (int i = 0; i < n && !quit; i++) {
 		int s = i % RING;
@@ -1469,6 +1532,11 @@ static int cmd_tear(int n)
 	printf("RESULT tear flips %d frames_checked %d ok %d wrong %d stale %d early %d mixed %d bad %d fence_errors %d\n",
 	       n, checked, cnt[TEAR_OK], cnt[TEAR_WRONG], stale, early, cnt[TEAR_MIXED],
 	       cnt[TEAR_BAD], ferr);
+	if (fo.on)
+		printf("RESULT event_order events_got %d unheld %d unflushed %d\n",
+		       fo.got, fo.unheld, fo.unflushed);
+	else
+		printf("RESULT event_order unavailable\n");
 	printf("RESULT tear_full full_checked %d full_bad %d check_step %d\n", full, full_bad,
 	       CHECK_STEP);
 	printf("RESULT flip_rate %.3f seq_gaps %d\n",

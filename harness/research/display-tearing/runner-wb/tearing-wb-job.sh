@@ -1,6 +1,6 @@
 #!/bin/bash
-# Runner package for job 58-tearing-wb: writeback proof that no scanned-out frame mixes two commits (DE33 display tearing).
-# `bash harness/research/display-tearing/runner-wb/tearing-wb-job.sh` (job id t58; logs harness/research/display-tearing/logs/runner-t58/)
+# Runner package for job 59-tearing-wb2 (was 58-tearing-wb): writeback proof that no scanned-out frame mixes two commits (DE33 display tearing).
+# `bash harness/research/display-tearing/runner-wb/tearing-wb-job.sh` (job id t59; logs harness/research/display-tearing/logs/runner-t59/)
 # Self-contained: board lock (fresh owner name), the newest cumulative kernel (must contain the latch-event fix $FIX) installed
 # with the one-shot fallback armed (harness/research/vdec-perf/install-kernel.sh, Image+modules+DTB), HDMI-A-1 forced on at
 # 1024x768@60 (no sink; mode missing = NOT TESTED), harness/kms-wb/out/kms-wb `tear N`: a different full-screen picture every
@@ -13,14 +13,14 @@
 # Exit 0 = chunks ran (judge with HANDOFF.md checks); 2 = BLOCKED ($OUT/BLOCKED); 3 = Oops/WARN ($OUT/OOPS); 1 = setup/lock error.
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/display-tearing; V=$H/harness/research/vdec-perf; SSH="timeout 120 $H/harness/ssh.sh"
-J=t58
+J=t59
 K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR
    -o ConnectTimeout=8 -o ServerAliveInterval=15 -o ServerAliveCountMax=8)
 OUT=$S/logs/runner-$J; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED $OUT/OOPS
 CHUNKS="base load"; CT=900; STALL=150
 T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
 want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || exit 1
-FIX=8af646391                              # fix/sunxi-h616-de33-latch-event HEAD; the kernel must contain it
+FIX=93b00281a                              # fix/sunxi-h616-de33-latch-event HEAD (atomic_begin event fix); the kernel must contain it
 CLIENT=$H/harness/kms-wb/out/kms-wb       # built by harness/kms-wb/build.sh
 P=/root/wb/kms-wb
 R=/root/tearwb                            # board results dir
@@ -85,13 +85,22 @@ run() { local name=\$1; shift
   timeout 120 $P -c HDMI-A-1 -m $MODE -o \$D/dump/\$name "\$@" > \$name.txt 2>&1; echo "RC \$?" >> \$name.txt
   params > \$name.params.after; veirq > \$name.ve.after
   cp \$D/dump/\$name/tear.csv \$name.csv 2>/dev/null
-  echo "== \$name: $P \$*"; grep -E "^RESULT (probe|selftest (pass|fail)|tear|tear_full|flip_rate|seq_gap_max|commit_phase|mode)|^RC |error|Error|failed| (WRONG|MIXED|BAD|FULL_[A-Z]+) " \$name.txt | head -20; }
+  echo "== \$name: $P \$*"; grep -E "^RESULT (probe|selftest (pass|fail)|tear|tear_full|event_order|flip_rate|seq_gap_max|commit_phase|mode)|^RC |error|Error|failed| (WRONG|MIXED|BAD|FULL_[A-Z]+) " \$name.txt | head -20; }
+# VE load: decode into drm_prime frames (no 4K NV12 download to system RAM, which capped job 58 at ~9.5 VE IRQs/s), loop
+# until ve_stop. The loop's stdout/stderr never reach the ssh session (job 58: a loop that survived ve_stop kept the chunk's
+# ssh open -> STALL after ROUND-DONE). ve_stop kills the loop shell first, then ffmpeg, and waits until no ffmpeg is left.
 ve_start() { [ -s /dev/shm/in.mkv ] || curl -sS --fail $U64/vdec/hevc-main-2160p60.mkv -o /dev/shm/in.mkv || { echo VE-DOWNLOAD-FAILED; return; }
   [ -x /root/tearwb/ffmpeg ] || { curl -sS --fail $U63/avs2/ffmpeg-avs2q -o /root/tearwb/ffmpeg && chmod +x /root/tearwb/ffmpeg; } || { echo VE-DOWNLOAD-FAILED; return; }
-  ( while [ ! -f \$D/ve.stop ]; do timeout 100 /root/tearwb/ffmpeg -hide_banner -nostats -loglevel error -hwaccel v4l2request -i /dev/shm/in.mkv -f null - 2>>\$D/ve.err; done ) &
-  VEPID=\$!; sleep 3; echo "VE load started pid \$VEPID"; }
-ve_stop() { touch \$D/ve.stop; pkill -f 'tearwb/ffmpeg' 2>/dev/null; sleep 2; rm -f \$D/ve.stop; true; }
-mem_start() { $P memload \$1 4 32 > \$D/memload.\$2.txt 2>&1 & MEMPID=\$!; sleep 1; }
+  ve_loop "-hwaccel_output_format drm_prime"
+  [ \$VERATE -ge 20 ] || { echo "VE drm_prime rate \$VERATE/2s too low, retrying with system-memory frames"; ve_stop; ve_loop ""; }; }
+ve_loop() { rm -f \$D/ve.stop
+  ( while [ ! -f \$D/ve.stop ]; do timeout 100 /root/tearwb/ffmpeg -nostdin -hide_banner -nostats -loglevel error -hwaccel v4l2request \$1 -i /dev/shm/in.mkv -f null - 2>>\$D/ve.err; done ) </dev/null >/dev/null 2>&1 &
+  VEPID=\$!; sleep 3; a=\$(veirq); sleep 2; b=\$(veirq); VERATE=\$((b - a)); echo "VE load started pid \$VEPID (\${1:-system-memory frames}), \$VERATE VE IRQs in 2 s"; }
+ve_stop() { touch \$D/ve.stop; [ -n "\${VEPID:-}" ] && kill \$VEPID 2>/dev/null; pkill -f 'tearwb/ffmpeg' 2>/dev/null
+  for i in \$(seq 1 20); do pgrep -f 'tearwb/ffmpeg' >/dev/null || break; sleep 0.5; done
+  pkill -9 -f 'tearwb/ffmpeg' 2>/dev/null; [ -n "\${VEPID:-}" ] && wait \$VEPID 2>/dev/null; VEPID=
+  pgrep -f 'tearwb/ffmpeg' >/dev/null && echo VE-STOP-FAILED || echo "VE load stopped"; true; }
+mem_start() { $P memload \$1 4 32 </dev/null > \$D/memload.\$2.txt 2>&1 & MEMPID=\$!; sleep 1; }
 case $1 in
 base)
   timeout 30 $P selftest > selftest.txt 2>&1; echo "RC \$?" >> selftest.txt; grep -E '^RESULT selftest (pass|fail)|^RC' selftest.txt
@@ -110,10 +119,12 @@ load)
   mem_start 14 mem-rand; run mem-rand -D -1 tear 600; wait \$MEMPID 2>/dev/null
   ve_start; mem_start 14 vemem-rand; run vemem-rand -D -1 tear 600; wait \$MEMPID 2>/dev/null; ve_stop
   # printk flood (IRQ latency): 50 lines/s at KERN_ERR; console loglevel in printk.txt
-  ( for i in \$(seq 1 700); do echo "<3>tearing-wb printk load \$i" > /dev/kmsg; sleep 0.02; done ) & KPID=\$!
+  ( for i in \$(seq 1 700); do echo "<3>tearing-wb printk load \$i" > /dev/kmsg; sleep 0.02; done ) </dev/null >/dev/null 2>&1 & KPID=\$!
   run kmsg-rand -D -1 tear 600; kill \$KPID 2>/dev/null; wait \$KPID 2>/dev/null
-  rm -f /dev/shm/in.mkv ;;
+  ve_stop; rm -f /dev/shm/in.mkv ;;
 esac
+# nothing of this chunk may outlive it (an inherited stdout keeps the ssh session open)
+pkill -f '$P memload' 2>/dev/null; pgrep -f 'tearwb/ffmpeg' >/dev/null && { echo LEFTOVER-VE; pkill -9 -f 'tearwb/ffmpeg'; }
 for c in /sys/class/drm/card*-HDMI-A-1; do echo detect > \$c/status; done
 dmesg | tail -n +\$((n1+1)) > dmesg-chunk.txt
 grep -E 'sun4i|sun8i|sun50i|drm|iommu|$OOPS' dmesg-chunk.txt | grep -v 'tearing-wb printk load' | tail -40 | sed 's/^/DMESG: /'
@@ -140,6 +151,8 @@ extract() { # host side: results.txt lines "<chunk> <run> <key> <value>"
       /^RESULT flip [0-9]+ commit_error / { print c, r, "flip_commit_errno", $5 }
       /^RESULT tear flips / { for (i = 3; i < NF; i += 2) print c, r, $i, $(i+1) }
       /^RESULT tear_full / { for (i = 3; i < NF; i += 2) print c, r, $i, $(i+1) }
+      /^RESULT event_order unavailable/ { print c, r, "event_order_unavailable", 1 }
+      /^RESULT event_order events_got / { print c, r, "events_got", $4; print c, r, "events_unheld", $6; print c, r, "events_unflushed", $8 }
       /^RESULT flip_rate / { print c, r, "flip_rate", $3; print c, r, "seq_gaps", $5 }
       /^RESULT seq_gap_max / { print c, r, "seq_gap_max", $3; print c, r, "first_gap_flip", $5 }
       /^RESULT commit_phase / { print c, r, "commit_phase_mean_ms", $4; print c, r, "commit_phase_max_ms", $6
@@ -155,6 +168,7 @@ extract() { # host side: results.txt lines "<chunk> <run> <key> <value>"
   done
   grep -q MODE-UNAVAILABLE $d/connectors.txt 2>/dev/null && echo "$c all mode_unavailable 1" >> $OUT/results.txt
   grep -q VE-DOWNLOAD-FAILED $OUT/chunk-$c.txt 2>/dev/null && echo "$c all ve_download_failed 1" >> $OUT/results.txt
+  k=$(grep -cE 'VE-STOP-FAILED|LEFTOVER-VE' $OUT/chunk-$c.txt 2>/dev/null); echo "$c all ve_leftover ${k:-0}" >> $OUT/results.txt
   k=$(grep -v 'tearing-wb printk load' $d/dmesg-chunk.txt 2>/dev/null | grep -cE "$OOPS"); echo "$c all dmesg_bad ${k:-0}" >> $OUT/results.txt
   k=$(grep -ciE 'iommu' $d/dmesg-chunk.txt 2>/dev/null); echo "$c all dmesg_iommu ${k:-0}" >> $OUT/results.txt; }
 oops_fail() { log "OOPS during chunk $1 ($2): $(head -3 $OUT/OOPS | tr '\n' ' ')"; restore; release; log "job $J ABORTED (exit 3)"; exit 3; }

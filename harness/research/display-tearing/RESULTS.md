@@ -49,6 +49,47 @@ patch in series.conf):
 - c43 = test-cumulative c65ef3449 (merge of 8af646391), 2026-11-06 18:36, Image md5 1a65e6a622f769e4f2bd2aa35c3f822f,
   879 patches, 0 C warnings, served in kernel-check/vdec-serve (*.c43). Pushed to fork.
 
+## Job 58 result (c43, 2026-11-06 18:40-18:50) and the follow-up fix
+No tearing anywhere: 14 tear runs, mixed/bad/wrong 0, ok == flips, late/forced 0, 60.003 fps unloaded, stale_cleared 2
+per run (the stale-bit cause of (a) confirmed: the bit was set at every vblank-IRQ enable and was cleared, late 0).
+Open items and causes:
+1. Check 6 FAIL (de33_latch_events / _now 0 while flushes == commits): a real kernel bug, not a counter bug. Upstream
+   sun4i_crtc_atomic_begin() moves crtc->state->event to scrtc->event (sent by sun4i_tcon_finish_page_flip() in the TCON
+   handler, BEFORE the vblank_quirk flush); atomic_flush, where 8af646391 hands the event to hold_event, therefore never
+   saw one. The client did request DRM_MODE_PAGE_FLIP_EVENT (nonblocking atomic). So race (b) was still open for every
+   client (atomic, legacy page_flip and the helper's internal commit->event all go through atomic_begin). Fix 93b00281a:
+   atomic_begin leaves the event in the state for an engine with hold_event (sunxi_engine_holds_events(); only the DE33
+   non-RCQ ops have it); DE2/DE3/RCQ unchanged. The tearing pixels were fine in job 58 because the flush follows the early
+   event in the same hard IRQ (microseconds), before a woken client can get its next commit in; the window is real but
+   narrow (another CPU, a long IRQ path such as a printk), so the counters, not the pixels, prove the fix.
+   Client proof added: kms-wb tear `RESULT event_order events_got N unheld U unflushed F`: at every flip event it reads
+   de33_latch_events(+_now) and de33_latch_flushes, which the kernel increments under the latch lock before sending; an
+   event that arrives before the counters moved by k (k-th event) is unheld/unflushed. Pre-fix kernel: unheld == N.
+2. Check 7 NOT TESTED (ve_irqs 89-95 per 10 s run): package bug, two parts. (i) ffmpeg -hwaccel v4l2request without
+   -hwaccel_output_format drm_prime downloads every 4K NV12 frame to system RAM, capping the decode at ~9.5 frames/s;
+   now drm_prime (fallback to system frames if < 20 IRQs/2 s). (ii) The VE loop of vemem-rand survived ve_stop (ffmpeg
+   took > 2 s to exit after SIGTERM, ve.stop was already removed, so the loop restarted: kmsg-rand still had 94 VE IRQs)
+   and then spun 3385x on the deleted /dev/shm/in.mkv ("Error opening input file"). ve_stop now kills the loop shell
+   first, then ffmpeg, waits until none is left (SIGKILL after 10 s), and the stop flag is cleared only by ve_start.
+3. STALL after ROUND-DONE: the same surviving loop held the ssh session's stdout open, so ssh never ended. All background
+   loads now run with stdin/stdout/stderr off the session, the chunk end kills leftovers (LEFTOVER-VE counted as
+   `load all ve_leftover`).
+4. Memory load flip_rate 49-56, seq_gaps 87-110 (no tearing): client CPU/DRAM starvation, not a kernel issue. The kernel
+   side is clean in those runs (latch_deferred 0, coalesced 0, late 0, wb 600/600 done, no overflow); the gaps follow
+   commits that the client made 18-38 ms after the previous event although asked for 4 ms (mem-d4 commit_phase mean 7.9,
+   max 38.8 ms vs 4.07/4.11 unloaded), because its per-frame check (3 MB capture read, mean 8.4 max 32 ms vs 4.4/5.1) and
+   draw (2.4/16 vs 1.1/2.3 ms) slow down under the 4-thread 2.37 GB/s memcpy that also takes all 4 cores. A commit that
+   misses its vblank simply goes out one later. No work-list item; a stricter variant would run the client SCHED_FIFO
+   or the memload at nice 19 (not done).
+
+Fix commit: armbian-build fix/sunxi-h616-de33-latch-event 93b00281a (same patch file, regenerated from
+kernel-check/tearing-late/{a,b}; previous diff kept as raw-8af646391.diff), pushed to fork. Build check
+(kernel-check/tearing-late/build-check2.log): 879 patches, 0 failed, 0 C warnings, dtc 0. c44 = test-cumulative cf976bccc
+(merge of 93b00281a), 2026-11-06 19:00, Image md5 a471ce426a7389b518b5420835b01f95, DTB md5 aa4d5bbb... (unchanged),
+served in kernel-check/vdec-serve (*.c44), pushed to fork. Client kms-wb sha256 2730ba1f... (event_order).
+Package updated for job 59 (J=t59, FIX=93b00281a, checks 6/7 extended, check 9 = no STALL): runner job
+harness/runner-queue/59-tearing-wb2.md, logs harness/research/display-tearing/logs/runner-t59/.
+
 ## Writeback tearing check (design, runner job 58)
 harness/kms-wb `tear N` (kms-wb.c cmd_tear): ring of 4 source dumbs, frame i pixel = (i & 0xff) << 16 | y (red tags the
 commit, green/blue the row), a writeback capture of every flip (ring 6), each capture classified on every 32nd pixel of
@@ -67,11 +108,13 @@ Package: harness/research/display-tearing/runner-wb/{tearing-wb-job.sh,HANDOFF.m
 harness/runner-queue/58-tearing-wb.md, logs harness/research/display-tearing/logs/runner-t58/.
 
 ## Open / next
-- Next: runner job 58 on c43; a fresh agent judges done/58-tearing-wb.summary.md with HANDOFF checks 0-8.
+- Next: runner job 59-tearing-wb2 on c44; a fresh agent judges done/59-tearing-wb2.summary.md with HANDOFF checks 0-9.
   PASS -> status item 9 "Display tearing" = fixed and verified by writeback; cherry-pick b04527be4's follow-ups
-  (8af646391) into stonking-orangepizero2 with the other writeback commits after the user's build.
-  FAIL check 2 MIXED with boundary_row small (< 40) on most frames -> the flush lands in active video: the TCON line
-  counter is not zeroed at vsync start (sun4i_tcon1_mode_set doubles vtotal; see the note in sun4i_tcon.c) -> fix
+  (8af646391, 93b00281a) into stonking-orangepizero2 with the other writeback commits after the user's build.
+  Check 6 unheld > 0 -> the event still bypasses hold_event (look for another path that sends crtc->state->event:
+  sun4i_crtc_atomic_disable, the vblank_delay hrtimer path); MIXED/WRONG -> as in the job-58 notes below.
+- Job 58 FAIL branches kept for reference: MIXED with boundary_row small (< 40) on most frames -> the flush lands in
+  active video (TCON line counter not zeroed at vsync start; sun4i_tcon1_mode_set doubles vtotal) -> fix
   sun50i_mixer_latch_mode_set() line_active/line_deadline. WRONG early -> event/snapshot race still open.
-  check 4 forced/late > 0 outside kmsg -> real IRQ latency > 2 frames: look at what holds IRQs off (printk.txt, dmesg).
+  forced/late > 0 outside kmsg -> real IRQ latency > 2 frames: look at what holds IRQs off (printk.txt, dmesg).
 - Not done: RCQ port (vendor RTMX_USE_RCQ; would latch in hardware); not needed for frame coherence.

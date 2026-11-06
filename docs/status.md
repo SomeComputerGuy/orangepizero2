@@ -165,6 +165,10 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
 - Merged, waiting for board: c19 panfrost oops fix (job 18; then release held 08/09/14/15), c21 DE33 vblank latch (job 19-display-tearing).
 - Open coding: SPI/I2C target mode (W33, agent running), DE33 writeback connector (W23, agent running).
 - Runner failures 2026-11-06 (next code agent, one at a time):
+  - c27 jobs 28-32 (2026-11-06): 29-g2d STALLED (first conversion step, board unreachable ~2 min); 32-ve-encoder STALLED (first step after probe, board unreachable ~5 min); c27 boot WARN mc-device.c:619 media_device_register_entity from cedrus_probe+0x398 (encoder registration) -> code agent "m2m stalls" running.
+  - 30-de33-writeback (c27): every flip+writeback atomic commit -EINVAL, nothing captured; xr30 dumb buffer -EINVAL.
+  - 31-spi-i2c-target (c27): SPI set PASS (spidev1.0 present); I2C set: i2c3 does not probe with sit-i2c3-slave overlay (status okay, overlay applied, not deferred, no dmesg).
+  - 28-panfrost-softstop2 (c27): kernel fix works (stress/vk/vklong/intops/reg PASS, no oops); tdim package bug (quick_2d not a test name); math-a/b Mesa multi-queue race; img3d timeout + "Unhandled Page fault in AS0 at VA 0xB2F8000", JOB_BUS_FAULT js=1.
   - 16-kbase-traces (c20): trace step rc 139 (segfault); probe PASS except dmesg; stalled 90 min in restore (ssh, see harness item).
   - 19-display-tearing (c24): seq_gaps 1 in four of six runs (stock d4/d12 too, so a test artefact is possible); 60 flips/s, rest PASS.
   - 20-spi-i2c-target (c24, no jumpers): no /dev/i2c-3, no 3-1064, no /dev/spidev1.0: overlays did not take effect (check overlay

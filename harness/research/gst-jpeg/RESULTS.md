@@ -1,4 +1,4 @@
-# GStreamer hardware JPEG decode on cedrus (v4l2sljpegdec): state 2026-11-06 (job 11 ran on c17: 8/8 cases PASS, the two FAILs were wrong expectations; rerun queued as job 22)
+# GStreamer hardware JPEG decode on cedrus (v4l2sljpegdec + stateful v4l2jpegdec): state 2026-11-06 (job 22 PASS on c24; stateful v4l2jpegdec hang root-caused = cedrus refused V4L2_DEC_CMD_STOP, kernel fix in c41, runner job 56 queued)
 
 ## Rounds so far
 - 02-gst-jpeg (done, build/gst-jpeg/results/, summary harness/runner-queue/done/02-gst-jpeg.summary.md): hardware path
@@ -11,6 +11,43 @@
   see below; compare.txt regenerated with the fixed reference: 12 of 12 PASS (original kept as compare.run1.txt).
 - 11-gst-jpeg-recheck (queued, harness/runner-queue/11-gst-jpeg-recheck.md): the failing cases of both on the newest
   cumulative kernel with patches 0101-0107. Package harness/gst-jpeg/recheck/, bundle build/gst-jpeg/bundle-recheck.
+
+## Stateful v4l2jpegdec hang (work-list item) root-caused 2026-11-06: cedrus refused V4L2_DEC_CMD_STOP; kernel fix c41
+Evidence: job 22 out/norank16.gstdebug.txt (build/gst-jpeg/results-recheck/out/) and out/dmesg.txt.
+- Is cedrus JPEG a stateful-looking node? Yes, by design: the 2024 JPEG series (Gil Peyrot / Skrabec,
+  "Don't require requests for all codecs") decodes JPEG without requests (the driver parses the whole image), on the
+  same /dev/video0 decoder node, source format V4L2_PIX_FMT_JPEG, capture NV12/NV21/YU12/YV12. That is exactly the
+  stateful JPEG decoder shape gst-plugins-good (and FFmpeg v4l2m2m) autoplug, and it decodes correctly that way: in the
+  log frame 0 (1920x1088) is decoded and output (`Got buffer for frame number 0`). So the autoplug is not wrong and no
+  caps/rank change is warranted; the driver lacked one piece of the stateful interface.
+- The hang: at EOS gst_v4l2_video_dec_finish() sends V4L2_DEC_CMD_STOP; cedrus only had
+  v4l2_m2m_ioctl_stateless_decoder_cmd (FLUSH only) -> `Failed to send decoder command 1 ... (Invalid argument)`.
+  GStreamer then falls back to queueing empty OUTPUT buffers until the capture side reports EOS. vb2 makes each a
+  full-length buffer ("use of bytesused == 0 is deprecated"), the JPEG parser refuses it ("Failed to setup decoding job:
+  -22", ~50/s, ratelimited -> dmesg +133), the capture buffer returns with ERROR and a stale timestamp ("Driver bug
+  detected", "frame number 4293", "Decoder is producing too many buffers"), and the loop repeats until timeout 60
+  (rc=124). Not a gst-plugins-good bug: it handles a LAST-flagged buffer / -EPIPE properly.
+- Fix (kernel, armbian-build fix/sunxi-cedrus-jpeg-stop-drain 950c46035, worktree wt-jpeg-stop, pushed to fork;
+  merged into test-cumulative 39b1dce3f = **c41**; patch
+  patches.media/h616-jpeg/media-cedrus-jpeg-drain-on-V4L2_DEC_CMD_STOP.patch at the end of series.conf): for the JPEG
+  source format, (try_)decoder_cmd use the stateful m2m helpers (STOP/START); cedrus_job_finish() (irq, watchdog,
+  setup-error paths) flags the capture buffer of the last source buffer queued before STOP with V4L2_BUF_FLAG_LAST and
+  marks the context stopped; buf_queue completes a capture buffer queued after the drain as an empty LAST buffer;
+  start/stop_streaming update the m2m drain state; START clears last_buffer_dequeued and reschedules. The other
+  codecs keep the stateless FLUSH (they never enter the draining state). Build-check: 877 patches, 0 failed, build exit
+  0, 0 C warnings, dtbs exit 0; checkpatch --strict clean. No GStreamer change and no rank change.
+- MARGINAL override (image-integration.patch, GST_PLUGIN_FEATURE_RANK=v4l2jpegdec:MARGINAL): keep it. With the fix
+  v4l2jpegdec works, but it is a wrong autoplug at equal rank: it sorts before v4l2sljpegdec and its caps cannot refuse
+  what the engine cannot decode (greyscale, multi-scan, separate chroma tables, 16-bit DQT), so those would become
+  decode errors instead of falling back to jpegdec, while v4l2sljpegdec's caps (0102/0104/0105) route them. Update the
+  comment in image-integration.patch from "cannot drive cedrus / hangs" to that reason when the integration is done.
+- Board check: runner job 56 (harness/runner-queue/56-gst-jpeg-stateful.md, package harness/gst-jpeg/stateful/:
+  make-bundle.sh -> build/gst-jpeg/bundle-stateful, board-test.sh, check.sh, run-job.sh (resumable, PAUSE file, stall
+  watchdog, restore-kernel.sh), HANDOFF.md checks C0-C7). Results build/gst-jpeg/results-stateful/compare.txt.
+  If C1-C4 fail with `cmdfail>0`: the board did not run c41+ (kernel.txt). If `cmdfail=0` but rc=124: read
+  out/sf-*.gstdebug.txt for "Waiting for decoder stop" without a following "Done draining" (LAST never delivered: check
+  out/dmesg.txt and the drain path in cedrus_job_finish). md5 != v4l2sljpegdec at equal size: compare the NV12
+  format/stride both negotiated (out/*.log caps lines).
 
 ## Job 11 analysed (2026-11-06): 8 of 8 cases PASS on c17, checks 1 and 8 had wrong expectations, no hardware fault
 Summary harness/runner-queue/done/11-gst-jpeg-recheck.summary.md, results kept in build/gst-jpeg/results-recheck-job11/.
@@ -190,7 +227,9 @@ Rerun: harness/runner-queue/22-gst-jpeg-recheck2.md (bundle-recheck rebuilt with
   and z17x33-411 PASS, mjmix (pre-0106) FAIL(caps,sw-size) as expected.
 
 ## Next steps
-1. Runner: job 22 (recheck rerun). Expected: INSPECT PASS `KSIZES=1; sink-range ok width=[1,4096] height=[1,2304]`,
+0. Job 22 ran on c24 (2026-11-06): PASS (8/8, INSPECT, NORANK; NORANK16 recorded as expected). Next: job 56 (stateful
+   v4l2jpegdec on c41), then the integration in step 3.
+1. (done) Runner: job 22 (recheck rerun). Expected: INSPECT PASS `KSIZES=1; sink-range ok width=[1,4096] height=[1,2304]`,
    8 of 8 PASS, every `dmesg +0`, NORANK PASS (stateful declines 1921x1081), NORANK16 recorded (rc=124 and some dmesg
    lines expected; out/norank16.gstdebug.txt is the log for the work-list item).
 2. If 11 fails: `sink-range BAD` = the bundle is not the 0107 build (BUILD.txt in the bundle names the commit);
@@ -202,6 +241,4 @@ Rerun: harness/runner-queue/22-gst-jpeg-recheck2.md (bundle-recheck rebuilt with
    harness/research/gst-jpeg/image-integration.patch, image build, verify-board. Re-check the 02 package's check 4
    threshold (PSNR only; use recheck/compare.py's reference instead).
 4. Deferred: throughput (above). Work list: jpegdec/videoconvert 4:1:1 chroma (upstream GStreamer, affects only the
-   software path); the stateful v4l2jpegdec hang on cedrus (gst-plugins-good 1.28.7 source at
-   /home/aruni/orangepi5/work/gst-plugins-good-1.28.7; analyse job 11's out/norank.gstdebug.txt; the MARGINAL override
-   covers it until then).
+   software path). The stateful v4l2jpegdec hang is root-caused and fixed in c41 (section above); runner job 56.

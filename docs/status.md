@@ -202,7 +202,8 @@ finished: KASLR 3/3 distinct, 60 min thermal stress max 76 °C, TVE/IR overlay b
   patch arm64-dts-sun50i-h5-nanopi-r1s-h5-add-rtl8153-support: usb device reg cells), shown because c40 rebuilt all DTBs
   (c39's dtbs step was incremental). c40 diff touches no DT. Optional Armbian PR (other boards), low priority.
   Package built 2026-11-06: harness/afbc-wb (client + lossless flat-chroma-tile synthetic streams), runner job 53-afbc-wb (c38, no kernel change); pass = AFBC captures bit-identical to linear away from chroma-tile edges (the DE33 scaler uses another chroma phase for AFBC). State: harness/research/afbc-wb/RESULTS.md.
-- Next items: stateful v4l2jpegdec hang (after job 11 gstdebug), remaining M/L datasheet items (W22 encoder SPEC, W26, W12, W24, W29, W25 G2D).
+- Stateful v4l2jpegdec hang ROOT-CAUSED 2026-11-06: cedrus (JPEG without requests = stateful-style node) refused V4L2_DEC_CMD_STOP, gst fell back to empty buffers -> endless "Failed to setup decoding job: -22". Kernel fix 950c46035 fix/sunxi-cedrus-jpeg-stop-drain (fork) in c41 = 39b1dce3f; runner job 56-gst-jpeg-stateful. MARGINAL override stays (wrong autoplug at equal rank, not a hang workaround any more). TODO after PASS: cherry-pick into stonking.
+- Next items: remaining M/L datasheet items (W22 encoder SPEC, W26, W12, W24, W29, W25 G2D).
 
 ### C. Needs hardware from the user
 10. HDMI display (HDMI 4K60, HDMI audio, CEC, AFBC 4K60 output), TV (CVBS), 13-pin expansion board (IR, line-out,

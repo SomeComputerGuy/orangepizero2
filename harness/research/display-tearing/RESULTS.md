@@ -148,6 +148,57 @@ Image branch: 20e682fc2 (writeback retry) is already in the image branch. The c4
 906968398) only make the writeback fence honest (no capture of another commit's picture reported as good); they belong
 with 20e682fc2 and must follow it into the image (together with 8af646391/93b00281a) at the next build if job 61 passes.
 
+## Job 61 result (c46, 2026-11-06 19:47-19:56) and the accounting fix
+Display clean everywhere: 0 WRONG/MIXED/BAD/FULL in all 18 tear runs, events held 100 % (unheld/unflushed 0), late/forced
+0, no dmesg issue, VE load real (524-555 IRQs). Two check failures, both analysed from files/{base,load}/<run>.{txt,csv}
+and the params before/after:
+1. Check 3(d) (ve-rand lost 7 > 5, vemem-rand2 6 > 4, vemem-rand3 4 > 2): one late RT-WB begin cost two captures. Every
+   fence error but one comes in a pair of consecutive flips N, N+1 with events in consecutive vblanks (ve-rand 523/524
+   seq 7624/7625, 576/577, 583/584; vemem-rand2 225/226, 512/513, 559/560; vemem-rand3 265/266, 276/277). Job N was busy
+   at vblank N+1 (snapshot N+1 on screen) -> marked replaced, but 906968398 ended it only when the unit finished, at
+   vblank N+2; job N+1 could not start while the unit was busy and at N+2 found snapshot N+2 on screen -> lost. Per run
+   lost == 2 x replaced (+1 in ve-rand: flip 75, OVERFLOW at the first try, repeat found snapshot 76 already on screen;
+   wb_overflow 2 = retries 2, the other repeat succeeded). vemem-rand2 busy 4 vs replaced 3: one busy frame with the
+   snapshot unchanged, finished OK. The follower losses were needless: the replaced capture is failed in any case, so
+   it can be stopped at the vblank that replaces it and the next job started in the same blanking.
+2. Check 5 (base t-rand seq_gaps 1, deferred 0): flip 204 (same random phase in every run, the largest of the sequence):
+   commit ioctl at 99.241212, 14.838 ms after flip 203's event 99.226374, i.e. 1.83 ms before vblank 2883; event at 2884.
+   deferred 0 and coalesced 0 mean the snapshot was not pending at vblank 2883 (a pending one is flushed or counted
+   deferred, its event held): the commit reached atomic_flush after that vblank. Not a lost flip in the latch. The same
+   flip made it in jobs 58-60 with 1.82-1.86 ms (phase 14.78-14.81 ms); in job 61 commits with 1.86 ms made it. So the
+   commit ioctl -> snapshot latency is sometimes > 1.8 ms on the idle board (nonblocking commit worker + plane updates;
+   not measured before). The random phase goes up to frame - 2 ms by design, so such a flip is the test pushing the edge.
+Fix: armbian-build fix/sunxi-h616-de33-latch-event 825596b48 (two patches after 906968398, scratch kernel-check/wb-account/
+{a,b,tools}):
+- drm-sun4i-de33-writeback-stop-a-capture-overtaken-by-the-next-snapshot.patch: a capture busy at a vblank with another
+  snapshot on screen is stopped there (-ESTALE, de33_wb_replaced) and the next job starts in the same IRQ. Every failed
+  job has exactly one reason, as its fence error and a counter: -EIO de33_wb_fail_error (data lost, not repeatable),
+  -ENODATA de33_wb_fail_missed (picture gone before the start: start postponed / coalesced), -ESTALE de33_wb_replaced,
+  -ETIMEDOUT de33_wb_fail_timeout, -ECANCELED de33_wb_fail_cancelled; failed == their sum, lost = missed + replaced.
+- drm-sun4i-de33-record-the-vblank-and-time-of-each-latch-snapshot.patch: latch_vblanks counted under latch_lock in every
+  vblank IRQ; de33_latch_snap_vbl / _flush_vbl / _snap_ns of the last snapshot.
+- Client harness/kms-wb (sha256 4970f3b2...): `RESULT flip N fence_error status=S reason R`, `RESULT wb_fail_reasons`,
+  per gap `RESULT flip N seq_gap g late_vblanks a deferred_vblanks b commit_margin_ms m snapshot_latency_ms l`,
+  `RESULT seq_gap_account ... unexplained U client_late C commit_slow S`, `RESULT snapshot_latency`.
+- HANDOFF check 3 L is now exact per reason (client == kernel for each, failed == sum, cause bounds: replaced <= busy,
+  error <= overflow + timeout, missed <= deferred + coalesced); check 5 accounts every vblank between flips
+  (unexplained 0 everywhere; t-rand late-commit gaps allowed and reported). Package no longer copies ve.stop.
+Build check (kernel-check/wb-account/build-check.log): 883 patches, 0 failed, 0 C warnings, dtc 0 (c47 run: 17 old warnings of rebuilt A64/H5 DTBs, Zero2 DTB unchanged); W=1 sun50i_wb.o and
+sun8i_mixer.o clean. c47 = test-cumulative 2dc70409e (merge of 825596b48), Image md5 b3938b2633e1bcc7cf9d5262fa66b5d1, DTB unchanged, served
+in kernel-check/vdec-serve (*.c47). Runner job harness/runner-queue/62-tearing-wb5.md (J=t62, logs logs/runner-t62/).
+
+## Done criteria / image
+- Display fix = done when job 62 (or 61 as it stands) shows checks 2, 4, 6 and the display part of 5 (unexplained 0,
+  no deferred-free gap other than a late commit) on all runs. Jobs 59, 60, 61 were already clean on these with
+  8af646391 + 93b00281a: no torn/stale/garbled capture in ~24 000 captured flips (3 x ~8000), events held, late/forced 0.
+- The display commits can go to the image on their own: the display patch (send-the-flip-event-after-the-latch-flush,
+  8af646391 + 93b00281a) touches only sun4i_crtc.c, sun4i_tcon.c, sun8i_mixer.{c,h}, sunxi_engine.h; the writeback
+  patches (3e0255e2f, 906968398, the wb half of 825596b48) touch only sun50i_wb.c and apply with or without it. The
+  writeback ones make the writeback fence honest (no wrong picture reported as good, every failure with a reason) and
+  belong with 20e682fc2 (already in the image); they should follow at the same build if job 62 check 3 passes, otherwise
+  ship the display patch alone. The latch-record patch (mixer half of 825596b48) is diagnostics only; it needs the
+  display patch and may go with it.
+
 ## Writeback tearing check (design, runner job 58)
 harness/kms-wb `tear N` (kms-wb.c cmd_tear): ring of 4 source dumbs, frame i pixel = (i & 0xff) << 16 | y (red tags the
 commit, green/blue the row), a writeback capture of every flip (ring 6), each capture classified on every 32nd pixel of
@@ -166,13 +217,16 @@ Package: harness/research/display-tearing/runner-wb/{tearing-wb-job.sh,HANDOFF.m
 harness/runner-queue/58-tearing-wb.md, logs harness/research/display-tearing/logs/runner-t58/.
 
 ## Open / next
-- Next: runner job 61-tearing-wb4 on c46 (harness/runner-queue/61-tearing-wb4.md, package runner-wb/ J=t61,
-  FIX=906968398); a fresh agent judges done/61-tearing-wb4.summary.md with HANDOFF checks 0-9.
-  PASS -> status item 9 "Display tearing" = fixed and verified by writeback; cherry-pick 8af646391, 93b00281a, 3e0255e2f,
-  906968398 into the image branch after 20e682fc2 at the next build.
-  WRONG again with wb_busy_frames 0 -> a real early latch (flush/held-event path). WRONG with busy > 0 -> the
-  unit recorded a frame after the one it was last seen busy on (add a per-job trace: job, latch_seq, start vblank, fence).
-  Look at wb_busy_start_line_min vs wb_quick_start_line_max (late-begin threshold; perf/coverage only, not a defect).
+- Next: runner job 62-tearing-wb5 on c47 (harness/runner-queue/62-tearing-wb5.md, package runner-wb/ J=t62,
+  FIX=825596b48); a fresh agent judges done/62-tearing-wb5.summary.md with HANDOFF checks 0-9.
+  PASS -> status item 9 "Display tearing" = fixed and verified; cherry-pick 8af646391, 93b00281a, 3e0255e2f, 906968398,
+  825596b48 into the image branch after 20e682fc2 at the next build. Check 3 fails only -> image gets the display patch
+  alone (see "Done criteria / image").
+  Check 3: a pair of failures (replaced N, missed N+1) again -> the stopped unit did not take the new start in the same
+  blanking (look at wb_start_line_max / busy_start_line_min). replaced > 0 with wb_busy_start_line_min above
+  wb_quick_start_line_max -> late begins follow the start line (a later item could defer starts past some line).
+  Check 5: commit_slow gaps in base t-rand with snapshot_latency_max_ms > ~1.8 -> commit path latency (Deferred perf
+  note, not a display defect); UNEXPLAINED -> a vblank without a flush of a pending snapshot = real latch bug.
 - Job 58 FAIL branches kept for reference: MIXED with boundary_row small (< 40) on most frames -> the flush lands in
   active video (TCON line counter not zeroed at vsync start; sun4i_tcon1_mode_set doubles vtotal) -> fix
   sun50i_mixer_latch_mode_set() line_active/line_deadline. WRONG early -> event/snapshot race still open.

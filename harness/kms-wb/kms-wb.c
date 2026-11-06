@@ -838,6 +838,13 @@ struct flip_ev {
 	uint32_t seq;
 	double t;
 	struct flip_order *order;	/* NULL: no ordering check */
+	/*
+	 * read at the event (flip_order on): the kernel's record of the flip's
+	 * latch snapshot (de33_latch_snap_vbl/_flush_vbl/_snap_ns), -1 if the
+	 * kernel has none
+	 */
+	long snap_vbl, flush_vbl;
+	double t_snap;
 };
 
 static void flip_handler(int fd, unsigned int seq, unsigned int sec, unsigned int usec,
@@ -858,6 +865,11 @@ static void flip_handler(int fd, unsigned int seq, unsigned int sec, unsigned in
 			fo->unheld++;
 		if (kparam("de33_latch_flushes") - fo->fl_base < fo->got)
 			fo->unflushed++;
+		ev->snap_vbl = kparam("de33_latch_snap_vbl");
+		ev->flush_vbl = kparam("de33_latch_flush_vbl");
+		ev->t_snap = kparam("de33_latch_snap_ns") * 1e-9;
+	} else {
+		ev->snap_vbl = ev->flush_vbl = -1;
 	}
 }
 
@@ -1294,10 +1306,45 @@ static int cmd_selftest(void)
 
 struct tear_rec {
 	uint32_t seq;
-	double t_vbl, t_commit;
+	double t_vbl, t_commit, t_snap;
+	long snap_vbl, flush_vbl;
 	int8_t verdict;
+	int8_t reason;		/* fence error: index into wb_reason_name */
 	int16_t tag;
 };
+
+/*
+ * Why a capture failed, from its out-fence error (sun50i_wb.c gives every
+ * failed job exactly one: de33_wb_fail_error, _missed, de33_wb_replaced,
+ * _fail_timeout, _fail_cancelled); "wait" = the fence did not signal here.
+ */
+enum { WBR_ERROR, WBR_MISSED, WBR_REPLACED, WBR_TIMEOUT, WBR_CANCELLED, WBR_WAIT, WBR_OTHER, WBR_N };
+static const char *const wb_reason_name[WBR_N] = {
+	"error", "missed", "replaced", "timeout", "cancelled", "wait", "other",
+};
+
+static int wb_reason(int waited, int status)
+{
+	if (waited)
+		return WBR_WAIT;
+	switch (status) {
+	case -EIO:		return WBR_ERROR;
+	case -ENODATA:		return WBR_MISSED;
+	case -ESTALE:		return WBR_REPLACED;
+	case -ETIMEDOUT:	return WBR_TIMEOUT;
+	case -ECANCELED:	return WBR_CANCELLED;
+	default:		return WBR_OTHER;
+	}
+}
+
+static void tear_rec_event(struct tear_rec *r, const struct flip_ev *fe)
+{
+	r->seq = fe->seq;
+	r->t_vbl = fe->t;
+	r->snap_vbl = fe->snap_vbl;
+	r->flush_vbl = fe->flush_vbl;
+	r->t_snap = fe->t_snap;
+}
 
 static int cmd_tear(int n)
 {
@@ -1306,7 +1353,7 @@ static int cmd_tear(int n)
 	static struct tear_rec rec[TEAR_MAX];
 	int ret, w, h, cnt[4] = { 0 }, stale = 0, early = 0, ferr = 0, checked = 0;
 	int gaps = 0, gap_max = 0, first_gap = -1, full = 0, full_bad = 0, dumped = 0;
-	int phase_n = 0, phase_outside = 0;
+	int phase_n = 0, phase_outside = 0, reasons[WBR_N] = { 0 };
 	drmEventContext ev = { .version = 3, .page_flip_handler2 = flip_handler };
 	struct flip_ev fe = { 0 };
 	struct flip_order fo;
@@ -1390,8 +1437,7 @@ static int cmd_tear(int n)
 			}
 			last_seq = fe.seq;
 			t_last = fe.t;
-			rec[i - 1].seq = fe.seq;
-			rec[i - 1].t_vbl = fe.t;
+			tear_rec_event(&rec[i - 1], &fe);
 			if (o.commit_delay_us > 0) {
 				sleep_until(fe.t + o.commit_delay_us * 1e-6);
 			} else if (o.commit_delay_us < 0) {
@@ -1426,7 +1472,7 @@ static int cmd_tear(int n)
 		/* while flip i waits for its vblank: check capture i-2, draw frame i+2 */
 		for (int j = i - 2; j <= i - 2 + (i == n - 1 ? 2 : 0) && j >= 0 && j < n; j++) {
 			struct tear_cls r;
-			int st, sj = j % RING;
+			int st, w_ret, sj = j % RING;
 
 			if (j > i - 2 && !fe.done) {
 				/* the last two: wait for the last flip first */
@@ -1447,15 +1493,20 @@ static int cmd_tear(int n)
 					}
 					last_seq = fe.seq;
 					t_last = fe.t;
-					rec[i].seq = fe.seq;
-					rec[i].t_vbl = fe.t;
+					tear_rec_event(&rec[i], &fe);
 				}
 			}
 			t0 = now_s();
-			if (fence_wait(fence[sj], FENCE_TIMEOUT_MS, &st) || st < 0) {
-				printf("RESULT flip %d fence_error status=%d\n", j, st);
+			st = 0;
+			if ((w_ret = fence_wait(fence[sj], FENCE_TIMEOUT_MS, &st)) || st < 0) {
+				int rs = wb_reason(w_ret, st);
+
+				printf("RESULT flip %d fence_error status=%d reason %s\n", j, st,
+				       wb_reason_name[rs]);
 				ferr++;
+				reasons[rs]++;
 				rec[j].verdict = -1;
+				rec[j].reason = rs;
 			} else {
 				stat_add(&fence_ms, (now_s() - t0) * 1e3);
 				t0 = now_s();
@@ -1532,6 +1583,73 @@ static int cmd_tear(int n)
 	printf("RESULT tear flips %d frames_checked %d ok %d wrong %d stale %d early %d mixed %d bad %d fence_errors %d\n",
 	       n, checked, cnt[TEAR_OK], cnt[TEAR_WRONG], stale, early, cnt[TEAR_MIXED],
 	       cnt[TEAR_BAD], ferr);
+	printf("RESULT wb_fail_reasons");
+	for (int r = 0; r < WBR_N; r++)
+		printf(" %s %d", wb_reason_name[r], reasons[r]);
+	printf("\n");
+
+	/*
+	 * Every vblank between two flips, from the kernel's snapshot record
+	 * (sun8i_mixer.c de33_latch_snap_vbl): flip j missed
+	 * gap = seq(j) - seq(j-1) - 1 vblanks, of which
+	 *   late  = snap_vbl(j) - flush_vbl(j-1): vblanks that passed before its
+	 *           commit reached the latch snapshot (atomic_flush) and
+	 *   defer = flush_vbl(j) - snap_vbl(j) - 1: vblanks the latch held it.
+	 * gap != late + defer (or either < 0) is a flip the account cannot
+	 * explain (unexplained: a vblank without a flush of a pending snapshot).
+	 * A late flip is client_late if the commit ioctl began after the
+	 * vblank it was meant for (t_vbl(j-1) + frame), else commit_slow (began
+	 * before it, the snapshot was taken after it).
+	 */
+	{
+		int acct = 1, g_flips = 0, g_vbl = 0, late_vbl = 0, def_vbl = 0, unexpl = 0;
+		int c_late = 0, c_slow = 0;
+		struct stat_ms snap_ms = { 0 };
+
+		for (int j = 0; j < n; j++)
+			if (rec[j].seq && (rec[j].snap_vbl < 0 || rec[j].flush_vbl < 0))
+				acct = 0;
+		for (int j = 1; acct && j < n; j++) {
+			int gap, late, defer;
+			double margin, lat;
+
+			if (!rec[j].seq || !rec[j - 1].seq)
+				continue;
+			gap = (int)(rec[j].seq - rec[j - 1].seq) - 1;
+			late = (int)(rec[j].snap_vbl - rec[j - 1].flush_vbl);
+			defer = (int)(rec[j].flush_vbl - rec[j].snap_vbl) - 1;
+			margin = (rec[j - 1].t_vbl + frame_ms * 1e-3 - rec[j].t_commit) * 1e3;
+			lat = (rec[j].t_snap - rec[j].t_commit) * 1e3;
+			stat_add(&snap_ms, lat);
+			if (late > 0) {
+				if (margin <= 0)
+					c_late++;
+				else
+					c_slow++;
+			}
+			if (gap > 0) {
+				g_flips++;
+				g_vbl += gap;
+			}
+			if (late > 0)
+				late_vbl += late;
+			if (defer > 0)
+				def_vbl += defer;
+			if (gap != late + defer || late < 0 || defer < 0)
+				unexpl++;
+			if (gap || late || defer)
+				printf("RESULT flip %d seq_gap %d late_vblanks %d deferred_vblanks %d commit_margin_ms %.3f snapshot_latency_ms %.3f%s\n",
+				       j, gap, late, defer, margin, lat,
+				       gap != late + defer || late < 0 || defer < 0 ? " UNEXPLAINED" : "");
+		}
+		if (acct) {
+			printf("RESULT seq_gap_account gap_flips %d gap_vblanks %d late_vblanks %d deferred_vblanks %d unexplained %d client_late %d commit_slow %d\n",
+			       g_flips, g_vbl, late_vbl, def_vbl, unexpl, c_late, c_slow);
+			stat_print("snapshot_latency", &snap_ms);
+		} else {
+			printf("RESULT seq_gap_account unavailable\n");
+		}
+	}
 	if (fo.on)
 		printf("RESULT event_order events_got %d unheld %d unflushed %d\n",
 		       fo.got, fo.unheld, fo.unflushed);

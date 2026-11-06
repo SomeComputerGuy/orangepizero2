@@ -1,6 +1,6 @@
 #!/bin/bash
-# Runner package for job 61-tearing-wb4 (was 58-tearing-wb, 59-tearing-wb2, 60-tearing-wb3): writeback proof that no scanned-out frame mixes two commits (DE33 display tearing).
-# `bash harness/research/display-tearing/runner-wb/tearing-wb-job.sh` (job id t61; logs harness/research/display-tearing/logs/runner-t61/)
+# Runner package for job 62-tearing-wb5 (was 58-tearing-wb, 59-tearing-wb2, 60-tearing-wb3, 61-tearing-wb4): writeback proof that no scanned-out frame mixes two commits (DE33 display tearing).
+# `bash harness/research/display-tearing/runner-wb/tearing-wb-job.sh` (job id t62; logs harness/research/display-tearing/logs/runner-t62/)
 # Self-contained: board lock (fresh owner name), the newest cumulative kernel (must contain the latch-event fix $FIX) installed
 # with the one-shot fallback armed (harness/research/vdec-perf/install-kernel.sh, Image+modules+DTB), HDMI-A-1 forced on at
 # 1024x768@60 (no sink; mode missing = NOT TESTED), harness/kms-wb/out/kms-wb `tear N`: a different full-screen picture every
@@ -13,14 +13,14 @@
 # Exit 0 = chunks ran (judge with HANDOFF.md checks); 2 = BLOCKED ($OUT/BLOCKED); 3 = Oops/WARN ($OUT/OOPS); 1 = setup/lock error.
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/display-tearing; V=$H/harness/research/vdec-perf; SSH="timeout 120 $H/harness/ssh.sh"
-J=t61
+J=t62
 K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR
    -o ConnectTimeout=8 -o ServerAliveInterval=15 -o ServerAliveCountMax=8)
 OUT=$S/logs/runner-$J; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED $OUT/OOPS
 CHUNKS="base load"; CT=900; STALL=150
 T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
 want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || exit 1
-FIX=906968398                              # fix/sunxi-h616-de33-latch-event HEAD (writeback fails a capture that ran into the next snapshot); the kernel must contain it
+FIX=825596b48                           # fix/sunxi-h616-de33-latch-event HEAD (writeback failure reasons + latch snapshot vblank record); the kernel must contain it
 CLIENT=$H/harness/kms-wb/out/kms-wb       # built by harness/kms-wb/build.sh
 P=/root/wb/kms-wb
 R=/root/tearwb                            # board results dir
@@ -59,8 +59,8 @@ boot_trial() {
   dtbwant=$(md5sum < $H/kernel-check/vdec-serve/sun50i-h616-orangepi-zero2.dtb.$T | cut -c1-32)
   dtbhave=$($SSH -n 'md5sum < /boot/dtb/allwinner/sun50i-h616-orangepi-zero2.dtb | cut -c1-32')
   [ "$dtbhave" = "$dtbwant" ] || blocked "$T DTB not installed: board md5 $dtbhave, want $dtbwant"
-  $SSH -n 'test -f /sys/module/sun8i_mixer/parameters/de33_latch_deferred && test -f /sys/module/sun4i_tcon/parameters/vblank_stale_cleared && test -f /sys/module/sun8i_mixer/parameters/de33_wb_replaced' \
-    || blocked "kernel $T has no de33_latch_deferred / vblank_stale_cleared / de33_wb_replaced parameters (fix $FIX not in the running kernel)"
+  $SSH -n 'test -f /sys/module/sun8i_mixer/parameters/de33_latch_deferred && test -f /sys/module/sun4i_tcon/parameters/vblank_stale_cleared && test -f /sys/module/sun8i_mixer/parameters/de33_wb_fail_missed && test -f /sys/module/sun8i_mixer/parameters/de33_latch_snap_vbl' \
+    || blocked "kernel $T has no de33_latch_deferred / vblank_stale_cleared / de33_wb_fail_missed / de33_latch_snap_vbl parameters (fix $FIX not in the running kernel)"
   $SSH -n 'ls -d /sys/class/drm/card*-Writeback-1 >/dev/null 2>&1' || blocked "kernel $T has no Writeback-1 connector"
   log "kernel $T up (dtb $dtbhave), writeback present"; }
 others_waiting() { ls $H/harness/queue/board.wait 2>/dev/null | grep -v "\.$OWN\." | grep -q .; }
@@ -85,7 +85,7 @@ run() { local name=\$1; shift
   timeout 120 $P -c HDMI-A-1 -m $MODE -o \$D/dump/\$name "\$@" > \$name.txt 2>&1; echo "RC \$?" >> \$name.txt
   params > \$name.params.after; veirq > \$name.ve.after
   cp \$D/dump/\$name/tear.csv \$name.csv 2>/dev/null
-  echo "== \$name: $P \$*"; grep -E "^RESULT (probe|selftest (pass|fail)|tear|tear_full|event_order|flip_rate|seq_gap_max|commit_phase|mode)|^RC |error|Error|failed| (WRONG|MIXED|BAD|FULL_[A-Z]+) " \$name.txt | head -20; }
+  echo "== \$name: $P \$*"; grep -E "^RESULT (probe|selftest (pass|fail)|tear|tear_full|event_order|flip_rate|seq_gap_max|seq_gap_account|snapshot_latency|wb_fail_reasons|commit_phase|mode)|^RC |error|Error|failed|UNEXPLAINED| (WRONG|MIXED|BAD|FULL_[A-Z]+) " \$name.txt | head -24; }
 # VE load: decode into drm_prime frames (no 4K NV12 download to system RAM, which capped job 58 at ~9.5 VE IRQs/s), loop
 # until ve_stop. The loop's stdout/stderr never reach the ssh session (job 58: a loop that survived ve_stop kept the chunk's
 # ssh open -> STALL after ROUND-DONE). ve_stop kills the loop shell first, then ffmpeg, and waits until no ffmpeg is left.
@@ -128,6 +128,7 @@ esac
 # nothing of this chunk may outlive it (an inherited stdout keeps the ssh session open)
 pkill -f '$P memload' 2>/dev/null; pgrep -f 'tearwb/ffmpeg' >/dev/null && { echo LEFTOVER-VE; pkill -9 -f 'tearwb/ffmpeg'; }
 for c in /sys/class/drm/card*-HDMI-A-1; do echo detect > \$c/status; done
+rm -f \$D/ve.stop   # loop marker, not a result
 dmesg | tail -n +\$((n1+1)) > dmesg-chunk.txt
 grep -E 'sun4i|sun8i|sun50i|drm|iommu|$OOPS' dmesg-chunk.txt | grep -v 'tearing-wb printk load' | tail -40 | sed 's/^/DMESG: /'
 ls dump/*/ 2>/dev/null | grep -c raw | sed 's/^/DUMPS: /'
@@ -157,12 +158,16 @@ extract() { # host side: results.txt lines "<chunk> <run> <key> <value>"
       /^RESULT event_order events_got / { print c, r, "events_got", $4; print c, r, "events_unheld", $6; print c, r, "events_unflushed", $8 }
       /^RESULT flip_rate / { print c, r, "flip_rate", $3; print c, r, "seq_gaps", $5 }
       /^RESULT seq_gap_max / { print c, r, "seq_gap_max", $3; print c, r, "first_gap_flip", $5 }
+      /^RESULT seq_gap_account unavailable/ { print c, r, "seq_gap_account_unavailable", 1 }
+      /^RESULT seq_gap_account gap_flips / { for (i = 3; i < NF; i += 2) print c, r, "acct_" $i, $(i+1) }
+      /^RESULT snapshot_latency / { print c, r, "snapshot_latency_mean_ms", $4; print c, r, "snapshot_latency_max_ms", $6 }
+      /^RESULT wb_fail_reasons / { for (i = 3; i < NF; i += 2) print c, r, "client_fail_" $i, $(i+1) }
       /^RESULT commit_phase / { print c, r, "commit_phase_mean_ms", $4; print c, r, "commit_phase_max_ms", $6
                                 for (i = 1; i <= NF; i++) if ($i == "outside_blanking") { print c, r, "commits_outside_blanking", $(i+1); print c, r, "commits_counted", $(i+3) } }
       /^RESULT (commit_ioctl|fence_wait|check|draw) / { print c, r, $2 "_mean_ms", $4; print c, r, $2 "_max_ms", $6 }
       / (WRONG|MIXED|BAD|FULL_WRONG|FULL_MIXED|FULL_BAD) tag_top / { n++ } END { print c, r, "anomaly_lines", n + 0 }' $d/$r.txt >> $OUT/results.txt
     for k in commits flushes flushes_late deferred forced events events_now coalesced; do v=$(pdelta $d $r de33_latch_$k); [ -n "$v" ] && echo "$c $r latch_${k}_delta $v" >> $OUT/results.txt; done
-    for k in jobs done failed overflow timeout retries deferred lost busy_frames replaced; do v=$(pdelta $d $r de33_wb_$k); [ -n "$v" ] && echo "$c $r wb_${k}_delta $v" >> $OUT/results.txt; done
+    for k in jobs done failed overflow timeout retries deferred lost busy_frames replaced fail_error fail_missed fail_timeout fail_cancelled; do v=$(pdelta $d $r de33_wb_$k); [ -n "$v" ] && echo "$c $r wb_${k}_delta $v" >> $OUT/results.txt; done
     v=$(pdelta $d $r vblank_stale_cleared); [ -n "$v" ] && echo "$c $r vblank_stale_cleared_delta $v" >> $OUT/results.txt
     for k in line_min line_max line_active line_deadline; do v=$(grep "^de33_latch_$k=" $d/$r.params.after 2>/dev/null | cut -d= -f2); [ -n "$v" ] && echo "$c $r latch_${k}_after $v" >> $OUT/results.txt; done
     for k in start_line_max busy_start_line_min quick_start_line_max; do v=$(grep "^de33_wb_$k=" $d/$r.params.after 2>/dev/null | cut -d= -f2); [ -n "$v" ] && echo "$c $r wb_${k}_after $v" >> $OUT/results.txt; done
@@ -190,7 +195,7 @@ run_chunk() {
   done; wait $p 2>/dev/null
   mkdir -p $OUT/files/$c
   # text results only (no dump/*.raw captures, they are 3 MB each): every top-level file of the chunk dir
-  timeout 300 $H/harness/ssh.sh -n "cd $R/$c && tar cf - --exclude=dump . " 2>/dev/null | tar xf - -C $OUT/files/$c 2>/dev/null || log "copy of $R/$c failed or timed out"
+  timeout 300 $H/harness/ssh.sh -n "cd $R/$c && tar cf - --exclude=dump --exclude=ve.stop . " 2>/dev/null | tar xf - -C $OUT/files/$c 2>/dev/null || log "copy of $R/$c failed or timed out"
   $H/harness/ssh.sh -n "ls -la $R/$c/dump/*/ 2>/dev/null" > $OUT/files/$c/dump-list.txt 2>/dev/null
   if [ -z "$oops" ] && grep -v 'tearing-wb printk load' $OUT/files/$c/dmesg-chunk.txt 2>/dev/null | grep -qE "$OOPS"; then grep -E "$OOPS|Call trace|pc :|lr :" $OUT/files/$c/dmesg-chunk.txt | grep -v 'tearing-wb printk load' | head -40 > $OUT/OOPS; oops=dmesg; fi
   sed -i "/^$c /d" $OUT/results.txt 2>/dev/null; extract $c

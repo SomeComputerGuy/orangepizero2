@@ -1,6 +1,6 @@
 #!/bin/bash
-# Runner package for job 60-tearing-wb3 (was 58-tearing-wb, 59-tearing-wb2): writeback proof that no scanned-out frame mixes two commits (DE33 display tearing).
-# `bash harness/research/display-tearing/runner-wb/tearing-wb-job.sh` (job id t60; logs harness/research/display-tearing/logs/runner-t60/)
+# Runner package for job 61-tearing-wb4 (was 58-tearing-wb, 59-tearing-wb2, 60-tearing-wb3): writeback proof that no scanned-out frame mixes two commits (DE33 display tearing).
+# `bash harness/research/display-tearing/runner-wb/tearing-wb-job.sh` (job id t61; logs harness/research/display-tearing/logs/runner-t61/)
 # Self-contained: board lock (fresh owner name), the newest cumulative kernel (must contain the latch-event fix $FIX) installed
 # with the one-shot fallback armed (harness/research/vdec-perf/install-kernel.sh, Image+modules+DTB), HDMI-A-1 forced on at
 # 1024x768@60 (no sink; mode missing = NOT TESTED), harness/kms-wb/out/kms-wb `tear N`: a different full-screen picture every
@@ -13,14 +13,14 @@
 # Exit 0 = chunks ran (judge with HANDOFF.md checks); 2 = BLOCKED ($OUT/BLOCKED); 3 = Oops/WARN ($OUT/OOPS); 1 = setup/lock error.
 set -u
 H=/home/aruni/orangepizero2; S=$H/harness/research/display-tearing; V=$H/harness/research/vdec-perf; SSH="timeout 120 $H/harness/ssh.sh"
-J=t60
+J=t61
 K=(-i $H/harness/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=$H/harness/known_hosts -o LogLevel=ERROR
    -o ConnectTimeout=8 -o ServerAliveInterval=15 -o ServerAliveCountMax=8)
 OUT=$S/logs/runner-$J; mkdir -p $OUT/files; touch $OUT/state; rm -f $OUT/BLOCKED $OUT/OOPS
 CHUNKS="base load"; CT=900; STALL=150
 T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
 want=$(md5sum < $H/kernel-check/vdec-serve/Image.$T | cut -c1-32) || exit 1
-FIX=3e0255e2f                              # fix/sunxi-h616-de33-latch-event HEAD (writeback captures only its own snapshot); the kernel must contain it
+FIX=906968398                              # fix/sunxi-h616-de33-latch-event HEAD (writeback fails a capture that ran into the next snapshot); the kernel must contain it
 CLIENT=$H/harness/kms-wb/out/kms-wb       # built by harness/kms-wb/build.sh
 P=/root/wb/kms-wb
 R=/root/tearwb                            # board results dir
@@ -59,8 +59,8 @@ boot_trial() {
   dtbwant=$(md5sum < $H/kernel-check/vdec-serve/sun50i-h616-orangepi-zero2.dtb.$T | cut -c1-32)
   dtbhave=$($SSH -n 'md5sum < /boot/dtb/allwinner/sun50i-h616-orangepi-zero2.dtb | cut -c1-32')
   [ "$dtbhave" = "$dtbwant" ] || blocked "$T DTB not installed: board md5 $dtbhave, want $dtbwant"
-  $SSH -n 'test -f /sys/module/sun8i_mixer/parameters/de33_latch_deferred && test -f /sys/module/sun4i_tcon/parameters/vblank_stale_cleared' \
-    || blocked "kernel $T has no de33_latch_deferred / vblank_stale_cleared parameters (fix $FIX not in the running kernel)"
+  $SSH -n 'test -f /sys/module/sun8i_mixer/parameters/de33_latch_deferred && test -f /sys/module/sun4i_tcon/parameters/vblank_stale_cleared && test -f /sys/module/sun8i_mixer/parameters/de33_wb_replaced' \
+    || blocked "kernel $T has no de33_latch_deferred / vblank_stale_cleared / de33_wb_replaced parameters (fix $FIX not in the running kernel)"
   $SSH -n 'ls -d /sys/class/drm/card*-Writeback-1 >/dev/null 2>&1' || blocked "kernel $T has no Writeback-1 connector"
   log "kernel $T up (dtb $dtbhave), writeback present"; }
 others_waiting() { ls $H/harness/queue/board.wait 2>/dev/null | grep -v "\.$OWN\." | grep -q .; }
@@ -162,9 +162,10 @@ extract() { # host side: results.txt lines "<chunk> <run> <key> <value>"
       /^RESULT (commit_ioctl|fence_wait|check|draw) / { print c, r, $2 "_mean_ms", $4; print c, r, $2 "_max_ms", $6 }
       / (WRONG|MIXED|BAD|FULL_WRONG|FULL_MIXED|FULL_BAD) tag_top / { n++ } END { print c, r, "anomaly_lines", n + 0 }' $d/$r.txt >> $OUT/results.txt
     for k in commits flushes flushes_late deferred forced events events_now coalesced; do v=$(pdelta $d $r de33_latch_$k); [ -n "$v" ] && echo "$c $r latch_${k}_delta $v" >> $OUT/results.txt; done
-    for k in jobs done failed overflow timeout retries deferred lost busy_frames; do v=$(pdelta $d $r de33_wb_$k); [ -n "$v" ] && echo "$c $r wb_${k}_delta $v" >> $OUT/results.txt; done
+    for k in jobs done failed overflow timeout retries deferred lost busy_frames replaced; do v=$(pdelta $d $r de33_wb_$k); [ -n "$v" ] && echo "$c $r wb_${k}_delta $v" >> $OUT/results.txt; done
     v=$(pdelta $d $r vblank_stale_cleared); [ -n "$v" ] && echo "$c $r vblank_stale_cleared_delta $v" >> $OUT/results.txt
     for k in line_min line_max line_active line_deadline; do v=$(grep "^de33_latch_$k=" $d/$r.params.after 2>/dev/null | cut -d= -f2); [ -n "$v" ] && echo "$c $r latch_${k}_after $v" >> $OUT/results.txt; done
+    for k in start_line_max busy_start_line_min quick_start_line_max; do v=$(grep "^de33_wb_$k=" $d/$r.params.after 2>/dev/null | cut -d= -f2); [ -n "$v" ] && echo "$c $r wb_${k}_after $v" >> $OUT/results.txt; done
     a=$(cat $d/$r.ve.after 2>/dev/null); b=$(cat $d/$r.ve.before 2>/dev/null); [ -n "$a" ] && [ -n "$b" ] && echo "$c $r ve_irqs_delta $((a - b))" >> $OUT/results.txt
     [ -f $d/memload.$r.txt ] && echo "$c $r memload_GBps $(awk '/^RESULT memload/{print $NF}' $d/memload.$r.txt)" >> $OUT/results.txt
   done

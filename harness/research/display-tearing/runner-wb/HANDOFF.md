@@ -1,18 +1,20 @@
-# Job 60-tearing-wb3: handoff (writeback proof that no frame mixes two commits; rerun of jobs 58, 59)
+# Job 61-tearing-wb4: handoff (writeback proof that no frame mixes two commits; rerun of jobs 58, 59, 60)
 
 Command: `bash harness/research/display-tearing/runner-wb/tearing-wb-job.sh`
 
-Purpose: board check of armbian-build `fix/sunxi-h616-de33-latch-event` 3e0255e2f (in c45 = test-cumulative 7a7ee8e23):
-on top of job 59's fixes (flip event sent only after the vblank latch flush, atomic snapshot, stale TCON vblank bit
-cleared, no flush in active video), a writeback job that cannot start at the vblank that flushed its own commit (unit
-still writing out the previous capture under DRAM load) now fails with -EIO (`de33_wb_lost`) instead of capturing the
-next commit's picture with a good fence (job 59 vemem-rand: 2 "early" WRONG captures = this measurement bug, the
-scan-out was right). vemem-rand runs 3 times. State/background: harness/research/display-tearing/RESULTS.md.
+Purpose: board check of armbian-build `fix/sunxi-h616-de33-latch-event` 906968398 (in c46 = test-cumulative 266499b02):
+on top of job 60's kernel (flip event only after the vblank latch flush, atomic snapshot, stale TCON vblank bit cleared,
+no flush in active video, a writeback job starts only while its own snapshot is on screen), a capture that is still
+busy at a vblank at which another snapshot is on screen now fails with -EIO (`de33_wb_lost` and `de33_wb_replaced`)
+instead of completing with the later commit's picture (job 60: 6 "early" WRONG captures under VE load, each the only
+busy capture of its run; the RT-WB unit sometimes begins one frame after its start, the scan-out was right). New
+diagnostics `de33_wb_busy_start_line_min` / `de33_wb_quick_start_line_max` (start lines of captures that were busy /
+finished at the next vblank). vemem-rand runs 3 times. State/background: harness/research/display-tearing/RESULTS.md.
 
-Kernel: newest cumulative tag (c45 or later, Image.c45 md5 751c43fc9fbcc188c93f8a20ee42daeb), installed by the script
+Kernel: newest cumulative tag (c46 or later, Image.c46 md5 7b46b2a92515f23d7c1db63bb6e7a5d1), installed by the script
 with Image+modules+DTB through harness/research/vdec-perf/install-kernel.sh (fallback armed), restored at the end
-(restore-kernel.sh). The script refuses (BLOCKED) a kernel without 3e0255e2f, without the parameters
-`de33_latch_deferred` / `sun4i_tcon vblank_stale_cleared`, or without the Writeback-1 connector. Board must start on the
+(restore-kernel.sh). The script refuses (BLOCKED) a kernel without 906968398, without the parameters
+`de33_latch_deferred` / `sun4i_tcon vblank_stale_cleared` / `de33_wb_replaced`, or without the Writeback-1 connector. Board must start on the
 stock image kernel. HTTP servers 10.56.0.1:8643 (kernel-check/vdec-serve) and :8644 (kernel-check/legacy-serve) must be up.
 
 Client: harness/kms-wb/out/kms-wb (sha256 2730ba1fe6cc374a8f3605b9afd8e8477295a472224fb889b86832c8625cf895, built 2026-11-06 with `tear` incl. the
@@ -23,7 +25,7 @@ Display: HDMI-A-1 forced on (`echo on > status`, no sink), 1024x768@60. If the m
 (`<chunk> all mode_unavailable 1`) that chunk is NOT TESTED, never FAIL.
 
 DEV or TEST: TEST, about 16 min (install+reboot ~5, chunk base ~2.5, chunk load ~5, restore ~3). Resumable: chunks
-`base`, `load` are recorded in logs/runner-t60/state; re-running skips the done ones (the trial kernel is re-installed
+`base`, `load` are recorded in logs/runner-t61/state; re-running skips the done ones (the trial kernel is re-installed
 then). Pauses between chunks for a waiting session (restore + lock hand-over). Stall watchdog: 150 s without chunk output
 kills the chunk; serial log and dmesg watched for Oops/WARN/flip_done timeout/IOMMU fault (exit 3).
 
@@ -37,7 +39,7 @@ frame; each capture is classified OK / WRONG (stale or early) / MIXED (two commi
   IRQs in 2 s` in chunk-load.txt), mem-d4, mem-rand (4-thread memcpy load),
   vemem-rand, vemem-rand2, vemem-rand3 (both, 3 runs), kmsg-rand (printk flood 50 lines/s, IRQ latency stress).
 
-Results: harness/research/display-tearing/logs/runner-t60/: runner.log, results.txt (`<chunk> <run> <key> <value>`),
+Results: harness/research/display-tearing/logs/runner-t61/: runner.log, results.txt (`<chunk> <run> <key> <value>`),
 chunk-<c>.txt, files/<c>/{<run>.txt,<run>.csv,<run>.params.before/after,selftest.txt,connectors.txt,printk.txt,
 dmesg-chunk.txt,ve.err,memload.*.txt,dump-list.txt}. Raw captures of anomalies stay on the board (/root/tearwb/<c>/dump/),
 never copied or committed.
@@ -54,7 +56,8 @@ Exit codes: 0 = chunks ran, judge with the checks; 2 = BLOCKED (report BLOCKED +
    L runs, all of: (a) `ok` + `fence_errors` == `flips`; (b) `fence_errors` == `wb_failed_delta`;
    (c) `fence_errors` <= `wb_overflow_delta` + `wb_timeout_delta` + `wb_lost_delta`;
    (d) `wb_lost_delta` <= `wb_busy_frames_delta` + `wb_deferred_delta` + `latch_coalesced_delta` + `wb_overflow_delta`
-   + `wb_timeout_delta`; (e) `ok` >= 570 (coverage). A capture the unit could not make of its own frame (DRAM
+   + `wb_timeout_delta`; (e) `ok` >= 570 (coverage); (f) `wb_replaced_delta` <= `wb_busy_frames_delta` and
+   `wb_replaced_delta` <= `wb_lost_delta`. A capture the unit could not make of its own frame (DRAM
    contention: previous write-out still busy, overflow) is not tearing; any other fence error = FAIL.
 4. B runs and L runs except kmsg-rand: `latch_flushes_late_delta 0` and `latch_forced_delta 0`.
    kmsg-rand: report only.
@@ -75,6 +78,7 @@ PASS = 1-9 hold (with NOT TESTED parts named). Anything else = FAIL, name the ch
 - the check verdicts 0-9.
 - one table row per tear run: flips, ok, wrong (stale/early), mixed, bad, fence_errors, full_bad, flip_rate, seq_gaps,
   latch_late/deferred/forced/events/events_now/coalesced deltas, events_got/unheld/unflushed, vblank_stale_cleared_delta,
-  wb_failed/overflow/timeout/lost/busy_frames/deferred deltas,
+  wb_failed/overflow/timeout/lost/busy_frames/deferred/replaced deltas, wb_start_line_max_after,
+  wb_busy_start_line_min_after, wb_quick_start_line_max_after,
   ve_irqs_delta, latch_line_max_after, latch_line_deadline_after.
 - the `VE load started` lines of chunk-load.txt; memload_GBps per mem run; printk.txt content; first 10 `RESULT flip ... (WRONG|MIXED|BAD|FULL_*)` lines if any.

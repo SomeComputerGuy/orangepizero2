@@ -1,0 +1,88 @@
+DMESG-START 662
+/sys/class/drm/card0-HDMI-A-1 status=connected modes: 1024x768 800x600 800x600 848x480 640x480 
+== probe: /root/wb/kms-wb wb
+RESULT writeback_cap 1
+RESULT writeback_connectors 1
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT wb_encoder id=76 possible_crtcs=0x3 possible_clones=0x3
+RESULT wb_reaches_crtc 1
+RESULT wb_props crtc=21 fb=78 fence=80
+RESULT wb_formats XR24 AR24 XB24 AB24 RX24 RA24 BX24 BA24 RG24 BG24 XR30 NV12 NV21 YU12
+RESULT wb_format_offered 1
+RESULT probe ok
+RC 0
+== solid1: /root/wb/kms-wb wb
+RESULT writeback_cap 1
+RESULT writeback_connectors 1
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT wb_encoder id=76 possible_crtcs=0x3 possible_clones=0x3
+RESULT wb_reaches_crtc 1
+RESULT wb_props crtc=21 fb=78 fence=80
+RESULT wb_formats XR24 AR24 XB24 AB24 RX24 RA24 BX24 BA24 RG24 BG24 XR30 NV12 NV21 YU12
+RESULT wb_format_offered 1
+RESULT capture 0 pixels 786432 mismatches 0 max_dev 0 first -1,-1 expect 000000 got 00000000 fence_ms 31.8
+RESULT capture 1 pixels 786432 mismatches 0 max_dev 0 first -1,-1 expect 000000 got 00000000 fence_ms 21.6
+RESULT capture 2 pixels 786432 mismatches 0 max_dev 0 first -1,-1 expect 000000 got 00000000 fence_ms 21.5
+RESULT solid 3c7ab4 XR24 captures 3 failed 0
+RC 0
+== flips-d0: /root/wb/kms-wb wb
+RESULT writeback_cap 1
+RESULT writeback_connectors 1
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT wb_encoder id=76 possible_crtcs=0x3 possible_clones=0x3
+RESULT wb_reaches_crtc 1
+RESULT wb_props crtc=21 fb=78 fence=80
+RESULT wb_formats XR24 AR24 XB24 AB24 RX24 RA24 BX24 BA24 RG24 BG24 XR30 NV12 NV21 YU12
+RESULT wb_format_offered 1
+RESULT flips 300 frames_captured 300 frames_a 150 frames_b 150 frames_torn 0 frames_bad 0 fence_errors 0
+RESULT frames_wrong 0 full_checked 6 full_mismatch 0 check_step 32
+RESULT flip_rate 60.003 seq_gaps 0
+RESULT seq_gap_max 0 first_gap_flip -1 commits_after_frame 0 frame_ms 16.666
+RESULT commit_phase mean_ms 0.094 max_ms 0.151 outside_blanking 0 of 299 blanking_ms 0.786
+RESULT commit_ioctl mean_ms 0.143 max_ms 0.187 n 300
+RESULT fence_wait mean_ms 0.069 max_ms 12.347 n 300
+RESULT check mean_ms 4.297 max_ms 4.844 n 300
+RESULT poison mean_ms 0.707 max_ms 1.398 n 299
+RC 0
+== flips-d4: /root/wb/kms-wb wb
+RESULT writeback_cap 1
+RESULT writeback_connectors 1
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT wb_encoder id=76 possible_crtcs=0x3 possible_clones=0x3
+RESULT wb_reaches_crtc 1
+RESULT wb_props crtc=21 fb=78 fence=80
+RESULT wb_formats XR24 AR24 XB24 AB24 RX24 RA24 BX24 BA24 RG24 BG24 XR30 NV12 NV21 YU12
+RESULT wb_format_offered 1
+RESULT flips 300 frames_captured 300 frames_a 150 frames_b 150 frames_torn 0 frames_bad 0 fence_errors 0
+RESULT frames_wrong 0 full_checked 6 full_mismatch 0 check_step 32
+RESULT flip_rate 60.004 seq_gaps 0
+RESULT seq_gap_max 0 first_gap_flip -1 commits_after_frame 0 frame_ms 16.666
+RESULT commit_phase mean_ms 4.070 max_ms 4.259 outside_blanking 299 of 299 blanking_ms 0.786
+RESULT commit_ioctl mean_ms 0.151 max_ms 0.256 n 300
+RESULT fence_wait mean_ms 0.071 max_ms 12.375 n 300
+RESULT check mean_ms 4.307 max_ms 5.012 n 300
+RESULT poison mean_ms 0.709 max_ms 1.401 n 299
+RC 0
+== flips-d12: /root/wb/kms-wb wb
+RESULT writeback_cap 1
+RESULT writeback_connectors 1
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT wb_encoder id=76 possible_crtcs=0x3 possible_clones=0x3
+RESULT wb_reaches_crtc 1
+RESULT wb_props crtc=21 fb=78 fence=80
+RESULT wb_formats XR24 AR24 XB24 AB24 RX24 RA24 BX24 BA24 RG24 BG24 XR30 NV12 NV21 YU12
+RESULT wb_format_offered 1
+RESULT flips 300 frames_captured 300 frames_a 150 frames_b 150 frames_torn 0 frames_bad 0 fence_errors 0
+RESULT frames_wrong 0 full_checked 6 full_mismatch 0 check_step 32
+RESULT flip_rate 60.003 seq_gaps 0
+RESULT seq_gap_max 0 first_gap_flip -1 commits_after_frame 0 frame_ms 16.666
+RESULT commit_phase mean_ms 12.131 max_ms 12.264 outside_blanking 299 of 299 blanking_ms 0.786
+RESULT commit_ioctl mean_ms 0.164 max_ms 0.327 n 300
+RESULT fence_wait mean_ms 0.073 max_ms 12.467 n 300
+RESULT check mean_ms 4.364 max_ms 5.958 n 300
+RESULT poison mean_ms 0.669 max_ms 1.401 n 299
+RC 0
+DMESG: [   47.406409] sun4i-drm display-engine: [drm] fb0: sun4i-drmdrmfb frame buffer device
+DUMP: drwxr-xr-x 2 root root 4096 Nov  6 09:33 .
+DUMP: drwxr-xr-x 3 root root 4096 Nov  6 09:33 ..
+ROUND-DONE

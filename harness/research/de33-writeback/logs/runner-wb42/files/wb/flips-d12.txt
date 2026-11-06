@@ -1,0 +1,19 @@
+RESULT writeback_cap 1
+RESULT writeback_connectors 1
+RESULT mode 1024x768 1024x768 total 1344x806 clock 65000
+RESULT wb_encoder id=76 possible_crtcs=0x3 possible_clones=0x3
+RESULT wb_reaches_crtc 1
+RESULT crtc 52 plane 42 wb_connector 77
+RESULT wb_props crtc=21 fb=78 fence=80
+RESULT wb_formats XR24 AR24 XB24 AB24 RX24 RA24 BX24 BA24 RG24 BG24 XR30 NV12 NV21 YU12
+RESULT wb_format_offered 1
+RESULT flips 300 frames_captured 300 frames_a 150 frames_b 150 frames_torn 0 frames_bad 0 fence_errors 0
+RESULT frames_wrong 0 full_checked 6 full_mismatch 0 check_step 32
+RESULT flip_rate 60.003 seq_gaps 0
+RESULT seq_gap_max 0 first_gap_flip -1 commits_after_frame 0 frame_ms 16.666
+RESULT commit_phase mean_ms 12.131 max_ms 12.264 outside_blanking 299 of 299 blanking_ms 0.786
+RESULT commit_ioctl mean_ms 0.164 max_ms 0.327 n 300
+RESULT fence_wait mean_ms 0.073 max_ms 12.467 n 300
+RESULT check mean_ms 4.364 max_ms 5.958 n 300
+RESULT poison mean_ms 0.669 max_ms 1.401 n 299
+RC 0

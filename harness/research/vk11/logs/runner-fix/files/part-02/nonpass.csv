@@ -1,0 +1,1 @@
+dEQP-VK.synchronization2.internally_synchronized_queues.large2_large2,ResourceError,"vk.allocateMemory(device, pAllocateInfo, pAllocator, &object): VK_ERROR_OUT_OF_DEVICE_MEMORY at vkRefUtilImpl.inl:236"

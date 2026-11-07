@@ -1,0 +1,27 @@
+2026-11-07 21:41:50 fork: 4800173ec22, lib md5 new (frozen copy: not yet); kernel c48 (b82264f81, Image md5 ba448c353e2327b69c7d38671a7bfc78)
+2026-11-07 21:41:50 job vk11fix start (0 of 5 parts done before; max hours 0)
+2026-11-07 21:41:50 acquired by runner-vk11fix-1794087710
+running 7.3.3-edge-sunxi64 Image=vmlinuz-7.3.3-edge-sunxi64
+dtb sun50i-h616-orangepi-zero2.dtb.vdec-c48 md5 aa4d5bbb33e171e32c349e413c68f12c
+armed fallback to vmlinuz-7.3.3-edge-sunxi64
+2026-11-07 21:44:52 kernel fix: present (c48 contains e544ddb00)
+kernel: #51 SMP PREEMPT Fri Nov  6 20:28:54 UTC 2026
+66M	/home/aruni/orangepizero2/mesa-work/deploy/vk4
+2026-11-07 21:45:12 deployed vk4 ok (libvulkan_panfrost md5 6edf92d6ecb77705108dcd62708753f2)
+2026-11-07 21:45:18 board results of another build removed (/root/vk11fix/res)
+2026-11-07 21:45:27 probe start
+2026-11-07 21:45:49 probe done: apiVersion 1.1.354
+COUNTS part-00 cases=536 Fail=506 Pass=28 ResourceError=2
+2026-11-07 21:47:42 part-00 done
+COUNTS part-01 cases=9 Pass=9
+2026-11-07 21:52:14 part-01 done
+COUNTS part-02 cases=8507 Pass=8506 ResourceError=1
+2026-11-07 22:11:32 part-02 done
+COUNTS part-03 cases=32476 Fail=6 NotSupported=25644 Pass=6826
+2026-11-07 22:20:06 part-03 done
+COUNTS part-04 cases=5225 Fail=6 NotSupported=1813 Pass=3406
+2026-11-07 22:22:38 part-04 done
+restore: Image=vmlinuz-7.3.3-edge-sunxi64 dtb=sun50i-h616-orangepi-zero2.dtb.stock
+2026-11-07 22:23:33 restored: 7.3.3-edge-sunxi64 #21 SMP PREEMPT Fri Nov  6 18:18:30 UTC 2026 vmlinuz-7.3.3-edge-sunxi64 
+released by runner-vk11fix-1794087710
+2026-11-07 22:23:33 job vk11fix end: 5 of 5 parts done

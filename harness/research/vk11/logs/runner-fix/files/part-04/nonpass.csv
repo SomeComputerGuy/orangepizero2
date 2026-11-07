@@ -1,0 +1,6 @@
+dEQP-VK.api.device_init.create_device_global_priority.basic,Fail,Fail
+dEQP-VK.api.device_init.create_device_global_priority_khr.basic,Fail,Fail
+dEQP-VK.memory.requirements.create_info.image.regular_tiling_linear,Fail,Some memory requirements were incorrect
+dEQP-VK.memory.requirements.create_info.image.regular_tiling_optimal,Fail,Some memory requirements were incorrect
+dEQP-VK.memory.requirements.create_info.image.transient_tiling_linear,Fail,Some memory requirements were incorrect
+dEQP-VK.memory.requirements.create_info.image.transient_tiling_optimal,Fail,Some memory requirements were incorrect

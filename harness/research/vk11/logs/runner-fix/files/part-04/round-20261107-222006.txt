@@ -1,0 +1,13 @@
+#51 SMP PREEMPT Fri Nov  6 20:28:54 UTC 2026
+PROGRESS 3020
+PROGRESS 3912
+PROGRESS 4828
+PROGRESS 5225
+DEQP-RC 0
+caselist /root/vk11fix/parts/part-04.txt, 5225 cases, 98 s
+Fail                   6
+NotSupported           1813
+Pass                   3406
+
+PART-COMPLETE
+ROUND-DONE

@@ -1,2 +1,44 @@
-#15 SMP PREEMPT Thu Nov  5 20:31:54 UTC 2026
-DMESG-START 656
+#24 SMP PREEMPT Fri Nov  6 01:50:06 UTC 2026
+DMESG-START 1633
+Integer Ops                              Timeout  rc=timeout 
+CHUNK-RC 0
+DMESG: [  931.104542] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  931.708701] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  932.316573] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  932.924573] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  933.532537] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  934.140540] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  934.748552] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  935.356672] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  935.964629] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  936.572648] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  937.180595] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  937.788543] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  938.400666] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  939.004670] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  939.612584] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  940.220650] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  940.828617] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  941.436767] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  942.044502] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  942.652545] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  943.260567] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  943.868721] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  944.476529] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  945.084543] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  945.692671] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  946.300558] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  946.908560] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  947.516603] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  948.124461] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  948.732552] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  949.340566] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  949.948628] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  950.556511] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  951.164694] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  951.772558] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  952.380546] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  952.988477] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  953.596561] panfrost 1800000.gpu: Soft-stop failed
+DMESG: [  954.204514] panfrost 1800000.gpu: Soft-stop failed
+ROUND-DONE

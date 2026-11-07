@@ -22,3 +22,27 @@ kernel: #15 SMP PREEMPT Thu Nov  5 20:31:54 UTC 2026
 2026-11-05 20:45:25 kernel fix: present (panfrost.ko md5 1e92cde2a0709e0c0e4afd26af438569)
 2026-11-05 20:45:27 chunk intops start
 released by runner-timeout-fix-1793911397
+2026-11-06 02:24:27 job timeout-fix start, kernel c25 (Image md5 de8e87b28a1cb43b3b96d83c69f3577e), chunks: stress intops tdim math-a math-b reg img3d, done before: 
+2026-11-06 02:24:27 acquired by runner-timeout-fix-1793931867
+shipped /root/stage/modules-c25.tgz d3c48fe75967c205f0fc3e1757a4cb33120def5513ceeccc5a9619095c184e31
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+kernel: #24 SMP PREEMPT Fri Nov  6 01:50:06 UTC 2026
+2026-11-06 02:26:19 kernel fix: present (panfrost.ko md5 4d6f7d6d31322bc6b3f86e9fe10a7934)
+2026-11-06 02:26:21 chunk stress start
+2026-11-06 02:41:07 chunk stress ended without ROUND-DONE
+2026-11-06 02:41:07 chunk intops start
+2026-11-06 02:54:52 chunk intops done
+2026-11-06 02:54:52 chunk tdim start
+2026-11-06 03:08:36 chunk tdim done
+2026-11-06 03:08:36 chunk math-a start
+2026-11-06 03:15:40 chunk math-a done
+2026-11-06 03:15:40 chunk math-b start
+2026-11-06 03:16:03 chunk math-b done
+2026-11-06 03:16:03 chunk reg start
+2026-11-06 03:25:27 chunk reg done
+2026-11-06 03:25:27 chunk img3d start
+2026-11-06 03:39:12 chunk img3d done
+2026-11-06 03:39:59 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 
+released by runner-timeout-fix-1793931867
+2026-11-06 03:39:59 job timeout-fix end: 6 of 7 chunks done

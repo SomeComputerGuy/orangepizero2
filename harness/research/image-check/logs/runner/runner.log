@@ -1,0 +1,14 @@
+2026-11-07 04:44:34 job 69-image-check start: Armbian-unofficial_26.11.0-trunk_Orangepizero2_stonking_edge_7.3.3.img.xz (kernel 7.3.3)
+2026-11-07 04:44:34 acquired by image-check-1794026674
+2026-11-07 04:44:54 reflash (reflash) start
+2026-11-07 04:58:25 reflash (reflash) rc=0
+2026-11-07 05:00:31 step pkgs
+2026-11-07 05:00:51 step gst
+2026-11-07 05:01:11 step libav
+2026-11-07 05:01:31 step venv
+2026-11-07 05:01:51 step vulkan
+2026-11-07 05:02:12 step gles
+2026-11-07 05:02:32 step ocl
+2026-11-07 05:16:13 step dmesg
+released by image-check-1794026674
+2026-11-07 05:16:40 job 69-image-check done: 11 steps finished of 11 (reflash verify restage pkgs gst libav venv vulkan gles ocl dmesg)

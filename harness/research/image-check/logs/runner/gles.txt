@@ -1,0 +1,8 @@
+EGL-RENDERER Mali-G31 MC1 (Panfrost)
+EGL-VERSION OpenGL ES 3.1 Mesa 26.2.4-1ubuntu1+opiz2.1
+KMSCUBE not-run hdmi=disconnected
+GLES-RUN rc=0
+GLES-SUMMARY caselist /root/imgchk/gles3-derivate.txt, 556 cases, 12 s Pass 556 
+GLES-DMESG 0
+STEP-DONE gles
+rc=0

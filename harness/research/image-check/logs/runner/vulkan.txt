@@ -1,0 +1,21 @@
+VULKANINFO rc=0
+PANVK-API 1.0.354
+PANVK-DEVICE Mali-G31 MC1
+PANVK-DRIVERINFO Mesa 26.2.4-1ubuntu1+opiz2.1
+NO-ENV-PANVK 0
+VKCUBE not-run hdmi=disconnected (vkcube has no headless WSI; offscreen rendering = SMOKE below)
+SMOKE rc=0
+SMOKE-FAILED  Failed: 0/6 (0.0%)
+SMOKE-TRIANGLE  Pass (Rendering succeeded)
+SG dEQP-VK.subgroups.basic.compute.subgroupelect rc=0 result=[ Pass (OK)]
+SG dEQP-VK.subgroups.basic.graphics.subgroupelect rc=0 result=[ Pass (OK)]
+SG dEQP-VK.subgroups.ballot_broadcast.compute.subgroupbroadcast_uint rc=0 result=[ Pass (OK)]
+SG dEQP-VK.subgroups.basic.compute.subgroupbarrier rc=0 result=[ Pass (OK)]
+SG dEQP-VK.subgroups.basic.compute.subgroupmemorybarrier rc=0 result=[ Pass (OK)]
+SG dEQP-VK.subgroups.basic.compute.subgroupmemorybarriershared rc=0 result=[ Pass (OK)]
+SG dEQP-VK.subgroups.basic.graphics.subgroupbarrier rc=0 result=[ Pass (OK)]
+SG dEQP-VK.subgroups.clustered.graphics.subgroupclusteredmul_ivec4 rc=0 result=[ Pass (OK)]
+SG dEQP-VK.subgroups.builtin_var.compute.subgroupsize_compute rc=0 result=[ Pass (OK)]
+VK-DMESG 0
+STEP-DONE vulkan
+rc=0

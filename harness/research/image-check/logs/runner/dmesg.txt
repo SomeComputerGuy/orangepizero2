@@ -1,0 +1,3 @@
+DMESG-BAD 0
+STEP-DONE dmesg
+rc=0

@@ -1,0 +1,18 @@
+UNAME 7.3.3-edge-sunxi64 | #21 SMP PREEMPT Fri Nov  6 18:18:30 UTC 2026
+IMAGE-LINK vmlinuz-7.3.3-edge-sunxi64
+SYSTEM-STATE running
+PKG gstreamer1.0-plugins-bad ii 1.28.6-1ubuntu1+opiz2.1
+PKG gstreamer1.0-plugins-good ii 1.28.7-1build1+opiz2.1
+PKG libgl1-mesa-dri ii 26.2.4-1ubuntu1+opiz2.1
+PKG libegl-mesa0 ii 26.2.4-1ubuntu1+opiz2.1
+PKG mesa-libgallium ii 26.2.4-1ubuntu1+opiz2.1
+PKG mesa-vulkan-drivers ii 26.2.4-1ubuntu1+opiz2.1
+PKG mesa-opencl-icd ii 26.2.4-1ubuntu1+opiz2.1
+PKG libgbm1 ii 26.2.4-1ubuntu1+opiz2.1
+NOT-OURS 0 
+OURS-COUNT 12
+REPO deb [trusted=yes] file:/opt/opiz2-media ./ | debs 32
+PIN  1001 file:/opt/opiz2-media ./ Packages
+FFMPEG not-installed
+STEP-DONE pkgs
+rc=0

@@ -1,0 +1,19 @@
+WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+ELEM v4l2sljpegdec yes
+ELEM v4l2jpegdec yes
+ELEM v4l2slh264dec yes
+ELEM v4l2slh265dec yes
+ELEM v4l2slmpeg2dec yes
+ELEM v4l2slvp8dec yes
+ELEM v4l2slvp9dec yes
+ELEM jpegdec yes
+ELEM avdec_mpeg2video yes
+V4L2CODECS v4l2slh264dec v4l2slh264enc v4l2slh265dec v4l2sljpegdec v4l2slmpeg2dec v4l2slvp8alphadecodebin v4l2slvp8dec v4l2slvp9alphadecodebin v4l2slvp9dec 
+RANK-ENV v4l2jpegdec:MARGINAL
+RANK-V4L2JPEGDEC  Rank marginal (64)
+JPEG v4l2sljpegdec rc=0 size=115200 irqs=1
+JPEG v4l2jpegdec rc=0 size=115200 irqs=1
+JPEG jpegdec rc=0 size=115200 irqs=0
+JPEG-AUTOPLUG rc=0 picked=[v4l2sljpegdec0 ]
+STEP-DONE gst
+rc=0

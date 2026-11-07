@@ -1,0 +1,21 @@
+7.3.3-edge-sunxi64
+ 04:58:50 up 2 min,  2 users,  load average: 1.27, 0.94, 0.39
+MemAvailable:     825900 kB
+/dev/mmcblk0p1   29G  3.3G   26G  12% /
+== deqp-gles: copying 251M
+== deqp-gles: verified on board
+== opencl-cts: copying 54M
+== opencl-cts: verified on board
+== deqp-vk: copying 92M
+== deqp-vk: verified on board
+/root/cts/mesa-libclc/spirv64-mesa3d-.spv: FAILED open or read
+== libclc: verified
+== run-cts-queue.sh: verified
+== run-vk-subset.sh: verified
+== vulkan packages: present
+ERROR: Waiver file '' could not be opened. No tests will be waived.
+  Passed:        6/6 (100.0%)
+  Passed:        6/6 (100.0%)
+== sanity runs: done
+== staged; not started (rerun with --start)
+rc=0

@@ -1,0 +1,3 @@
+/home/aruni/orangepizero2/armbian-build/output/images/Armbian-unofficial_26.11.0-trunk_Orangepizero2_stonking_edge_7.3.3.img.xz
+7.3.3
+33a82c9469ec721d1dcd7ea4a60f12171c16cf378be0972116d7e7b6e811f1ad Armbian-unofficial_26.11.0-trunk_Orangepizero2_stonking_edge_7.3.3.img.xz

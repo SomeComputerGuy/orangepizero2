@@ -79,11 +79,12 @@ Image branch stonking-orangepizero2 = e79177038 (9ba317178 = armbian/build main 
 Mesa fork: github.com/SomeComputerGuy/mesa, branch panfrost-opencl-fixes (mesa-26.2.4 + 32 commits, 9d278fabfc2).
 
 ### A. Running
-- Board: job 68 (Vulkan 1.1 full dEQP-VK, 64 parts, resumable, 8 h chunks; fork 9d278fabfc2 on c48). 2026-11-07 09:33:
-  parts 00-17 done, part 18 running; 527 non-pass so far (part 05: 3, 06: 4, 12: 16, 15: 504 = glsl.texture_functions
-  *offset* variants + texturequerylod trilinear). Not yet compared with the job 52 1.0 baseline.
-  Logs: harness/research/vk11/logs/runner/; state: harness/research/vk11/RESULTS.md.
-- No image build and no coding agent running (LOW-CREDIT: the runner is the one agent).
+- Job 68 (Vulkan 1.1 full dEQP-VK) DONE 2026-11-07 21:xx: 64/64 parts, 3,247,552 cases: Pass 684,180, NotSupported
+  2,562,827, Fail 526 (504 = glsl.texture_functions *offset* + texturequerylod), Crash 9 (parts 45/46/57; 8 js faults),
+  QualityWarning 8, ResourceError 2; 8 INSTR_INVALID_ENC lines; vs system Mesa 1.0 main1in100: 1 regression, 482 fixed.
+  --check FAIL 3 (d9), 7, 8, 9. Summaries: harness/runner-queue/68-vk11-main.chunk-{1,3}.summary.md.
+- Coding: Opus agent on item 16 (classify + fix job 68's failures in the fork, then queue runner job 70-vk11-fix).
+- Board idle (LOW-CREDIT: the coding agent is the one agent).
 
 ### B. Image integration (DONE 2026-11-07: built by the user, board check job 69 PASS)
 1. DONE: board-PASS kernel fixes (AFBC compose offset, writeback retry, cedrus JPEG drain + S_FMT with CAPTURE buffers

@@ -4,8 +4,8 @@ Task (user decision 2026-11-06, "wants Vulkan working"): make the fork panvk rep
 and pass dEQP-VK at that level. Step 1 (fork + PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1 in the image) is separate packaging
 work. Agent vk11, 2026-11-06. Memory: project-vulkan.md. Earlier work: harness/research/vk-hangs/RESULTS.md (jobs 14, 52).
 
-## Fork (mesa-work/mesa-cl, branch panfrost-opencl-fixes, local only, never upstream)
-HEAD **9d278fabfc2** (was 0e274280595; ded6ccea0bc for job 68 chunk 1):
+## Fork (mesa-work/mesa-cl, branch panfrost-opencl-fixes, pushed to github.com/SomeComputerGuy/mesa, never upstream)
+HEAD **4800173ec22** (job 70; 9d278fabfc2 = job 68; ded6ccea0bc = job 68 chunk 1; was 0e274280595):
 * 214aed48424 = cherry-pick of Mesa **0dbf521d381** "panvk: enable Vulkan 1.1 and subgroups on Bifrost" (MR 41981).
   Note: the brief named ba09d293e54, but that commit is the later 1.1 -> **1.3** bump ("expose vulkan 1.3 on bifrost",
   MR 43245); 0dbf521d381 is the 1.0 -> 1.1 gate. 1.3 is step 3 (scope 1.2+ against the G31), not done here.
@@ -26,6 +26,9 @@ HEAD **9d278fabfc2** (was 0e274280595; ded6ccea0bc for job 68 chunk 1):
 * 9d278fabfc2 "panvk: report the Bifrost warp count for VK_ARM_shader_core_builtins" (Generated-by: LLM): chunk 1 d9 fix.
   New helper panvk_get_shader_warps_per_core(): before Valhall max_threads_per_core / warp size (G31: 512 / 4 = 128),
   v9+ unchanged (/ (size * 2)); shaderWarpsPerCore and the inlined WarpMaxIDARM (= that - 1) come from it.
+
+* cc734ca5372 (ATOM_CX staging reads), 000362f6ff4 (explicit-layout overfetch slack), 4800173ec22 (textureQueryLod
+  level on Bifrost): the job 68 fixes, see "Job 68 result" below.
 
 ## Job 68 chunk 1 (2026-11-06, c48, build ded6ccea0bc): BLOCKED at part-00 case 4244, d9 FAIL; both fixed
 Raw results moved to `logs/runner-ded6ccea0bc/` (summary harness/runner-queue/done/68-vk11-main.chunk1.summary.md).
@@ -91,7 +94,8 @@ d9 and d10 compile and dispatch (PAN_SHADER_PRESENT=0x1).
   exit 3, no summary); host test: 12 budget rounds over 60000 cases = 60000 unique rows.
 
 ## Builds
-`mesa-work/build-cl` (arm64, driver string `git-9d278fabfc`) and `build-host-shim` rebuilt at 9d278fabfc2 (nice 19).
+`mesa-work/build-cl` (arm64, driver string `git-4800173ec2`; source tools/env-cl.sh before ninja, else rusticl
+bindgen fails) and `build-host-shim` rebuilt at 4800173ec22 (nice 19).
 
 ## Runner job 68 (re-queued 2026-11-06 at 9d278fabfc2, restarts clean at part-00)
 Restart: FORK=9d278fabfc2 in vk11-main.sh; the stale frozen copy (ded6ccea0bc) is deleted (and the script deletes any
@@ -107,20 +111,64 @@ newly exposed extensions add cases, 1.3 took 818 s). Checks 1-9 by `vk11-main.sh
 Regression baselines (vk11-cmp.py): vk-main 1/100 at 1.0 and at override 1.1 (system 26.2.4), vk-subset at 1.0 and
 override 1.1 (system), job 52 fork vk-subset (override 1.1).
 
-## Next step (fresh agent, after the job 68 summary)
-1. Checks 2-4 + 3b: if d9/d10 still fail, d10's max warp/core id lines give the raw range (e.g. ids >= 128 would mean
-   extra bits in the WARP_ID FAU word on v7: then mask/derive from the d10 OR word, or gate shaderCoreBuiltins off on v7).
-   Check the allocate_many_* rows: they must be Pass now (an OOM/ResourceLimit row there = 039c393b7fb not enough).
-2. Check 9 regressions: each REG line is a real regression of the 1.1 enable -> root-cause first (function first).
-3. cmp.txt NON-PASS by group: triage with harness/analysis/gpu/vk-triage.py against Mesa's g52 fails/flakes/skips
-   (expected-upstream vs G31-specific); the newly exposed extension groups (maintenance4/5/7/8, size_control,
-   subgroup_extended_types, float_controls2) are the likely new failures. Fix in the fork, rerun only the failing
-   cases (a small caselist through deqp-run.py) rather than the full 14+ h run.
-4. Then record the result in impl-gpu-spec.md 4c / the spec row, and hand step 3 (1.2+ scope) to the coordinator.
-
 ## Coordinator note 2026-11-06 23:50 (job 68 chunk 2)
 Paused by the coordinator (PAUSE file) for image integration; 1/64 parts done (part-00: 16333 Pass, 34410 NotSupported,
 0 Fail/Crash/Hang, 0 regressions). Resume = same command. Open: --check 3 (d9) FAILs with no reason printed while
 3b (d10) PASSes (max core 0 < count 1, max warp 127 = WarpMaxIDARM); likely the d9 check's core-count vs
 shaderCoreCount condition. Next code agent: fix the check (or the probe) and make it print the failing condition.
 Summary: harness/runner-queue/done/68-vk11-main.chunk2.summary.md.
+
+## Job 68 result (2026-11-07, c48, build 9d278fabfc2): all 64 parts, analysed by agent vk11-fix
+3 247 552 cases: 684 180 Pass, 2 562 827 NotSupported, 526 Fail, 9 Crash, 2 ResourceError, 8 QualityWarning.
+Summary: harness/runner-queue/68-vk11-main.chunk-3.summary.md; results logs/runner/ (cmp.txt, check.txt).
+Check 3 (d9) FAIL was the check, not the driver: it also read the 16 unused zero words after the 16 results of the
+1x1x1 dispatch; every d9 word is `0x7f..0100` (core 0, count 1, warp <= 127) and d10 (3b) PASS. Fixed in vk11-fix.sh.
+Every one of the 537 non-pass rows classified:
+| rows | what | class | action |
+|---|---|---|---|
+| 8 Crash | robustness.image_robustness.{bind,push}...r32i.dontunroll.nonvolatile.storage_image.fmt_qual.img.samples_1.{cube,cube_array}.{comp,frag} = the 8 INSTR_INVALID_ENC / js faults (parts 45/46) | pre-existing upstream bug (Mesa g52-fails: Crash; main has it too), not 1.1 | **fixed cc734ca5372** |
+| 16 Fail | drm_format_modifiers.export_import{,_fmt_features2}_with_suballoc.{r8g8b8,b8g8r8}_{unorm,snorm,srgb}, r32g32b32_{sfloat,sint,uint} (= check 9's 1 REG) | **regression of our fork commit 02df5721016** (RGB overfetch slack, job 46), not of 1.1 | **fixed 000362f6ff4** |
+| 4 Fail | glsl.texture_functions.query.texturequerylod.sampler2d_{fixed,float}_trilinear{,non_zero_base_level}_fragment | pre-existing upstream bug (g52-fails; Valhall passes) | **fixed 4800173ec22** |
+| 1 Crash | synchronization2.internally_synchronized_queues.device_wait_idle_device_wait_idle: "Watchdog timer timeout for touch interval" | newly exposed by 1.1 (KHR_internally_synchronized_queues); test/harness: dEQP's 30 s touch watchdog on a 4-thread x 1000-iteration case (upstream PowerVR skips the device_wait_idle cases as too slow) | rerun with the watchdog off (job 70 part-01) |
+| 500 Fail | texture_functions.texture*offset*.mirrored_repeat.* | hardware limit: Khronos CTS waiver 4936 (Arm, device list includes 0x70930000 = G31; offset >= extent with MIRRORED_REPEAT); all 500 are in upstream panvk-skips.txt | none (waived) |
+| 3 Fail | rasterization.primitives.no_stipple.lines{,_factor_0,_factor_large} (strict/rectangular/bresenham/line_strip pass) | pre-existing upstream known (g52-fails) | open, qpa kept by job 70 |
+| 2 Fail | api.device_init.create_device_global_priority{,_khr}.basic | pre-existing upstream known (g52-fails) | open |
+| 1 Fail | api.driver_properties.conformance_version (0.0.0.0 < 1.1) | newly exposed by 1.1; the driver is not conformant, upstream g52-fails | none (no false conformance claim) |
+| 2 ResourceError | api.object_management.max_concurrent.device{,_group} (OUT_OF_DEVICE_MEMORY) | resource limit (1 GB board, 600 MB memcg; upstream g52-fails Fail) | none |
+QualityWarning 8 (e.g. pipeline_binary unique_key_pairs) count as pass. No GPU fault other than the 8 above.
+
+### Fixes (fork, Generated-by: LLM, pushed to github panfrost-opencl-fixes; build-cl rebuilt at 4800173ec22)
+* **cc734ca5372 "pan/bi: count the ATOM_CX staging reads like ATOM_RETURN"**. Host repro (shim, asserts on): the case
+  asserts `!(mode & 0x8)` in bi_pack_registers = the last tuple of a clause writes two registers. The scheduler lets
+  `r10 = CSEL` (read only through the passthrough by the paired ADD) sit next to the `r5 = MUX` write because r10 is
+  dead in the pre-scheduling liveness (0x27f). bi_lower_atom_c turns ATOM_RETURN (counted as reading 1 staging reg) into
+  +ATOM_CX (counted as reading sr_count = 2), so the post-scheduling DCE sees r8/r10 (upper return halves) live around
+  the loop (0x77f) and keeps the write -> invalid encoding. Fix: ATOM_CX keeps atom_opc (not encoded) and reads
+  sr_count/2 (all for ACMPXCHG), like ATOM_RETURN. Not in upstream main (checked 2648b2059f1). Host: the 8 cases compile
+  (Fail on the shim = no execution), glsl.atomic_operations (1040), image_robustness bind r32i (540),
+  image.atomic_operations.compare_exchange (440): 0 asserts.
+* **000362f6ff4 "panvk: reserve the overfetch slack for explicit 24/96-bit image layouts"**: 02df5721016 pads only the
+  layouts we choose (64x64 RGB8: 12288 -> 16384), explicit (imported) layouts stay exact (12288), so the test bound the
+  imported sub-image at another offset than the exporter's. panvk now adds the 64 B to the memory requirements of an
+  explicit plane with a non-power-of-two texel size (data_size_B and gallium unchanged).
+* **4800173ec22 "panvk: take the textureQueryLod level from the sampler on Bifrost"**: bi_lower_lod always rounded .x;
+  for a LINEAR mipmap mode .x must be the clamped LOD. panvk (v7) now derives .x from the raw LOD (.y) and the sampler /
+  texture descriptors in the set memory, like va_lower_lod on Valhall (clamp to [min, min(max, levels-1)]; None 0,
+  Nearest ceil(lod+0.5)-1, trilinear the clamped LOD). Host: query.texturequerylod.* (190) 0 crashes on the shim.
+* Harness: deqp-run.py `--no-watchdog`; vk11-fix.sh check 3 fixed.
+
+## Runner job 70 (queued 2026-11-07): harness/runner-queue/70-vk11-fix.md
+Package runner/{vk11-fix.sh,HANDOFF-fix.md,vk11-fix-cmp.py,fix-parts/}; results logs/runner-fix/; deploys
+/root/opiz2-mesa/vk4 (frozen/vk4), board dir /root/vk11fix. 5 caselists (46 753 cases): part-00 the 536 job 68 non-pass
+(qpa kept), part-01 the 9 isq *device_wait_idle* (watchdog off, 1500 s), part-02 8507 job 68 Pass in the touched groups,
+part-03 vk-main 1/100, part-04 vk-subset. Checks 9a-9d = the targets pass, 10 = 0 regressions vs job 68, 11 = 0 vs the
+26.2.4/job 52 baselines; INFO = remaining per known class (expected 500/3/2/1/2). Estimate 1.5-2.5 h.
+
+## Next step (fresh agent, after the job 70 summary)
+1. Checks 9a-9c FAIL -> the fix did not work on the hardware: read part-00.qpa.xz for the case. 9d Timeout/Stuck -> the
+   case is slower than 1500 s: profile panvk QueueWaitIdle (vk_common: one sync per queue per call) before calling it
+   a test limit. Checks 7/8/10/11 FAIL -> root-cause first (function first).
+2. All PASS -> Vulkan 1.1 done on the G31: remaining non-pass = waiver 4936 (500), conformance_version (1),
+   max_concurrent (2) by design; open upstream-known items (lines x3, global_priority x2) go on the work list
+   (qpa in logs/runner-fix/files/part-00/). Then patches/mesa refresh from the fork (image integration, coordinator),
+   record in impl-gpu-spec.md 4c, and hand step 3 (1.2+ scope) to the coordinator.

@@ -9,3 +9,9 @@ host/vkprops-arm64
 host/stub/libvulkan.so.1
 host/deqp-*/
 logs/runner-*/files/*/shard-0.csv
+# job 70 (vk11-fix)
+logs/runner-fix/parts/
+logs/runner-fix/files/*/results.csv
+logs/runner-fix/files/*/results.csv.xz
+logs/runner-fix/files/*/*.qpa
+logs/runner-fix/files/*/*.qpa.xz

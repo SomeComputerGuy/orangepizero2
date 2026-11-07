@@ -14,6 +14,7 @@ caselist order, and the run can be resumed: cases already in OUT/shard-*.csv are
 OUT/shard-N.current holds the case the shard last started (for an outside stuck-case watchdog).
 A memcg OOM kill of dEQP inside a case: retried once, then recorded as OOM (run it under systemd-run with
 -p OOMPolicy=continue, or systemd stops the whole scope, this runner included, at the first kill).
+--no-watchdog (optional): drop --deqp-watchdog=enable (a case may run longer than dEQP's 30 s touch interval).
 --budget S (optional): stop after S seconds of wall time (the dEQP process is killed, its unfinished case is
 not recorded and runs again on resume); then no results.csv/summary.txt is written and the exit code is 3.
 """
@@ -81,6 +82,8 @@ def run_shard(idx, cases, a, extra):
             with open(cl, "w") as f:
                 f.write("\n".join(todo) + "\n")
             base = VK_ARGS if os.path.basename(a.deqp).startswith("deqp-vk") else MESA_CI_ARGS  # Mesa CI gives deqp-vk no GL/surface args
+            if a.no_watchdog:  # dEQP's own 30 s touch watchdog off (long single cases); --timeout still applies
+                base = [x for x in base if x != "--deqp-watchdog=enable"]
             cmd = [a.deqp, "--deqp-caselist-file=" + cl, "--deqp-log-filename=" + os.path.join(a.out, "shard-%d.qpa" % idx)] + base + extra
             if a.deadline and time.time() >= a.deadline:
                 STOPPED.append(idx); break
@@ -164,6 +167,7 @@ def main():
     ap.add_argument("--out", required=True); ap.add_argument("--jobs", type=int, default=3)
     ap.add_argument("--timeout", type=int, default=120)
     ap.add_argument("--budget", type=int, default=0)
+    ap.add_argument("--no-watchdog", action="store_true")
     a, extra = ap.parse_known_args()
     try:  # keep the runner alive under memcg OOM so kill counts and resume state stay coherent
         with open("/proc/self/oom_score_adj", "w") as f:

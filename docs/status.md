@@ -114,7 +114,8 @@ build-checked 879 patches, 0 failed, 0 C warnings, pushed to fork). Desktop FFmp
    assume a 7.3.1 stock kernel. Still open after 69: the GNOME desktop with the variable set (GTK4 renderer choice) on
    a display; older runner packages in harness/research/*/runner still hardcode vmlinuz-7.3.1-edge-sunxi64 in their
    own restore() (only matters if one of them is rerun).
-   Fork GitHub repo still to be created by the user (debs are built from patches/mesa).
+   Mesa fork on GitHub: github.com/SomeComputerGuy/mesa, branch panfrost-opencl-fixes (= mesa-26.2.4 + 32 commits, 9d278fabfc2;
+   local remote "github" in mesa-work/mesa-cl). Debs are still built from patches/mesa.
 
 ### C. Coding queue (one fresh agent at a time, in order)
 6. Ethernet: bulk host->board TCP stalls at exactly 512 KiB and 8000-byte pings lose ~33 % after ~1 h (seen on debug
@@ -158,7 +159,7 @@ build-checked 879 patches, 0 failed, 0 C warnings, pushed to fork). Desktop FFmp
   (suspend power), jumpers for the W33 / header I2C-SPI-UART loopbacks; second board's console in serial.log.
 
 ### G. Waiting for the user
-- Report when ./build-all.sh is done (then B). Create the Mesa fork GitHub repo.
+- Report when ./build-all.sh is done (then B).
 - Go for upstream items (docs/upstream-queue.md) and the Armbian PRs (docs/prs/README.md).
 
 ### Done 2026-11-06 (board PASS)

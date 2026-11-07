@@ -1,0 +1,17 @@
+COUNTS cases=59948 Fail=506 NotSupported=27420 Pass=32019 ResourceError=3
+CHECK 9a image_robustness cube r32i nonvolatile fmt_qual (job 68: Crash, INSTR_INVALID_ENC; fix cc734ca5372): Pass 8 of 8 (8 in this run): PASS
+CHECK 9b drm_format_modifiers export_import*_with_suballoc 24/96-bit (job 68: Fail; fix 000362f6ff4): Pass 16 of 16 (16 in this run): PASS
+CHECK 9c texturequerylod sampler2d_*_trilinear* (job 68: Fail; fix 4800173ec22): Pass 4 of 4 (4 in this run): PASS
+CHECK 9d internally_synchronized_queues.device_wait_idle_device_wait_idle, dEQP watchdog off (job 68: Crash = 30 s watchdog): Pass 1 of 1 (1 in this run): PASS
+CHECK 9e memory requirements create_info.image regular/transient + api.invariance memory*_requirements_matching (job 70: Fail, stack garbage in vkGetDeviceImageMemoryRequirements; fix 26cb3c93a58): Pass 6 of 6 (6 in this run): PASS
+CHECK 9f dEQP-VK.synchronization2.internally_synchronized_queues.large2_large2 alone in a fresh dEQP process (part-06): Pass: PASS
+INFO not counted in check 10: dEQP-VK.synchronization2.internally_synchronized_queues.large2_large2 ResourceError in the batch run, Pass alone (9f): memcg memory pressure
+CHECK 10 regressions against job 68 (Pass/QualityWarning there, not now): 0: PASS
+INFO fixed against job 68 (non-pass there, Pass now): 29
+INFO remaining, hardware limit, Khronos waiver 4936 (offset >= extent with MIRRORED_REPEAT on Mali): 500
+INFO remaining, upstream known (panfrost-g52-fails): line rasterization: 3
+INFO remaining, upstream known (panfrost-g52-fails): global priority: 2
+INFO remaining, non-conformant driver (conformanceVersion 0.0.0.0, upstream g52-fails): 1
+INFO remaining, resource limit: 1 GB board, 600 MB memcg (upstream g52-fails): 2
+INFO remaining, not in the known classes and not a check-9 target: 1
+  OTHER dEQP-VK.synchronization2.internally_synchronized_queues.large2_large2 ResourceError vk.allocateMemory(device, pAllocateInfo, pAllocator, &object): VK_ERROR_OUT_OF_DEVICE_MEMORY at vkRefUtilImpl.inl:236

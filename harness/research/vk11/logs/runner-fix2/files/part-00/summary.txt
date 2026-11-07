@@ -1,0 +1,4 @@
+caselist /root/vk11fix2/parts/part-00.txt, 536 cases, 90 s
+Fail                   506
+Pass                   28
+ResourceError          2

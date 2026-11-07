@@ -47,7 +47,7 @@ fi
 if command -v gst-launch-1.0 >/dev/null; then
   gst-launch-1.0 -q videotestsrc num-buffers=1 ! video/x-raw,width=64,height=48 ! jpegenc ! filesink location=/tmp/vb.jpg >/dev/null 2>&1
   jd=$(timeout 30 gst-launch-1.0 -v filesrc location=/tmp/vb.jpg ! jpegparse ! decodebin ! fakesink 2>&1 | grep -oE '(v4l2sl|v4l2)?jpegdec[0-9]+' | sort -u | tr '\n' ' '); rm -f /tmp/vb.jpg
-  ok gst-jpeg-autoplug "grep -qx 'GST_PLUGIN_FEATURE_RANK=v4l2jpegdec:MARGINAL' /etc/environment && systemctl show -p DefaultEnvironment | grep -q v4l2jpegdec:MARGINAL && grep -qE '^(v4l2sl)?jpegdec[0-9]' <<<'$jd' && ! grep -q 'v4l2jpegdec' <<<'$jd'" "decoder: $jd"
+  ok gst-jpeg-autoplug "grep -qx 'GST_PLUGIN_FEATURE_RANK=v4l2jpegdec:MARGINAL' /etc/environment && systemctl show-environment | grep -qx GST_PLUGIN_FEATURE_RANK=v4l2jpegdec:MARGINAL && grep -qE '^(v4l2sl)?jpegdec[0-9]' <<<'$jd' && ! grep -q 'v4l2jpegdec' <<<'$jd'" "decoder: $jd"
 fi
 r INFO eth-mtu "end0 mtu $(cat /sys/class/net/end0/mtu) (max $(ip -d link show end0 | grep -o 'maxmtu [0-9]*' | cut -d' ' -f2))"
 ok cups "systemctl is-active -q cups && lpstat -r | grep -q running" "$(cupsd -v 2>/dev/null | head -1)"

@@ -47,7 +47,7 @@ libav)  # job 24 check 1: MPEG-1 without MG1S on the image kernel -> decodebin t
 venv)  # PAN_I_WANT_A_BROKEN_VULKAN_DRIVER everywhere: this login shell, the system manager, the user-manager generator
   echo "LOGIN-ENV ${PAN_I_WANT_A_BROKEN_VULKAN_DRIVER:-unset}"
   echo "ETC-ENVIRONMENT $(grep -c '^PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1$' /etc/environment)"
-  echo "SYSTEMD-SYSTEM $(systemctl show -p DefaultEnvironment --value | tr ' ' '\n' | grep -c '^PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1$')"
+  echo "SYSTEMD-SYSTEM $(systemctl show-environment | grep -c '^PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1$')"
   echo "SYSTEMD-USER-CONF $(grep -c 'PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1' /etc/systemd/user.conf.d/60-opiz2-panvk.conf 2>/dev/null || echo 0)"
   g=/usr/lib/systemd/user-environment-generators/30-systemd-environment-d-generator
   echo "ENVIRONMENT-D $([ -x $g ] && $g 2>/dev/null | grep -c '^PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1$' || echo no-generator)"

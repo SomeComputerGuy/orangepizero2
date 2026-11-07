@@ -28,3 +28,10 @@ VERDICT: FAIL
 verify.txt FAIL line: FAIL gst-jpeg-autoplug      decoder: v4l2sljpegdec0 
 DMESG-LINE: none (check 15 PASS)
 Results: harness/research/image-check/logs/runner/ (files/)
+
+## Coordinator follow-up (2026-11-07)
+Both FAILs were check bugs, not image bugs. systemd 261 has no DefaultEnvironment property for `systemctl show`
+(it prints nothing); the manager environment is in `systemctl show-environment`, and there both
+GST_PLUGIN_FEATURE_RANK=v4l2jpegdec:MARGINAL and PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1 are set; a systemd-run service gets both.
+Fixed in harness/verify-board.sh (gst-jpeg-autoplug) and image-check/runner/board-checks.sh (SYSTEMD-SYSTEM).
+verify-board rerun: 22 PASS, 0 FAIL. Job 69 is effectively PASS (vkcube/kmscube NOT-TESTED, no HDMI).

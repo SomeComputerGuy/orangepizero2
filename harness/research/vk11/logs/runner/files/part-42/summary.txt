@@ -1,0 +1,4 @@
+caselist /root/vk11/parts/part-42.txt, 50743 cases, 197 s
+Fail                   3
+NotSupported           47206
+Pass                   3534

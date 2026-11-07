@@ -1,0 +1,1 @@
+dEQP-VK.synchronization2.internally_synchronized_queues.device_wait_idle_device_wait_idle,Crash,exit -9:  | Test case 'dEQP-VK.synchronization2.internally_synchronized_queues.device_wait_idle_device_wait_idle'.. | FATAL ERROR: Watchdog timer timeout for touch interval

@@ -1,0 +1,5 @@
+caselist /root/vk11/parts/part-06.txt, 50743 cases, 540 s
+NotSupported           31754
+Pass                   18983
+QualityWarning         4
+ResourceError          2

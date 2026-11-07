@@ -1,0 +1,3 @@
+caselist /root/vk11/parts/part-09.txt, 50743 cases, 118 s
+NotSupported           50029
+Pass                   714

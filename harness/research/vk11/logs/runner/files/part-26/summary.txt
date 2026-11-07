@@ -1,0 +1,4 @@
+caselist /root/vk11/parts/part-26.txt, 50743 cases, 447 s
+NotSupported           29134
+Pass                   21608
+QualityWarning         1

@@ -1,0 +1,3 @@
+caselist /root/vk11/parts/part-27.txt, 50743 cases, 385 s
+NotSupported           29565
+Pass                   21178

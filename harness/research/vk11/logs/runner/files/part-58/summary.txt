@@ -1,0 +1,4 @@
+caselist /root/vk11/parts/part-58.txt, 50743 cases, 759 s
+NotSupported           38436
+Pass                   12304
+QualityWarning         3

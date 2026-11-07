@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
 """Job 70 (vk11-fix) comparison against job 68.
 
-  vk11-fix-cmp.py NEWFILES J68FILES OUT.txt
+  vk11-fix-cmp.py NEWFILES J68FILES OUT.txt [ISOPART]
 
 NEWFILES/part-NN/results.csv.xz = this run (5 caselists), J68FILES/part-NN/results.csv.xz = job 68 (64 parts of
 vk-main, build 9d278fabfc2). Prints COUNTS, the CHECK lines 9a-9d (the cases the fixes target) and 10 (regressions
 against job 68), and the remaining non-pass rows by class. OUT.txt gets every row that changed and every non-pass.
+Job 71 (vk11-fix2) passes ISOPART = part-06 (synchronization2.internally_synchronized_queues.large2_large2 alone in
+a fresh dEQP process): that part is kept out of the merged rows and gives checks 9e (the 6 memory requirement cases
+of fix 26cb3c93a58) and 9f; check 10 then reports a large2_large2 ResourceError/OOM row of the batch run as INFO
+(memory pressure of the 600 MB memcg after thousands of cases in one process) only when 9f passes.
 """
 import csv, glob, lzma, os, re, sys
 
 OK = {"Pass", "QualityWarning", "CompatibilityWarning"}
 
 
-def load(d):
+def load(d, skip=None, only=None):
     res = {}
     for p in sorted(glob.glob(os.path.join(d, "part-*/results.csv.xz"))):
+        part = os.path.basename(os.path.dirname(p))
+        if part == skip or (only and part != only):
+            continue
         with lzma.open(p, "rt", newline="") as f:
             for r in csv.reader(f):
                 if r and r[0] != "test":
@@ -43,8 +50,15 @@ KNOWN = [  # class, regex: non-pass rows that are expected to stay (see harness/
 ]
 
 
+LARGE2 = "dEQP-VK.synchronization2.internally_synchronized_queues.large2_large2"
+MEMREQ = (r"^dEQP-VK\.(memory\.requirements\.create_info\.image\.(regular|transient)_tiling_(linear|optimal)"
+          r"|api\.invariance\.memory(_dedicated)?_requirements_matching)$")
+
+
 def main():
-    new, old = load(sys.argv[1]), load(sys.argv[2])
+    iso_part = sys.argv[4] if len(sys.argv) > 4 else None
+    new, old = load(sys.argv[1], skip=iso_part), load(sys.argv[2])
+    iso = load(sys.argv[1], only=iso_part) if iso_part else {}
     out = open(sys.argv[3], "w")
     counts = {}
     for r in new.values():
@@ -60,12 +74,29 @@ def main():
         for r in rows:
             if r[1] not in OK:
                 print("  %s %s %s" % (r[0], r[1], r[3][:160] if len(r) > 3 else ""))
+    iso_ok = False
+    if iso_part:
+        rows = [r for c, r in sorted(new.items()) if re.search(MEMREQ, c)]
+        npass = sum(1 for r in rows if r[1] in OK)
+        print("CHECK 9e memory requirements create_info.image regular/transient + api.invariance memory*_requirements_matching "
+              "(job 70: Fail, stack garbage in vkGetDeviceImageMemoryRequirements; fix 26cb3c93a58): Pass %d of 6 (%d in this run): %s"
+              % (npass, len(rows), "PASS" if len(rows) == 6 and npass == 6 else "FAIL"))
+        for r in rows:
+            if r[1] not in OK:
+                print("  %s %s %s" % (r[0], r[1], r[3][:160] if len(r) > 3 else ""))
+        r = iso.get(LARGE2)
+        iso_ok = r is not None and r[1] in OK
+        print("CHECK 9f %s alone in a fresh dEQP process (%s): %s: %s"
+              % (LARGE2, iso_part, r[1] if r else "no row", "PASS" if iso_ok else "FAIL"))
     reg, fixed = [], []
     for c, r in sorted(new.items()):
         o = old.get(c)
         if o is None:
             continue
         if o[1] in OK and r[1] not in OK:
+            if c == LARGE2 and iso_ok and r[1] in ("ResourceError", "OOM", "ResourceLimit"):
+                print("INFO not counted in check 10: %s %s in the batch run, Pass alone (9f): memcg memory pressure" % (c, r[1]))
+                continue
             reg.append((c, o[1], r))
         elif o[1] not in OK and o[1] != "NotSupported" and r[1] in OK:
             fixed.append((c, o[1], r))

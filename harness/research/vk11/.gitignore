@@ -15,3 +15,8 @@ logs/runner-fix/files/*/results.csv
 logs/runner-fix/files/*/results.csv.xz
 logs/runner-fix/files/*/*.qpa
 logs/runner-fix/files/*/*.qpa.xz
+logs/runner-fix2/parts/
+logs/runner-fix2/files/*/results.csv
+logs/runner-fix2/files/*/results.csv.xz
+logs/runner-fix2/files/*/*.qpa
+logs/runner-fix2/files/*/*.qpa.xz

@@ -5,7 +5,7 @@ and pass dEQP-VK at that level. Step 1 (fork + PAN_I_WANT_A_BROKEN_VULKAN_DRIVER
 work. Agent vk11, 2026-11-06. Memory: project-vulkan.md. Earlier work: harness/research/vk-hangs/RESULTS.md (jobs 14, 52).
 
 ## Fork (mesa-work/mesa-cl, branch panfrost-opencl-fixes, pushed to github.com/SomeComputerGuy/mesa, never upstream)
-HEAD **4800173ec22** (job 70; 9d278fabfc2 = job 68; ded6ccea0bc = job 68 chunk 1; was 0e274280595):
+HEAD **26cb3c93a58** (job 71; 4800173ec22 = job 70; 9d278fabfc2 = job 68; ded6ccea0bc = job 68 chunk 1; was 0e274280595):
 * 214aed48424 = cherry-pick of Mesa **0dbf521d381** "panvk: enable Vulkan 1.1 and subgroups on Bifrost" (MR 41981).
   Note: the brief named ba09d293e54, but that commit is the later 1.1 -> **1.3** bump ("expose vulkan 1.3 on bifrost",
   MR 43245); 0dbf521d381 is the 1.0 -> 1.1 gate. 1.3 is step 3 (scope 1.2+ against the G31), not done here.
@@ -29,6 +29,7 @@ HEAD **4800173ec22** (job 70; 9d278fabfc2 = job 68; ded6ccea0bc = job 68 chunk 1
 
 * cc734ca5372 (ATOM_CX staging reads), 000362f6ff4 (explicit-layout overfetch slack), 4800173ec22 (textureQueryLod
   level on Bifrost): the job 68 fixes, see "Job 68 result" below.
+* 26cb3c93a58 "panvk: always set explicit_pad_B when laying out an image": the job 70 fix, see "Job 70 result".
 
 ## Job 68 chunk 1 (2026-11-06, c48, build ded6ccea0bc): BLOCKED at part-00 case 4244, d9 FAIL; both fixed
 Raw results moved to `logs/runner-ded6ccea0bc/` (summary harness/runner-queue/done/68-vk11-main.chunk1.summary.md).
@@ -94,8 +95,8 @@ d9 and d10 compile and dispatch (PAN_SHADER_PRESENT=0x1).
   exit 3, no summary); host test: 12 budget rounds over 60000 cases = 60000 unique rows.
 
 ## Builds
-`mesa-work/build-cl` (arm64, driver string `git-4800173ec2`; source tools/env-cl.sh before ninja, else rusticl
-bindgen fails) and `build-host-shim` rebuilt at 4800173ec22 (nice 19).
+`mesa-work/build-cl` (arm64, driver string `git-26cb3c93a5`; source tools/env-cl.sh before ninja, else rusticl
+bindgen fails) and `build-host-shim` rebuilt at 26cb3c93a58 (nice 19).
 
 ## Runner job 68 (re-queued 2026-11-06 at 9d278fabfc2, restarts clean at part-00)
 Restart: FORK=9d278fabfc2 in vk11-main.sh; the stale frozen copy (ded6ccea0bc) is deleted (and the script deletes any
@@ -164,7 +165,43 @@ Package runner/{vk11-fix.sh,HANDOFF-fix.md,vk11-fix-cmp.py,fix-parts/}; results 
 part-03 vk-main 1/100, part-04 vk-subset. Checks 9a-9d = the targets pass, 10 = 0 regressions vs job 68, 11 = 0 vs the
 26.2.4/job 52 baselines; INFO = remaining per known class (expected 500/3/2/1/2). Estimate 1.5-2.5 h.
 
-## Next step (fresh agent, after the job 70 summary)
+## Job 70 result (2026-11-07, c51 kernel #51, build 4800173ec22): summary harness/runner-queue/done/70-vk11-fix.summary.md
+46 529 cases; checks 1-9d and 11 PASS (all 28 targets + 9d fixed, 29 fixed vs job 68; 0 INSTR_INVALID_ENC / GPU
+faults; 0 regressions vs 26.2.4 / job 52); remaining known classes exactly 500/3/2/1/2. Check 10 FAIL, 6 regressions:
+* **5 = our fix 000362f6ff4** (memory.requirements.create_info.image.{regular,transient}_tiling_{linear,optimal},
+  api.invariance.memory_requirements_matching). Cause: the new panvk_image_plane::explicit_pad_B was only written for
+  explicit 24/96-bit planes. vkCreateImage zero-allocates the image, but panvk_GetDeviceImageMemoryRequirements (and
+  GetDeviceImageSparseMemoryRequirements) build `struct panvk_image image;` on the stack, so the size from the create
+  info carried stack garbage and differed from vkGetImageMemoryRequirements (both tests compare exactly those two;
+  CTS users of the device queries: memory.requirements, api.invariance, image.subresource_layout). Host repro (shim,
+  4800173ec22): those 5 + api.invariance.memory_dedicated_requirements_matching Fail; at the fix all Pass
+  (memory.requirements.* + api.invariance.*: 28 Pass, 52 NotSupported, 0 Fail). **Fix 26cb3c93a58**: assign the field
+  for every plane (pad stays for explicit RGB planes, so 9b / 02df5721016 are unchanged).
+* **1 = memory pressure, not a fix**: synchronization2.internally_synchronized_queues.large2_large2 ResourceError
+  (vkAllocateMemory OUT_OF_DEVICE_MEMORY after 0.32 s). It ran as case 8503 of 8507 of part-02 (job 68: Pass inside
+  part-57). The case has 3 large threads, each a 4096x4096 RGBA8 optimal image (64 MiB) + a 64 MiB host-visible
+  readback buffer (~384 MiB GEM) on the 600 MB memcg, after thousands of cases in the same dEQP process. None of the
+  fixes touches RGBA8 / buffer allocation (000362f6ff4 only explicit RGB layouts; created images are zeroed). Job 71
+  runs it alone in a fresh process (part-06, check 9f); check 10 reports its batch ResourceError as INFO only then.
+
+## Runner job 71 (queued 2026-11-07): harness/runner-queue/71-vk11-fix2.md
+Package runner/{vk11-fix2.sh,HANDOFF-fix2.md,fix2-parts/} + vk11-fix-cmp.py (new optional ISOPART arg = part-06: 9e,
+9f, large2_large2 rule; job 70 calls unchanged); results logs/runner-fix2/; deploys /root/opiz2-mesa/vk5 (frozen/vk5),
+board dir /root/vk11fix2. 7 caselists (60 173 cases): part-00..04 = job 70's, part-05 (13 419) = job 68 non-NotSupported
+rows of memory.*, api.invariance.*, drm_format_modifiers.*, image.subresource_layout.* + every 10th other image.* not in
+part-00..04, part-06 = large2_large2 alone. HANDOFF tells the runner to use harness/ssh.sh / BOARD_SSH_OPTS for any
+manual ssh (job 70's "Host key verification failed"). Estimate 1-2 h (job 70 = 41 min of rounds).
+
+## Next step (fresh agent, after the job 71 summary)
+1. 9e FAIL -> read part-03/05 results for the case (host shim reproduces these: run them there first). 9f FAIL ->
+   large2_large2 really fails: measure GEM usage of the case (3 x 128 MiB expected) against the 600 MB memcg and look
+   for a panvk allocation leak / over-allocation before calling it a board limit. 10 FAIL with other cases -> root-cause.
+2. All PASS -> Vulkan 1.1 done on the G31 (remaining non-pass: waiver 4936 (500), conformance_version (1),
+   max_concurrent (2) by design; upstream-known lines x3, global_priority x2 on the work list, qpa in
+   logs/runner-fix/files/part-00/). Then patches/mesa refresh from the fork (image integration, coordinator), record
+   in impl-gpu-spec.md 4c, and hand step 3 (1.2+ scope) to the coordinator.
+
+## Older next step (after the job 70 summary, done)
 1. Checks 9a-9c FAIL -> the fix did not work on the hardware: read part-00.qpa.xz for the case. 9d Timeout/Stuck -> the
    case is slower than 1500 s: profile panvk QueueWaitIdle (vk_common: one sync per queue per call) before calling it
    a test limit. Checks 7/8/10/11 FAIL -> root-cause first (function first).

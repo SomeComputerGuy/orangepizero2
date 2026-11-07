@@ -1,0 +1,51 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 22:34:37 +0000
+Subject: [PATCH] drm-shim/panfrost: report the medium JM context priority and
+ a barrier size
+
+pan_kmod treats a missing ALLOWED_JM_CTX_PRIORITIES param as "medium
+allowed", but the shim answered 0, so panvk_device_create() returned
+VK_ERROR_NOT_PERMITTED for every vkCreateDevice() on the fake GPU.
+Answer with the medium bit, and give THREAD_MAX_BARRIER_SZ the same
+256 as MAX_THREADS instead of 0.
+
+Host tooling only (panvk on the noop drm-shim), not shipped.
+
+Generated-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ src/panfrost/drm-shim/panfrost_noop.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/src/panfrost/drm-shim/panfrost_noop.c b/src/panfrost/drm-shim/panfrost_noop.c
+index 46db7a951be..e915aa82a6e 100644
+--- a/src/panfrost/drm-shim/panfrost_noop.c
++++ b/src/panfrost/drm-shim/panfrost_noop.c
+@@ -74,12 +74,16 @@ panfrost_ioctl_get_param(int fd, unsigned long request, void *arg)
+    case DRM_PANFROST_PARAM_CORE_FEATURES:
+    case DRM_PANFROST_PARAM_COHERENCY_FEATURES:
+    case DRM_PANFROST_PARAM_SELECTED_COHERENCY:
+-   case DRM_PANFROST_PARAM_THREAD_MAX_BARRIER_SZ:
+    case DRM_PANFROST_PARAM_SYSTEM_TIMESTAMP:
+    case DRM_PANFROST_PARAM_SYSTEM_TIMESTAMP_FREQUENCY:
+-   case DRM_PANFROST_PARAM_ALLOWED_JM_CTX_PRIORITIES:
+       gp->value = 0;
+       return 0;
++   case DRM_PANFROST_PARAM_ALLOWED_JM_CTX_PRIORITIES:
++      /* What a kernel without JM context priorities implies (pan_kmod
++       * assumes medium when the param is missing); panvk refuses to create
++       * a device (VK_ERROR_NOT_PERMITTED) when the medium bit is clear. */
++      gp->value = BITFIELD_BIT(PANFROST_JM_CTX_PRIORITY_MEDIUM);
++      return 0;
+    case DRM_PANFROST_PARAM_NR_CORE_GROUPS:
+       gp->value = 1;
+       return 0;
+@@ -107,6 +111,7 @@ panfrost_ioctl_get_param(int fd, unsigned long request, void *arg)
+       return 0;
+    case DRM_PANFROST_PARAM_MAX_THREADS:
+    case DRM_PANFROST_PARAM_THREAD_MAX_WORKGROUP_SZ:
++   case DRM_PANFROST_PARAM_THREAD_MAX_BARRIER_SZ:
+       gp->value = 256;
+       return 0;
+    default:

@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Faith Ekstrand <faith.ekstrand@collabora.com>
+Date: Thu, 30 Jul 2026 23:32:37 -0400
+Subject: [PATCH] pan/bi/nir: Scalarize the rest of nir_op_b(any|all)_*
+
+Acked-by: Ahmed Hesham <ahmed.hesham@arm.com>
+Reviewed-by: Lorenzo Rossi <lorenzo.rossi@collabora.com>
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/43349>
+(cherry picked from commit bab5285218aad042b80e305243317692f3bb22b2)
+---
+ src/panfrost/compiler/bifrost/bifrost_nir.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/src/panfrost/compiler/bifrost/bifrost_nir.c b/src/panfrost/compiler/bifrost/bifrost_nir.c
+index 3b3b7af0e98..e0ebbbda28a 100644
+--- a/src/panfrost/compiler/bifrost/bifrost_nir.c
++++ b/src/panfrost/compiler/bifrost/bifrost_nir.c
+@@ -127,15 +127,27 @@ bi_vectorize_filter(const nir_instr *instr, const void *data)
+    case nir_op_ball_fequal2:
+    case nir_op_ball_fequal3:
+    case nir_op_ball_fequal4:
++   case nir_op_ball_fequal5:
++   case nir_op_ball_fequal8:
++   case nir_op_ball_fequal16:
+    case nir_op_bany_fnequal2:
+    case nir_op_bany_fnequal3:
+    case nir_op_bany_fnequal4:
++   case nir_op_bany_fnequal5:
++   case nir_op_bany_fnequal8:
++   case nir_op_bany_fnequal16:
+    case nir_op_ball_iequal2:
+    case nir_op_ball_iequal3:
+    case nir_op_ball_iequal4:
++   case nir_op_ball_iequal5:
++   case nir_op_ball_iequal8:
++   case nir_op_ball_iequal16:
+    case nir_op_bany_inequal2:
+    case nir_op_bany_inequal3:
+    case nir_op_bany_inequal4:
++   case nir_op_bany_inequal5:
++   case nir_op_bany_inequal8:
++   case nir_op_bany_inequal16:
+       return 1;
+    case nir_op_pack_uvec2_to_uint:
+    case nir_op_pack_uvec4_to_uint:

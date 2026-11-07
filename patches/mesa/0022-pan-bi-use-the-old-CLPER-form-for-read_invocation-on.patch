@@ -1,0 +1,49 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 22:34:37 +0000
+Subject: [PATCH] pan/bi: use the old CLPER form for read_invocation on
+ limited-CLPER GPUs
+
+G71, G72 and G31 (BIFROST_LIMITED_CLPER) only decode the old CLPER
+encoding: fixed subgroup4, inactive_result = zero, lane_op = none. The
+derivative path already lowers through bi_clper() for them, but
+nir_intrinsic_read_invocation (subgroupBroadcast, and everything
+nir_lower_subgroups turns into read_invocation: shuffles, quad ops,
+rotates, read_first_invocation) still emitted the full CLPER.i32
+encoding, which faults these GPUs with INSTR_INVALID_ENC
+(dEQP-VK.subgroups.ballot_broadcast.compute.* on the Mali-G31).
+
+Emit CLPER_OLD.i32 there when the quirk is set. With 4-wide subgroups
+on these GPUs the fixed subgroup4 form is exactly what read_invocation
+needs; the lane index is passed as a 32-bit source (same as the XOR
+lowering in bi_clper()).
+
+Generated-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ src/panfrost/compiler/bifrost/bifrost_compile.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/src/panfrost/compiler/bifrost/bifrost_compile.c b/src/panfrost/compiler/bifrost/bifrost_compile.c
+index a069f2bed5e..2a318c6c293 100644
+--- a/src/panfrost/compiler/bifrost/bifrost_compile.c
++++ b/src/panfrost/compiler/bifrost/bifrost_compile.c
+@@ -2075,6 +2075,18 @@ bi_emit_intrinsic(bi_builder *b, nir_intrinsic_instr *instr)
+ 
+    case nir_intrinsic_read_invocation: {
+       assert(instr->src[0].ssa->bit_size <= 32);
++
++      /* G71/G72/G31 only decode the old CLPER form (BIFROST_LIMITED_CLPER):
++       * fixed subgroup4, inactive_result = zero, lane_op = none, which is
++       * exactly what a 4-wide read_invocation needs. The full CLPER.i32
++       * encoding faults them with INSTR_INVALID_ENC. */
++      if (b->shader->quirks & BIFROST_LIMITED_CLPER) {
++         assert(pan_subgroup_size_gpu(b->shader->inputs->gpu_id) == 4);
++         bi_clper_old_i32_to(b, dst, bi_src_index(&instr->src[0]),
++                             bi_src_index(&instr->src[1]));
++         break;
++      }
++
+       enum bi_inactive_result inactive_result = BI_INACTIVE_RESULT_ZERO;
+       enum bi_lane_op lane_op = BI_LANE_OP_NONE;
+       enum bi_subgroup subgroup =

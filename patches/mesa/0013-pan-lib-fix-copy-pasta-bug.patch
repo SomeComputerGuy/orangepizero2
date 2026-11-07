@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Erik Faye-Lund <erik.faye-lund@arm.com>
+Date: Tue, 13 Oct 2026 17:52:28 +0200
+Subject: [PATCH] pan/lib: fix copy-pasta bug
+
+We shouldn't set allow_hsr_prepass based on provoking_vertex_first. We
+already have the right input, so use that instead.
+
+Fixes: 5fc91b38c84c ("pan/fb: Add a mapping to the old FB info")
+Reviewed-by: Boris Brezillon <boris.brezillon@collabora.com>
+(cherry picked from commit 20598a321306b9e1ff5199ef476037d4c45373bc)
+
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/45704>
+(cherry picked from commit 0c477fc5e1b4e5a7609e2d94adc3ddbc2df8d806)
+---
+ src/panfrost/lib/pan_fb.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/panfrost/lib/pan_fb.c b/src/panfrost/lib/pan_fb.c
+index ab39023c68a..f2e93979ff5 100644
+--- a/src/panfrost/lib/pan_fb.c
++++ b/src/panfrost/lib/pan_fb.c
+@@ -316,7 +316,7 @@ GENX(pan_fill_fb_info)(const struct pan_fb_desc_info *info,
+       .sample_positions = info->sample_pos_array_pointer,
+       .sprite_coord_origin = info->sprite_coord_origin_max_y,
+       .first_provoking_vertex = info->provoking_vertex_first,
+-      .allow_hsr_prepass = info->provoking_vertex_first,
++      .allow_hsr_prepass = info->allow_hsr_prepass,
+    };
+ 
+    /* There are cases where we only want to fill out a partial fb_info */

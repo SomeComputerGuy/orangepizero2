@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Erik Faye-Lund <erik.faye-lund@arm.com>
+Date: Tue, 13 Oct 2026 18:00:31 +0200
+Subject: [PATCH] pan/lib: do not fold into the same op twice
+
+It looks like this should have been border rather than repeating
+in_bounds. Whoops!
+
+Fixes: 1f51daf30917 ("panvk: Optimize resolves if possible")
+Reviewed-by: Boris Brezillon <boris.brezillon@collabora.com>
+(cherry picked from commit 3e7b0b6313d6d89b4f4a5dc900d2d8634531f5f4)
+
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/45704>
+(cherry picked from commit 0c77574f306b4946694550138050ed8649aebd21)
+---
+ src/panfrost/lib/pan_fb.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/panfrost/lib/pan_fb.c b/src/panfrost/lib/pan_fb.c
+index cb8e17bcbfd..ab39023c68a 100644
+--- a/src/panfrost/lib/pan_fb.c
++++ b/src/panfrost/lib/pan_fb.c
+@@ -204,7 +204,7 @@ fold_resolve_into_store_target(enum pipe_format format,
+ 
+    fold_sample_0_image_load(&resolve->in_bounds, resolve->iview,
+                             fb_sample_count);
+-   fold_sample_0_image_load(&resolve->in_bounds, resolve->iview,
++   fold_sample_0_image_load(&resolve->border, resolve->iview,
+                             fb_sample_count);
+ 
+    if (!resolve_msaa_can_fold(resolve->in_bounds, self_op, format) ||

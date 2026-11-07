@@ -1,0 +1,56 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 06:37:39 +0000
+Subject: [PATCH] pan/bi: keep SEG_ADD.i64 src[1] out of the low destination
+ register
+
+SEG_ADD.i64 is lowered by the scheduler into *SEG_ADD (writes the low
+half of the destination) and +SEG_ADD in the same tuple (reads src[1],
+writes the high half). The ADD's read of a register written by the FMA
+of its tuple is rewritten to the stage passthrough, so when RA put src[1]
+in the same register as the low destination half, the high half became
+SEG_ADD(low result) instead of SEG_ADD(0) and the atomic went to a wrong
+address.
+
+This happens when the WLS offset is a uniform (an OpenCL __local kernel
+argument): the #0 high half then has to be moved to a register because
+the tuple's FAU slot is taken. Every __local atomic except xchg/cmpxchg
+returned 0 and left memory untouched (OpenCL-CTS atomics: atomic_add,
+sub, min, max, inc, dec, xor; C11 atomic_fetch_add/sub/xor/min/max).
+
+Add an interference between the destination and src[1].
+
+Generated-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ src/panfrost/compiler/bifrost/bi_ra.c | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/src/panfrost/compiler/bifrost/bi_ra.c b/src/panfrost/compiler/bifrost/bi_ra.c
+index 6ec09c1120d..ff8d0171f1b 100644
+--- a/src/panfrost/compiler/bifrost/bi_ra.c
++++ b/src/panfrost/compiler/bifrost/bi_ra.c
+@@ -376,6 +376,23 @@ bi_mark_interference(bi_block *block, struct lcra_state *l, uint8_t *live,
+          }
+       }
+ 
++      /* SEG_ADD.i64 is lowered at scheduling time to *SEG_ADD, which writes
++       * the low half of the destination, and +SEG_ADD in the same tuple,
++       * which reads src[1] and writes the high half. A read by the ADD of a
++       * register written by the FMA of its tuple is rewritten to the stage
++       * passthrough, so if src[1] shared a register with the low half of the
++       * destination, the ADD would see the new low half instead of src[1].
++       * This happens when src[0] is a uniform and the #0 high half had to be
++       * moved to a register, e.g. OpenCL __local kernel arguments, and broke
++       * every __local atomic except xchg. Keep them apart.
++       */
++      if (ins->op == BI_OPCODE_SEG_ADD_I64 && bi_is_ssa(ins->src[1]) &&
++          bi_is_ssa(ins->dest[0])) {
++         lcra_add_node_interference(l, ins->dest[0].value, bi_writemask(ins, 0),
++                                    ins->src[1].value,
++                                    BITFIELD_BIT(ins->src[1].offset));
++      }
++
+       /* Valhall needs >= 64-bit reads to be pair-aligned */
+       if (aligned_sr) {
+          bi_foreach_ssa_src(ins, s) {

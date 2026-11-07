@@ -1,0 +1,56 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 20:42:55 +0000
+Subject: [PATCH] nir/lower_cl_images: record buffer textures in
+ texture_buffers
+
+shader_info::texture_buffers was only filled by the GLSL path
+(gl_nir_lower_samplers_as_deref). OpenCL kernels lowered through
+nir_lower_cl_images left it empty, so on Bifrost (v6-v7) panfrost, which
+reads texel buffers through the attribute table and sizes that table from
+texture_buffers (pan_compiler.c), compiled read_image*(image1d_buffer_t)
+to an LEA_ATTR/LD_CVT pair with attribute_count = 0. The driver then
+emitted no attribute descriptors at all for the compute job and the
+sampler-less 1D buffer reads returned zeros: every format of the
+OpenCL-CTS Images (Samplerless int/uint/float) 1Dbuffer tests failed at
+the first size ("Sampler-less reads differ from reads with sampler").
+
+Set texture_buffers for the read-only (texture) buffer images, keeping
+image_buffers for the writable ones, mirroring the GLSL path. With this
+the compute job carries one attribute (R8I, 1D buffer, stride 1, size
+329 for the CTS case) and LD_CVT reads the buffer.
+
+Generated-by: LLM
+---
+ src/compiler/nir/nir_lower_cl_images.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/src/compiler/nir/nir_lower_cl_images.c b/src/compiler/nir/nir_lower_cl_images.c
+index 760e8449040..b3c1346c35e 100644
+--- a/src/compiler/nir/nir_lower_cl_images.c
++++ b/src/compiler/nir/nir_lower_cl_images.c
+@@ -121,6 +121,7 @@ nir_lower_cl_images(nir_shader *shader, bool lower_image_derefs, bool lower_samp
+    int num_rd_images = 0, num_wr_images = 0;
+ 
+    BITSET_ZERO(shader->info.image_buffers);
++   BITSET_ZERO(shader->info.texture_buffers);
+    BITSET_ZERO(shader->info.msaa_images);
+    nir_foreach_variable_with_modes(var, shader, nir_var_image | nir_var_uniform) {
+       if (!glsl_type_is_image(var->type) && !glsl_type_is_texture(var->type))
+@@ -139,7 +140,15 @@ nir_lower_cl_images(nir_shader *shader, bool lower_image_derefs, bool lower_samp
+ 
+       switch (glsl_get_sampler_dim(var->type)) {
+       case GLSL_SAMPLER_DIM_BUF:
+-         BITSET_SET(shader->info.image_buffers, var->data.binding);
++         /* Read-only images are textures: record buffer textures in
++          * texture_buffers (as the GLSL path does), so drivers that need
++          * extra descriptors for texel buffers (Bifrost attributes) can
++          * count them.
++          */
++         if (var->data.access & ACCESS_NON_WRITEABLE)
++            BITSET_SET(shader->info.texture_buffers, var->data.binding);
++         else
++            BITSET_SET(shader->info.image_buffers, var->data.binding);
+          break;
+       case GLSL_SAMPLER_DIM_MS:
+          BITSET_SET(shader->info.msaa_images, var->data.binding);

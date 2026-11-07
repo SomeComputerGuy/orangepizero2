@@ -1,0 +1,88 @@
+--- archive libegl-mesa0
++++ ours libegl-mesa0
+@@ -10,9 +10,9 @@
+ drwxr-xr-x ./usr/share/glvnd/
+ drwxr-xr-x ./usr/share/glvnd/egl_vendor.d/
+ lrwxrwxrwx ./usr/lib/aarch64-linux-gnu/libEGL_mesa.so.0 -> libEGL_mesa.so.0.0.0
+-lrwxrwxrwx ./usr/share/doc/libegl-mesa0/changelog.Debian.gz -> ../mesa-libgallium/changelog.Debian.gz
+ -rw-r--r-- ./usr/lib/aarch64-linux-gnu/libEGL_mesa.so.0.0.0
+ -rw-r--r-- ./usr/share/bug/libegl-mesa0/control
++-rw-r--r-- ./usr/share/doc/libegl-mesa0/changelog.Debian.gz
+ -rw-r--r-- ./usr/share/doc/libegl-mesa0/copyright
+ -rw-r--r-- ./usr/share/glvnd/egl_vendor.d/50_mesa.json
+ -rwxr-xr-x ./usr/share/bug/libegl-mesa0/script
+--- archive libgbm1
++++ ours libgbm1
+@@ -11,10 +11,10 @@
+ drwxr-xr-x ./usr/share/lintian/
+ drwxr-xr-x ./usr/share/lintian/overrides/
+ lrwxrwxrwx ./usr/lib/aarch64-linux-gnu/libgbm.so.1 -> libgbm.so.1.0.0
+-lrwxrwxrwx ./usr/share/doc/libgbm1/changelog.Debian.gz -> ../mesa-libgallium/changelog.Debian.gz
+ -rw-r--r-- ./usr/lib/aarch64-linux-gnu/gbm/dri_gbm.so
+ -rw-r--r-- ./usr/lib/aarch64-linux-gnu/libgbm.so.1.0.0
+ -rw-r--r-- ./usr/share/bug/libgbm1/control
++-rw-r--r-- ./usr/share/doc/libgbm1/changelog.Debian.gz
+ -rw-r--r-- ./usr/share/doc/libgbm1/copyright
+ -rw-r--r-- ./usr/share/doc/libgbm1/README.Debian
+ -rw-r--r-- ./usr/share/lintian/overrides/libgbm1
+--- archive libgbm-dev
++++ ours libgbm-dev
+@@ -10,10 +10,10 @@
+ drwxr-xr-x ./usr/share/doc/
+ drwxr-xr-x ./usr/share/doc/libgbm-dev/
+ lrwxrwxrwx ./usr/lib/aarch64-linux-gnu/libgbm.so -> libgbm.so.1
+-lrwxrwxrwx ./usr/share/doc/libgbm-dev/changelog.Debian.gz -> ../mesa-libgallium/changelog.Debian.gz
+ -rw-r--r-- ./usr/include/gbm_backend_abi.h
+ -rw-r--r-- ./usr/include/gbm.h
+ -rw-r--r-- ./usr/lib/aarch64-linux-gnu/pkgconfig/gbm.pc
+ -rw-r--r-- ./usr/share/bug/libgbm-dev/control
++-rw-r--r-- ./usr/share/doc/libgbm-dev/changelog.Debian.gz
+ -rw-r--r-- ./usr/share/doc/libgbm-dev/copyright
+ -rwxr-xr-x ./usr/share/bug/libgbm-dev/script
+--- archive libgl1-mesa-dri
++++ ours libgl1-mesa-dri
+@@ -67,9 +67,9 @@
+ lrwxrwxrwx ./usr/lib/aarch64-linux-gnu/dri/vmwgfx_dri.so -> libdril_dri.so
+ lrwxrwxrwx ./usr/lib/aarch64-linux-gnu/dri/zink_dri.so -> libdril_dri.so
+ lrwxrwxrwx ./usr/lib/aarch64-linux-gnu/dri/zynqmp-dpsub_dri.so -> libdril_dri.so
+-lrwxrwxrwx ./usr/share/doc/libgl1-mesa-dri/changelog.Debian.gz -> ../mesa-libgallium/changelog.Debian.gz
+ -rw-r--r-- ./usr/lib/aarch64-linux-gnu/dri/libdril_dri.so
+ -rw-r--r-- ./usr/share/bug/libgl1-mesa-dri/control
++-rw-r--r-- ./usr/share/doc/libgl1-mesa-dri/changelog.Debian.gz
+ -rw-r--r-- ./usr/share/doc/libgl1-mesa-dri/copyright
+ -rw-r--r-- ./usr/share/drirc.d/00-mesa-defaults.conf
+ -rwxr-xr-x ./usr/share/bug/libgl1-mesa-dri/script
+--- archive libglx-mesa0
++++ ours libglx-mesa0
+@@ -9,8 +9,8 @@
+ drwxr-xr-x ./usr/share/doc/libglx-mesa0/
+ lrwxrwxrwx ./usr/lib/aarch64-linux-gnu/libGLX_indirect.so.0 -> libGLX_mesa.so.0
+ lrwxrwxrwx ./usr/lib/aarch64-linux-gnu/libGLX_mesa.so.0 -> libGLX_mesa.so.0.0.0
+-lrwxrwxrwx ./usr/share/doc/libglx-mesa0/changelog.Debian.gz -> ../libgl1-mesa-dri/changelog.Debian.gz
+ -rw-r--r-- ./usr/lib/aarch64-linux-gnu/libGLX_mesa.so.0.0.0
+ -rw-r--r-- ./usr/share/bug/libglx-mesa0/control
++-rw-r--r-- ./usr/share/doc/libglx-mesa0/changelog.Debian.gz
+ -rw-r--r-- ./usr/share/doc/libglx-mesa0/copyright
+ -rwxr-xr-x ./usr/share/bug/libglx-mesa0/script
+--- archive mesa-va-drivers
++++ ours mesa-va-drivers
+@@ -5,7 +5,7 @@
+ drwxr-xr-x ./usr/share/bug/mesa-va-drivers/
+ drwxr-xr-x ./usr/share/doc/
+ drwxr-xr-x ./usr/share/doc/mesa-va-drivers/
+-lrwxrwxrwx ./usr/share/doc/mesa-va-drivers/changelog.Debian.gz -> ../mesa-libgallium/changelog.Debian.gz
+ -rw-r--r-- ./usr/share/bug/mesa-va-drivers/control
++-rw-r--r-- ./usr/share/doc/mesa-va-drivers/changelog.Debian.gz
+ -rw-r--r-- ./usr/share/doc/mesa-va-drivers/copyright
+ -rwxr-xr-x ./usr/share/bug/mesa-va-drivers/script
+--- archive mesa-vdpau-drivers
++++ ours mesa-vdpau-drivers
+@@ -5,7 +5,7 @@
+ drwxr-xr-x ./usr/share/bug/mesa-vdpau-drivers/
+ drwxr-xr-x ./usr/share/doc/
+ drwxr-xr-x ./usr/share/doc/mesa-vdpau-drivers/
+-lrwxrwxrwx ./usr/share/doc/mesa-vdpau-drivers/changelog.Debian.gz -> ../mesa-libgallium/changelog.Debian.gz
+ -rw-r--r-- ./usr/share/bug/mesa-vdpau-drivers/control
++-rw-r--r-- ./usr/share/doc/mesa-vdpau-drivers/changelog.Debian.gz
+ -rw-r--r-- ./usr/share/doc/mesa-vdpau-drivers/copyright
+ -rwxr-xr-x ./usr/share/bug/mesa-vdpau-drivers/script

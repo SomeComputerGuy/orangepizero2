@@ -1,18 +1,24 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-2.0-only
-# Rebuild Ubuntu's media packages for arm64 (Orange Pi Zero2 desktop image) with the patches in patches/<source>/:
+# Rebuild Ubuntu's media and GPU packages for arm64 (Orange Pi Zero2 images) with the patches in patches/<source>/:
 #   ffmpeg              V4L2 Request API (stateless decoder) hwaccels: Jernej Skrabec's v4l2request-mpeg4 series
 #                       (Kwiboo's hwaccels + VC-1 + MPEG-4) 00xx, shared with the orangepi5 build 01xx, ours 02xx
-#   mpv                 v4l2request hwdec + DRM PRIME interop; needs our ffmpeg
+#                       (desktop variant only)
+#   mpv                 v4l2request hwdec + DRM PRIME interop; needs our ffmpeg (desktop variant only)
 #   gst-plugins-bad1.0  the orangepi5 build's v4l2codecs/kmssink set 00xx (patches/gstreamer, shared) and ours 01xx:
-#                       v4l2sljpegdec (cedrus JPEG) and jpegparse sampling-factors caps
+#                       v4l2sljpegdec (cedrus JPEG) and jpegparse sampling-factors caps (every variant)
+#   gst-plugins-good1.0 stateful v4l2jpegdec on cedrus: 1:4:0:0 colorimetry, system memory for an ANY peer
+#                       (board PASS runner job 57; every variant)
+#   mesa                our Mesa fork for the Mali-G31 (panfrost/panvk/rusticl fixes, patches/mesa/README.md;
+#                       every variant)
 # Adapted from the orangepi5 project's scripts/build-media-debs.sh (same author; the method, structure and
-# the mpv/debian patches are copied from there), cut down to ffmpeg + mpv and with a build stamp so an
-# unchanged source is not rebuilt (build caching rule #1).
+# the mpv/debian patches are copied from there), with a build stamp so an unchanged source is not rebuilt
+# (build caching rule #1).
 # Rootless: mmdebstrap --mode=unshare + qemu-user binfmt, no sudo.
-# Usage: build-media-debs.sh [--force] [source...]     (default: ffmpeg mpv, in that order; gst-plugins-bad1.0 on request)
-# Output: out/debs-media/*.deb plus a Packages index (a flat apt repository that the desktop variant of
-#         userpatches/config-opiz2-printserver.conf installs from).
+# Usage: build-media-debs.sh [--force] [source...]     (default: every source below, in the SOURCES order)
+# Output: out/debs-media/*.deb plus a Packages index (a flat apt repository that
+#         userpatches/config-opiz2-printserver.conf installs from: every variant takes gst + mesa, the desktop
+#         also ffmpeg + mpv). build.sh runs this script before every image build.
 #
 # patches/<dir>/*.patch are appended to debian/patches/series (upstream code,
 # applied by dpkg-source); patches/<dir>/debian/*.patch change the packaging
@@ -21,6 +27,7 @@
 # When Ubuntu updates one of these packages, bump its version below and rebuild.
 set -euo pipefail
 
+# --- build recipe begin (this block and the mmdebstrap call below are part of every source's build stamp)
 if [ "${1:-}" = --in-chroot ]; then
   # Runs inside the build chroot (as the unshared root user): fetch, patch, build.
   src=$2 ver=$3 rev=$4 jobs=$5 pdir_name=${6:-$2} build=${7:-any}
@@ -69,6 +76,7 @@ if [ "${1:-}" = --in-chroot ]; then
   mv ../*.deb /build/debs/
   exit 0
 fi
+# --- build recipe end
 
 [ "$(id -u)" -ne 0 ] || { echo "run as your normal user (rootless build)"; exit 1; }
 SELF=$(readlink -f "$0")
@@ -87,9 +95,11 @@ declare -A VERSION=(
   [ffmpeg]=7:8.1.2-2ubuntu2
   [mpv]=0.41.0-2ubuntu5
   [gst-plugins-bad1.0]=1.28.6-1ubuntu1
+  [gst-plugins-good1.0]=1.28.7-1build1
+  [mesa]=26.2.4-1ubuntu1
 )
-declare -A REV=([ffmpeg]=5 [mpv]=1 [gst-plugins-bad1.0]=1)
-declare -A PDIR=([ffmpeg]=ffmpeg [mpv]=mpv [gst-plugins-bad1.0]=gstreamer)
+declare -A REV=([ffmpeg]=5 [mpv]=1 [gst-plugins-bad1.0]=1 [gst-plugins-good1.0]=1 [mesa]=1)
+declare -A PDIR=([ffmpeg]=ffmpeg [mpv]=mpv [gst-plugins-bad1.0]=gstreamer [gst-plugins-good1.0]=gst-plugins-good1.0 [mesa]=mesa)
 # Architecture: all sources (built with -A); the rest build their arm64 packages
 declare -A BUILD=()
 
@@ -98,7 +108,7 @@ if [ "${1:-}" = --force ]; then FORCE=1; shift; fi
 if [ $# -gt 0 ]; then
   SOURCES=("$@")
 else
-  SOURCES=(ffmpeg mpv)   # gst-plugins-bad1.0 joins after its board test (harness/research/gst-jpeg)
+  SOURCES=(ffmpeg mpv gst-plugins-bad1.0 gst-plugins-good1.0 mesa)
 fi
 
 # apt cache: apt-cacher-ng on 127.0.0.1:3142 is used if it is listening
@@ -141,9 +151,11 @@ else
   echo "ccache: not used (OPI5_MEDIA_CCACHE=0)"
 fi
 mkdir -p "$REPO" "$WORK"
-# Build stamp: version, revision, every patch file and this script. An unchanged source is not rebuilt.
+# Build stamp: version, revision, every patch file and this script's build recipe (the marked blocks: the in-chroot
+# build and the mmdebstrap call). An unchanged source is not rebuilt; comments and the source list elsewhere in
+# this script do not count.
 stamp_of() {
-  { echo "${VERSION[$1]} ${REV[$1]}"; sha256sum "$SELF";
+  { echo "${VERSION[$1]} ${REV[$1]}"; sed -n '/^ *# --- build recipe begin/,/^ *# --- build recipe end/p' "$SELF" | sha256sum;
     (cd "$TOP/patches/${PDIR[$1]}" && find . -type f -print0 | sort -z | xargs -0 sha256sum); } | sha256sum | cut -c1-16
 }
 index_repo() {
@@ -175,6 +187,7 @@ for src in "${SOURCES[@]}"; do
   cp "$REPO"/Packages "$STAGE"/
   for d in "$REPO"/*.deb; do if [ -e "$d" ]; then cp "$d" "$STAGE"/; fi; done
   chmod -R a+rX "$STAGE"
+  # --- build recipe begin
   # The local repository is a file:// mirror, so mpv's build-deps resolve to our
   # libav*-dev rather than Ubuntu's. The outer apt reads it at $STAGE on the host,
   # apt inside the chroot at the same path in the chroot (copy-in; bind mounts
@@ -199,6 +212,7 @@ for src in "${SOURCES[@]}"; do
     "deb-src $MIRROR $SUITE $COMPONENTS" \
     "deb [trusted=yes] file://$STAGE ./" \
     > "$w/build.log" 2>&1 || { echo "$src failed; see $w/build.log"; tail -20 "$w/build.log"; exit 1; }
+  # --- build recipe end
   if [ -d "$CCACHE_HOST.new" ]; then rm -rf "$CCACHE_HOST"; mv "$CCACHE_HOST.new" "$CCACHE_HOST"; fi
   # Replace the previous build of this source in the repository
   for d in "$REPO"/*.deb; do

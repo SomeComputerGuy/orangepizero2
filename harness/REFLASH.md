@@ -17,8 +17,9 @@ runs verify-board.sh.
 
 ## Inputs (from the coordinator's job message)
 - IMAGE: which variant to flash. Default: server. The images are in armbian-build/output/images/:
-  - server:  `Armbian-unofficial_26.11.0-trunk_Orangepizero2_stonking_edge_7.3.1.img.xz`
-  - minimal: `..._7.3.1_minimal.img.xz`, desktop: `..._7.3.1_desktop.img.xz`
+  - server:  `Armbian-unofficial_26.11.0-trunk_Orangepizero2_stonking_edge_<kver>.img.xz` (newest; <kver> = the image's
+    kernel, 7.3.3 since the 2026-11-07 build, 7.3.1 before)
+  - minimal: `..._<kver>_minimal.img.xz`, desktop: `..._<kver>_desktop.img.xz`
 - TAG: the label for the log directory (for example the armbian-build commit, `git -C armbian-build log -1 --format=%h`).
 
 ## Steps

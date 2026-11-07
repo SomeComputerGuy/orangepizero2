@@ -74,11 +74,11 @@ it flashes whichever variant was built last. Desktop variant (`./build.sh OPIZ2_
 
 Mode: LOW-CREDIT (one agent at a time, runner included). Per-task state: each task's RESULTS.md and memory file.
 Test kernels: cumulative cN on test-cumulative (kernel-check/cumulative-kernels.txt); newest c43 (c65ef3449).
-Image branch stonking-orangepizero2 = 452cdd53f (+ DE33 tearing/writeback 5 commits + panfrost map unwind on 90b5e7da2;
-build-checked 878 patches, 0 failed, 0 warnings, pushed to fork 2026-11-06). Desktop FFmpeg 0320 compose crop added (rev 5, 81d1c2a).
+Image branch stonking-orangepizero2 = 9ba317178 (2026-11-07: armbian/build main merged into 452cdd53f; kernel 7.3.3;
+build-checked 879 patches, 0 failed, 0 C warnings, pushed to fork). Desktop FFmpeg 0320 compose crop added (rev 5, 81d1c2a).
 
 ### A. Running
-- Nothing on the board. User's image build (90b5e7da2) running.
+- Board: job 68 (vk11) paused. Queue: 69-image-check (after the user's build), then 68 resumes. No image build running.
 - DONE 2026-11-06: DE33 tearing + writeback, job 62 PASS on c47 (2dc70409e): 0 torn/wrong/stale captures in all runs, events
   held 100 %, 0 late/forced latches (base), every lost capture accounted by reason (kernel == client), VE+mem load real.
   Branch fix/sunxi-h616-de33-latch-event: 8af646391, 93b00281a (display), 3e0255e2f, 906968398, 825596b48 (writeback).
@@ -86,21 +86,35 @@ build-checked 878 patches, 0 failed, 0 warnings, pushed to fork 2026-11-06). Des
 - DONE 2026-11-06: panfrost failed-map unwind a524d09da (fix/sunxi-panfrost-mmu-map-enomem): job 63 PASS on c48 (6 memcg-OOM
   rounds, OOM hit, 0 WARN/oops, GPU alive; GLES31/KHR/OpenCL 0 regressions, 2 drawelements cases OOM->Pass). -> in stonking 452cdd53f. State: harness/research/display-tearing/RESULTS.md.
 
-### B. Image integration (after the user's current build_all; the main armbian-build checkout stays untouched until then)
-1. Cherry-pick the board-PASS kernel fixes into stonking-orangepizero2 (-x, build-check):
-   8b1f787fe H.265 AFBC compose offset (job 54) · 20e682fc2 writeback retry (job 55) · 950c46035 cedrus JPEG drain on
-   DEC_CMD_STOP + fbba781aa S_FMT with CAPTURE buffers left (job 57; fixes every v4l2sl* resolution change since c10)
-   DONE 2026-11-06 = 90b5e7da2 (in the running build). Tearing+writeback (job 62 PASS) = next build, see A.
-2. gst-plugins-good1.0 patches 0101 (1:4:0:0 JPEG colorimetry) + 0102 (sysmem when the peer answers ANY) into
-   scripts/build-media-debs.sh; keep the MARGINAL rank for v4l2jpegdec, fix its "hangs" comment in image-integration.patch.
-3. DONE: FFmpeg compose crop = patches/ffmpeg/0320 (applies fuzz 0 on the image series), ffmpeg rev 5.
-4. Rebuild images, then runner reflash (harness/REFLASH.md, server image) + verify-board.sh. Also closes job 24 check 1
-   (gstreamer1.0-libav in every variant).
-5. Vulkan step 1 (user go 2026-11-06: "get the Vulkan support running"): ship the Mesa fork (mesa-work/mesa-cl
-   panfrost-opencl-fixes 0e274280595: RGB overfetch, G31 ballot/WMASK, A8 texel buffers; board PASS jobs 46/52) as the
-   image's Mesa in all variants, and set PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1 system-wide (panvk = Vulkan 1.0 on G31).
-   Checks: vulkaninfo/vkcube on the board, GNOME desktop still renders (GTK4 renderer choice), GLES/OpenCL no regressions.
-   Fork GitHub repo still to be created by the user (build from the local tree until then).
+### B. Image integration (2026-11-07: everything integrated; next = the user's ./build-all.sh, then runner job 69)
+1. DONE: board-PASS kernel fixes (AFBC compose offset, writeback retry, cedrus JPEG drain + S_FMT with CAPTURE buffers
+   left, DE33 tearing/writeback, panfrost map unwind) are in stonking-orangepizero2.
+2. DONE: Armbian upstream merged (120 commits, merge base 2026-11-01): branch merge/upstream-2026-11-06 = 9ba317178
+   (pushed to fork; the main checkout's stonking-orangepizero2 fast-forwarded to it). One conflict: uwe5622 ref, took
+   upstream bd3da409fa33 (= our f88cd0d25ff6 + its Linux 7.4 build fix). Upstream also adds OVERLAY_PREFIX for
+   sun50iw9, multi-prefix overlays in boot-sun50i-next.cmd, KERNEL_CVE_PATCHES (off by default). Kernel now 7.3.3.
+   Build check (build-kernel.sh, KVER=7.3.3): 879 patches applied, 0 failed, build exit 0, 0 C warnings, dtbs exit 0,
+   17 dtc warnings = all the pre-existing pine64-7inch-lcd / nanopi-r1s-h5 ones, 61 h616 overlays.
+3. DONE: scripts/build-media-debs.sh builds ffmpeg, mpv, gst-plugins-bad1.0 (patches/gstreamer), gst-plugins-good1.0
+   (patches/gst-plugins-good1.0 0101-0102, job 57) and mesa (patches/mesa = fork 0e274280595, 28 patches, fuzz 0),
+   all by default, emulated arm64 (qemu-user) as before. The build stamp covers only the marked build recipe, so
+   comment/source-list edits don't force rebuilds. build.sh runs it for every variant (unchanged sources are skipped).
+   A Mesa cross build was tried (user request 2026-11-07) and is blocked by packaging: llvm-22-dev:arm64 ->
+   llvm-22-tools:arm64 -> python3-yaml:arm64 conflicts with the native python3-yaml, so LLVM's -dev packages cannot
+   be co-installed for a cross build. Attempt kept in harness/research/image-integration/mesa-cross-build-attempt.patch.
+4. DONE: image config. /opt/opiz2-media repo in EVERY variant (post_repo_customize_image__opiz2_media): gst-bad/-good +
+   Mesa everywhere, ffmpeg/mpv desktop only; only installed packages are replaced and checked (+ each source must have
+   replaced at least one). PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1 in /etc/environment, /etc/environment.d and the
+   system/user DefaultEnvironment. v4l2jpegdec stays MARGINAL (comment now gives the caps-routing reason, not "hangs").
+   vulkan-tools/mesa-utils/kmscube/clinfo were already in every variant.
+5. NEXT: user runs ./build-all.sh OPIZ2_WIFI_REGDOM=US; then runner job 69-image-check (reflash server image + checks
+   0-17: kernel 7.3.3, verify-board, +opiz2 packages, gst elements/JPEG, gst-libav = job 24 check 1, Vulkan env,
+   vulkaninfo 1.0.x, vkcube (NOT-TESTED without HDMI), dEQP-VK smoke + subgroups, GLES, OpenCL, dmesg, /root/cts
+   restage), then job 68 resumes. Kernel scripts (install/restore-kernel.sh, vdec-fallback.sh, vk11-main.sh) no longer
+   assume a 7.3.1 stock kernel. Still open after 69: the GNOME desktop with the variable set (GTK4 renderer choice) on
+   a display; older runner packages in harness/research/*/runner still hardcode vmlinuz-7.3.1-edge-sunxi64 in their
+   own restore() (only matters if one of them is rerun).
+   Fork GitHub repo still to be created by the user (debs are built from patches/mesa).
 
 ### C. Coding queue (one fresh agent at a time, in order)
 6. Ethernet: bulk host->board TCP stalls at exactly 512 KiB and 8000-byte pings lose ~33 % after ~1 h (seen on debug

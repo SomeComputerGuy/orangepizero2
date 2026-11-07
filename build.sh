@@ -8,8 +8,8 @@ here="$(cd "$(dirname "$0")" && pwd)"
 ab="$here/armbian-build"
 [[ -L $ab/userpatches ]] || { [[ -e $ab/userpatches ]] && { echo "$ab/userpatches exists and is not a symlink" >&2; exit 1; }; ln -s ../userpatches "$ab/userpatches"; }
 echo "armbian-build: $(git -C "$ab" rev-parse --abbrev-ref HEAD) $(git -C "$ab" log -1 --format=%h)"
-# Desktop variant: our FFmpeg/mpv rebuilds (out/debs-media) first, as this user (rootless; skips unchanged sources).
-for a in "$@"; do
-	if [[ $a == OPIZ2_VARIANT=desktop ]]; then "$here/scripts/build-media-debs.sh"; fi
-done
+# Our package rebuilds (out/debs-media) first, as this user, for every variant (rootless; a source whose version,
+# patches and build recipe are unchanged is skipped, so after the first variant this only checks the stamps):
+# gst-plugins-bad/-good and Mesa go into every variant, FFmpeg/mpv into the desktop variant.
+"$here/scripts/build-media-debs.sh"
 cd "$ab" && exec ./compile.sh opiz2-printserver "$@"

@@ -1,0 +1,58 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 20:42:56 +0000
+Subject: [PATCH] rusticl/mem: fix the whole-slice fast path of sw_copy and the
+ rect copies
+
+sw_copy(), Buffer::copy_rect() and Buffer::write_rect() copy a whole
+slice at once when the rows are contiguous, but tested that with
+region[1] (the row count) instead of region[0] (the row length in
+pixels or bytes). Any region whose height times pixel size happened to
+equal the row pitch took the fast path, copied only
+region[0] * region[1] bytes from the start of the slice and left the
+rest of the mapped/copied region untouched.
+
+OpenCL-CTS basic/enqueue_map_image hits this with its fixed MT19937
+stream on a 64x64x64 RG SIGNED_INT8 image (row pitch 128): the second
+map of the ALLOC_HOST_PTR|COPY_HOST_PTR IMAGE3D case has region
+(4, 64, 9), 64 rows * 2 B == 128, so only 512 bytes per slice were
+copied and the CTS saw "Sample 168218 (coord 0,4,0) did not validate!
+Got 0, expected 126". Reproduced on the host with a drm-shim device
+(no GPU involved) and gone with the region[0] test.
+
+Generated-by: LLM
+---
+ src/gallium/frontends/rusticl/core/memory.rs | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/gallium/frontends/rusticl/core/memory.rs b/src/gallium/frontends/rusticl/core/memory.rs
+index c777be4a341..4e4463020d1 100644
+--- a/src/gallium/frontends/rusticl/core/memory.rs
++++ b/src/gallium/frontends/rusticl/core/memory.rs
+@@ -778,7 +778,7 @@ fn sw_copy(
+ ) {
+     let pixel_size = pixel_size as usize;
+     for z in 0..region[2] {
+-        if src_row_pitch == dst_row_pitch && region[1] * pixel_size == src_row_pitch {
++        if src_row_pitch == dst_row_pitch && region[0] * pixel_size == src_row_pitch {
+             unsafe {
+                 ptr::copy(
+                     src.byte_add(
+@@ -1277,7 +1277,7 @@ impl Buffer {
+         let mut dst_offset = self.apply_offset(dst_offset)?;
+         let dst_res = dst.get_res_for_access(ctx, RWFlags::WR)?;
+ 
+-        if src_row_pitch == dst_row_pitch && region[1] == src_row_pitch {
++        if src_row_pitch == dst_row_pitch && region[0] == src_row_pitch {
+             let slice_size = (region[0] * region[1]).try_into_with_err(CL_OUT_OF_RESOURCES)?;
+             for _ in 0..region[2] {
+                 ctx.resource_copy_buffer(
+@@ -1651,7 +1651,7 @@ impl Buffer {
+         let mut dst_offset = self.apply_offset(dst_offset)?;
+         let dst_res = self.get_res_for_access(ctx, RWFlags::WR)?;
+ 
+-        if src_row_pitch == dst_row_pitch && region[1] == src_row_pitch {
++        if src_row_pitch == dst_row_pitch && region[0] == src_row_pitch {
+             let slice_size = (region[0] * region[1]).try_into_with_err(CL_OUT_OF_RESOURCES)?;
+             for _ in 0..region[2] {
+                 ctx.buffer_subdata(dst_res, dst_offset as u32, src, slice_size);

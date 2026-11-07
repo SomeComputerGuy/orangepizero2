@@ -116,9 +116,10 @@ blocked() { log "BLOCKED: $*"; echo "$*" > $OUT/BLOCKED; restore; release; exit 
 T=$(tail -1 $H/kernel-check/cumulative-kernels.txt | cut -d' ' -f1)   # newest cumulative tag (install-kernel.sh does the same)
 boot_trial() {
   local cur; cur=$($SSH -n 'readlink /boot/Image') || { echo "board does not answer ssh" > $OUT/BLOCKED; log "BLOCKED: board does not answer ssh"; release; exit 2; }
-  if [ "$cur" = "vmlinuz-7.3.1-vdec-$T" ] && [ "$($SSH -n "md5sum < /boot/$cur | cut -c1-32")" = "$KIMG" ]; then
+  # trial = vmlinuz-<release>-vdec-$T, stock = the image's vmlinuz-<release>-edge-sunxi64 (7.3.3 since the 2026-11-06 image)
+  if [[ $cur == vmlinuz-*-vdec-$T ]] && [ "$($SSH -n "md5sum < /boot/$cur | cut -c1-32")" = "$KIMG" ]; then
     $SSH -n 'touch /run/vdec-ok'; log "kernel fix: present (already on $T, contains $SOFTSTOP)"; return; fi
-  [ "$cur" = vmlinuz-7.3.1-edge-sunxi64 ] || blocked "board neither on the stock kernel nor on $T at start (/boot/Image -> $cur)"
+  [[ $cur == vmlinuz-*-edge-sunxi64 ]] || blocked "board neither on the stock kernel nor on $T at start (/boot/Image -> $cur)"
   $V/install-kernel.sh $T 2>&1 | tail -3 | tee -a $OUT/runner.log
   $SSH -n 'sync; (sleep 2; systemctl reboot) >/dev/null 2>&1 &'; sleep 20
   waitup || { log "trial kernel did not come up (the fallback reverts on the next boot)"; echo "trial boot failed" > $OUT/BLOCKED; release; exit 2; }
@@ -252,7 +253,7 @@ after_stall() { # after_stall <part>: kill the round on the board, mark the hung
     echo "board unreachable after a stall in $P: power-cycle per RUNNER.md, then rerun the same command (it resumes)" > $OUT/BLOCKED
     release; exit 2; fi
   $SSH -n "p=\$(cat $B/round.pid 2>/dev/null); [ -n \"\$p\" ] && grep -q deqp-run /proc/\$p/cmdline 2>/dev/null || p=; [ -n \"\$p\" ] && kill \$p 2>/dev/null; sleep 3; [ -n \"\$p\" ] && kill -9 \$p 2>/dev/null; for q in \$(pidof deqp-vk); do kill -9 \$q; done; rm -f $B/round.pid; touch $B/res/$P/STALLED" 2>/dev/null
-  [ "$($SSH -n 'readlink /boot/Image')" = "vmlinuz-7.3.1-vdec-$T" ] || { log "board came back on another kernel after the stall: reinstalling $T"; boot_trial; setup; }
+  [[ $($SSH -n 'readlink /boot/Image') == vmlinuz-*-vdec-$T ]] || { log "board came back on another kernel after the stall: reinstalling $T"; boot_trial; setup; }
   $SSH -n 'touch /run/vdec-ok'; }
 run_probe() {
   probe_script | $SSH "mkdir -p $B; cat > $B/probe.sh" || { log "probe: cannot write the board script"; return; }

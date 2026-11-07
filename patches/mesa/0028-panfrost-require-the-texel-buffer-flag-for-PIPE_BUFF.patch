@@ -1,0 +1,50 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 6 Nov 2026 15:45:41 +0000
+Subject: [PATCH] panfrost: require the texel-buffer flag for PIPE_BUFFER
+ sampler views
+
+panfrost_is_format_supported() ignored the target, so a PIPE_BUFFER
+sampler view or image was accepted for any texturable format, although
+the format table marks the texel-buffer capable formats separately
+(PAN_BIND_TEXEL_BUFFER, which panvk already checks). On Bifrost texel
+buffers are read through the attribute unit, and A8_UNORM is a
+texture-only format on v7: rusticl exposed CL_A/CL_UNORM_INT8 for
+CL_MEM_OBJECT_IMAGE1D_BUFFER, and the OpenCL-CTS samplerless float
+1Dbuffer test of that format faults the Mali-G31 with
+"js fault, status=INSTR_INVALID_ENC" (the kernel is the same one every
+other format runs fine with; only the attribute format differs, and v7
+has no 000R component order to read an R8 attribute as alpha).
+
+Add PAN_BIND_TEXEL_BUFFER to the requested flags for sampler views and
+images on PIPE_BUFFER. On v7 this drops only A8_UNORM, RGBA4,
+RGB10A2_SINT, R3G3B2 and the YUV/X6 formats from texel buffers, none of
+which GL ES or Vulkan allow there; for OpenCL only CL_A/CL_UNORM_INT8
+1D-buffer images go (1D/2D/3D CL_A images stay).
+
+Generated-by: LLM
+---
+ src/gallium/drivers/panfrost/pan_screen.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/src/gallium/drivers/panfrost/pan_screen.c b/src/gallium/drivers/panfrost/pan_screen.c
+index 5f7c8ac1d22..9a12e832808 100644
+--- a/src/gallium/drivers/panfrost/pan_screen.c
++++ b/src/gallium/drivers/panfrost/pan_screen.c
+@@ -184,6 +184,16 @@ panfrost_is_format_supported(struct pipe_screen *screen,
+ 
+    unsigned pan_bind_flags = pipe_to_pan_bind_flags(bind);
+    struct pan_format fmt = dev->formats[format];
++
++   /* Texel buffers (sampler views and images on a PIPE_BUFFER) are read
++    * through the attribute unit on Bifrost and through buffer descriptors on
++    * Valhall: only the formats marked as texel-buffer capable work there
++    * (panvk already checks this flag). A8_UNORM, for one, is a texture-only
++    * format on v7: an attribute in that format faults the G31 with
++    * INSTR_INVALID_ENC. */
++   if (target == PIPE_BUFFER &&
++       (bind & (PIPE_BIND_SAMPLER_VIEW | PIPE_BIND_SHADER_IMAGE)))
++      pan_bind_flags |= PAN_BIND_TEXEL_BUFFER;
+    unsigned fmt_bind_flags = fmt.bind;
+ 
+    /* Also check that compressed texture formats are supported on this

@@ -1,0 +1,61 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 20:42:54 +0000
+Subject: [PATCH] drm-shim: hand out a signalled sync file for
+ SYNCOBJ_HANDLE_TO_FD
+
+The stub left drm_syncobj_handle::fd at -1, so panfrost's
+panfrost_fence_create() ("export failed") returned NULL on every flush and
+rusticl's queue worker thread panicked on it: any clFinish() or blocking
+map on the drm-shim device hung forever. Return an eventfd with a count
+of 1, i.e. an fd that is always readable/signalled, so fences work on the
+shim and CPU-side paths (image uploads, maps, read/write) can be run
+without a GPU.
+
+Generated-by: LLM
+---
+ src/drm-shim/device.c | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/src/drm-shim/device.c b/src/drm-shim/device.c
+index 7df59002768..a18a025bc4c 100644
+--- a/src/drm-shim/device.c
++++ b/src/drm-shim/device.c
+@@ -34,6 +34,7 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
++#include <sys/eventfd.h>
+ #include <sys/ioctl.h>
+ #include <sys/mman.h>
+ #include <unistd.h>
+@@ -283,6 +284,20 @@ drm_shim_ioctl_stub(int fd, unsigned long request, void *arg)
+    return 0;
+ }
+ 
++/* Hand out an always-signalled sync file: drivers (panfrost) snapshot their
++ * fences with HANDLE_TO_FD + FD_TO_HANDLE and fail the fence creation when the
++ * stub leaves fd at -1.
++ */
++static int
++drm_shim_ioctl_syncobj_handle_to_fd(int fd, unsigned long request, void *arg)
++{
++   struct drm_syncobj_handle *args = arg;
++
++   args->fd = eventfd(1, EFD_CLOEXEC);
++
++   return args->fd < 0 ? -errno : 0;
++}
++
+ ioctl_fn_t core_ioctls[] = {
+    [_IOC_NR(DRM_IOCTL_VERSION)] = drm_shim_ioctl_version,
+    [_IOC_NR(DRM_IOCTL_GET_UNIQUE)] = drm_shim_ioctl_get_unique,
+@@ -290,7 +305,7 @@ ioctl_fn_t core_ioctls[] = {
+    [_IOC_NR(DRM_IOCTL_GEM_CLOSE)] = drm_shim_ioctl_gem_close,
+    [_IOC_NR(DRM_IOCTL_SYNCOBJ_CREATE)] = drm_shim_ioctl_syncobj_create,
+    [_IOC_NR(DRM_IOCTL_SYNCOBJ_DESTROY)] = drm_shim_ioctl_stub,
+-   [_IOC_NR(DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD)] = drm_shim_ioctl_stub,
++   [_IOC_NR(DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD)] = drm_shim_ioctl_syncobj_handle_to_fd,
+    [_IOC_NR(DRM_IOCTL_SYNCOBJ_FD_TO_HANDLE)] = drm_shim_ioctl_stub,
+    [_IOC_NR(DRM_IOCTL_SYNCOBJ_WAIT)] = drm_shim_ioctl_stub,
+    [_IOC_NR(DRM_IOCTL_SYNCOBJ_TRANSFER)] = drm_shim_ioctl_stub,

@@ -1,0 +1,82 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 6 Nov 2026 13:52:23 +0000
+Subject: [PATCH] pan/layout: leave a cache line of slack after 24/96-bit
+ images
+
+OpenCL-CTS image reads of CL_RGB images (RGB8 UNORM/SNORM 2D arrays,
+RGB32I 3D) fault intermittently on Mali-G31 (Bifrost v7.0):
+"Unhandled Page fault in AS0 at VA 0x...000", JOB_BUS_FAULT on the
+compute slot, the remaining work-items never store. The fault address
+is page aligned every time and the formats that fault are exactly the
+non-power-of-two texel sizes; RGBA and the other formats with the same
+kernels and sizes never fault. The images that fault have data that
+ends exactly on a page boundary (21x32x14 RGB8: row 64, layer 2048,
+28672 bytes; 25x128x32 RGB32I: row 320, slice 40960, 0x140000 bytes)
+and the random integer coordinates clamp to the last texel, so the
+texture unit seems to read the cache line after the one holding a
+24/96-bit texel. That line is the next BO when one is mapped there
+(no fault, nothing used) and an unmapped page otherwise, which depends
+on the allocation order and makes the fault intermittent.
+
+For images whose layout we choose, add 64 bytes before rounding the
+data size up to a page when the (plane) format has a non-power-of-two
+block size and is not compressed. That costs one page for the images
+whose data ends on a page boundary and nothing for the others; explicit
+(imported) layouts are unchanged.
+
+Not proven on the hardware yet: the board A/B (old build vs this one,
+kernel that names the BO around a fault) is harness/runner-queue/
+46-rgb-tdim.md.
+
+Generated-by: LLM
+---
+ src/panfrost/lib/pan_layout.c | 28 ++++++++++++++++++++++++++--
+ 1 file changed, 26 insertions(+), 2 deletions(-)
+
+diff --git a/src/panfrost/lib/pan_layout.c b/src/panfrost/lib/pan_layout.c
+index b0114493623..7d0accbce6f 100644
+--- a/src/panfrost/lib/pan_layout.c
++++ b/src/panfrost/lib/pan_layout.c
+@@ -61,6 +61,19 @@ get_mip_level_extent(const struct pan_image_props *props, unsigned plane_idx,
+    };
+ }
+ 
++static bool
++pan_image_needs_overfetch_pad(enum pipe_format format, unsigned plane_idx)
++{
++   if (util_format_is_compressed(format))
++      return false;
++
++   enum pipe_format plane_format =
++      util_format_get_plane_format(format, plane_idx);
++
++   return !util_is_power_of_two_nonzero(
++      util_format_get_blocksize(plane_format));
++}
++
+ bool
+ pan_image_layout_init(
+    unsigned arch, struct pan_image *image, unsigned plane_idx,
+@@ -153,8 +166,19 @@ pan_image_layout_init(
+       assert(!explicit_layout_constraints ||
+              explicit_layout_constraints->offset_B ==
+                 layout->slices[0].offset_B);
+-      layout->data_size_B = ALIGN_POT(
+-         (uint64_t)layout->array_stride_B * (uint64_t)props->array_size, 4096);
++      uint64_t size_B =
++         (uint64_t)layout->array_stride_B * (uint64_t)props->array_size;
++
++      /* Images of a non-power-of-two texel size (RGB8, RGB32) seem to be
++       * read past their last texel: on Mali-G31 such an image whose data
++       * ends on a page boundary takes a JOB_BUS_FAULT on the page-aligned VA
++       * right after the BO when nothing is mapped there. Leave one cache
++       * line of slack after these images.
++       */
++      if (pan_image_needs_overfetch_pad(props->format, plane_idx))
++         size_B += 64;
++
++      layout->data_size_B = ALIGN_POT(size_B, 4096);
+    }
+ 
+    return true;

@@ -1,0 +1,28 @@
+--- a/userpatches/config-opiz2-printserver.conf	2026-11-07 04:08:50.007827509 +0000
++++ b/userpatches/config-opiz2-printserver.conf	2026-11-07 04:08:50.056079315 +0000
+@@ -43,15 +43,20 @@
+ 
+ # Desktop (OPIZ2_VARIANT=desktop). The DE is the one variable OPIZ2_DESKTOP_DE (gnome | xfce | any configng DE).
+ # GNOME with the same settings as Armbian's standard orangepizero2 desktop image (armbian/os
+-# userpatches/targets-release-community-maintained.yaml, target gnome-desktop-stable-ubuntu). The current framework
+-# maps a non-empty DESKTOP_APPGROUPS_SELECTED to DESKTOP_TIER=full (config-desktop.sh); DESKTOP_TIER=minimal|mid on
+-# the command line overrides that. armbian/configng has no stonking definitions yet: see the custom_apt_repo hook below.
++# userpatches/targets-release-community-maintained.yaml, target gnome-desktop-stable-ubuntu): armbian-config's "full"
++# tier (module_desktops), which holds the app groups that image used to select with the removed
++# DESKTOP_APPGROUPS_SELECTED / DESKTOP_ENVIRONMENT_CONFIG_NAME (config-desktop.sh). DESKTOP_TIER=minimal|mid on the
++# command line overrides it. armbian/configng has no stonking definitions yet: see the custom_apt_repo hook below.
+ declare -g OPIZ2_DESKTOP_DE="${OPIZ2_DESKTOP_DE:-gnome}"
+ if [[ "${BUILD_DESKTOP}" == "yes" ]]; then
+ 	declare -g DESKTOP_ENVIRONMENT="${DESKTOP_ENVIRONMENT:-${OPIZ2_DESKTOP_DE}}"
+-	declare -g DESKTOP_ENVIRONMENT_CONFIG_NAME="${DESKTOP_ENVIRONMENT_CONFIG_NAME:-config_base}"
+-	declare -g DESKTOP_APPGROUPS_SELECTED="${DESKTOP_APPGROUPS_SELECTED-browsers,chat,desktop_tools,editors,email,internet,languages,multimedia,office,programming,remote_desktop}"
++	declare -g DESKTOP_TIER="${DESKTOP_TIER:-full}"
+ fi
++# Rootfs size for Armbian's tmpfs decision and its post-tweaks size check (lib/functions/rootfs/trap-rootfs.sh,
++# ROOTFS_TMPFS_ESTIMATED_SIZE_MIB from our armbian-build branch): the print server package set makes the CLI rootfs
++# bigger than Armbian's 2300 MiB estimate (measured 2026-11-07: minimal 2418 MiB, server 3013 MiB, "Actual rootfs size" in the build
++# log). The desktop keeps Armbian's 6000 MiB.
++[[ "${BUILD_DESKTOP}" == "yes" ]] || declare -g ROOTFS_TMPFS_ESTIMATED_SIZE_MIB="${ROOTFS_TMPFS_ESTIMATED_SIZE_MIB:-3500}"
+ KERNEL_CONFIGURE="no"
+ # Kernel BTF stays on (Armbian default; BPF CO-RE and out-of-tree module BTF need it).
+ 

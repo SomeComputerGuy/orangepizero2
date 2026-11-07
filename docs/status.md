@@ -79,7 +79,7 @@ Image branch stonking-orangepizero2 = e79177038 (9ba317178 = armbian/build main 
 Mesa fork: github.com/SomeComputerGuy/mesa, branch panfrost-opencl-fixes (mesa-26.2.4 + 32 commits, 9d278fabfc2).
 
 ### A. Running
-- Job 68 (Vulkan 1.1 full dEQP-VK) DONE 2026-11-07 21:xx: 64/64 parts, 3,247,552 cases: Pass 684,180, NotSupported
+- Job 68 (Vulkan 1.1 full dEQP-VK) DONE 2026-11-07 21:04: 64/64 parts, 3,247,552 cases: Pass 684,180, NotSupported
   2,562,827, Fail 526 (504 = glsl.texture_functions *offset* + texturequerylod), Crash 9 (parts 45/46/57; 8 js faults),
   QualityWarning 8, ResourceError 2; 8 INSTR_INVALID_ENC lines; vs system Mesa 1.0 main1in100: 1 regression, 482 fixed.
   --check FAIL 3 (d9), 7, 8, 9. Summaries: harness/runner-queue/68-vk11-main.chunk-{1,3}.summary.md.

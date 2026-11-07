@@ -162,7 +162,7 @@ setup() { # deploy the fork to /root/opiz2-mesa/vk3 (first time from build-cl, l
   if [ ! -d $FROZEN ]; then
     MESA_ENV=$MW/tools/env-cl.sh $MW/tools/deploy.sh build-cl $DN 2>&1 | tail -2 | tee -a $OUT/runner.log
     mkdir -p $(dirname $FROZEN); rm -rf $FROZEN; cp -a $MW/deploy/$DN $FROZEN
-  else timeout 900 rsync -a --delete -e "/usr/bin/ssh ${BOARD_SSH_OPTS[*]}" $FROZEN/ root@10.56.0.107:/root/opiz2-mesa/$DN/ || blocked "rsync of the frozen $DN failed"; fi
+  else $SSH -n "mkdir -p /root/opiz2-mesa" || blocked "mkdir /root/opiz2-mesa failed"; timeout 900 rsync -a --delete -e "/usr/bin/ssh ${BOARD_SSH_OPTS[*]}" $FROZEN/ root@10.56.0.107:/root/opiz2-mesa/$DN/ || blocked "rsync of the frozen $DN failed"; fi
   want=$(md5sum < $FROZEN/lib/libvulkan_panfrost.so | cut -c1-32)
   have=$($SSH -n "md5sum < /root/opiz2-mesa/$DN/lib/libvulkan_panfrost.so | cut -c1-32")
   [ -n "$want" ] && [ "$want" = "$have" ] && log "deployed $DN ok (libvulkan_panfrost md5 $have)" || blocked "$DN deploy mismatch (host $want board $have)"

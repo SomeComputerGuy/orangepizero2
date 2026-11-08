@@ -20,3 +20,9 @@ Flash: `sudo ./flash-sd.sh /dev/sdX` (newest image; run without a device to list
 - `scripts/build-media-debs.sh` — builds those packages; `build.sh` runs it.
 
 License: GPL-2.0-only.
+
+## Testing
+
+Verified on the board (2026-11-07, kernel 7.3.3): boot, SD, SPI NOR, DVFS, thermal, suspend, WiFi, Bluetooth,
+GPU (GLES 3.1, Vulkan 1.1 full dEQP-VK with 0 regressions, OpenCL 3.0), hardware video decode
+(MPEG-2, H.264, HEVC, VP8, VP9, AVS2) and H.264 encode. Not yet tested: HDMI output, USB devices, end-to-end printing.

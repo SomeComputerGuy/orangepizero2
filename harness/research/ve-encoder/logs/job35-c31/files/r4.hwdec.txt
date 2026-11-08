@@ -1,6 +1,0 @@
-ERROR: from element /GstPipeline:pipeline0/GstH264Parse:h264parse0: No valid frames found before end of stream
-Additional debug info:
-../libs/gst/base/gstbaseparse.c(3774): gst_base_parse_loop (): /GstPipeline:pipeline0/GstH264Parse:h264parse0
-ERROR: pipeline doesn't want to preroll.
-RC 1
-HWDEC r4 bytes 0 md5 d41d8cd98f00b204e9800998ecf8427e RC 1

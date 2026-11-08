@@ -1,3 +1,0 @@
-# AFBC capture dumps (binary) from the afbc runner job: copy, never commit
-*.afbc
-*.afbc-head

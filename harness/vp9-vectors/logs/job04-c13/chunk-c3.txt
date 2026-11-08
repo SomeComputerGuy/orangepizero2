@@ -1,2 +1,0 @@
-chunk c3: VP9-TEST-VECTORS, 97 vectors
-STALLED

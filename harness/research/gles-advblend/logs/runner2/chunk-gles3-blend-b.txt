@@ -1,9 +1,0 @@
-#38 SMP PREEMPT Fri Nov  6 10:29:47 UTC 2026
-DMESG-START 663
-TRACE-ON
-caselist /root/oclfix/advblend2/caselists/gles3-blend-b.txt, 1152 cases, 37 s
-Pass                   1152
-
-CHUNK-RC 0
-TRACE: TIMEDOUT 0
-ROUND-DONE

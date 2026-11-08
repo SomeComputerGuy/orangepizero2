@@ -1,2 +1,0 @@
-[  155.746013] hdmi-audio-codec hdmi-audio-codec.3.auto: HDMI: Unknown ELD version 0
-[  158.194147] hdmi-audio-codec hdmi-audio-codec.3.auto: HDMI: Unknown ELD version 0

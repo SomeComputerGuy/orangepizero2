@@ -1,7 +1,0 @@
-chunk pre: VP9-TEST-VECTORS, 1 vectors
-direct gst-launch rc=0 1 checksum lines
-02:02:20 [TEST SUITE      ] (DECODER             ) TEST VECTOR                 ... RESULT
-02:02:21 [VP9-TEST-VECTORS] (GStreamer-VP9-V4L2SL) vp90-2-00-quantizer-00.webm ... Success
-02:02:21 Ran 1/1 tests successfully, in 1.040 secs
-fluster: ran 1 1 (ok total); rc=0
-ROUND-DONE

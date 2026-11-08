@@ -1,3 +1,0 @@
-dEQP-VK.api.device_init.create_device_global_priority.basic,Fail,Fail
-dEQP-VK.api.device_init.create_device_global_priority_khr.basic,Fail,Fail
-dEQP-VK.api.driver_properties.conformance_version,Fail,Wrong driver conformance version (older than used API version) at vktApiDriverPropertiesTests.cpp:107

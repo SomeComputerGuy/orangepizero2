@@ -1,9 +1,0 @@
-suite,verdict,exit,summary,seconds,command
-Compute Info,Pass,0,PASSED 3 of 3 tests.,1,computeinfo/test_computeinfo
-Relationals,Pass,0,PASSED 17 of 17 tests.,692,relationals/test_relationals
-Atomics,Pass,0,PASSED 13 of 13 tests.,6,atomics/test_atomics
-Select,Pass,0,PASSED 22 of 22 tests.,14,select/test_select -w
-Half Ops,Pass,0,PASSED 13 of 13 tests.,68,half/test_half -w
-C11 Atomics,Pass,0,PASSED 32 of 32 tests.,15,c11_atomics/test_c11_atomics
-Workgroups,Pass,0,,1,workgroups/test_workgroups
-Subgroups,Pass,0,,1,subgroups/test_subgroups

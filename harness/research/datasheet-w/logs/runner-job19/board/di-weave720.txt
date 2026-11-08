@@ -1,3 +1,0 @@
-720x576 nv12 -> nv12, bytesperline 720/720, mode weave ("Weave" = 3)
-frames in 6, out 6, 0.048 s, 125.1 out/s, 51.9 Mpixel/s in
-weave check: PASS (0 mismatching frames)

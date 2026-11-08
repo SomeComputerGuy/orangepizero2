@@ -1,9 +1,0 @@
-#38 SMP PREEMPT Fri Nov  6 10:29:47 UTC 2026
-DMESG-START 663
-TRACE-ON
-caselist /root/oclfix/advblend2/caselists/khr-adv.txt, 88 cases, 6 s
-Pass                   88
-
-CHUNK-RC 0
-TRACE: TIMEDOUT 1
-ROUND-DONE

@@ -1,3 +1,0 @@
-caselist /root/mapenomem/caselists/khr-compute.txt, 39 cases, 10 s
-NotSupported           2
-Pass                   37

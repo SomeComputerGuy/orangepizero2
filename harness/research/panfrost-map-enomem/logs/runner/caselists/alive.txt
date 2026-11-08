@@ -1,1 +1,0 @@
-dEQP-GLES31.functional.compute.basic.ubo_to_ssbo_single_invocation

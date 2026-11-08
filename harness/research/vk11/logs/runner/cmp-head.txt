@@ -1,2 +1,0 @@
-COUNTS cases=3247552 Crash=9 Fail=526 NotSupported=2562827 Pass=684180 QualityWarning=8 ResourceError=2
-REGRESSIONS 1

@@ -1,6 +1,0 @@
-MG1S 1 (/dev/video0)
-SWDEC avdec_mpeg2video 
-LIBAV-PKG ii 1.28.7-1
-CCM1-DB rc=0 6b2806e022029f559b59ee5ca9e65d0d size=49536 irqs=129 picked=[v4l2slmpeg2dec0 ]
-STEP-DONE libav
-rc=0

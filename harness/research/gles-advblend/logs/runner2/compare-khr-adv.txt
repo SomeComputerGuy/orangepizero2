@@ -1,2 +1,0 @@
-FIXED KHR-GLES31.core.blend_equation_advanced.test_coherency.mixedSequence Fail -> Pass
-SUMMARY cases=88 {'Pass': 88} REGRESSIONS=0 FIXED=1 CHANGED=0 MISSING=0

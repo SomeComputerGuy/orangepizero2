@@ -1,8 +1,0 @@
-#25 SMP PREEMPT Fri Nov  6 04:18:02 UTC 2026
-DMESG-START 742
-TRACE-ON
-VK 1 dEQP-VK.spirv_assembly.type.vec4.i8.bit_field_insert_offset16_count64_frag rc=0 t=4s result=[ Pass (Rendered output matches input)] msg=[]
-VK 1 dEQP-VK.spirv_assembly.type.vec4.u64.bit_field_insert_offset8_count64_frag rc=0 t=5s result=[ Pass (Rendered output matches input)] msg=[]
-CHUNK-RC 0
-ROUND-DONE
-TRACE: TIMEDOUT 2

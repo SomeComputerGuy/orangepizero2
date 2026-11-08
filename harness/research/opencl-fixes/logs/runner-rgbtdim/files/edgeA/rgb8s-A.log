@@ -1,4 +1,0 @@
-CASE rgb8s RGB UNORM_INT8 2Darray 21x32x14 texel 3 B row 64 B data 0x7000 B, last texel at 0x6ffc
-RESULT rgb8s rep 0 enqueue 0 finish 0 stored 64 of 64
-RESULT rgb8s rep 1 enqueue 0 finish 0 stored 64 of 64
-RESULT rgb8s rep 2 enqueue 0 finish 0 stored 64 of 64

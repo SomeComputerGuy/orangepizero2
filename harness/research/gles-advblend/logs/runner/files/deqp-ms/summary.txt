@@ -1,3 +1,0 @@
-caselist /root/oclfix/advblend/caselists/deqp-ms.txt, 410 cases, 17 s
-NotSupported           2
-Pass                   408

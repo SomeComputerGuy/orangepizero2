@@ -1,1 +1,0 @@
-ENC /dev/video1 DEC /dev/video0 MEDIA /dev/media0

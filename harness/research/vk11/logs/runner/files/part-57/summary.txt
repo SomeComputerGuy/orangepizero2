@@ -1,4 +1,0 @@
-caselist /root/vk11/parts/part-57.txt, 50743 cases, 676 s
-Crash                  1
-NotSupported           46716
-Pass                   4026

@@ -1,3 +1,0 @@
-caselist /root/vk11fix/parts/part-02.txt, 8507 cases, 310 s
-Pass                   8506
-ResourceError          1

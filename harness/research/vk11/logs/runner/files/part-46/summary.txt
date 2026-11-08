@@ -1,4 +1,0 @@
-caselist /root/vk11/parts/part-46.txt, 50743 cases, 291 s
-Crash                  4
-NotSupported           48353
-Pass                   2386

@@ -1,3 +1,0 @@
-32x32 nv12 -> nv12, bytesperline 32/32, mode weave ("Weave" = 3)
-frames in 8, out 8, 0.001 s, 8896.3 out/s, 9.1 Mpixel/s in
-weave check: PASS (0 mismatching frames)

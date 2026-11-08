@@ -1,3 +1,0 @@
-caselist /root/vk11/parts/part-22.txt, 50743 cases, 641 s
-NotSupported           31455
-Pass                   19288

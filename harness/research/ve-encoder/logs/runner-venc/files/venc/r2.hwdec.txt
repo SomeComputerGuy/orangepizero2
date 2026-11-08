@@ -1,2 +1,0 @@
-RC 0
-HWDEC r2 bytes 41472000 md5 6383b2fd91091add1525584e1f392d8f raw 41472000 crop frames 30 stride 1280 rest 0 RC 0

@@ -1,3 +1,0 @@
-test,status,duration_s,detail
-dEQP-GLES31.functional.draw_indirect.compute_interop.large.drawelements_separate_grid_1000x1000_drawcount_5000,OOM,0.4,SIGKILL x2 (memcg OOM): ERROR: Waiver file '' could not be opened. No tests will be waived. |  | Test case 'dEQP-GLES31.functional.draw_indirect.compute_interop.large.drawelements_separate_grid_1000x1000_drawcount_5000'..
-dEQP-GLES31.functional.draw_indirect.compute_interop.large.drawelements_combined_grid_1000x1000_drawcount_5000,OOM,0.4,SIGKILL x2 (memcg OOM): ERROR: Waiver file '' could not be opened. No tests will be waived. |  | Test case 'dEQP-GLES31.functional.draw_indirect.compute_interop.large.drawelements_combined_grid_1000x1000_drawcount_5000'..

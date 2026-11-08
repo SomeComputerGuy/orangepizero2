@@ -1,2 +1,0 @@
-COUNTS cases=46529 Fail=511 NotSupported=27420 Pass=18595 ResourceError=3
-REGRESSIONS 0

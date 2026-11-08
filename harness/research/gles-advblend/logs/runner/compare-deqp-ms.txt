@@ -1,1 +1,0 @@
-SUMMARY cases=410 {'Pass': 408, 'NotSupported': 2} REGRESSIONS=0 FIXED=0 CHANGED=0 MISSING=0

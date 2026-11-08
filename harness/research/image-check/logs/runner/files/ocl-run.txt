@@ -1,8 +1,0 @@
-Compute Info                             Pass     rc=0 PASSED 3 of 3 tests.
-Relationals                              Pass     rc=0 PASSED 17 of 17 tests.
-Atomics                                  Pass     rc=0 PASSED 13 of 13 tests.
-Select                                   Pass     rc=0 PASSED 22 of 22 tests.
-Half Ops                                 Pass     rc=0 PASSED 13 of 13 tests.
-C11 Atomics                              Pass     rc=0 PASSED 32 of 32 tests.
-Workgroups                               Pass     rc=0 
-Subgroups                                Pass     rc=0 

@@ -1,4 +1,0 @@
-caselist /root/oclfix/advblend/caselists/deqp-fbo.txt, 118 cases, 6 s
-Fail                   1
-NotSupported           41
-Pass                   76

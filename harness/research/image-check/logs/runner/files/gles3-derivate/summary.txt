@@ -1,2 +1,0 @@
-caselist /root/imgchk/gles3-derivate.txt, 556 cases, 12 s
-Pass                   556

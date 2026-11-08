@@ -1,2 +1,0 @@
-DMESG: [12160.152192] deqp-vk invoked oom-killer: gfp_mask=0xcc0(GFP_KERNEL), order=0, oom_score_adj=1000
-DMESG: [12160.152779] oom-kill:constraint=CONSTRAINT_MEMCG,nodemask=(null),cpuset=/,mems_allowed=0,oom_memcg=/system.slice/run-p48223-i36862.scope,task_memcg=/system.slice/run-p48223-i36862.scope,task=deqp-vk,pid=48227,uid=0

@@ -1,3 +1,0 @@
-[    0.199947] platform 1c0e000.video-codec: Adding to iommu group 0
-[    0.242604] cedrus 1c0e000.video-codec: Device registered as /dev/video0
-[    0.242827] cedrus 1c0e000.video-codec: Encoder registered as /dev/video1

@@ -1,2 +1,0 @@
-dEQP-VK.api.object_management.max_concurrent.device,ResourceError,"vk.createDevice(physicalDevice, pCreateInfo, pAllocator, &object): VK_ERROR_OUT_OF_DEVICE_MEMORY at vkRefUtilImpl.inl:341"
-dEQP-VK.api.object_management.max_concurrent.device_group,ResourceError,"vk.createDevice(physicalDevice, pCreateInfo, pAllocator, &object): VK_ERROR_OUT_OF_DEVICE_MEMORY at vkRefUtilImpl.inl:341"

@@ -1,8 +1,0 @@
-#17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026
-DMESG-START 690
-caselist /root/oclfix/advblend/caselists/khr-ms.txt, 199 cases, 7 s
-NotSupported           38
-Pass                   161
-
-CHUNK-RC 0
-ROUND-DONE

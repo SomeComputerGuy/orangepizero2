@@ -1,7 +1,0 @@
-7.3.1-edge-sunxi64
-vmlinuz-7.3.1-edge-sunxi64
-shipped /root/stage/modules-c8.tgz b6f881cde28f75f15c0e9b51d1d19ddebf06dc9b8d203abd83ea47ef183f5440
-running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
-armed fallback to vmlinuz-7.3.1-edge-sunxi64
-7.3.1 #11 SMP PREEMPT Thu Nov  5 14:38:34 UTC 2026
-/dev/video0

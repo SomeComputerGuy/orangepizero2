@@ -1,6 +1,0 @@
-boot_warnings 0
-media /dev/media0 model=cedrus
-media /dev/media1 model=sun50i-di300
-media_node /dev/media0
-media_info 1
-dec_D_rc 0

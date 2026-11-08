@@ -1,2 +1,0 @@
-caselist /root/vk11/parts/part-47.txt, 50743 cases, 106 s
-NotSupported           50743

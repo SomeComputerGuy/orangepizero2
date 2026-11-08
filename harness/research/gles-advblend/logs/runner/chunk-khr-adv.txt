@@ -1,9 +1,0 @@
-#17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026
-DMESG-START 689
-caselist /root/oclfix/advblend/caselists/khr-adv.txt, 88 cases, 6 s
-Fail                   1
-Pass                   87
-
-CHUNK-RC 0
-DMESG: [  163.997197] panfrost 1800000.gpu: gpu sched timeout, js=0, config=0x7300, status=0x8, head=0xa113700, tail=0xa113700, sched_job=0000000026e5aba2
-ROUND-DONE

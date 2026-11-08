@@ -1,3 +1,0 @@
-chunk c4: VP9-TEST-VECTORS-HIGH, 6 vectors
-rc=1
-ROUND-DONE

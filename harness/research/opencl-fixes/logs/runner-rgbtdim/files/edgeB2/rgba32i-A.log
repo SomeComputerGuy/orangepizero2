@@ -1,4 +1,0 @@
-CASE rgba32i RGBA SIGNED_INT32 3D 256x64x24 texel 16 B row 4096 B data 0x600000 B, last texel at 0x5ffff0
-RESULT rgba32i rep 0 enqueue 0 finish 0 stored 64 of 64
-RESULT rgba32i rep 1 enqueue 0 finish 0 stored 64 of 64
-RESULT rgba32i rep 2 enqueue 0 finish 0 stored 64 of 64

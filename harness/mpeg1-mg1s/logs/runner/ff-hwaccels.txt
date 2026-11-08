@@ -1,4 +1,0 @@
-Hardware acceleration methods:
-drm
-v4l2request
-

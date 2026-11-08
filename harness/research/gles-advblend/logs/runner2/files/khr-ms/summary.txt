@@ -1,3 +1,0 @@
-caselist /root/oclfix/advblend2/caselists/khr-ms.txt, 199 cases, 7 s
-NotSupported           38
-Pass                   161

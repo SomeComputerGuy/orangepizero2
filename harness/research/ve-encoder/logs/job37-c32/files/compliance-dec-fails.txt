@@ -1,1 +1,0 @@
-		fail: v4l2-test-codecs.cpp(161): ret

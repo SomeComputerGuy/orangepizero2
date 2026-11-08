@@ -1,2 +1,0 @@
-caselist /root/vk11fix2/parts/part-06.txt, 1 cases, 25 s
-Pass                   1

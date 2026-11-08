@@ -1,6 +1,0 @@
-[   46.905341] Console: switching to colour frame buffer device 128x48
-[   46.907149] sun4i-drm display-engine: [drm] fb0: sun4i-drmdrmfb frame buffer device
-[   47.346345] hdmi-audio-codec hdmi-audio-codec.3.auto: HDMI: Unknown ELD version 0
-[   52.066311] hdmi-audio-codec hdmi-audio-codec.3.auto: HDMI: Unknown ELD version 0
-[   52.191494] hdmi-audio-codec hdmi-audio-codec.3.auto: HDMI: Unknown ELD version 0
-[   56.728281] hdmi-audio-codec hdmi-audio-codec.3.auto: HDMI: Unknown ELD version 0

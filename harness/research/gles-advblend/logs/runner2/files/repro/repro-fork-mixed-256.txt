@@ -1,4 +1,0 @@
-renderer: Mali-G31 MC1 (Panfrost) | version: OpenGL ES 3.1 Mesa 26.2.4 (git-02df572101) | coherent ext: 1 | seq mixed x4, 256x256, barrier=0
-first pixel: 32,32,32,255 ref 32,32,32,255 OK; distinct values: 1; pixels != first: 0 of 65536
-  value  32, 32, 32,255 x65536 (e.g. 0,0)
-RESULT PASS

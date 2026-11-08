@@ -1,4 +1,0 @@
-DMESG: [ 1567.954391] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12d2d200, tail=0x12d2d200
-DMESG: [ 1569.763985] panfrost 1800000.gpu: js fault, js=0, status=INSTR_INVALID_ENC, head=0x12a126c0, tail=0x12a126c0
-DMESG: [ 1571.739928] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0x12a12200, tail=0x12a12200
-DMESG: [ 1573.478861] panfrost 1800000.gpu: js fault, js=0, status=INSTR_INVALID_ENC, head=0x12a126c0, tail=0x12a126c0

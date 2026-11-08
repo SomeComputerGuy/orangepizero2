@@ -1,7 +1,0 @@
-#51 SMP PREEMPT Fri Nov  6 20:28:54 UTC 2026
-PROGRESS 4244
-DEQP-RC 143
-PART-INCOMPLETE 4244 of 50743
-DMESG: [  359.169957] deqp-vk invoked oom-killer: gfp_mask=0xcc0(GFP_KERNEL), order=0, oom_score_adj=1000
-DMESG: [  359.170519] oom-kill:constraint=CONSTRAINT_MEMCG,nodemask=(null),cpuset=/,mems_allowed=0,oom_memcg=/system.slice/run-p9473-i6735.scope,task_memcg=/system.slice/run-p9473-i6735.scope,task=deqp-vk,pid=9477,uid=0
-ROUND-DONE

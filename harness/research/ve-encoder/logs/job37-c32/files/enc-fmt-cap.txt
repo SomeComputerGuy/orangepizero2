@@ -1,4 +1,0 @@
-ioctl: VIDIOC_ENUM_FMT
-	Type: Video Capture
-
-	[0]: 'S264' (H.264 Parsed Slice Data, compressed)

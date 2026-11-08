@@ -1,3 +1,0 @@
-caselist /root/vk11/parts/part-03.txt, 50743 cases, 493 s
-NotSupported           29143
-Pass                   21600

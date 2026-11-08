@@ -1,2 +1,0 @@
-caselist /root/oclfix/advblend2/caselists/deqp-fbfetch.txt, 146 cases, 17 s
-Pass                   146

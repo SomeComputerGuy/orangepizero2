@@ -1,3 +1,0 @@
-chunk c2: VP9-TEST-VECTORS, 137 vectors
-rc=0
-ROUND-DONE

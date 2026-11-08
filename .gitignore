@@ -56,3 +56,7 @@ harness/research/g2d/logs/
 harness/research/ve-encoder/tools/out/
 harness/research/ve-encoder/runner/clips/
 harness/research/ve-encoder/logs/
+
+# Runner/test logs stay local, never in the repo (user 2026-11-08)
+logs/
+*.log

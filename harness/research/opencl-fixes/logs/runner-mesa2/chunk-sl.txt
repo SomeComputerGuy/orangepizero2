@@ -1,8 +1,0 @@
-#17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026
-DMESG-START 674
-Images (Samplerless int)                 Pass     rc=0 PASSED 6 of 6 tests.
-Images (Samplerless uint)                Pass     rc=0 PASSED 6 of 6 tests.
-Images (Samplerless float)               Fail     rc=1 FAILED 1 of 6 tests.
-CHUNK-RC 0
-DMESG: [  181.788808] panfrost 1800000.gpu: js fault, js=1, status=INSTR_INVALID_ENC, head=0xa010240, tail=0xa010240
-ROUND-DONE

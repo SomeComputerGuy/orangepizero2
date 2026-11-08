@@ -1,1 +1,0 @@
-root=UUID=f4b27789-916c-4aca-a071-702cd3d477e7 rootwait rootfstype=ext4 splash=verbose console=ttyS0,115200 console=tty1 consoleblank=0 loglevel=1 ubootpart=3cdb7e02-01 usb-storage.quirks=0x2537:0x1066:u,0x2537:0x1068:u   cgroup_enable=memory

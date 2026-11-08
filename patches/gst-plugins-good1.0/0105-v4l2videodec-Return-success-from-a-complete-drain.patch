@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Sun, 8 Nov 2026 18:53:02 +0000
+Subject: [PATCH 105/105] v4l2videodec: Return success from a complete drain
+
+The processing thread ends a drain with GST_V4L2_FLOW_LAST_BUFFER, a
+custom success value, and finish() returned it as is. At the end of the
+stream the base class only posts "No valid frames decoded before end of
+stream" when the drain returned GST_FLOW_OK, so that check never ran for
+this element: a stream of which the device decoded no frame, e.g. one
+the driver refuses, ended with EOS and no error.
+
+Return GST_FLOW_OK for a complete drain.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2/gstv4l2videodec.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/sys/v4l2/gstv4l2videodec.c b/sys/v4l2/gstv4l2videodec.c
+index d65d75f..1e7c1a5 100644
+--- a/sys/v4l2/gstv4l2videodec.c
++++ b/sys/v4l2/gstv4l2videodec.c
+@@ -710,6 +710,12 @@ gst_v4l2_video_dec_finish (GstVideoDecoder * decoder)
+   if (ret == GST_FLOW_FLUSHING)
+     ret = self->output_flow;
+ 
++  /* The processing thread ends a complete drain with the last buffer: that
++   * is success. The base class only checks at the end of the stream that
++   * something was decoded when the drain returns GST_FLOW_OK. */
++  if (ret == GST_V4L2_FLOW_LAST_BUFFER)
++    ret = GST_FLOW_OK;
++
+   GST_DEBUG_OBJECT (decoder, "Done draining buffers");
+ 
+   /* Draining of the capture buffer has completed.
+-- 
+2.55.0
+

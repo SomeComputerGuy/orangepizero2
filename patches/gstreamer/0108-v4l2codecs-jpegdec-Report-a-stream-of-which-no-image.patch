@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Sun, 8 Nov 2026 18:53:26 +0000
+Subject: [PATCH 108/108] v4l2codecs: jpegdec: Report a stream of which no
+ image was decoded
+
+Images the driver returned with the error flag, and broken images, were
+skipped with gst_video_decoder_drop_frame(). That is the QoS drop, which
+marks the decoder as having produced data: a stream of which no image
+could be decoded ended with EOS, no frame and no error, and the
+application could not tell it from an empty stream.
+
+Release these frames with gst_video_decoder_release_frame() instead.
+They still count as decoding errors, so a stream with occasional bad
+images carries on as before, while the base class now posts "No valid
+frames decoded before end of stream" when no image of the stream could
+be decoded.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2codecs/gstv4l2codecjpegdec.c | 16 ++++++++++------
+ 1 file changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/sys/v4l2codecs/gstv4l2codecjpegdec.c b/sys/v4l2codecs/gstv4l2codecjpegdec.c
+index dbba6b3..09a0c9a 100644
+--- a/sys/v4l2codecs/gstv4l2codecjpegdec.c
++++ b/sys/v4l2codecs/gstv4l2codecjpegdec.c
+@@ -38,8 +38,8 @@
+  * caps negotiation, so decodebin and playbin pick a software decoder
+  * (jpegdec) for them. What the caps do not show (12-bit samples, Huffman
+  * table selectors above 1) is checked on every image and reported as an
+- * error; images the driver refuses or cannot finish are dropped with a decode
+- * error.
++ * error; images the driver refuses or cannot finish are skipped with a decode
++ * error, and a stream of which no image could be decoded ends with an error.
+  *
+  * ## Example launch line
+  * ```
+@@ -732,11 +732,13 @@ gst_v4l2_codec_jpeg_dec_handle_frame (GstVideoDecoder * decoder,
+       gst_video_decoder_release_frame (decoder, frame);
+       return GST_FLOW_NOT_SUPPORTED;
+     }
+-    /* Broken image (MJPEG streams have them): drop it. */
++    /* Broken image (MJPEG streams have them): skip it. Release rather
++     * than drop it: a QoS drop counts as decoded data, and a stream of
++     * which no image could be decoded must end with an error. */
+     flow_ret = GST_FLOW_OK;
+     GST_VIDEO_DECODER_ERROR (self, 1, STREAM, DECODE,
+         ("Corrupt JPEG image"), ("%s", reason), flow_ret);
+-    gst_video_decoder_drop_frame (decoder, frame);
++    gst_video_decoder_release_frame (decoder, frame);
+     return flow_ret;
+   }
+ 
+@@ -849,13 +851,15 @@ gst_v4l2_codec_jpeg_dec_handle_frame (GstVideoDecoder * decoder,
+ 
+   if (gst_v4l2_request_has_buf_error (request)) {
+     /* The driver refused or could not finish this image (see the kernel
+-     * log); a corrupt MJPEG frame should not end the stream. */
++     * log); a corrupt MJPEG frame should not end the stream. Release the
++     * frame rather than drop it, as above: the base class then posts an
++     * error at the end of a stream of which no image was decoded. */
+     gst_v4l2_request_unref (request);
+     flow_ret = GST_FLOW_OK;
+     GST_VIDEO_DECODER_ERROR (self, 1, STREAM, DECODE,
+         ("Failed to decode frame %u", frame->system_frame_number),
+         ("the driver returned the picture with the error flag"), flow_ret);
+-    gst_video_decoder_drop_frame (decoder, frame);
++    gst_video_decoder_release_frame (decoder, frame);
+     return flow_ret;
+   }
+ 
+-- 
+2.55.0
+

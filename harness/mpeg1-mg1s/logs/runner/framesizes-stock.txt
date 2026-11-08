@@ -1,0 +1,3 @@
+The pixelformat 'MG1S' is invalid
+-- MG2S
+ioctl: VIDIOC_ENUM_FRAMESIZES

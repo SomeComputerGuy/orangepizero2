@@ -1,0 +1,13 @@
+2026-11-06 01:51:09 job datasheet-w start, done before: 
+2026-11-06 01:51:09 acquired by runner-dsw-1793929869
+2026-11-06 01:51:12 installing c24 (Image md5 3de93f5e0a45c26e1be069814cd313a7)
+shipped /root/stage/modules-c24.tgz dc0a9d3e0954630c2c2b48f95be4ccf30a4bf256829c9f9f62cebc0182ca10ec
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+user_overlays=dsw-spdif-out dsw-i2s3-ph dsw-ahub-dam
+kernel: #23 SMP PREEMPT Fri Nov  6 00:46:05 UTC 2026
+2026-11-06 01:53:23 checks start
+2026-11-06 01:54:25 chunk cumul done: 25 PASS, 0 FAIL, 0 SKIP
+2026-11-06 01:55:19 restored: #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 0 
+released by runner-dsw-1793929869
+2026-11-06 01:55:19 job datasheet-w end: cumul restore 

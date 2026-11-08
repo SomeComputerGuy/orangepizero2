@@ -1,0 +1,4 @@
+forced 100 half: speed 100Mb/s duplex Half link yes ping-received 5/5
+forced 10 half: speed 10Mb/s duplex Half link yes ping-received 5/5
+autoneg on: Speed: 1000Mb/s Duplex: Full Auto-negotiation: on Link detected: yes after 4s
+HD-DONE

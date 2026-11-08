@@ -1,0 +1,5 @@
+ioctl: VIDIOC_ENUM_FRAMESIZES
+	Size: Stepwise 16x16 - 4096x2304 with step 16/16
+-- MG2S
+ioctl: VIDIOC_ENUM_FRAMESIZES
+	Size: Stepwise 16x16 - 4096x2304 with step 16/16

@@ -1,0 +1,26 @@
+ Initializing random seed to 0.
+Requesting Default device based on command line for platform index 0 and device index 0
+Compute Device Name = Mali-G31 MC1 (Panfrost), Compute Device Vendor = Arm, Compute Device Version = OpenCL 3.0 , CL C Version = OpenCL C 1.2 
+Device latest conformance version passed: v0000-01-01-00
+Supports single precision denormals: NO
+sizeof( void*) = 8  (host)
+sizeof( void*) = 8  (device)
+quick_long_math...
+Testing "+" passed
+Testing "-" passed
+Testing "*" passed
+Testing "/" cl_long Verification failed at element 622593 of 1048576: 0x5be5ee4e4a54 / 0x671e30fb43a44161 = 0x0, got 0x1
+cl_long Verification failed at element 622594 of 1048576: 0x58a4b0d1178a / 0x153b29a7c363 = 0x4, got 0x0
+cl_long Verification failed at element 622595 of 1048576: 0x4c681707a49 / 0xd5c2fe4b5f6e473d = 0x0, got 0x3
+cl_long Verification failed at element 622596 of 1048576: 0x4bc1f943ee2ef20b / 0x6466bdb12628 = 0xc12a, got 0xfffffffffff3af19
+cl_long Verification failed at element 622597 of 1048576: 0xf8bbd66acad4b248 / 0x7c5552bcd116 = 0xfffffffffffff10a, got 0x3
+cl_long Verification failed at element 622601 of 1048576: 0x5904d1aa9d89de0b / 0x64f57bf8e0f2 = 0xe1b9, got 0xfffffffffffffffe
+cl_long Verification failed at element 622603 of 1048576: 0x257be70a027a6ab6 / 0x37903f34f75b = 0xacb3, got 0xfffffffffffffffc
+cl_long Verification failed at element 622604 of 1048576: 0x67df46efdecf / 0x6b1c2ad0be33 = 0x0, got 0x6
+cl_long Verification failed at element 622605 of 1048576: 0xde97f1a1e1a6e39d / 0x16d6a72e4e07 = 0xfffffffffffe898b, got 0x0
+cl_long Verification failed at element 622606 of 1048576: 0x5f95ada9f2a7d3fc / 0x307d0523caa1 = 0x1f8a6, got 0x0
+Further errors ignored.
+Thread 3 (job 0) failed test_integer_ops with result 1
+ThreadPool_Do return non-success value 1
+FAILED
+Testing "%" 

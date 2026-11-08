@@ -1,0 +1,2 @@
+m1-tcela-18	mpeg2/tcela-18.bits	720x480	rc=0	irqs=31	vs-dpic-ref: frames=31 exact=31 maxdiff=0 psnrY_min=99.00 psnrY_mean=99.00 last_max=0 leftover_ref/test=0/0
+[mpeg1video @ 0xaaaad50129d0] D-pictures are decoded by the device

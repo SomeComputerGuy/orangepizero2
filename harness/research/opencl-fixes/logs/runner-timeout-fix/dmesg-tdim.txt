@@ -1,0 +1,1 @@
+DMESG: [ 2252.981936] panfrost 1800000.gpu: unexpectedly high interrupt latency

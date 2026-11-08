@@ -1,0 +1,16 @@
+chunk c4: VP9-TEST-VECTORS-HIGH, 6 vectors
+02:15:48 [TEST SUITE           ] (DECODER             ) TEST VECTOR                 ... RESULT
+02:15:49 [VP9-TEST-VECTORS-HIGH] (GStreamer-VP9-V4L2SL) vp92-2-20-10bit-yuv420.webm ... Success
+02:15:50 [VP9-TEST-VECTORS-HIGH] (GStreamer-VP9-V4L2SL) vp92-2-20-12bit-yuv420.webm ... Error
+02:15:50 [VP9-TEST-VECTORS-HIGH] (GStreamer-VP9-V4L2SL) vp93-2-20-10bit-yuv422.webm ... Error
+02:15:50 [VP9-TEST-VECTORS-HIGH] (GStreamer-VP9-V4L2SL) vp93-2-20-12bit-yuv422.webm ... Error
+02:15:51 [VP9-TEST-VECTORS-HIGH] (GStreamer-VP9-V4L2SL) vp93-2-20-10bit-yuv444.webm ... Error
+02:15:51 [VP9-TEST-VECTORS-HIGH] (GStreamer-VP9-V4L2SL) vp93-2-20-12bit-yuv444.webm ... Error
+02:15:51 FAIL: vp92-2-20-12bit-yuv420.webm (GStreamer-VP9-V4L2SL.VP9-TEST-VECTORS-HIGH.vp92-2-20-12bit-yuv420.webm)
+02:15:51 FAIL: vp93-2-20-10bit-yuv422.webm (GStreamer-VP9-V4L2SL.VP9-TEST-VECTORS-HIGH.vp93-2-20-10bit-yuv422.webm)
+02:15:51 FAIL: vp93-2-20-12bit-yuv422.webm (GStreamer-VP9-V4L2SL.VP9-TEST-VECTORS-HIGH.vp93-2-20-12bit-yuv422.webm)
+02:15:51 FAIL: vp93-2-20-10bit-yuv444.webm (GStreamer-VP9-V4L2SL.VP9-TEST-VECTORS-HIGH.vp93-2-20-10bit-yuv444.webm)
+02:15:51 FAIL: vp93-2-20-12bit-yuv444.webm (GStreamer-VP9-V4L2SL.VP9-TEST-VECTORS-HIGH.vp93-2-20-12bit-yuv444.webm)
+02:15:51 Ran 1/6 tests successfully, in 2.883 secs
+fluster: ran 1 6 (ok total); rc=0
+ROUND-DONE

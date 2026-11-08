@@ -1,0 +1,35 @@
+2026-11-06 02:17:00 job mpeg1-mg1s start, kernel c25 (04964f921, Image md5 de8e87b28a1cb43b3b96d83c69f3577e), FFmpeg 3f0f729dffc850015b59bab05161b7df, chunks: stock fmts compliance md5 dpic raw mpeg2, done before: 
+2026-11-06 02:17:00 acquired by runner-mg1s-1793931420
+shipped /root/mg1s/ffmpeg 9af9f9941b93cb68f4e11ccbb1e88a1dcc5b077bc0c55c1c1c3926d38060f4dc
+2026-11-06 02:17:21 chunk stock start (on the stock kernel #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026)
+2026-11-06 02:18:01 compliance stock: Total for cedrus device /dev/video0: 49, Succeeded: 43, Failed: 6, Warnings: 0
+2026-11-06 02:18:02 chunk stock done in 41 s
+shipped /root/stage/modules-c25.tgz d3c48fe75967c205f0fc3e1757a4cb33120def5513ceeccc5a9619095c184e31
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+kernel: #24 SMP PREEMPT Fri Nov  6 01:50:06 UTC 2026
+2026-11-06 02:19:54 chunk fmts start
+2026-11-06 02:20:00 chunk fmts done in 6 s
+2026-11-06 02:20:00 chunk compliance start
+2026-11-06 02:20:19 compliance test: Total for cedrus device /dev/video0: 49, Succeeded: 48, Failed: 1, Warnings: 0
+2026-11-06 02:20:21 chunk compliance done in 21 s
+2026-11-06 02:20:21 chunk md5 start
+m1-ccm1	mpeg2/ccm1.mpg	rc=0	irqs=129	PASS	match=129/129	hw_frames=129	first_bad=-
+2026-11-06 02:20:29 chunk md5 done in 8 s
+2026-11-06 02:20:29 chunk dpic start
+2026-11-06 02:20:38 chunk dpic done in 9 s
+2026-11-06 02:20:38 chunk raw start
+m1-MEI.stream16	mpeg2/MEI.stream16.long	352x240	rc=0	irqs=61	simple: frames=61 exact=0 maxdiff=2 psnrY_min=62.69 psnrY_mean=64.62 last_max=1 leftover_ref/test=0/0	int: frames=61 exact=0 maxdiff=3 psnr
+m1-MEI	mpeg2/MEI.stream16v2	352x240	rc=0	irqs=4	simple: frames=4 exact=0 maxdiff=2 psnrY_min=65.65 psnrY_mean=66.08 last_max=2 leftover_ref/test=0/0	int: frames=4 exact=0 maxdiff=2 psnrY_min=64.06 psn
+m1-tcela-16	mpeg2/tcela-16.bits	352x240	rc=0	irqs=31	simple: frames=31 exact=0 maxdiff=3 psnrY_min=60.88 psnrY_mean=62.94 last_max=1 leftover_ref/test=0/0	int: frames=31 exact=0 maxdiff=3 psnrY_min=58
+m1-tcela-19	mpeg2/tcela-19.bits	768x128	rc=0	irqs=31	simple: frames=31 exact=0 maxdiff=2 psnrY_min=62.42 psnrY_mean=64.17 last_max=2 leftover_ref/test=0/0	int: frames=31 exact=0 maxdiff=2 psnrY_min=60
+g-mpeg1-1080p30	gen/mpeg1-1080p30.m1v	1920x1080	rc=0	irqs=300	simple: frames=300 exact=0 maxdiff=3 psnrY_min=64.04 psnrY_mean=69.67 last_max=1 leftover_ref/test=0/0	int: frames=300 exact=0 maxdiff=4 p
+2026-11-06 02:21:45 chunk raw done in 67 s
+2026-11-06 02:21:45 chunk mpeg2 start
+m2-tcela-15	mpeg2/tcela-15.bits	rc=0	irqs=61	PASS	match=61/61	hw_frames=61	first_bad=-
+m2-mcp10ccett	mpeg2/mcp10ccett.bits	rc=0	irqs=4	PASS	match=4/4	hw_frames=4	first_bad=-
+2026-11-06 02:22:00 chunk mpeg2 done in 15 s
+2026-11-06 02:24:05 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 
+released by runner-mg1s-1793931420
+2026-11-06 02:24:05 check-results: VERDICT: FAIL
+2026-11-06 02:24:05 job end: 7 of 7 chunks done

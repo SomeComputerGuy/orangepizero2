@@ -1,0 +1,272 @@
+ Initializing random seed to 0.
+Requesting Default device based on command line for platform index 0 and device index 0
+Compute Device Name = Mali-G31 MC1 (Panfrost), Compute Device Vendor = Arm, Compute Device Version = OpenCL 3.0 , CL C Version = OpenCL C 1.2 
+Device latest conformance version passed: v0000-01-01-00
+Supports single precision denormals: NO
+sizeof( void*) = 8  (host)
+sizeof( void*) = 8  (device)
+quick_long_math...
+Testing "+" passed
+Testing "-" passed
+Testing "*" passed
+Testing "/" passed
+Testing "%" passed
+quick_long_math passed
+quick_long_logic...
+Testing "&" passed
+Testing "|" passed
+Testing "^" passed
+Testing "~" passed
+Testing "&&" passed
+Testing "||" passed
+Testing "!" passed
+quick_long_logic passed
+quick_long_shift...
+Testing ">> by vector" passed
+Testing "<< by vector" passed
+Testing ">> by scalar" passed
+Testing "<< by scalar" passed
+quick_long_shift passed
+quick_long_compare...
+Testing "?:" passed
+Testing "<" passed
+Testing ">" passed
+Testing "<=" passed
+Testing ">=" passed
+Testing "==" passed
+Testing "!=" passed
+quick_long_compare passed
+quick_ulong_math...
+Testing "+" passed
+Testing "-" passed
+Testing "*" passed
+Testing "/" passed
+Testing "%" passed
+quick_ulong_math passed
+quick_ulong_logic...
+Testing "&" passed
+Testing "|" passed
+Testing "^" passed
+Testing "~" passed
+Testing "&&" passed
+Testing "||" passed
+Testing "!" passed
+quick_ulong_logic passed
+quick_ulong_shift...
+Testing ">> by vector" passed
+Testing "<< by vector" passed
+Testing ">> by scalar" passed
+Testing "<< by scalar" passed
+quick_ulong_shift passed
+quick_ulong_compare...
+Testing "?:" passed
+Testing "<" passed
+Testing ">" passed
+Testing "<=" passed
+Testing ">=" passed
+Testing "==" passed
+Testing "!=" passed
+quick_ulong_compare passed
+quick_int_math...
+Testing "+" passed
+Testing "-" passed
+Testing "*" passed
+Testing "/" passed
+Testing "%" passed
+quick_int_math passed
+quick_int_logic...
+Testing "&" passed
+Testing "|" passed
+Testing "^" passed
+Testing "~" passed
+Testing "&&" passed
+Testing "||" passed
+Testing "!" passed
+quick_int_logic passed
+quick_int_shift...
+Testing ">> by vector" passed
+Testing "<< by vector" passed
+Testing ">> by scalar" passed
+Testing "<< by scalar" passed
+quick_int_shift passed
+quick_int_compare...
+Testing "?:" passed
+Testing "<" passed
+Testing ">" passed
+Testing "<=" passed
+Testing ">=" passed
+Testing "==" passed
+Testing "!=" passed
+quick_int_compare passed
+quick_uint_math...
+Testing "+" passed
+Testing "-" passed
+Testing "*" passed
+Testing "/" passed
+Testing "%" passed
+quick_uint_math passed
+quick_uint_logic...
+Testing "&" passed
+Testing "|" passed
+Testing "^" passed
+Testing "~" passed
+Testing "&&" passed
+Testing "||" passed
+Testing "!" passed
+quick_uint_logic passed
+quick_uint_shift...
+Testing ">> by vector" passed
+Testing "<< by vector" passed
+Testing ">> by scalar" passed
+Testing "<< by scalar" passed
+quick_uint_shift passed
+quick_uint_compare...
+Testing "?:" passed
+Testing "<" passed
+Testing ">" passed
+Testing "<=" passed
+Testing ">=" passed
+Testing "==" passed
+Testing "!=" passed
+quick_uint_compare passed
+quick_short_math...
+Testing "+" passed
+Testing "-" passed
+Testing "*" passed
+Testing "/" passed
+Testing "%" passed
+quick_short_math passed
+quick_short_logic...
+Testing "&" passed
+Testing "|" passed
+Testing "^" passed
+Testing "~" passed
+Testing "&&" passed
+Testing "||" passed
+Testing "!" passed
+quick_short_logic passed
+quick_short_shift...
+Testing ">> by vector" passed
+Testing "<< by vector" passed
+Testing ">> by scalar" passed
+Testing "<< by scalar" passed
+quick_short_shift passed
+quick_short_compare...
+Testing "?:" passed
+Testing "<" passed
+Testing ">" passed
+Testing "<=" passed
+Testing ">=" passed
+Testing "==" passed
+Testing "!=" passed
+quick_short_compare passed
+quick_ushort_math...
+Testing "+" passed
+Testing "-" passed
+Testing "*" passed
+Testing "/" passed
+Testing "%" passed
+quick_ushort_math passed
+quick_ushort_logic...
+Testing "&" passed
+Testing "|" passed
+Testing "^" passed
+Testing "~" passed
+Testing "&&" passed
+Testing "||" passed
+Testing "!" passed
+quick_ushort_logic passed
+quick_ushort_shift...
+Testing ">> by vector" passed
+Testing "<< by vector" passed
+Testing ">> by scalar" passed
+Testing "<< by scalar" passed
+quick_ushort_shift passed
+quick_ushort_compare...
+Testing "?:" passed
+Testing "<" passed
+Testing ">" passed
+Testing "<=" passed
+Testing ">=" passed
+Testing "==" passed
+Testing "!=" passed
+quick_ushort_compare passed
+quick_char_math...
+Testing "+" passed
+Testing "-" passed
+Testing "*" passed
+Testing "/" passed
+Testing "%" passed
+quick_char_math passed
+quick_char_logic...
+Testing "&" passed
+Testing "|" passed
+Testing "^" passed
+Testing "~" passed
+Testing "&&" passed
+Testing "||" passed
+Testing "!" passed
+quick_char_logic passed
+quick_char_shift...
+Testing ">> by vector" passed
+Testing "<< by vector" passed
+Testing ">> by scalar" passed
+Testing "<< by scalar" passed
+quick_char_shift passed
+quick_char_compare...
+Testing "?:" passed
+Testing "<" passed
+Testing ">" passed
+Testing "<=" passed
+Testing ">=" passed
+Testing "==" passed
+Testing "!=" passed
+quick_char_compare passed
+quick_uchar_math...
+Testing "+" passed
+Testing "-" passed
+Testing "*" passed
+Testing "/" passed
+Testing "%" passed
+quick_uchar_math passed
+quick_uchar_logic...
+Testing "&" passed
+Testing "|" passed
+Testing "^" passed
+Testing "~" passed
+Testing "&&" passed
+Testing "||" passed
+Testing "!" passed
+quick_uchar_logic passed
+quick_uchar_shift...
+Testing ">> by vector" passed
+Testing "<< by vector" passed
+Testing ">> by scalar" passed
+Testing "<< by scalar" passed
+quick_uchar_shift passed
+quick_uchar_compare...
+Testing "?:" passed
+Testing "<" passed
+Testing ">" passed
+Testing "<=" passed
+Testing ">=" passed
+Testing "==" passed
+Testing "!=" passed
+quick_uchar_compare passed
+integer_clz...
+integer_clz passed
+integer_ctz...
+integer_ctz passed
+integer_addAssign...
+integer_addAssign passed
+integer_subtractAssign...
+integer_subtractAssign passed
+integer_multiplyAssign...
+integer_multiplyAssign passed
+integer_exclusiveOrAssign...
+integer_exclusiveOrAssign passed
+integer_orAssign...
+integer_orAssign passed
+integer_andAssign...
+integer_andAssign passed
+integer_divideAssign...

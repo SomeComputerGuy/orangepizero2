@@ -1,0 +1,37 @@
+#sessionInfo releaseName 54436699e326efdd3b152bb487c675bdae85aafd
+#sessionInfo releaseId 0x54436699
+#sessionInfo targetName "Vulkan Headless"
+#sessionInfo logFormatVersion "0.3.4"
+#sessionInfo vendorID 0x13b5
+#sessionInfo deviceID 0x70930000
+#sessionInfo deviceName Mali-G31 MC1
+#sessionInfo commandLineParameters "--deqp-case=dEQP-VK.spirv_assembly.type.vec4.u16.bit_field_insert_offset8_count16_frag --deqp-log-images=disable --deqp-log-shader-sources=disable --deqp-shadercache=disable --deqp-log-filename=/root/oclfix/vklogs/dEQP-VK.spirv_assembly.type.vec4.u16.bit_field_insert_offset8_count16_frag.qpa"
+
+#beginSession
+
+#beginTestCaseResult dEQP-VK.spirv_assembly.type.vec4.u16.bit_field_insert_offset8_count16_frag
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult CasePath="dEQP-VK.spirv_assembly.type.vec4.u16.bit_field_insert_offset8_count16_frag" Version="0.3.4" CaseType="SelfValidate">
+ <Section Name="frag" Description="Program: frag">
+  <ShaderProgram LinkStatus="OK">
+   <InfoLog></InfoLog>
+   <SpirVAssemblySource></SpirVAssemblySource>
+</ShaderProgram>
+  <Number Name="SpirVAssemblyTime" Description="SpirV assembly time" Tag="Time" Unit="ms">2.691000</Number>
+</Section>
+ <Section Name="vert" Description="Program: vert">
+  <ShaderProgram LinkStatus="OK">
+   <InfoLog></InfoLog>
+   <SpirVAssemblySource></SpirVAssemblySource>
+</ShaderProgram>
+  <Number Name="SpirVAssemblyTime" Description="SpirV assembly time" Tag="Time" Unit="ms">1.709000</Number>
+</Section>
+ <Number Name="TestDuration" Description="Test case duration in microseconds" Tag="Time" Unit="us">644630</Number>
+ <Result StatusCode="Pass">Rendered output matches input</Result>
+</TestCaseResult>
+
+#endTestCaseResult
+
+Run took 3.63 seconds
+
+#endSession

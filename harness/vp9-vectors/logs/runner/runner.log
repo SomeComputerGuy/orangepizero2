@@ -1,0 +1,25 @@
+2026-11-06 01:59:55 job vp9-vectors start, kernel c25 (Image md5 de8e87b28a1cb43b3b96d83c69f3577e), chunks: c1 c2 c3 c5 c4, done before: 
+2026-11-06 01:59:55 acquired by runner-vp9-1793930395
+shipped /root/stage/modules-c25.tgz d3c48fe75967c205f0fc3e1757a4cb33120def5513ceeccc5a9619095c184e31
+running 7.3.1-edge-sunxi64 Image=vmlinuz-7.3.1-edge-sunxi64
+armed fallback to vmlinuz-7.3.1-edge-sunxi64
+kernel: #24 SMP PREEMPT Fri Nov  6 01:50:06 UTC 2026
+shipped /root/vp9/bundle.tar 748c2dad8d9d0dcbe97df017787966d8736527024f9c7c439883915b941f263f
+2026-11-06 02:01:52 unpacked: VP9-TEST-VECTORS VP9-TEST-VECTORS-HIGH libgstv4l2codecs.so 
+2026-11-06 02:01:54 pre-flight: vp90-2-00-quantizer-00.webm
+2026-11-06 02:02:37 chunk pre done in 43 s (1 vectors; Ran 1/1 tests)
+2026-11-06 02:02:37 pre-flight OK: vp90-2-00-quantizer-00.webm decodes bit-exact (1 checksum lines in pre.gst.txt)
+2026-11-06 02:02:37 chunk c1 start
+2026-11-06 02:03:21 chunk c1 done in 44 s (71 vectors; Ran 71/71 tests)
+2026-11-06 02:03:21 chunk c2 start
+2026-11-06 02:05:24 chunk c2 done in 123 s (137 vectors; Ran 137/137 tests)
+2026-11-06 02:05:24 chunk c3 start
+2026-11-06 02:13:08 chunk c3 done in 464 s (59 vectors; Ran 59/59 tests)
+2026-11-06 02:13:08 chunk c5 start
+2026-11-06 02:15:32 chunk c5 done in 144 s (38 vectors; Ran 36/38 tests)
+2026-11-06 02:15:32 chunk c4 start
+2026-11-06 02:15:56 chunk c4 done in 24 s (6 vectors; Ran 1/6 tests)
+2026-11-06 02:16:41 restored: 7.3.1-edge-sunxi64 #17 SMP PREEMPT Fri Oct 30 12:09:52 UTC 2026 vmlinuz-7.3.1-edge-sunxi64 
+released by runner-vp9-1793930395
+2026-11-06 02:16:41 check-results: VERDICT: PASS; VP9-TEST-VECTORS 303/305 Success, HIGH 1/6 Success
+2026-11-06 02:16:41 job end: 5 of 5 chunks done

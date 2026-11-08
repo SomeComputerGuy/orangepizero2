@@ -1,0 +1,11 @@
+[    0.001432] pid_max: default: 32768 minimum: 301
+[    0.124443] iommu: Default domain type: Translated
+[    0.124465] iommu: DMA domain TLB invalidation policy: strict mode
+[    0.128741] NetLabel:  unlabeled traffic allowed by default
+[    0.141557] PCI: CLS 0 bytes, default 64
+[    0.201115] platform 1420000.deinterlace: Adding to iommu group 0
+[    0.201202] platform 1c0e000.video-codec: Adding to iommu group 0
+[    0.243666] cedrus 1c0e000.video-codec: Device registered as /dev/video0
+[    0.267250] bridge: filtering via arp/ip/ip6tables is no longer available by default. Update your scripts to load br_netfilter if you need this.
+[    0.310861] platform 1100000.planes: Adding to iommu group 0
+[    8.293402] systemd[1]: Queued start job for default target graphical.target.

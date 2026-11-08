@@ -1,0 +1,36 @@
+ Initializing random seed to 0.
+Requesting Default device based on command line for platform index 0 and device index 0
+Compute Device Name = Mali-G31 MC1 (Panfrost), Compute Device Vendor = Arm, Compute Device Version = OpenCL 3.0 , CL C Version = OpenCL C 1.2 
+Device latest conformance version passed: v0000-01-01-00
+Supports single precision denormals: NO
+sizeof( void*) = 8  (host)
+sizeof( void*) = 8  (device)
+partition_equally...
+Maximal number of sub-devices on device 0xaaaab549d138 is 0.
+partition_equally passed
+partition_by_counts...
+Maximal number of sub-devices on device 0xaaaab549d138 is 0.
+partition_by_counts passed
+partition_by_affinity_domain_numa...
+Maximal number of sub-devices on device 0xaaaab549d138 is 0.
+partition_by_affinity_domain_numa passed
+partition_by_affinity_domain_l4_cache...
+Maximal number of sub-devices on device 0xaaaab549d138 is 0.
+partition_by_affinity_domain_l4_cache passed
+partition_by_affinity_domain_l3_cache...
+Maximal number of sub-devices on device 0xaaaab549d138 is 0.
+partition_by_affinity_domain_l3_cache passed
+partition_by_affinity_domain_l2_cache...
+Maximal number of sub-devices on device 0xaaaab549d138 is 0.
+partition_by_affinity_domain_l2_cache passed
+partition_by_affinity_domain_l1_cache...
+Maximal number of sub-devices on device 0xaaaab549d138 is 0.
+partition_by_affinity_domain_l1_cache passed
+partition_by_affinity_domain_next_partitionable...
+Maximal number of sub-devices on device 0xaaaab549d138 is 0.
+partition_by_affinity_domain_next_partitionable passed
+partition_all...
+Maximal number of sub-devices on device 0xaaaab549d138 is 0.
+partition_all passed
+PASSED sub-test.
+PASSED 9 of 9 tests.

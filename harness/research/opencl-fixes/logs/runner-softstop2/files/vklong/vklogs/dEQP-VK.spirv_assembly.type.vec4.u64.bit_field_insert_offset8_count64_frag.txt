@@ -1,0 +1,15 @@
+Writing test log into /root/oclfix/vklogs/dEQP-VK.spirv_assembly.type.vec4.u64.bit_field_insert_offset8_count64_frag.qpa
+dEQP Core 54436699e326efdd3b152bb487c675bdae85aafd (0x54436699) starting..
+  target implementation = 'Vulkan Headless'
+
+Test case 'dEQP-VK.spirv_assembly.type.vec4.u64.bit_field_insert_offset8_count64_frag'..
+  Pass (Rendered output matches input)
+
+DONE!
+
+Test run totals:
+  Passed:        1/1 (100.0%)
+  Failed:        0/1 (0.0%)
+  Not supported: 0/1 (0.0%)
+  Warnings:      0/1 (0.0%)
+  Waived:        0/1 (0.0%)

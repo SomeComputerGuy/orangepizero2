@@ -1,0 +1,53 @@
+[tcp @ 0xaaaad76bbd10] Starting connection attempt to 10.56.0.1 port 8644
+[tcp @ 0xaaaad76bbd10] Successfully connected to 10.56.0.1 port 8644
+[in#0/mpegvideo @ 0xaaaad76b8a50] Estimating duration from bitrate, this may be inaccurate
+[vist#0:0/mpeg1video @ 0xaaaad76d91d0] Selecting decoder 'mpeg1video' because of requested hwaccel method v4l2request
+Input #0, mpegvideo, from 'http://10.56.0.1:8644/mpeg2/tcela-16.bits':
+  Duration: 00:00:01.07, bitrate: 1855 kb/s
+  Stream #0:0: Video: mpeg1video, 1 reference frame, yuv420p(tv, progressive, center), 352x240 [SAR 187:200 DAR 2057:1500], 1856 kb/s, 25 fps, 60 tbr, 1200k tbn
+    Side data:
+      CPB properties: bitrate max/min/avg: 0/0/0 buffer size: 327680 vbv_delay: N/A
+[out#0/rawvideo @ 0xaaaad76d9490] No explicit maps, mapping streams automatically...
+[vost#0:0/rawvideo @ 0xaaaad76d98a0] Created video stream from input stream 0:0
+Stream mapping:
+  Stream #0:0 -> #0:0 (mpeg1video (native) -> rawvideo (native))
+[vost#0:0/rawvideo @ 0xaaaad76d98a0] Starting thread...
+[vf#0:0 @ 0xaaaad76da260] Starting thread...
+[vist#0:0/mpeg1video @ 0xaaaad76d91d0] [dec:mpeg1video @ 0xaaaad76e1fe0] Starting thread...
+[in#0/mpegvideo @ 0xaaaad76b87c0] Starting thread...
+[AVHWFramesContext @ 0xffffa4000c60] Device /dev/video1 is missing support for pixelformat MG1S
+[AVHWFramesContext @ 0xffffa4000c60] Device /dev/video0 is missing support for pixelformat MG1S
+[mpeg1video @ 0xaaaad76dacc0] Failed setup for format drm_prime: hwaccel initialisation returned error.
+[graph -1 input from stream 0:0 @ 0xffffac001b40] w:352 h:240 pixfmt:yuv420p tb:1/1200000 fr:30/1 sar:187/200 csp:unknown range:tv alpha:unspecified
+[graph -1 input from stream 0:0 @ 0xffffac001b40] video frame properties congruent with link at pts_time: 0
+Output #0, rawvideo, to 'pipe:':
+  Metadata:
+    encoder         : Lavf62.12.102
+  Stream #0:0: Video: rawvideo, 1 reference frame (I420 / 0x30323449), yuv420p(tv, progressive, center), 352x240 [SAR 187:200 DAR 2057:1500], q=2-31, 30412 kb/s, 30 fps, 30 tbn
+    Metadata:
+      encoder         : Lavc62.28.102 rawvideo
+[out#0/rawvideo @ 0xaaaad76d9490] Starting thread...
+[in#0/mpegvideo @ 0xaaaad76b87c0] EOF while reading input
+[in#0/mpegvideo @ 0xaaaad76b87c0] Terminating thread with return code 0 (success)
+[vist#0:0/mpeg1video @ 0xaaaad76d91d0] [dec:mpeg1video @ 0xaaaad76e1fe0] Decoder thread received EOF packet
+[vist#0:0/mpeg1video @ 0xaaaad76d91d0] [dec:mpeg1video @ 0xaaaad76e1fe0] Decoder returned EOF, finishing
+[vf#0:0 @ 0xaaaad76da260] Filtergraph returned EOF, finishing
+[vf#0:0 @ 0xaaaad76da260] All consumers returned EOF
+[vist#0:0/mpeg1video @ 0xaaaad76d91d0] [dec:mpeg1video @ 0xaaaad76e1fe0] Terminating thread with return code 0 (success)
+[vost#0:0/rawvideo @ 0xaaaad76d98a0] [enc:rawvideo @ 0xaaaad76d9dd0] Encoder thread received EOF
+[vost#0:0/rawvideo @ 0xaaaad76d98a0] Terminating thread with return code 0 (success)
+[vf#0:0 @ 0xaaaad76da260] Terminating thread with return code 0 (success)
+[out#0/rawvideo @ 0xaaaad76d9490] All streams finished
+[out#0/rawvideo @ 0xaaaad76d9490] Terminating thread with return code 0 (success)
+[AVIOContext @ 0xaaaad76e27b0] Statistics: 3928320 bytes written, 0 seeks, 124 writeouts
+[out#0/rawvideo @ 0xaaaad76d9490] Output file #0 (pipe:):
+[out#0/rawvideo @ 0xaaaad76d9490]   Output stream #0:0 (video): 31 frames encoded; 31 packets muxed (3928320 bytes); 
+[out#0/rawvideo @ 0xaaaad76d9490]   Total: 31 packets (3928320 bytes) muxed
+[out#0/rawvideo @ 0xaaaad76d9490] video:3836KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 0.000000%
+frame=   31 fps=0.0 q=-0.0 Lsize=    3836KiB time=00:00:01.03 bitrate=30412.8kbits/s speed=16.5x elapsed=0:00:00.06    
+[in#0/mpegvideo @ 0xaaaad76b87c0] Input file #0 (http://10.56.0.1:8644/mpeg2/tcela-16.bits):
+[in#0/mpegvideo @ 0xaaaad76b87c0]   Input stream #0:0 (video): 31 packets read (248053 bytes); 31 frames decoded; 0 decode errors; 
+[in#0/mpegvideo @ 0xaaaad76b87c0]   Total: 31 packets (248053 bytes) demuxed
+[AVIOContext @ 0xaaaad76cbe40] Statistics: 248053 bytes read, 0 seeks
+
+Exiting with exit code 0

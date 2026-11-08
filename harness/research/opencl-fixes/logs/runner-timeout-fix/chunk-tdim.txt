@@ -1,0 +1,6 @@
+#24 SMP PREEMPT Fri Nov  6 01:50:06 UTC 2026
+DMESG-START 1673
+Thread Dimensions                        Timeout  rc=timeout 
+CHUNK-RC 0
+DMESG: [ 2252.981936] panfrost 1800000.gpu: unexpectedly high interrupt latency
+ROUND-DONE

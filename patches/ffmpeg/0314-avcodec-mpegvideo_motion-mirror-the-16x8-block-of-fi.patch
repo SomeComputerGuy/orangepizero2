@@ -1,0 +1,80 @@
+From 1b4b13527e53bb62282b4fc6beebf1b8ed9120eb Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 6 Nov 2026 12:29:59 +0000
+Subject: [PATCH] avcodec/mpegvideo_motion: mirror the 16x8 block of field
+ quarter sample MC
+
+The quarter sample interpolation of MPEG-4 Part 2 (ISO/IEC 14496-2,
+7.6.2.2) mirrors the reference area of the block at its edges. The block
+of a field motion vector is 16x8, but qpel_motion() predicts it with two
+8x8 operations, which mirror at the middle of the block as well: luma
+columns 5-10 of a field predicted block with a fractional horizontal
+vector differ from the standard, and the error propagates through the
+following pictures.
+
+Run the 16x16 operation on the 17x9 field reference area mirrored below
+the block instead (line 8 + k is line 9 - k, as the 8 line vertical
+filter does), and keep its first 8 lines.
+
+Interlaced quarter sample vectors of ISO/IEC 14496-4 (a1ge2_asp_L4,
+a1ge4_asp, a1ge9_asp_L1-L4) against the ISO/IEC 14496-5 reference
+decoder: luma macroblocks with max|diff| > 4 go from 92 (max 14) to 0
+(max 4, the IDCT difference) for a1ge4_asp, and from 87-92 (max 9) to 0
+for a1ge9_asp_L3. a1ge2_asp_L4 (P only, 20 picture GOPs) goes from max
+9 to max 6-7, which is the drift between FFmpeg's own simple and int
+IDCTs on it (6). The output of the other 56 MPEG-4, H.263 and Sorenson
+Spark test streams is unchanged, and so are the 42 MPEG-4, H.263 and
+FLV FATE tests.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/mpegvideo_motion.c | 25 +++++++++++++++++++++----
+ 1 file changed, 21 insertions(+), 4 deletions(-)
+
+diff --git a/libavcodec/mpegvideo_motion.c b/libavcodec/mpegvideo_motion.c
+index 741927d809..5eb93d5e90 100644
+--- a/libavcodec/mpegvideo_motion.c
++++ b/libavcodec/mpegvideo_motion.c
+@@ -416,6 +416,9 @@ static inline void qpel_motion(MpegEncContext *s,
+     if (!field_based)
+         qpix_op[0][dxy](dest_y, ptr_y, linesize);
+     else {
++        LOCAL_ALIGNED_16(uint8_t, field_src, [32 * 17]);
++        LOCAL_ALIGNED_16(uint8_t, field_dst, [32 * 16]);
++
+         if (bottom_field) {
+             dest_y  += s->linesize;
+             dest_cb += s->uvlinesize;
+@@ -427,10 +430,24 @@ static inline void qpel_motion(MpegEncContext *s,
+             ptr_cb += s->uvlinesize;
+             ptr_cr += s->uvlinesize;
+         }
+-        // damn interlaced mode
+-        // FIXME boundary mirroring is not exactly correct here
+-        qpix_op[1][dxy](dest_y, ptr_y, linesize);
+-        qpix_op[1][dxy](dest_y + 8, ptr_y + 8, linesize);
++        /*
++         * The block of a field vector is 16x8, and the quarter sample
++         * interpolation mirrors the 17x9 reference area at its edges
++         * (ISO/IEC 14496-2, 7.6.2.2). Two 8x8 operations would mirror in the
++         * middle of the block: run a 16x16 one on the 9 field lines mirrored
++         * below the block (line 8 + k is line 9 - k) instead, whose first
++         * 8 output lines are then the 16x8 prediction.
++         */
++        for (int i = 0; i < 9; i++)
++            memcpy(field_src + 32 * i, ptr_y + i * linesize, 17);
++        for (int i = 9; i < 17; i++)
++            memcpy(field_src + 32 * i, field_src + 32 * (17 - i), 17);
++        /* the averaging operations of bidirectional prediction read dest */
++        for (int i = 0; i < 8; i++)
++            memcpy(field_dst + 32 * i, dest_y + i * linesize, 16);
++        qpix_op[0][dxy](field_dst, field_src, 32);
++        for (int i = 0; i < 8; i++)
++            memcpy(dest_y + i * linesize, field_dst + 32 * i, 16);
+     }
+     if (!CONFIG_GRAY || !(s->avctx->flags & AV_CODEC_FLAG_GRAY)) {
+         pix_op[1][uvdxy](dest_cr, ptr_cr, uvlinesize, h >> 1);
+-- 
+2.55.0
+

@@ -1,0 +1,210 @@
+From cbabe59778eab573e2df8369681204ab631aa0fa Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 6 Nov 2026 15:19:21 +0000
+Subject: [PATCH 317/317] avcodec/vp9: keep the hwaccel across frame size
+ changes of non-key frames
+
+VP9 non-key frames (inter and intra-only frames) can change the frame
+size and keep predicting from the frames of the previous size, scaled
+when their sizes differ. update_size() renegotiates the pixel format on
+every size change, which reinitialises the hwaccel: for hwaccels whose
+references live in the decoder session (V4L2 Request API), the frames
+of the previous size are then unknown to the new session, and the
+following inter frames predict from wrong data.
+
+Add an optional FFHWAccel.update_frame_size() callback, called instead
+of ff_get_format() for a size change of a non-key frame that keeps the
+pixel format; when it fails or is missing, the pixel format is
+renegotiated as before. Key frames, which drop all references, and
+software decoding are unchanged.
+
+Implement it for the V4L2 Request API VP9 hwaccel: a frame that fits in
+the CAPTURE buffers is decoded in place (the frame size is part of the
+codec controls, the CAPTURE format only sets the buffer layout); for a
+larger frame, the requests in flight are completed and the frames
+context is resized with avpriv_v4l2_request_frames_resize() (grown in
+both dimensions, on devices with VIDIOC_REMOVE_BUFS and frames contexts
+created by the hwaccel).
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/hwaccel_internal.h | 14 ++++++++
+ libavcodec/v4l2_request.c     | 65 +++++++++++++++++++++++++++++++++++
+ libavcodec/v4l2_request.h     |  3 ++
+ libavcodec/v4l2_request_vp9.c |  1 +
+ libavcodec/vp9.c              | 11 ++++++
+ 5 files changed, 94 insertions(+)
+
+diff --git a/libavcodec/hwaccel_internal.h b/libavcodec/hwaccel_internal.h
+index 8cf324adf0..c90266b8e6 100644
+--- a/libavcodec/hwaccel_internal.h
++++ b/libavcodec/hwaccel_internal.h
+@@ -160,6 +160,20 @@ typedef struct FFHWAccel {
+      */
+     int (*frame_params)(AVCodecContext *avctx, AVBufferRef *hw_frames_ctx);
+ 
++    /**
++     * Adapt the hwaccel to a new coded size (avctx->coded_width and
++     * coded_height) of a stream whose next frames still predict from frames
++     * of the previous size, e.g. a VP9 non-key frame with a new frame size.
++     * Decoders call it instead of reinitialising the hwaccel with
++     * ff_get_format(), which would discard the state those reference frames
++     * depend on. Frames allocated before the call must stay valid as
++     * references, frames allocated after it must hold the new size.
++     *
++     * Optional. On failure (negative return) the decoder falls back to
++     * ff_get_format().
++     */
++    int (*update_frame_size)(AVCodecContext *avctx);
++
+     /**
+      * Copy necessary context variables from a previous thread context to the current one.
+      * For thread-safe hwaccels only.
+diff --git a/libavcodec/v4l2_request.c b/libavcodec/v4l2_request.c
+index 6ba0d542c5..a7e88774d2 100644
+--- a/libavcodec/v4l2_request.c
++++ b/libavcodec/v4l2_request.c
+@@ -590,6 +590,70 @@ void ff_v4l2_request_flush(AVCodecContext *avctx)
+     ff_mutex_unlock(&ctx->mutex);
+ }
+ 
++int ff_v4l2_request_update_frame_size(AVCodecContext *avctx)
++{
++    V4L2RequestContext *ctx = v4l2_request_context(avctx);
++    AVHWFramesContext *hwfc;
++    struct pollfd pollfd;
++    int width, height, ret;
++
++    if (!ctx->fctxi || !ctx->frames_ref)
++        return AVERROR(EINVAL);
++
++    hwfc = (AVHWFramesContext *)ctx->frames_ref->data;
++
++    /*
++     * A frame that fits in the CAPTURE buffers is decoded in place: the codec
++     * controls carry the frame size, the CAPTURE format only sets the layout
++     * of the buffers, and the reference frames stay where they are.
++     */
++    if (avctx->coded_width <= hwfc->width && avctx->coded_height <= hwfc->height)
++        return 0;
++
++    // Larger buffers can only be added to a frames context of the hwaccel
++    if (!ctx->own_frames_ctx)
++        return AVERROR(ENOTSUP);
++
++    /*
++     * Let all queued requests complete before the formats change, they are
++     * decoded with the buffer layout of the current format.
++     */
++    ff_v4l2_request_flush(avctx);
++
++    pollfd = (struct pollfd) {
++        .fd = ctx->fctxi->video_fd,
++        .events = POLLIN,
++    };
++    ff_mutex_lock(&ctx->mutex);
++    while (ctx->queued_capture) {
++        ret = poll(&pollfd, 1, 2000);
++        if (ret <= 0)
++            break;
++
++        ret = v4l2_request_dequeue_buffer(ctx, ctx->fctxi->capture.format.type);
++        if (ret < 0 && ret != AVERROR(EAGAIN))
++            break;
++    }
++    if (ctx->queued_capture) {
++        ff_mutex_unlock(&ctx->mutex);
++        av_log(ctx, AV_LOG_ERROR, "Failed waiting on CAPTURE buffers before a frame size change\n");
++        return AVERROR(EINVAL);
++    }
++
++    // Grow the buffers in both dimensions, smaller frames are decoded in place
++    width = FFMAX(hwfc->width, avctx->coded_width);
++    height = FFMAX(hwfc->height, avctx->coded_height);
++    ret = avpriv_v4l2_request_frames_resize(hwfc, width, height);
++    ff_mutex_unlock(&ctx->mutex);
++    if (ret < 0) {
++        av_log(ctx, AV_LOG_VERBOSE, "Failed to change the CAPTURE frame size to %dx%d: %s\n",
++               width, height, av_err2str(ret));
++        return ret;
++    }
++
++    return 0;
++}
++
+ static void v4l2_request_output_buffer_uninit(V4L2RequestOutputBuffer *output)
+ {
+     // Close the request associated with the OUTPUT buffer
+@@ -741,6 +805,7 @@ int ff_v4l2_request_init(AVCodecContext *avctx,
+     }
+ 
+     // Create frames context and allocate initial CAPTURE buffers
++    ctx->own_frames_ctx = !avctx->hw_frames_ctx;
+     ret = ff_decode_get_hw_frames_ctx(avctx, AV_HWDEVICE_TYPE_V4L2REQUEST);
+     if (ret < 0)
+         goto fail;
+diff --git a/libavcodec/v4l2_request.h b/libavcodec/v4l2_request.h
+index 8ddb478e0e..0b7186bd0e 100644
+--- a/libavcodec/v4l2_request.h
++++ b/libavcodec/v4l2_request.h
+@@ -52,6 +52,7 @@ typedef struct V4L2RequestContext {
+     uint64_t queued_capture;
+     struct v4l2_ext_control *init_controls;
+     int nb_init_controls;
++    bool own_frames_ctx;
+ } V4L2RequestContext;
+ 
+ typedef struct V4L2RequestPictureContext {
+@@ -99,6 +100,8 @@ int ff_v4l2_request_frame_params(AVCodecContext *avctx,
+                                  uint32_t pixelformat,
+                                  uint8_t bit_depth);
+ 
++int ff_v4l2_request_update_frame_size(AVCodecContext *avctx);
++
+ int ff_v4l2_request_uninit(AVCodecContext *avctx);
+ 
+ int ff_v4l2_request_init(AVCodecContext *avctx,
+diff --git a/libavcodec/v4l2_request_vp9.c b/libavcodec/v4l2_request_vp9.c
+index e93937daf2..255b7783da 100644
+--- a/libavcodec/v4l2_request_vp9.c
++++ b/libavcodec/v4l2_request_vp9.c
+@@ -526,5 +526,6 @@ const FFHWAccel ff_vp9_v4l2request_hwaccel = {
+     .uninit             = ff_v4l2_request_uninit,
+     .priv_data_size     = sizeof(V4L2RequestContextVP9),
+     .frame_params       = v4l2_request_vp9_frame_params,
++    .update_frame_size  = ff_v4l2_request_update_frame_size,
+     .caps_internal      = HWACCEL_CAP_ASYNC_SAFE,
+ };
+diff --git a/libavcodec/vp9.c b/libavcodec/vp9.c
+index db849f4511..947a056a68 100644
+--- a/libavcodec/vp9.c
++++ b/libavcodec/vp9.c
+@@ -187,6 +187,16 @@ static int update_size(AVCodecContext *avctx, int w, int h)
+         if ((ret = ff_set_dimensions(avctx, w, h)) < 0)
+             return ret;
+ 
++        /*
++         * A non-key frame with a new size predicts from frames of the
++         * previous size: let the hwaccel adapt to the new size rather than
++         * reinitialise it, which would discard the state of those frames.
++         */
++        if (s->pix_fmt == s->gf_fmt && !s->s.h.keyframe &&
++            FF_HW_HAS_CB(avctx, update_frame_size) &&
++            FF_HW_SIMPLE_CALL(avctx, update_frame_size) >= 0)
++            goto size_updated;
++
+         switch (s->pix_fmt) {
+         case AV_PIX_FMT_YUV420P:
+         case AV_PIX_FMT_YUV420P10:
+@@ -266,6 +276,7 @@ static int update_size(AVCodecContext *avctx, int w, int h)
+ 
+         avctx->pix_fmt = ret;
+         s->gf_fmt  = s->pix_fmt;
++size_updated:
+         s->w = w;
+         s->h = h;
+     }
+-- 
+2.55.0
+

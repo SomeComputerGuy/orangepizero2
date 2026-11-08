@@ -1,0 +1,52 @@
+From 87b39adefc4c356a86b8b15c9b76e65f5e6ed7b8 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 6 Nov 2026 15:19:21 +0000
+Subject: [PATCH 315/317] avcodec/v4l2_request: track CAPTURE buffer indices
+ above 31
+
+The queued CAPTURE buffers are tracked in a 64-bit mask, but the bit of
+a buffer is computed as an int (1 << index), which is undefined for
+indices of 32 and above. Drivers may allow more than 32 buffers per
+queue (e.g. rkvdec allows 64), and buffer indices grow when buffers are
+added to a running queue with VIDIOC_CREATE_BUFS. Use a 64-bit shift.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/v4l2_request.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/libavcodec/v4l2_request.c b/libavcodec/v4l2_request.c
+index b0d8829ce3..6ba0d542c5 100644
+--- a/libavcodec/v4l2_request.c
++++ b/libavcodec/v4l2_request.c
+@@ -163,7 +163,7 @@ static int v4l2_request_queue_buffer(V4L2RequestContext *ctx,
+     if (V4L2_TYPE_IS_OUTPUT(buffer->type))
+         ctx->queued_output |= 1 << buffer->index;
+     else
+-        ctx->queued_capture |= 1 << buffer->index;
++        ctx->queued_capture |= UINT64_C(1) << buffer->index;
+ 
+     return 0;
+ }
+@@ -217,7 +217,7 @@ static int v4l2_request_dequeue_buffer(V4L2RequestContext *ctx,
+     if (V4L2_TYPE_IS_OUTPUT(buffer.type))
+         ctx->queued_output &= ~(1 << buffer.index);
+     else
+-        ctx->queued_capture &= ~(1 << buffer.index);
++        ctx->queued_capture &= ~(UINT64_C(1) << buffer.index);
+ 
+     return 0;
+ }
+@@ -249,7 +249,7 @@ static int v4l2_request_wait_on_capture(V4L2RequestContext *ctx, uint32_t index)
+         v4l2_request_dequeue_completed_buffers(ctx, type);
+ 
+     // Wait on the specific CAPTURE buffer
+-    while (ctx->queued_capture & (1 << index)) {
++    while (ctx->queued_capture & (UINT64_C(1) << index)) {
+         int ret = poll(&pollfd, 1, 2000);
+         if (ret <= 0)
+             goto fail;
+-- 
+2.55.0
+

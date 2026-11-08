@@ -1,0 +1,155 @@
+From d80101bda73af47a9b145e7cb474f1a8e5d8490f Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Sun, 8 Nov 2026 21:09:47 +0000
+Subject: [PATCH] avcodec/v4l2_request: describe frames decoded in place with
+ the driver's stride
+
+A VP9 inter frame smaller than the CAPTURE buffers is decoded in place
+(ff_v4l2_request_update_frame_size()). Drivers need not lay it out with
+the line stride of the buffers: the Allwinner (Cedrus) VP9 hardware
+derives the line stride of every reference frame from the width of that
+reference, so the driver writes such a frame with the stride of a frame
+of its own width, at the plane offsets of the CAPTURE format, and
+VIDIOC_TRY_FMT on the CAPTURE queue with the frame size reports that
+layout. The DRM PRIME descriptor of the frame still carried the stride
+of the buffers, so consumers read the picture with the wrong stride.
+
+When the coded size of a frame is smaller than the frames context,
+query the layout with VIDIOC_TRY_FMT (once per frame size) and set the
+line stride of the descriptor's planes to it; frames of the full size
+get the stride of the CAPTURE format again. Only linear formats with
+two planes are adjusted. Drivers that keep the layout of the buffers
+(TRY_FMT reports the CAPTURE format) are unchanged, and so is every
+stream that does not change the frame size.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/v4l2_request.c | 82 +++++++++++++++++++++++++++++++++++++++
+ libavcodec/v4l2_request.h |  6 +++
+ 2 files changed, 88 insertions(+)
+
+diff --git a/libavcodec/v4l2_request.c b/libavcodec/v4l2_request.c
+index 937e955..1528ed2 100644
+--- a/libavcodec/v4l2_request.c
++++ b/libavcodec/v4l2_request.c
+@@ -24,6 +24,9 @@
+ #include <sys/mman.h>
+ #include <unistd.h>
+ 
++#include <drm_fourcc.h>
++
++#include "libavutil/hwcontext_drm.h"
+ #include "libavutil/hwcontext_v4l2request_internal.h"
+ #include "libavutil/mem.h"
+ #include "decode.h"
+@@ -546,6 +549,82 @@ int ff_v4l2_request_reset_picture(AVCodecContext *avctx, V4L2RequestPictureConte
+     return 0;
+ }
+ 
++static uint32_t v4l2_request_format_pitch(const struct v4l2_format *format)
++{
++    return V4L2_TYPE_IS_MULTIPLANAR(format->type) ?
++           format->fmt.pix_mp.plane_fmt[0].bytesperline :
++           format->fmt.pix.bytesperline;
++}
++
++/*
++ * A frame smaller than the CAPTURE buffers is decoded in place, e.g. a VP9
++ * inter frame with a new frame size (ff_v4l2_request_update_frame_size()).
++ * The driver may lay it out with the line stride of a frame of its own size
++ * rather than the one of the buffers (Cedrus does: its hardware derives the
++ * stride of every reference frame from the width of that reference), at the
++ * plane offsets of the CAPTURE format. VIDIOC_TRY_FMT on the CAPTURE queue
++ * with the frame size reports that layout; drivers that keep the layout of
++ * the buffers report the CAPTURE format. Describe the frame accordingly.
++ */
++static void v4l2_request_set_frame_layout(AVCodecContext *avctx,
++                                          V4L2RequestContext *ctx,
++                                          AVFrame *frame)
++{
++    AVHWFramesContext *hwfc = (AVHWFramesContext *)ctx->frames_ref->data;
++    AVDRMFrameDescriptor *desc = (AVDRMFrameDescriptor *)frame->data[0];
++    AVDRMLayerDescriptor *layer = &desc->layers[0];
++    const struct v4l2_format *format = &ctx->fctxi->capture.format;
++    uint32_t pitch = v4l2_request_format_pitch(format);
++    int width = avctx->coded_width;
++    int height = avctx->coded_height;
++
++    // Only linear formats with a line stride per plane (NV12, P010, ...)
++    if (desc->nb_layers != 1 || layer->nb_planes != 2 ||
++        desc->objects[0].format_modifier != DRM_FORMAT_MOD_LINEAR)
++        return;
++
++    if (width < hwfc->width || height < hwfc->height) {
++        if (width != ctx->layout.width || height != ctx->layout.height ||
++            hwfc->width != ctx->layout.buffer_width ||
++            hwfc->height != ctx->layout.buffer_height) {
++            struct v4l2_format try_format = *format;
++            int multiplanar = V4L2_TYPE_IS_MULTIPLANAR(format->type);
++            uint32_t try_pitch;
++
++            if (multiplanar) {
++                try_format.fmt.pix_mp.width = width;
++                try_format.fmt.pix_mp.height = height;
++            } else {
++                try_format.fmt.pix.width = width;
++                try_format.fmt.pix.height = height;
++            }
++
++            ctx->layout.pitch = pitch;
++            if (ioctl(ctx->fctxi->video_fd, VIDIOC_TRY_FMT, &try_format) >= 0 &&
++                (multiplanar ? try_format.fmt.pix_mp.pixelformat ==
++                               format->fmt.pix_mp.pixelformat :
++                               try_format.fmt.pix.pixelformat ==
++                               format->fmt.pix.pixelformat)) {
++                try_pitch = v4l2_request_format_pitch(&try_format);
++                if (try_pitch && try_pitch <= pitch)
++                    ctx->layout.pitch = try_pitch;
++            }
++
++            ctx->layout.width = width;
++            ctx->layout.height = height;
++            ctx->layout.buffer_width = hwfc->width;
++            ctx->layout.buffer_height = hwfc->height;
++
++            av_log(ctx, AV_LOG_VERBOSE, "Decoding %dx%d frames in place in %dx%d CAPTURE buffers, line stride %u\n",
++                   width, height, hwfc->width, hwfc->height, ctx->layout.pitch);
++        }
++        pitch = ctx->layout.pitch;
++    }
++
++    layer->planes[0].pitch = pitch;
++    layer->planes[1].pitch = pitch;
++}
++
+ int ff_v4l2_request_start_frame(AVCodecContext *avctx,
+                                 V4L2RequestPictureContext *pic,
+                                 AVFrame *frame)
+@@ -565,6 +644,9 @@ int ff_v4l2_request_start_frame(AVCodecContext *avctx,
+     if (ret)
+         return ret;
+ 
++    // Line stride of a frame smaller than the CAPTURE buffers
++    v4l2_request_set_frame_layout(avctx, ctx, frame);
++
+     // Wait on CAPTURE buffer in post_process() before returning to application
+     fdd->hwaccel_priv = ctx;
+     fdd->post_process = v4l2_request_post_process;
+diff --git a/libavcodec/v4l2_request.h b/libavcodec/v4l2_request.h
+index 0b7186b..9703cd8 100644
+--- a/libavcodec/v4l2_request.h
++++ b/libavcodec/v4l2_request.h
+@@ -53,6 +53,12 @@ typedef struct V4L2RequestContext {
+     struct v4l2_ext_control *init_controls;
+     int nb_init_controls;
+     bool own_frames_ctx;
++    struct {
++        // Layout of frames decoded in place, see v4l2_request_set_frame_layout()
++        int width, height;
++        int buffer_width, buffer_height;
++        uint32_t pitch;
++    } layout;
+ } V4L2RequestContext;
+ 
+ typedef struct V4L2RequestPictureContext {

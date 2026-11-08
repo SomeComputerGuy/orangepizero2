@@ -1,0 +1,413 @@
+From ca90c717e5fcb4d498c1773187e16556ce094213 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 6 Nov 2026 15:19:21 +0000
+Subject: [PATCH 316/317] avutil/hwcontext_v4l2request: change the frame size
+ of a running session
+
+Some codecs change the frame size on frames that keep predicting from
+frames of the previous size: VP9 inter and intra-only frames, e.g. in
+spatial scalability (vp90-2-22-svc_*) or with internal resizing
+(vp90-2-21-resize_inter_*). Their references must stay in the CAPTURE
+queue of the running decoder session while frames of the new size are
+decoded, so the session cannot be replaced by a new one.
+
+Add avpriv_v4l2_request_frames_resize() for the hwaccels: it sets the
+new size on the OUTPUT and CAPTURE queues of the streaming device,
+keeping the coded and CAPTURE pixel formats, and replaces the buffer
+pools of the frames context, whose width and height are updated. Frames
+allocated earlier keep their buffers; once released, these buffers are
+removed from the CAPTURE queue with VIDIOC_REMOVE_BUFS (retried later
+while the buffer is still queued). Devices without VIDIOC_REMOVE_BUFS,
+or a frames context with a pool set by the user, are refused with
+AVERROR(ENOTSUP).
+
+The CAPTURE and OUTPUT pool buffers now carry their planes in the same
+allocation (struct V4L2RequestBuffer); frames_uninit() no longer
+dereferences an uninitialised context, and closes the media device only
+when it was opened.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavutil/hwcontext_v4l2request.c          | 248 ++++++++++++++++++++-
+ libavutil/hwcontext_v4l2request_internal.h |  21 ++
+ 2 files changed, 257 insertions(+), 12 deletions(-)
+
+diff --git a/libavutil/hwcontext_v4l2request.c b/libavutil/hwcontext_v4l2request.c
+index 6705cee48d..0d3d176c61 100644
+--- a/libavutil/hwcontext_v4l2request.c
++++ b/libavutil/hwcontext_v4l2request.c
+@@ -33,6 +33,7 @@
+ #include "hwcontext_internal.h"
+ #include "hwcontext_v4l2request_internal.h"
+ #include "mem.h"
++#include "thread.h"
+ 
+ /*
+  * Cedrus AFBC capture formats (Jernej Skrabec's sunxi media patches, not yet in
+@@ -61,8 +62,35 @@ typedef struct V4L2RequestDeviceContext {
+ typedef struct V4L2RequestFramesContext {
+     AVV4L2RequestFramesContext p;
+     AVV4L2RequestFramesContextInternal internal;
++
++    /*
++     * Protects capture_generation and remove_pending, CAPTURE buffers are
++     * freed from whichever thread drops the last reference to a frame.
++     */
++    AVMutex mutex;
++    int mutex_initialized;
++
++    /*
++     * Incremented when the CAPTURE format changes on a running stream:
++     * buffers of an earlier generation are removed from the CAPTURE queue
++     * once they are no longer used.
++     */
++    unsigned capture_generation;
++
++    /*
++     * CAPTURE buffers of an earlier generation that were still queued when
++     * they were released, bit n for buffer index n.
++     */
++    uint64_t remove_pending;
+ } V4L2RequestFramesContext;
+ 
++typedef struct V4L2RequestBuffer {
++    // AVBufferRef.data of the CAPTURE and OUTPUT pools points to this struct
++    struct v4l2_buffer buffer;
++    struct v4l2_plane planes[VIDEO_MAX_PLANES];
++    unsigned generation;
++} V4L2RequestBuffer;
++
+ typedef struct V4L2RequestFrameDescriptor {
+     AVDRMFrameDescriptor base;
+     AVBufferRef *ref;
+@@ -731,34 +759,101 @@ static int v4l2request_open_decoder(AVHWFramesContext *hwfc)
+     return ret;
+ }
+ 
++static void v4l2request_remove_capture_buffer(AVHWFramesContext *hwfc,
++                                              uint32_t index)
++{
++#if defined(VIDIOC_REMOVE_BUFS)
++    V4L2RequestFramesContext *hwctx = hwfc->hwctx;
++    AVV4L2RequestFramesContextInternal *fctxi = &hwctx->internal;
++    struct v4l2_remove_buffers remove = {
++        .index = index,
++        .count = 1,
++        .type = fctxi->capture.format.type,
++    };
++
++    // A buffer that is still queued is removed once it has been dequeued
++    if (ioctl(fctxi->video_fd, VIDIOC_REMOVE_BUFS, &remove) < 0) {
++        if (errno == EBUSY && index < 64)
++            hwctx->remove_pending |= UINT64_C(1) << index;
++        else
++            av_log(hwfc, AV_LOG_WARNING, "Failed to remove CAPTURE buffer %u: %s (%d)\n",
++                   index, strerror(errno), errno);
++    }
++#endif
++}
++
++static void v4l2request_remove_pending_buffers(AVHWFramesContext *hwfc)
++{
++    V4L2RequestFramesContext *hwctx = hwfc->hwctx;
++    uint64_t pending;
++
++    ff_mutex_lock(&hwctx->mutex);
++    pending = hwctx->remove_pending;
++    hwctx->remove_pending = 0;
++    for (uint32_t index = 0; pending; index++, pending >>= 1) {
++        if (pending & 1)
++            v4l2request_remove_capture_buffer(hwfc, index);
++    }
++    ff_mutex_unlock(&hwctx->mutex);
++}
++
++static void v4l2request_v4l2_buffer_free(void *opaque, uint8_t *data)
++{
++    AVHWFramesContext *hwfc = opaque;
++    V4L2RequestFramesContext *hwctx = hwfc->hwctx;
++    V4L2RequestBuffer *buf = (V4L2RequestBuffer *)data;
++
++    /*
++     * CAPTURE buffers of an earlier format are removed from the running
++     * queue, the remaining buffers are released with the video device.
++     */
++    if (!V4L2_TYPE_IS_OUTPUT(buf->buffer.type)) {
++        ff_mutex_lock(&hwctx->mutex);
++        if (buf->generation != hwctx->capture_generation)
++            v4l2request_remove_capture_buffer(hwfc, buf->buffer.index);
++        ff_mutex_unlock(&hwctx->mutex);
++    }
++
++    av_free(data);
++}
++
+ static AVBufferRef *v4l2request_v4l2_buffer_alloc(AVHWFramesContext *hwfc,
+                                                   struct v4l2_format *format)
+ {
+-    AVV4L2RequestFramesContext *fctx = hwfc->hwctx;
+-    AVV4L2RequestFramesContextInternal *fctxi = fctx->internal;
++    V4L2RequestFramesContext *hwctx = hwfc->hwctx;
++    AVV4L2RequestFramesContextInternal *fctxi = &hwctx->internal;
+     struct v4l2_create_buffers buffers = {
+         .count = 1,
+         .memory = V4L2_MEMORY_MMAP,
+         .format = *format,
+     };
+     struct v4l2_buffer *buffer;
++    V4L2RequestBuffer *buf;
+     uint8_t num_planes;
+     AVBufferRef *ref;
+ 
+     num_planes = V4L2_TYPE_IS_MULTIPLANAR(format->type) ?
+                  format->fmt.pix_mp.num_planes : 0;
++    av_assert0(num_planes <= VIDEO_MAX_PLANES);
+ 
+-    ref = av_buffer_allocz(sizeof(struct v4l2_buffer) +
+-                           (sizeof(struct v4l2_plane) * num_planes));
+-    if (!ref)
++    buf = av_mallocz(sizeof(*buf));
++    if (!buf)
+         return NULL;
+ 
+-    buffer = (struct v4l2_buffer *)ref->data;
++    ref = av_buffer_create((uint8_t *)buf, sizeof(*buf),
++                           v4l2request_v4l2_buffer_free, hwfc, 0);
++    if (!ref) {
++        av_free(buf);
++        return NULL;
++    }
++
++    buf->generation = hwctx->capture_generation;
++    buffer = &buf->buffer;
+     buffer->type = format->type;
+ 
+     if (num_planes) {
+         buffer->length = num_planes;
+-        buffer->m.planes = (struct v4l2_plane *)(buffer + 1);
++        buffer->m.planes = buf->planes;
+     }
+ 
+     // Create the buffer
+@@ -899,6 +994,11 @@ static int v4l2request_frames_init(AVHWFramesContext *hwfc)
+     fctxi->media_fd = -1;
+     fctxi->video_fd = -1;
+ 
++    ret = ff_mutex_init(&hwctx->mutex, NULL);
++    if (ret)
++        return AVERROR(ret);
++    hwctx->mutex_initialized = 1;
++
+     // Locate and open a capable video decoder device
+     ret = v4l2request_open_decoder(hwfc);
+     if (ret < 0)
+@@ -929,13 +1029,13 @@ static int v4l2request_frames_init(AVHWFramesContext *hwfc)
+     }
+ 
+     // Initialize buffer pool for CAPTURE buffers
+-    fctxi->capture.pool = av_buffer_pool_init2(sizeof(struct v4l2_buffer), hwfc,
++    fctxi->capture.pool = av_buffer_pool_init2(sizeof(V4L2RequestBuffer), hwfc,
+                                                v4l2request_capture_buffer_alloc, NULL);
+     if (!fctxi->capture.pool)
+         return AVERROR(ENOMEM);
+ 
+     // Initialize buffer pool for OUTPUT buffers
+-    fctxi->output.pool = av_buffer_pool_init2(sizeof(struct v4l2_buffer), hwfc,
++    fctxi->output.pool = av_buffer_pool_init2(sizeof(V4L2RequestBuffer), hwfc,
+                                               v4l2request_output_buffer_alloc, NULL);
+     if (!fctxi->output.pool)
+         return AVERROR(ENOMEM);
+@@ -955,8 +1055,12 @@ static int v4l2request_frames_init(AVHWFramesContext *hwfc)
+ 
+ static void v4l2request_frames_uninit(AVHWFramesContext *hwfc)
+ {
+-    AVV4L2RequestFramesContext *fctx = hwfc->hwctx;
+-    AVV4L2RequestFramesContextInternal *fctxi = fctx->internal;
++    V4L2RequestFramesContext *hwctx = hwfc->hwctx;
++    AVV4L2RequestFramesContextInternal *fctxi = hwctx->p.internal;
++
++    // Nothing to release when the frames context was never initialized
++    if (!fctxi)
++        return;
+ 
+     av_buffer_pool_uninit(&fctxi->capture.pool);
+     av_buffer_pool_uninit(&fctxi->output.pool);
+@@ -966,16 +1070,136 @@ static void v4l2request_frames_uninit(AVHWFramesContext *hwfc)
+         fctxi->video_fd = -1;
+     }
+ 
+-    if (fctxi->media_fd) {
++    if (fctxi->media_fd >= 0) {
+         close(fctxi->media_fd);
+         fctxi->media_fd = -1;
+     }
++
++    if (hwctx->mutex_initialized) {
++        ff_mutex_destroy(&hwctx->mutex);
++        hwctx->mutex_initialized = 0;
++    }
++}
++
++int avpriv_v4l2_request_frames_resize(AVHWFramesContext *hwfc,
++                                      int width, int height)
++{
++#if defined(VIDIOC_REMOVE_BUFS)
++    V4L2RequestFramesContext *hwctx = hwfc->hwctx;
++    AVV4L2RequestFramesContextInternal *fctxi = &hwctx->internal;
++    FFHWFramesContext *ctxi = ffhwframesctx(hwfc);
++    struct v4l2_format output = fctxi->output.format;
++    struct v4l2_format capture = { .type = fctxi->capture.format.type };
++    AVBufferPool *capture_pool, *frame_pool;
++    uint32_t pixelformat;
++    int multiplanar = V4L2_TYPE_IS_MULTIPLANAR(capture.type);
++    int ret;
++
++    /*
++     * Buffers of the current size must stay usable as references while
++     * buffers of the new size are added, they can only be released one by
++     * one with VIDIOC_REMOVE_BUFS. A pool set by the user can't be replaced.
++     */
++    if (!(fctxi->capture.capabilities & V4L2_BUF_CAP_SUPPORTS_REMOVE_BUFS) ||
++        !ctxi->pool_internal || hwfc->pool != ctxi->pool_internal)
++        return AVERROR(ENOTSUP);
++
++    pixelformat = multiplanar ? fctxi->capture.format.fmt.pix_mp.pixelformat :
++                                fctxi->capture.format.fmt.pix.pixelformat;
++
++    // Set the new frame size on the OUTPUT queue, the coded format stays
++    if (multiplanar) {
++        output.fmt.pix_mp.width = width;
++        output.fmt.pix_mp.height = height;
++    } else {
++        output.fmt.pix.width = width;
++        output.fmt.pix.height = height;
++    }
++    if (ioctl(fctxi->video_fd, VIDIOC_S_FMT, &output) < 0) {
++        ret = AVERROR(errno);
++        av_log(hwfc, AV_LOG_VERBOSE, "Failed to set OUTPUT frame size %dx%d: %s (%d)\n",
++               width, height, strerror(errno), errno);
++        return ret;
++    }
++
++    // Keep the CAPTURE buffer format of the stream at the new frame size
++    if (multiplanar) {
++        capture.fmt.pix_mp.width = width;
++        capture.fmt.pix_mp.height = height;
++        capture.fmt.pix_mp.pixelformat = pixelformat;
++    } else {
++        capture.fmt.pix.width = width;
++        capture.fmt.pix.height = height;
++        capture.fmt.pix.pixelformat = pixelformat;
++    }
++    if (ioctl(fctxi->video_fd, VIDIOC_S_FMT, &capture) < 0 ||
++        ioctl(fctxi->video_fd, VIDIOC_G_FMT, &capture) < 0 ||
++        ioctl(fctxi->video_fd, VIDIOC_G_FMT, &output) < 0) {
++        ret = AVERROR(errno);
++        av_log(hwfc, AV_LOG_VERBOSE, "Failed to set CAPTURE frame size %dx%d: %s (%d)\n",
++               width, height, strerror(errno), errno);
++        return ret;
++    }
++
++    if ((multiplanar ? capture.fmt.pix_mp.pixelformat : capture.fmt.pix.pixelformat) != pixelformat ||
++        (multiplanar ? capture.fmt.pix_mp.width : capture.fmt.pix.width) < width ||
++        (multiplanar ? capture.fmt.pix_mp.height : capture.fmt.pix.height) < height) {
++        av_log(hwfc, AV_LOG_VERBOSE, "CAPTURE format %s %ux%u does not hold %dx%d frames\n",
++               av_fourcc2str(multiplanar ? capture.fmt.pix_mp.pixelformat : capture.fmt.pix.pixelformat),
++               multiplanar ? capture.fmt.pix_mp.width : capture.fmt.pix.width,
++               multiplanar ? capture.fmt.pix_mp.height : capture.fmt.pix.height,
++               width, height);
++        return AVERROR(EINVAL);
++    }
++
++    capture_pool = av_buffer_pool_init2(sizeof(V4L2RequestBuffer), hwfc,
++                                        v4l2request_capture_buffer_alloc, NULL);
++    frame_pool = av_buffer_pool_init2(sizeof(V4L2RequestFrameDescriptor), hwfc,
++                                      v4l2request_frame_alloc, NULL);
++    if (!capture_pool || !frame_pool) {
++        av_buffer_pool_uninit(&capture_pool);
++        av_buffer_pool_uninit(&frame_pool);
++        return AVERROR(ENOMEM);
++    }
++
++    // Retire the buffers of the previous format
++    ff_mutex_lock(&hwctx->mutex);
++    hwctx->capture_generation++;
++    ff_mutex_unlock(&hwctx->mutex);
++
++    fctxi->capture.format = capture;
++    fctxi->output.format = output;
++
++    /*
++     * Frames still in use keep their descriptor and CAPTURE buffer, which
++     * are freed (and the buffer removed from the queue) when the frame is
++     * released. Unused descriptors go first, they hold CAPTURE buffers.
++     */
++    av_buffer_pool_uninit(&ctxi->pool_internal);
++    av_buffer_pool_uninit(&fctxi->capture.pool);
++    ctxi->pool_internal = frame_pool;
++    hwfc->pool = frame_pool;
++    fctxi->capture.pool = capture_pool;
++
++    hwfc->width = multiplanar ? capture.fmt.pix_mp.width : capture.fmt.pix.width;
++    hwfc->height = multiplanar ? capture.fmt.pix_mp.height : capture.fmt.pix.height;
++
++    av_log(hwfc, AV_LOG_VERBOSE, "Using CAPTURE buffer format %s (%dx%d)\n",
++           av_fourcc2str(pixelformat), hwfc->width, hwfc->height);
++
++    return 0;
++#else
++    return AVERROR(ENOTSUP);
++#endif
+ }
+ 
+ static int v4l2request_get_buffer(AVHWFramesContext *hwfc, AVFrame *frame)
+ {
+     V4L2RequestFrameDescriptor *desc;
+ 
++    // Retry removing buffers of an earlier format that were still queued
++    v4l2request_remove_pending_buffers(hwfc);
++
+     frame->buf[0] = av_buffer_pool_get(hwfc->pool);
+     if (!frame->buf[0])
+         return AVERROR(ENOMEM);
+diff --git a/libavutil/hwcontext_v4l2request_internal.h b/libavutil/hwcontext_v4l2request_internal.h
+index 20436b2b2d..221f463c6b 100644
+--- a/libavutil/hwcontext_v4l2request_internal.h
++++ b/libavutil/hwcontext_v4l2request_internal.h
+@@ -20,6 +20,7 @@
+ #define AVUTIL_HWCONTEXT_V4L2REQUEST_INTERNAL_H
+ 
+ #include "buffer.h"
++#include "hwcontext.h"
+ #include "hwcontext_v4l2request.h"
+ 
+ /**
+@@ -64,4 +65,24 @@ struct AVV4L2RequestFramesContextInternal {
+     } capture, output;
+ };
+ 
++/**
++ * Change the frame size of the CAPTURE buffers of a running decoder session,
++ * e.g. for a VP9 inter frame that is larger than the frames it predicts from.
++ *
++ * Sets the new size on the OUTPUT and CAPTURE queues of the streaming device
++ * (keeping the coded and the CAPTURE pixel format) and replaces the buffer
++ * pools of the frames context, whose width and height are updated. Frames
++ * allocated earlier stay valid and keep their buffers, which are removed from
++ * the CAPTURE queue with VIDIOC_REMOVE_BUFS once the frames are released.
++ *
++ * The caller must ensure that no request is pending and that no frame is
++ * allocated from the frames context during the call.
++ *
++ * @return 0 on success, AVERROR(ENOTSUP) if the device lacks VIDIOC_REMOVE_BUFS
++ *         or the frames context uses a pool set by the user, or another
++ *         negative error code if the device refused the new size.
++ */
++int avpriv_v4l2_request_frames_resize(AVHWFramesContext *hwfc,
++                                      int width, int height);
++
+ #endif /* AVUTIL_HWCONTEXT_V4L2REQUEST_INTERNAL_H */
+-- 
+2.55.0
+

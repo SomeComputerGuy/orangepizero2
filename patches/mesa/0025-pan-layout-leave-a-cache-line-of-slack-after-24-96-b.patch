@@ -25,10 +25,6 @@ block size and is not compressed. That costs one page for the images
 whose data ends on a page boundary and nothing for the others; explicit
 (imported) layouts are unchanged.
 
-Not proven on the hardware yet: the board A/B (old build vs this one,
-kernel that names the BO around a fault) is harness/runner-queue/
-46-rgb-tdim.md.
-
 Generated-by: LLM
 ---
  src/panfrost/lib/pan_layout.c | 28 ++++++++++++++++++++++++++--

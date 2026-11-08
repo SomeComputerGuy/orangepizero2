@@ -43,7 +43,7 @@ PAN_MESA_DEBUG=fbfetch_opaque,fbfetch_overdraw,persample_1x restore the
 old descriptors one by one (debug A/B switches, default off). Verified
 on the host with the panfrost drm-shim (fake G31): the 11 fbfetch draws
 now use Fixed-Function mode, no overdraw hints, evaluate_per_sample
-false; the board run is harness/runner-queue/15-gles-advblend.md.
+false.
 
 Generated-by: LLM
 ---

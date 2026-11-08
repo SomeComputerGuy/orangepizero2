@@ -2,18 +2,16 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Rebuild Ubuntu's media and GPU packages for arm64 (Orange Pi Zero2 images) with the patches in patches/<source>/:
 #   ffmpeg              V4L2 Request API (stateless decoder) hwaccels: Jernej Skrabec's v4l2request-mpeg4 series
-#                       (Kwiboo's hwaccels + VC-1 + MPEG-4) 00xx, shared with the orangepi5 build 01xx, ours 02xx
+#                       (Kwiboo's hwaccels + VC-1 + MPEG-4) 00xx, shared 01xx, ours 02xx
 #                       (desktop variant only)
 #   mpv                 v4l2request hwdec + DRM PRIME interop; needs our ffmpeg (desktop variant only)
-#   gst-plugins-bad1.0  the orangepi5 build's v4l2codecs/kmssink set 00xx (patches/gstreamer, shared) and ours 01xx:
+#   gst-plugins-bad1.0  v4l2codecs/kmssink fixes 00xx (patches/gstreamer) and ours 01xx:
 #                       v4l2sljpegdec (cedrus JPEG) and jpegparse sampling-factors caps (every variant)
 #   gst-plugins-good1.0 stateful v4l2jpegdec on cedrus: 1:4:0:0 colorimetry, system memory for an ANY peer
-#                       (board PASS runner job 57; every variant)
+#                       (every variant)
 #   mesa                our Mesa fork for the Mali-G31 (panfrost/panvk/rusticl fixes, patches/mesa/README.md;
 #                       every variant)
-# Adapted from the orangepi5 project's scripts/build-media-debs.sh (same author; the method, structure and
-# the mpv/debian patches are copied from there), with a build stamp so an unchanged source is not rebuilt
-# (build caching rule #1).
+# A build stamp makes sure an unchanged source is not rebuilt.
 # Rootless: mmdebstrap --mode=unshare + qemu-user binfmt, no sudo.
 # Usage: build-media-debs.sh [--force] [source...]     (default: every source below, in the SOURCES order)
 # Output: out/debs-media/*.deb plus a Packages index (a flat apt repository that
@@ -137,10 +135,6 @@ CCACHE_HOST=$HOME/.cache/opiz2-media-ccache   # basename must stay opiz2-media-c
 CCACHE_OPTS=() CCACHE_SYNC=()
 if [ "${OPIZ2_MEDIA_CCACHE:-1}" != 0 ]; then
   rm -rf "${CCACHE_HOST:?}.new"
-  # First run: seed from the orangepi5 build's cache (same sources, same compiler; read only, copied)
-  if [ ! -d "$CCACHE_HOST" ] && [ -d "$HOME/.cache/opi5-media-ccache" ]; then
-    cp -a "$HOME/.cache/opi5-media-ccache" "$CCACHE_HOST"
-  fi
   mkdir -p "$CCACHE_HOST"
   CCACHE_OPTS=(--include=ccache
     --customize-hook='mkdir -p "$1/build"'

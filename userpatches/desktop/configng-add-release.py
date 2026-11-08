@@ -7,7 +7,7 @@ Usage: configng-add-release.py <yaml_dir> <new_release> <base_release> [--no-arm
 Every mapping in every <yaml_dir>/*.yaml that has <base_release> as a key and no <new_release> key gets
 <new_release> as a deep copy of the <base_release> entry: the per-DE `releases:` blocks (availability,
 architectures, extra/removed packages), common.yaml's `releases:`, `browser:` map and `tier_overrides`.
-This is the change a configng PR adding the release would make (docs/upstream-queue.md).
+This is the change a configng PR adding the release would make.
 
 --no-armbian-repo: the image has no apt.armbian.com suite for the release (SKIP_ARMBIAN_REPO=yes), so
 drop the packages that only exist there (chromium, code, armbian-imager) and the snap-transitional

@@ -1,0 +1,122 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Sat, 7 Nov 2026 21:33:04 +0000
+Subject: [PATCH] panvk: reserve the overfetch slack for explicit 24/96-bit
+ image layouts
+
+02df5721016 ("pan/layout: leave a cache line of slack after 24/96-bit
+images") adds 64 bytes before the page round-up to the layouts we
+choose, but explicit (imported) layouts stay exact. An image created
+with VkImageDrmFormatModifierExplicitCreateInfoEXT from the subresource
+layout of an exported RGB8/RGB32 image therefore needed less memory than
+the exported image (12288 vs 16384 bytes for 64x64 RGB8), and
+dEQP-VK.drm_format_modifiers.export_import{,_fmt_features2}_with_suballoc
+.{r8g8b8,b8g8r8,r32g32b32}_* (16 cases) placed the second, suballocated
+image at a different offset than the exporter: "Unexpected copy image
+results" (they passed before 02df5721016).
+
+Keep the explicit layout itself exact (gallium import size checks use
+data_size_B), but add the same 64 bytes to the panvk memory
+requirements of an explicit plane with a non-power-of-two texel size.
+That also leaves room for the overfetch the slack exists for when an
+application allocates memory for such an image.
+
+Generated-by: LLM
+---
+ src/panfrost/lib/pan_image.h      |  5 +++++
+ src/panfrost/lib/pan_layout.c     |  4 ++--
+ src/panfrost/vulkan/panvk_image.c | 13 +++++++++++--
+ src/panfrost/vulkan/panvk_image.h |  4 ++++
+ 4 files changed, 22 insertions(+), 4 deletions(-)
+
+diff --git a/src/panfrost/lib/pan_image.h b/src/panfrost/lib/pan_image.h
+index 642f4a6f427..ff3225a6c7d 100644
+--- a/src/panfrost/lib/pan_image.h
++++ b/src/panfrost/lib/pan_image.h
+@@ -313,6 +313,11 @@ bool pan_image_layout_init(
+    unsigned arch, struct pan_image *image, unsigned plane_idx,
+    const struct pan_image_layout_constraints *explicit_layout_constraints);
+ 
++/* Non-power-of-two texel formats (RGB8, RGB32) are read up to a cache line
++ * past their last texel; layouts we choose leave 64 bytes of slack for that. */
++#define PAN_IMAGE_OVERFETCH_PAD_B 64
++bool pan_image_needs_overfetch_pad(enum pipe_format format, unsigned plane_idx);
++
+ struct pan_image_usage {
+    /* PAN_BIND_xxx flags. */
+    uint32_t bind;
+diff --git a/src/panfrost/lib/pan_layout.c b/src/panfrost/lib/pan_layout.c
+index 7d0accbce6f..7188328cda0 100644
+--- a/src/panfrost/lib/pan_layout.c
++++ b/src/panfrost/lib/pan_layout.c
+@@ -61,7 +61,7 @@ get_mip_level_extent(const struct pan_image_props *props, unsigned plane_idx,
+    };
+ }
+ 
+-static bool
++bool
+ pan_image_needs_overfetch_pad(enum pipe_format format, unsigned plane_idx)
+ {
+    if (util_format_is_compressed(format))
+@@ -176,7 +176,7 @@ pan_image_layout_init(
+        * line of slack after these images.
+        */
+       if (pan_image_needs_overfetch_pad(props->format, plane_idx))
+-         size_B += 64;
++         size_B += PAN_IMAGE_OVERFETCH_PAD_B;
+ 
+       layout->data_size_B = ALIGN_POT(size_B, 4096);
+    }
+diff --git a/src/panfrost/vulkan/panvk_image.c b/src/panfrost/vulkan/panvk_image.c
+index 892f3014fbf..45b8ccd0da2 100644
+--- a/src/panfrost/vulkan/panvk_image.c
++++ b/src/panfrost/vulkan/panvk_image.c
+@@ -497,6 +497,13 @@ panvk_image_init_layouts(struct panvk_image *image,
+                             VK_ERROR_INITIALIZATION_FAILED);
+       }
+ 
++      /* Explicit layouts are exact. Reserve the same overfetch slack in the
++       * memory requirements as a layout we choose has, so an imported image
++       * needs as much memory as the exported one it describes. */
++      if (explicit_info &&
++          pan_image_needs_overfetch_pad(pan_img->props.format, pan_plane))
++         image->planes[plane].explicit_pad_B = PAN_IMAGE_OVERFETCH_PAD_B;
++
+       if (!is_disjoint(image) && !explicit_info)
+          plane_layout.offset_B += image->planes[plane].plane.layout.data_size_B;
+    }
+@@ -581,7 +588,8 @@ static uint64_t
+ panvk_image_plane_size(const struct panvk_image *image, unsigned plane)
+ {
+    const struct pan_image_layout *layout = &image->planes[plane].plane.layout;
+-   return layout->slices[0].offset_B + layout->data_size_B;
++   return layout->slices[0].offset_B + layout->data_size_B +
++          image->planes[plane].explicit_pad_B;
+ }
+ 
+ static uint64_t
+@@ -1013,7 +1021,8 @@ panvk_GetImageMemoryRequirements2(VkDevice device,
+       plane_info ? plane_info->planeAspect : image->vk.aspects;
+    uint8_t plane = panvk_plane_index(image, aspects);
+    const uint64_t size_non_sparse =
+-      disjoint ? image->planes[plane].plane.layout.data_size_B :
++      disjoint ? image->planes[plane].plane.layout.data_size_B +
++                    image->planes[plane].explicit_pad_B :
+       panvk_image_get_total_size(image);
+    const uint64_t size =
+       image->vk.create_flags & VK_IMAGE_CREATE_SPARSE_BINDING_BIT
+diff --git a/src/panfrost/vulkan/panvk_image.h b/src/panfrost/vulkan/panvk_image.h
+index eeb452961d2..4345aff7fea 100644
+--- a/src/panfrost/vulkan/panvk_image.h
++++ b/src/panfrost/vulkan/panvk_image.h
+@@ -30,6 +30,10 @@ struct panvk_image_plane {
+ 
+    /* Plane offset inside the memory object. */
+    uint64_t mem_offset;
++
++   /* Bytes the memory requirements reserve past an explicit layout, see
++    * PAN_IMAGE_OVERFETCH_PAD_B. Layouts we choose already include it. */
++   uint32_t explicit_pad_B;
+ };
+ 
+ struct panvk_image {

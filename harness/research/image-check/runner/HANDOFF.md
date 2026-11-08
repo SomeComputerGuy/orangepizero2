@@ -6,7 +6,7 @@ Type: DEV (takes the whole board). Expected duration: 70-90 min (reflash 20-40, 
 ## What it does
 `image-check.sh` takes its own board lock (owner `image-check-<time>`), reflashes the board's SD card with the newest
 SERVER image (harness/reflash.sh: dry run, real run, the REFLASH.md retry rules scripted), then checks the image on the
-image's own kernel: kernel + boot, verify-board.sh, our +opiz2 packages (gst-plugins-bad/-good, Mesa fork 0e274280595),
+image's own kernel: kernel + boot, verify-board.sh, our +opiz2 packages (gst-plugins-bad/-good, Mesa fork 26cb3c93a58 = +opiz2.2),
 GStreamer elements + JPEG decodes, gst-libav (job 24 check 1), `PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1` everywhere,
 vulkaninfo / vkcube / dEQP-VK smoke + 9 subgroup cases, GLES and OpenCL regressions on the SYSTEM Mesa, dmesg. It also
 restages /root/cts (harness/analysis/gpu/cts-restage.sh, without --start), which the reflash wipes and job 68 needs.
@@ -16,7 +16,7 @@ No trial kernel is installed, nothing is installed into the system. Results: har
   (newest; the server image = no `_minimal`/`_desktop` suffix) with its `.sha`. `<kver>` is read from the file name
   (7.3.3 for the 2026-11-07 build); nothing assumes 7.3.1. The script refuses to start without it.
 - Debs inside the image: out/debs-media (gst-plugins-bad1.0 1.28.6-1ubuntu1+opiz2.1, gst-plugins-good1.0
-  1.28.7-1build1+opiz2.1, mesa 26.2.4-1ubuntu1+opiz2.1); the server image has no FFmpeg/mpv.
+  1.28.7-1build1+opiz2.1, mesa 26.2.4-1ubuntu1+opiz2.2 since the 2026-11-07 Vulkan 1.1 refresh; job 69 ran +opiz2.1); the server image has no FFmpeg/mpv.
 - Preconditions (the script checks them): image + .sha present, scripts/serial-log.py running, ssh/serial on
   ttyOPIZ2 (reflash.sh checks the rest). Start when the coordinator says the user's ./build-all.sh has finished.
 
@@ -44,9 +44,9 @@ Stall watchdog: every step is killed after 15 min without output (reflash: 40 mi
 | 6 | JPEG decodes | 320x240 picture: v4l2sljpegdec and v4l2jpegdec rc=0, 115200 bytes, cedrus irqs >= 1; jpegdec rc=0; decodebin rc=0 and not v4l2jpegdec |
 | 7 | gst-libav (job 24 check 1) | no MG1S on the image kernel; ccm1 via decodebin rc=0, 49536 bytes, irqs=0, picked avdec_mpeg*/mpeg2dec (SKIP if the kernel has MG1S) |
 | 8 | Vulkan env | `PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1` in the ssh login shell, /etc/environment, system manager, user.conf.d, environment.d generator, a systemd-run service |
-| 9 | vulkaninfo | login env without setting the variable: panvk device apiVersion `1.0.x`, deviceName Mali-G31, driverInfo `+opiz2` |
+| 9 | vulkaninfo | login env without setting the variable: panvk device apiVersion `1.1.x` (Mesa +opiz2.2; job 69 on +opiz2.1 had 1.0.354), deviceName Mali-G31, driverInfo `+opiz2` |
 | 10 | vkcube --c 100 | rc=0 on an HDMI display; no display connected = NOT-TESTED (vkcube has no headless WSI) |
-| 11 | Vulkan offscreen | dEQP-VK.api.smoke.* Failed 0 and triangle Pass; 9/9 job 52 subgroup cases Pass (MESA_VK_VERSION_OVERRIDE=1.1 for those only); 0 GPU fault lines |
+| 11 | Vulkan offscreen | dEQP-VK.api.smoke.* Failed 0 and triangle Pass; 9/9 job 52 subgroup cases Pass (MESA_VK_VERSION_OVERRIDE=1.1 for those only, a no-op since +opiz2.2); 0 GPU fault lines |
 | 12 | GLES | eglinfo renderer Mali-G31, `OpenGL ES 3.1` with `+opiz2`; gles3 derivate `556 cases`, `Pass 556`; 0 GPU fault lines |
 | 13 | kmscube | rc=0 on an HDMI display; no display = NOT-TESTED |
 | 14 | OpenCL | clinfo rc=0, platform rusticl, device Mali-G31; job 52's 8 suites all Pass; 0 GPU fault lines |

@@ -1,0 +1,78 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Sat, 7 Nov 2026 21:33:04 +0000
+Subject: [PATCH] pan/bi: count the ATOM_CX staging reads like ATOM_RETURN
+
+ATOM_RETURN.i32 reads one staging register and writes two (four/two for
+the 64-bit form, all of them for ACMPXCHG), and the pre-scheduling
+liveness relies on that. The scheduler lowers it to *ATOM_C + +ATOM_CX,
+and bi_count_read_registers() counted +ATOM_CX as reading all sr_count
+registers. The post-scheduling liveness (bi_opt_dce_post_ra after
+bi_schedule) therefore saw the upper half of every atomic return as
+read, which can keep that register live around a loop.
+
+The scheduler had already decided, with the pre-scheduling liveness,
+that a write to such a register was dead after one tuple and could be
+taken by a passthrough, and allowed it in the last tuple of a clause
+next to a second write. The post-scheduling DCE then kept the write, so
+the last tuple wrote two registers: bi_pack_registers() asserts
+(mode & 0x8) in debug builds and a release build emits an invalid
+first-tuple register block, which the GPU rejects with INSTR_INVALID_ENC.
+
+Seen on Mali-G31 (and in Mesa's G52 expectations as Crash) with
+dEQP-VK.robustness.image_robustness.{bind,push}.notemplate.r32i.
+dontunroll.nonvolatile.storage_image.fmt_qual.img.samples_1.
+{cube,cube_array}.{comp,frag}: a loop of image atomics in a cube face
+loop, "js fault ... INSTR_INVALID_ENC", job killed.
+
+Keep the pseudo-op's atom_opc on the lowered +ATOM_CX (not encoded) and
+count its staging reads the same way as ATOM_RETURN.
+
+Generated-by: LLM
+---
+ src/panfrost/compiler/bifrost/bifrost/bi_schedule.c | 4 ++++
+ src/panfrost/compiler/bifrost/bir.c                 | 9 +++++++++
+ 2 files changed, 13 insertions(+)
+
+diff --git a/src/panfrost/compiler/bifrost/bifrost/bi_schedule.c b/src/panfrost/compiler/bifrost/bifrost/bi_schedule.c
+index a0bdbc9ff07..665716c1b5d 100644
+--- a/src/panfrost/compiler/bifrost/bifrost/bi_schedule.c
++++ b/src/panfrost/compiler/bifrost/bifrost/bi_schedule.c
+@@ -349,6 +349,8 @@ bi_lower_atom_c(bi_context *ctx, struct bi_clause_state *clause,
+    bi_instr *atom_cx =
+       bi_atom_cx_to(&b, pinstr->dest[0], pinstr->src[0], pinstr->src[1],
+                     pinstr->src[2], pinstr->src[0], pinstr->sr_count);
++   /* Not encoded; bi_count_read_registers needs it (ACMPXCHG reads all) */
++   atom_cx->atom_opc = pinstr->atom_opc;
+    tuple->add = atom_cx;
+    bi_remove_instruction(pinstr);
+ 
+@@ -391,6 +393,8 @@ bi_lower_atom_c_64(bi_context *ctx, struct bi_clause_state *clause,
+    bi_instr *atom_cx =
+       bi_atom_cx_to(&b, pinstr->dest[0], pinstr->src[0], pinstr->src[1],
+                     pinstr->src[2], pinstr->src[0], pinstr->sr_count);
++   /* Not encoded; bi_count_read_registers needs it (ACMPXCHG reads all) */
++   atom_cx->atom_opc = pinstr->atom_opc;
+    tuple->add = atom_cx;
+    bi_remove_instruction(pinstr);
+ 
+diff --git a/src/panfrost/compiler/bifrost/bir.c b/src/panfrost/compiler/bifrost/bir.c
+index 8da950f32ae..14f6656c57b 100644
+--- a/src/panfrost/compiler/bifrost/bir.c
++++ b/src/panfrost/compiler/bifrost/bir.c
+@@ -71,6 +71,15 @@ bi_count_read_registers(const bi_instr *ins, unsigned s)
+       return (ins->atom_opc == BI_ATOM_OPC_ACMPXCHG) ? 2 : 1;
+    else if (s == 0 && ins->op == BI_OPCODE_ATOM_RETURN_I64)
+       return (ins->atom_opc == BI_ATOM_OPC_ACMPXCHG) ? 4 : 2;
++   /* +ATOM_CX is what the scheduler lowers ATOM_RETURN to (bi_lower_atom_c*),
++    * and it keeps the pseudo-op's atom_opc, so it must read the same staging
++    * registers. Otherwise the post-scheduling liveness sees the upper half
++    * of the return as read, keeps writes the scheduler assumed dead, and the
++    * last tuple of a clause can end up with two register writes (invalid
++    * encoding, INSTR_INVALID_ENC on the GPU). */
++   else if (s == 0 && ins->op == BI_OPCODE_ATOM_CX)
++      return (ins->atom_opc == BI_ATOM_OPC_ACMPXCHG) ? ins->sr_count
++                                                     : MAX2(ins->sr_count / 2, 1);
+    else if (s == 0 && bi_get_opcode_props(ins)->sr_read)
+       return bi_count_staging_registers(ins);
+    else if (s == 4 && ins->op == BI_OPCODE_BLEND)

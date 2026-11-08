@@ -1,0 +1,68 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 6 Nov 2026 22:42:31 +0000
+Subject: [PATCH] panvk: make the ARM core builtins safe on Bifrost
+
+The Vulkan 1.1 enable for Bifrost exposes VK_ARM_shader_core_builtins
+on v6/v7, but the compiler only handled the builtins on v9+ (assert on
+debug builds). Bifrost has the core_id and warp_id FAU slots (FAU 3 and
+2, as the disassembler names them), so allow those two on every arch.
+What the high words of those slots hold on Bifrost is not known, so
+CoreCountARM and WarpMaxIDARM are inlined from the shaderCoreCount and
+shaderWarpsPerCore properties before Valhall instead.
+
+Host dump (panfrost drm-shim, PAN_GPU_ID=7093): the probe shader reads
+core_id.x and warp_id.x only, count and max id are constants.
+
+Generated-by: LLM
+---
+ src/panfrost/compiler/bifrost/bifrost_compile.c |  3 +--
+ src/panfrost/vulkan/panvk_vX_shader.c           | 12 ++++++++++++
+ 2 files changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/src/panfrost/compiler/bifrost/bifrost_compile.c b/src/panfrost/compiler/bifrost/bifrost_compile.c
+index 96267e043b5..046f66d3e53 100644
+--- a/src/panfrost/compiler/bifrost/bifrost_compile.c
++++ b/src/panfrost/compiler/bifrost/bifrost_compile.c
+@@ -2244,17 +2244,16 @@ bi_emit_intrinsic(bi_builder *b, nir_intrinsic_instr *instr)
+       break;
+ 
+    case nir_intrinsic_load_core_id:
+-      assert(b->shader->arch >= 9);
+       bi_mov_i32_to(b, dst, bi_fau(BIR_FAU_CORE_ID, false));
+       break;
+ 
+    case nir_intrinsic_load_core_count_arm:
++      /* Inlined by the driver before Valhall. */
+       assert(b->shader->arch >= 9);
+       bi_mov_i32_to(b, dst, bi_iadd_u32(b, bi_fau(BIR_FAU_CORE_ID, true), bi_imm_u32(1), false));
+       break;
+ 
+    case nir_intrinsic_load_warp_id_arm:
+-      assert(b->shader->arch >= 9);
+       bi_mov_i32_to(b, dst, bi_fau(BIR_FAU_WARP_ID, false));
+       break;
+ 
+diff --git a/src/panfrost/vulkan/panvk_vX_shader.c b/src/panfrost/vulkan/panvk_vX_shader.c
+index 249dfeace15..a7ea67b8e8f 100644
+--- a/src/panfrost/vulkan/panvk_vX_shader.c
++++ b/src/panfrost/vulkan/panvk_vX_shader.c
+@@ -500,6 +500,18 @@ panvk_preprocess_nir(struct vk_physical_device *vk_pdev,
+    NIR_PASS(_, nir, nir_inline_sysval, nir_intrinsic_load_core_max_id_arm,
+             core_max_id);
+ 
++#if PAN_ARCH < 9
++   /* Bifrost has the core_id and warp_id FAU slots, but what their high
++    * words hold is not known, so the core count and the maximum warp id are
++    * inlined from the properties reported for VK_ARM_shader_core_builtins.
++    */
++   NIR_PASS(_, nir, nir_inline_sysval, nir_intrinsic_load_core_count_arm,
++            util_bitcount64(pdev->kmod.dev->props.shader_present));
++   NIR_PASS(_, nir, nir_inline_sysval, nir_intrinsic_load_warp_max_id_arm,
++            pdev->kmod.dev->props.max_threads_per_core /
++               (pan_subgroup_size_gpu(pdev->kmod.dev->props.gpu_id) * 2) - 1);
++#endif
++
+    pan_preprocess_nir(nir, pdev->kmod.dev->props.gpu_id);
+ }
+ 

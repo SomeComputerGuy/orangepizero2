@@ -209,3 +209,8 @@ manual ssh (job 70's "Host key verification failed"). Estimate 1-2 h (job 70 = 4
    max_concurrent (2) by design; open upstream-known items (lines x3, global_priority x2) go on the work list
    (qpa in logs/runner-fix/files/part-00/). Then patches/mesa refresh from the fork (image integration, coordinator),
    record in impl-gpu-spec.md 4c, and hand step 3 (1.2+ scope) to the coordinator.
+
+## Integrated (2026-11-08, image agent)
+Job 71 ALL PASS -> patches/mesa regenerated from mesa-26.2.4..26cb3c93a58 (36 patches, fuzz 0 on Ubuntu 26.2.4-1ubuntu1),
+mesa 26.2.4-1ubuntu1+opiz2.2 built in out/debs-media (file lists = +opiz2.1). Image check 9 expects apiVersion 1.1.x.
+Pending: the user's next build + image check. Next Vulkan item: step 3 (1.2+ scope vs the G31).

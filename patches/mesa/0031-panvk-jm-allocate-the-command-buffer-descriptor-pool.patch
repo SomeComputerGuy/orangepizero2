@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 6 Nov 2026 23:16:29 +0000
+Subject: [PATCH] panvk/jm: allocate the command buffer descriptor pool on
+ first use
+
+The JM command buffer preallocated a 64 KiB descriptor BO in
+panvk_create_cmdbuf(), before the command buffer is ever recorded.
+dEQP-VK.api.command_buffers.allocate_many_primary/secondary allocate
+10000 command buffers, which made that 625 MiB of GPU memory for empty
+command buffers: on a 1 GiB Mali-G31 board deqp-vk was OOM-killed in
+a 600 MB memory cgroup.
+
+panvk_pool_alloc_mem() already allocates a backing BO when the pool has
+none, and the CSF command buffers create all their pools without
+prealloc, so do the same here.
+
+Host (drm-shim, G31): allocate_many_primary maps 20000 64 KiB BOs
+before, 0 after; execute_small/large_primary still pass.
+
+Generated-by: LLM
+---
+ src/panfrost/vulkan/jm/panvk_vX_cmd_buffer.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/panfrost/vulkan/jm/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/jm/panvk_vX_cmd_buffer.c
+index 9f5323ad67a..8f9d77abeef 100644
+--- a/src/panfrost/vulkan/jm/panvk_vX_cmd_buffer.c
++++ b/src/panfrost/vulkan/jm/panvk_vX_cmd_buffer.c
+@@ -449,7 +449,10 @@ panvk_create_cmdbuf(struct vk_command_pool *vk_pool, VkCommandBufferLevel level,
+          panvk_device_adjust_bo_flags(device, PAN_KMOD_BO_FLAG_WB_MMAP),
+       .slab_size = 64 * 1024,
+       .label = "Command buffer descriptor pool",
+-      .prealloc = true,
++      /* Allocated on first use, like the other pools: a 64 KiB BO per
++       * command buffer up front costs 640 MiB of GPU memory for the 10000
++       * command buffers of dEQP-VK.api.command_buffers.allocate_many_*. */
++      .prealloc = false,
+       .owns_bos = true,
+       .needs_locking = false,
+    };

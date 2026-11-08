@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Sat, 7 Nov 2026 22:35:23 +0000
+Subject: [PATCH] panvk: always set explicit_pad_B when laying out an image
+
+000362f6ff4 ("panvk: reserve the overfetch slack for explicit 24/96-bit
+image layouts") set panvk_image_plane::explicit_pad_B only for explicit
+24/96-bit planes. vkGetDeviceImageMemoryRequirements() and the sparse
+memory requirement queries initialize a panvk_image on the stack, so for
+every other image the field kept stack garbage and the reported size
+differed from vkGetImageMemoryRequirements() on a created image:
+dEQP-VK.memory.requirements.create_info.image.{regular,transient}_tiling_*
+and dEQP-VK.api.invariance.memory{,_dedicated}_requirements_matching
+failed.
+
+Assign the field for every plane in panvk_image_init_layouts().
+
+Generated-by: LLM
+---
+ src/panfrost/vulkan/panvk_image.c | 11 +++++++----
+ 1 file changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/src/panfrost/vulkan/panvk_image.c b/src/panfrost/vulkan/panvk_image.c
+index 45b8ccd0da2..a3950615716 100644
+--- a/src/panfrost/vulkan/panvk_image.c
++++ b/src/panfrost/vulkan/panvk_image.c
+@@ -499,10 +499,13 @@ panvk_image_init_layouts(struct panvk_image *image,
+ 
+       /* Explicit layouts are exact. Reserve the same overfetch slack in the
+        * memory requirements as a layout we choose has, so an imported image
+-       * needs as much memory as the exported one it describes. */
+-      if (explicit_info &&
+-          pan_image_needs_overfetch_pad(pan_img->props.format, pan_plane))
+-         image->planes[plane].explicit_pad_B = PAN_IMAGE_OVERFETCH_PAD_B;
++       * needs as much memory as the exported one it describes. Always set
++       * it: vkGetDeviceImageMemoryRequirements() and the sparse queries
++       * initialize a panvk_image on the stack. */
++      image->planes[plane].explicit_pad_B =
++         explicit_info &&
++         pan_image_needs_overfetch_pad(pan_img->props.format, pan_plane) ?
++         PAN_IMAGE_OVERFETCH_PAD_B : 0;
+ 
+       if (!is_disjoint(image) && !explicit_info)
+          plane_layout.offset_B += image->planes[plane].plane.layout.data_size_B;

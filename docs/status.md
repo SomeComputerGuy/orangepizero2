@@ -29,7 +29,7 @@ known gap · **GAP** no driver anywhere.
 | HDMI video | OK\* | Pipeline bound; no display yet. Blend-mode warnings fixed (0). |
 | HDMI audio | OK\* | ALSA card present; needs a display. |
 | Analog audio | OK\* (line-out) | DAC-only by hardware (no MIC). Needs expansion board. |
-| GPU Mali-G31 (panfrost) | PARTIAL | devfreq 306–600 MHz. GLES 3.1 PASS; Mesa fork (+opiz2.1) in every variant since 2026-11-07: Vulkan 1.0 (panvk, PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1 set system-wide), OpenCL 3.0 (rusticl) PASS on the image (job 69). No AFBC on this GPU. Vulkan 1.1 under test (job 68); GLES 3.2 open. |
+| GPU Mali-G31 (panfrost) | PARTIAL | devfreq 306–600 MHz. GLES 3.1 PASS; Mesa fork (+opiz2.1) in every variant since 2026-11-07: Vulkan 1.0 (panvk, PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1 set system-wide), OpenCL 3.0 (rusticl) PASS on the image (job 69). No AFBC on this GPU. Vulkan 1.1 board PASS (jobs 68/71), integrated as Mesa +opiz2.2 (pending the next build + image check); GLES 3.2 open. |
 | Video decode (Cedrus) | PARTIAL | Bit-exact: MPEG-2, H.264, HEVC, VP8, VP9 P2, HEVC Main10. H.264 4K 42.0 fps (spec 4K30 OK); HEVC 8-bit 4K 81.8 fps, 6K 30.2 fps; HEVC Main10 4K 24.5 fps and VP9 P2 4K 35.6 fps via P010, vs. spec 4K60 (4K60 met via AFBC; AFBC output bit-exact vs. linear, job 54); Main10 6K OOM. Uses Jernej Skrabec's unposted H616 work. |
 | AVS2 decode | PARTIAL | New cedrus uAPI + backend: 8-bit bit-exact on 17 streams, 4K Main10 58.5 fps; 10-bit only self-consistent; no FFmpeg path yet (harness avs2dec). |
 | Video encode (H.264, JPEG) | PARTIAL | New cedrus stateless H.264 encoder (CAVLC, I+P) in the image; job 39 PASS on 7 sizes. JPEG encode not done. `harness/research/ve-encoder/`. |
@@ -76,15 +76,16 @@ Mode: LOW-CREDIT (one agent at a time, runner included). Per-task state: each ta
 Test kernels: cumulative cN on test-cumulative (kernel-check/cumulative-kernels.txt); newest c48 (b82264f81).
 Image branch stonking-orangepizero2 = e79177038 (9ba317178 = armbian/build main merged, kernel 7.3.3, + fix/build-warnings:
 0 C/modpost/dtc warnings on a clean check build; pushed to fork). Desktop FFmpeg 0320 compose crop added (rev 5, 81d1c2a).
-Mesa fork: github.com/SomeComputerGuy/mesa, branch panfrost-opencl-fixes (mesa-26.2.4 + 32 commits, 9d278fabfc2).
+Mesa fork: github.com/SomeComputerGuy/mesa, branch panfrost-opencl-fixes (mesa-26.2.4 + 36 commits, 26cb3c93a58 = patches/mesa).
 
 ### A. Running
-- Job 68 (Vulkan 1.1 full dEQP-VK) DONE 2026-11-07 21:04: 64/64 parts, 3,247,552 cases: Pass 684,180, NotSupported
-  2,562,827, Fail 526 (504 = glsl.texture_functions *offset* + texturequerylod), Crash 9 (parts 45/46/57; 8 js faults),
-  QualityWarning 8, ResourceError 2; 8 INSTR_INVALID_ENC lines; vs system Mesa 1.0 main1in100: 1 regression, 482 fixed.
-  --check FAIL 3 (d9), 7, 8, 9. Summaries: harness/runner-queue/68-vk11-main.chunk-{1,3}.summary.md.
-- Coding: Opus agent on item 16 (classify + fix job 68's failures in the fork, then queue runner job 70-vk11-fix).
-- Board idle (LOW-CREDIT: the coding agent is the one agent).
+- Vulkan 1.1 (item 16) DONE on the board: job 68 full dEQP-VK + fixes, job 71 ALL PASS on fork 26cb3c93a58 (0 regressions
+  vs job 68 and vs the system Mesa 26.2.4 / job 52 baselines; summary harness/runner-queue/done/71-vk11-fix2.summary.md).
+  Integrated 2026-11-07: patches/mesa = mesa-26.2.4..26cb3c93a58 (36 patches, fuzz 0), mesa 26.2.4-1ubuntu1+opiz2.2 in
+  out/debs-media (build 2026-11-08 rc 0, emulated, mesa only: 16 debs, same packages and file lists as +opiz2.1 apart from
+  the libgallium-<version>.so name, libvulkan_panfrost.so present, changelog lists the 36 patches). Image check 9 now expects apiVersion 1.1.x.
+  Pending: the user's next ./build-all.sh, then the image check (runner job, harness/research/image-check/runner).
+- Board idle (LOW-CREDIT).
 
 ### B. Image integration (DONE 2026-11-07: built by the user, board check job 69 PASS)
 1. DONE: board-PASS kernel fixes (AFBC compose offset, writeback retry, cedrus JPEG drain + S_FMT with CAPTURE buffers
@@ -96,7 +97,7 @@ Mesa fork: github.com/SomeComputerGuy/mesa, branch panfrost-opencl-fixes (mesa-2
    Build check (build-kernel.sh, KVER=7.3.3): 879 patches applied, 0 failed, build exit 0, 0 C warnings, dtbs exit 0,
    17 dtc warnings = all the pre-existing pine64-7inch-lcd / nanopi-r1s-h5 ones, 61 h616 overlays.
 3. DONE: scripts/build-media-debs.sh builds ffmpeg, mpv, gst-plugins-bad1.0 (patches/gstreamer), gst-plugins-good1.0
-   (patches/gst-plugins-good1.0 0101-0102, job 57) and mesa (patches/mesa = fork 0e274280595, 28 patches, fuzz 0),
+   (patches/gst-plugins-good1.0 0101-0102, job 57) and mesa (patches/mesa = fork 26cb3c93a58, 36 patches, fuzz 0, +opiz2.2 since 2026-11-07; was 0e274280595 / 28 / +opiz2.1),
    all by default, emulated arm64 (qemu-user) as before. The build stamp covers only the marked build recipe, so
    comment/source-list edits don't force rebuilds. build.sh runs it for every variant (unchanged sources are skipped).
    A Mesa cross build was tried (user request 2026-11-07) and is blocked by packaging: llvm-22-dev:arm64 ->
@@ -117,8 +118,8 @@ Mesa fork: github.com/SomeComputerGuy/mesa, branch panfrost-opencl-fixes (mesa-2
    assume a 7.3.1 stock kernel. Still open after 69: the GNOME desktop with the variable set (GTK4 renderer choice) on
    a display; older runner packages in harness/research/*/runner still hardcode vmlinuz-7.3.1-edge-sunxi64 in their
    own restore() (only matters if one of them is rerun).
-   Mesa fork on GitHub: github.com/SomeComputerGuy/mesa, branch panfrost-opencl-fixes (= mesa-26.2.4 + 32 commits, 9d278fabfc2;
-   local remote "github" in mesa-work/mesa-cl). Debs are still built from patches/mesa.
+   Mesa fork on GitHub: github.com/SomeComputerGuy/mesa, branch panfrost-opencl-fixes (= mesa-26.2.4 + 36 commits, 26cb3c93a58;
+   local remote "github" in mesa-work/mesa-cl). Debs are built from patches/mesa (= that HEAD).
 
 ### C. Coding queue (one fresh agent at a time, in order)
 6. Ethernet: bulk host->board TCP stalls at exactly 512 KiB and 8000-byte pings lose ~33 % after ~1 h (seen on debug
@@ -133,9 +134,10 @@ Mesa fork: github.com/SomeComputerGuy/mesa, branch panfrost-opencl-fixes (mesa-2
     MPEG-4 VOL LOW_DELAY flag when the OPi5 draft is final; take OPi5 FFmpeg 0314 (copy only).
 14. Upstream GStreamer bug: v4l2videodec swallows not-negotiated on the output thread (EOS with no frame).
 15. GLES 3.2 in panfrost (fork branch panfrost-gs-tess; Arm blob traces, then GS/tess lowering, then KHR-GLES32).
-16. Vulkan step 2 = Vulkan 1.1 on G31 (user go 2026-11-06): version gate + chunk-1 OOM and d9 fixes in fork 9d278fabfc2;
-    full run = job 68 (section A). Then: compare with job 52 (1.0), fix the failures (part 15 texture-offset group first),
-    fix the d9 --check condition. Step 3 later: scope 1.2+ features vs. G31 hardware.
+16. Vulkan step 2 = Vulkan 1.1 on G31: board PASS (job 68 full dEQP-VK, fixes verified by jobs 70/71, job 71 ALL PASS on
+    fork 26cb3c93a58); integrated as Mesa +opiz2.2 (patches/mesa 36), pending the user's next build + image check
+    (check 9 = apiVersion 1.1.x). Remaining non-pass by design: waiver 4936 (500), conformance_version (1),
+    max_concurrent (2); upstream-known lines x3 + global_priority x2 open. Step 3 later: scope 1.2+ vs. G31 hardware.
 17. Bluetooth LE connect + GATT (needs a phone; the host's LL privacy blocks a host test).
 18. Media debs cross-build (user go 2026-11-07): port scripts/build-media-debs.sh to the persistent chroot
     (~/.local/bin/arm64-chroot), cross-build every media deb, verify each against the archive debs (symbols, files,

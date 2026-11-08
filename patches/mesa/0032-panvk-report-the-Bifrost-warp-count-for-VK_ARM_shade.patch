@@ -1,0 +1,111 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 6 Nov 2026 23:16:30 +0000
+Subject: [PATCH] panvk: report the Bifrost warp count for
+ VK_ARM_shader_core_builtins
+
+shaderWarpsPerCore was max_threads_per_core / (warp size * 2) on every
+arch. On Bifrost every thread slot can belong to its own warp: the G31
+(512 threads, 4-wide warps) holds up to 128 warps, and with the
+advertised 64 about half of the warps of a dispatch read a WarpIDARM
+above WarpMaxIDARM (63) on the board.
+
+Report max_threads_per_core / warp size before Valhall, and inline
+WarpMaxIDARM as that value minus one from the same helper so the
+property and the builtin cannot disagree. Valhall keeps the upstream
+value.
+
+Generated-by: LLM
+---
+ src/panfrost/vulkan/panvk_physical_device.c   | 19 +++++++++++++++++++
+ src/panfrost/vulkan/panvk_physical_device.h   |  3 +++
+ .../vulkan/panvk_vX_physical_device.c         |  3 +--
+ src/panfrost/vulkan/panvk_vX_shader.c         |  6 +++---
+ 4 files changed, 26 insertions(+), 5 deletions(-)
+
+diff --git a/src/panfrost/vulkan/panvk_physical_device.c b/src/panfrost/vulkan/panvk_physical_device.c
+index 3f25829a86d..902797e97d3 100644
+--- a/src/panfrost/vulkan/panvk_physical_device.c
++++ b/src/panfrost/vulkan/panvk_physical_device.c
+@@ -34,6 +34,7 @@
+ #include "panvk_physical_device.h"
+ #include "panvk_wsi.h"
+ 
++#include "compiler/pan_compiler.h"
+ #include "pan_afbc.h"
+ #include "pan_props.h"
+ 
+@@ -915,6 +916,24 @@ panvk_get_max_buffer_size(const struct panvk_physical_device *device)
+    return MIN2(max_desc_size, device->memory.max_supported_va);
+ }
+ 
++uint32_t
++panvk_get_shader_warps_per_core(const struct panvk_physical_device *device)
++{
++   const uint64_t gpu_id = device->kmod.dev->props.gpu_id;
++   const unsigned warp_size = pan_subgroup_size_gpu(gpu_id);
++
++   /* Bifrost: max_threads_per_core thread slots in warps of warp_size, so
++    * up to max_threads_per_core / warp_size warps per core (128 on the G31:
++    * 512 threads, 4-wide warps). With half of that, about half of the warps
++    * read a WARP_ID above the advertised maximum. Valhall keeps the upstream
++    * value.
++    */
++   if (pan_arch(gpu_id) < 9)
++      return device->kmod.dev->props.max_threads_per_core / warp_size;
++
++   return device->kmod.dev->props.max_threads_per_core / (warp_size * 2);
++}
++
+ static VkFormatFeatureFlags2
+ get_image_format_sample_counts(struct panvk_physical_device *physical_device,
+                                VkFormat format)
+diff --git a/src/panfrost/vulkan/panvk_physical_device.h b/src/panfrost/vulkan/panvk_physical_device.h
+index c44a66113f4..1553bcb0b76 100644
+--- a/src/panfrost/vulkan/panvk_physical_device.h
++++ b/src/panfrost/vulkan/panvk_physical_device.h
+@@ -108,6 +108,9 @@ panvk_get_max_resource_size(const struct panvk_physical_device *device);
+ VkDeviceSize
+ panvk_get_max_buffer_size(const struct panvk_physical_device *device);
+ 
++uint32_t
++panvk_get_shader_warps_per_core(const struct panvk_physical_device *device);
++
+ #ifdef PAN_ARCH
+ void panvk_per_arch(get_physical_device_extensions)(
+    const struct panvk_physical_device *device,
+diff --git a/src/panfrost/vulkan/panvk_vX_physical_device.c b/src/panfrost/vulkan/panvk_vX_physical_device.c
+index f24f0749200..34a04c1683d 100644
+--- a/src/panfrost/vulkan/panvk_vX_physical_device.c
++++ b/src/panfrost/vulkan/panvk_vX_physical_device.c
+@@ -1285,8 +1285,7 @@ panvk_per_arch(get_physical_device_properties)(
+       /* VK_ARM_shader_core_builtins */
+       .shaderCoreMask = device->kmod.dev->props.shader_present,
+       .shaderCoreCount = util_bitcount(device->kmod.dev->props.shader_present),
+-      .shaderWarpsPerCore = device->kmod.dev->props.max_threads_per_core /
+-                            (pan_subgroup_size_gpu(device->kmod.dev->props.gpu_id) * 2),
++      .shaderWarpsPerCore = panvk_get_shader_warps_per_core(device),
+ 
+       /* VK_ARM_scheduling_controls */
+       .schedulingControlsFlags =
+diff --git a/src/panfrost/vulkan/panvk_vX_shader.c b/src/panfrost/vulkan/panvk_vX_shader.c
+index a7ea67b8e8f..8e24c2c5d09 100644
+--- a/src/panfrost/vulkan/panvk_vX_shader.c
++++ b/src/panfrost/vulkan/panvk_vX_shader.c
+@@ -503,13 +503,13 @@ panvk_preprocess_nir(struct vk_physical_device *vk_pdev,
+ #if PAN_ARCH < 9
+    /* Bifrost has the core_id and warp_id FAU slots, but what their high
+     * words hold is not known, so the core count and the maximum warp id are
+-    * inlined from the properties reported for VK_ARM_shader_core_builtins.
++    * inlined from the properties reported for VK_ARM_shader_core_builtins
++    * (shaderCoreCount, shaderWarpsPerCore - 1).
+     */
+    NIR_PASS(_, nir, nir_inline_sysval, nir_intrinsic_load_core_count_arm,
+             util_bitcount64(pdev->kmod.dev->props.shader_present));
+    NIR_PASS(_, nir, nir_inline_sysval, nir_intrinsic_load_warp_max_id_arm,
+-            pdev->kmod.dev->props.max_threads_per_core /
+-               (pan_subgroup_size_gpu(pdev->kmod.dev->props.gpu_id) * 2) - 1);
++            panvk_get_shader_warps_per_core(pdev) - 1);
+ #endif
+ 
+    pan_preprocess_nir(nir, pdev->kmod.dev->props.gpu_id);

@@ -4,7 +4,7 @@
 # harness/REFLASH.md procedure, scripted), then check the image: kernel + boot, verify-board.sh (CUPS, scan stack,
 # GStreamer JPEG autoplug, ...), our +opiz2 packages (gst-plugins-bad/-good, Mesa fork), GStreamer elements and JPEG
 # decodes, the gst-libav MPEG-1 fallback (job 24 check 1), PAN_I_WANT_A_BROKEN_VULKAN_DRIVER system-wide, vulkaninfo
-# (panvk, Vulkan 1.0.x), vkcube (needs HDMI), dEQP-VK smoke + job 52's subgroup cases, GLES (eglinfo, kmscube,
+# (panvk, Vulkan 1.1.x since Mesa +opiz2.2), vkcube (needs HDMI), dEQP-VK smoke + job 52's subgroup cases, GLES (eglinfo, kmscube,
 # job 52's gles3 derivate set) and OpenCL (clinfo, job 52's suites) on the SYSTEM Mesa, and dmesg. It also restages
 # /root/cts (harness/analysis/gpu/cts-restage.sh, no --start), which the reflash wipes and job 68 needs.
 #   bash harness/research/image-check/runner/image-check.sh            run (resumable: finished steps are skipped)
@@ -55,7 +55,7 @@ if [ "${1:-}" = --check ]; then
   v=""; for k in LOGIN-ENV ETC-ENVIRONMENT SYSTEMD-SYSTEM SYSTEMD-USER-CONF ENVIRONMENT-D SERVICE-ENV; do [ "$(g venv $k)" = 1 ] || v="$v $k=$(g venv $k)"; done
   [ -z "$v" ] && done_ venv && res 8 "PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1 everywhere" PASS "login, /etc/environment, system + user managers, environment.d, a system service" || res 8 "PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1 everywhere" FAIL "not 1:$v"
   a=$(g vulkan PANVK-API); dv=$(g vulkan PANVK-DEVICE); di=$(g vulkan PANVK-DRIVERINFO)
-  [ "$(g vulkan VULKANINFO)" = rc=0 ] && [[ $a =~ ^1\.0\.[0-9]+$ ]] && [[ $dv == *Mali-G31* ]] && [[ $di == *+opiz2* ]] && res 9 "vulkaninfo panvk (login env)" PASS "apiVersion $a, $dv, $di; without the variable panvk devices: $(g vulkan NO-ENV-PANVK)" || res 9 "vulkaninfo panvk (login env)" FAIL "$(g vulkan VULKANINFO) api=${a:-none} device=${dv:-none} driverInfo=${di:-none}"
+  [ "$(g vulkan VULKANINFO)" = rc=0 ] && [[ $a =~ ^1\.1\.[0-9]+$ ]] && [[ $dv == *Mali-G31* ]] && [[ $di == *+opiz2* ]] && res 9 "vulkaninfo panvk (login env)" PASS "apiVersion $a, $dv, $di; without the variable panvk devices: $(g vulkan NO-ENV-PANVK)" || res 9 "vulkaninfo panvk (login env)" FAIL "$(g vulkan VULKANINFO) api=${a:-none} device=${dv:-none} driverInfo=${di:-none}"
   c=$(g vulkan VKCUBE)
   case $c in "rc=0 "*) res 10 "vkcube --c 100" PASS "$c" ;; "not-run hdmi=disconnected"*) res 10 "vkcube --c 100" NOT-TESTED "$c" ;; *) res 10 "vkcube --c 100" FAIL "${c:-missing}: $(tail -3 $OUT/files/vkcube.txt 2>/dev/null | tr '\n' '|')" ;; esac
   sg=$(grep -c '^SG .* rc=0 result=\[ Pass' $OUT/vulkan.txt 2>/dev/null)

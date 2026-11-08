@@ -1,70 +1,17 @@
-# secrets / per-host state — never commit
-local.env
-harness/id_ed25519
-harness/id_ed25519.pub
-harness/known_hosts
-harness/serial.log
-harness/.tz
-# large / generated
-armbian-build/
-kernel-check/work/
-kernel-check/run.log
-*.img *.img.xz *.sha
-# downloaded third-party repos and agent worktrees
-harness/research/ve-encoder/dl/
-harness/research/gpu-src/
-wt-*/
-kernel-check/tmp/
-kernel-check/work-*/
-kernel-check/run*.log
-kernel-check/*.orig
-kernel-check/*.log
-kernel-check/dl-upstream/
-kernel-check/scratch*/
-docs/vendor/
-images/
-# local build trees, downloads, test data and binaries (not redistributed)
-mesa-work/
-kernel-check/*/
-kernel-check/*.bak-*
-harness/__pycache__/
-harness/known_hosts.old
-harness/afbc-kms-play/out/
-harness/di300test/di300test
-harness/jpegtest/jpegtest
-userpatches/config-example.conf
-harness/research/*/dl/
-harness/research/spi-backup/*.bin
-harness/queue/
-__pycache__/
-harness/avs1dec/avs1dec
-harness/avs1dec/avs1dec-host
-harness/di300test/di300err
-harness/research/dram-warm-reset/*.bin
-harness/research/legacy-dec/iso-refsoft-dl/
-# media debs (scripts/build-media-debs.sh output)
-out/
-build/
-# Arm libmali blob, its traces and symlinks: never commit (Arm EULA, reference only)
-harness/research/arm-blob/
-harness/research/kbase-trace/kbtrace.so
-harness/research/kbase-trace/gles32probe
-harness/research/kbase-trace/kbdecode
-harness/research/g2d/tool/out/
-harness/research/g2d/logs/
-# ve-encoder: built test tool, generated raw clips, runner logs
-harness/research/ve-encoder/tools/out/
-harness/research/ve-encoder/runner/clips/
-harness/research/ve-encoder/logs/
-
-# Runner/test logs stay local, never in the repo (user 2026-11-08)
-logs/
-*.log
-# The repo holds only what is needed to build the image (user 2026-11-08); dev/test tooling and notes stay local.
-/harness/
-/kernel-check/
-/docs/
+# Only the build files are tracked; everything else here stays local.
+/*
+!/.gitignore
+!/README.md
+!/LICENSE
+!/build.sh
+!/build-all.sh
+!/flash-sd.sh
+!/userpatches/
+!/patches/
+/patches/v4l-utils/
+!/scripts/
 /scripts/*
 !/scripts/build-media-debs.sh
-
-/patches/v4l-utils/
+__pycache__/
+*.log
+/userpatches/config-example.conf

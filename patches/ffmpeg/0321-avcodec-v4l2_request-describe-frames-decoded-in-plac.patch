@@ -1,4 +1,4 @@
-From d80101bda73af47a9b145e7cb474f1a8e5d8490f Mon Sep 17 00:00:00 2001
+From 1052c4a8a3042096bc06d1d297fd0e2439ad8e0b Mon Sep 17 00:00:00 2001
 From: Arun Iyengar <aiyengar1990@gmail.com>
 Date: Sun, 8 Nov 2026 21:09:47 +0000
 Subject: [PATCH] avcodec/v4l2_request: describe frames decoded in place with
@@ -22,12 +22,19 @@ two planes are adjusted. Drivers that keep the layout of the buffers
 (TRY_FMT reports the CAPTURE format) are unchanged, and so is every
 stream that does not change the frame size.
 
+Downloads of such a frame (av_hwframe_transfer_data(), e.g. by the
+hwdownload filter, which allocates frames of the frames context size)
+would copy rows of the buffer width with the shorter line stride and
+fail the line size assertion of av_image_copy_plane(): copy the size of
+the frame only, clamped to the destination.
+
 Assisted-by: LLM
 Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
 ---
- libavcodec/v4l2_request.c | 82 +++++++++++++++++++++++++++++++++++++++
- libavcodec/v4l2_request.h |  6 +++
- 2 files changed, 88 insertions(+)
+ libavcodec/v4l2_request.c         | 82 +++++++++++++++++++++++++++++++
+ libavcodec/v4l2_request.h         |  6 +++
+ libavutil/hwcontext_v4l2request.c |  9 +++-
+ 3 files changed, 95 insertions(+), 2 deletions(-)
 
 diff --git a/libavcodec/v4l2_request.c b/libavcodec/v4l2_request.c
 index 937e955..1528ed2 100644
@@ -153,3 +160,23 @@ index 0b7186b..9703cd8 100644
  } V4L2RequestContext;
  
  typedef struct V4L2RequestPictureContext {
+diff --git a/libavutil/hwcontext_v4l2request.c b/libavutil/hwcontext_v4l2request.c
+index 95551af..c1abe1c 100644
+--- a/libavutil/hwcontext_v4l2request.c
++++ b/libavutil/hwcontext_v4l2request.c
+@@ -1374,8 +1374,13 @@ static int v4l2request_transfer_data_from(AVHWFramesContext *hwfc,
+     if (ret)
+         goto fail;
+ 
+-    map->width  = dst->width;
+-    map->height = dst->height;
++    /*
++     * Copy the picture only: a frame decoded in place in larger CAPTURE
++     * buffers can have a line stride shorter than the buffer width (see
++     * ff_v4l2_request_update_frame_size()).
++     */
++    map->width  = FFMIN(dst->width, src->width);
++    map->height = FFMIN(dst->height, src->height);
+ 
+     ret = av_frame_copy(dst, map);
+     if (ret)

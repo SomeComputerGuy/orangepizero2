@@ -1,0 +1,52 @@
+From f90cdf1df6ce71576518f54a86e903d099f91c21 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Sun, 8 Nov 2026 22:07:56 +0000
+Subject: [PATCH] avutil/hwcontext_v4l2request: accept frames smaller than the
+ minimum frame size
+
+Stateless decoders report a stepwise range of frame sizes with
+VIDIOC_ENUM_FRAMESIZES (from 16x16 on Cedrus) and round smaller formats
+up to the minimum in VIDIOC_S_FMT. A stream smaller than the minimum in
+either dimension (VP9 allows 8x8, as in the vp90-2-02-size-08x08 ...
+66x10 conformance vectors) was refused, so hwaccel initialisation failed
+although the hardware decodes such frames into buffers of the minimum
+size.
+
+Only check the maximum of a stepwise range: the formats are rounded up
+by the driver and the frames context already takes the size of the
+CAPTURE format, larger than the frames then. Streams of a supported
+size are unchanged.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavutil/hwcontext_v4l2request.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/libavutil/hwcontext_v4l2request.c b/libavutil/hwcontext_v4l2request.c
+index c1abe1c..066aece 100644
+--- a/libavutil/hwcontext_v4l2request.c
++++ b/libavutil/hwcontext_v4l2request.c
+@@ -352,7 +352,12 @@ static int v4l2request_try_framesize(AVHWFramesContext *hwfc,
+         .pixel_format = pixelformat,
+     };
+ 
+-    // Enumerate and check if frame size is supported
++    /*
++     * Enumerate and check if frame size is supported. Frames smaller than
++     * the minimum frame size of a stepwise range are decoded into buffers
++     * of the minimum size: the driver rounds the formats up, and the frames
++     * context takes the size of the CAPTURE format.
++     */
+     while (ioctl(fctxi->video_fd, VIDIOC_ENUM_FRAMESIZES, &frmsize) >= 0) {
+         if (frmsize.type == V4L2_FRMSIZE_TYPE_DISCRETE &&
+             hwfc->width == frmsize.discrete.width &&
+@@ -360,8 +365,6 @@ static int v4l2request_try_framesize(AVHWFramesContext *hwfc,
+             return 0;
+         } else if ((frmsize.type == V4L2_FRMSIZE_TYPE_STEPWISE ||
+                     frmsize.type == V4L2_FRMSIZE_TYPE_CONTINUOUS) &&
+-                   hwfc->width >= frmsize.stepwise.min_width &&
+-                   hwfc->height >= frmsize.stepwise.min_height &&
+                    hwfc->width <= frmsize.stepwise.max_width &&
+                    hwfc->height <= frmsize.stepwise.max_height) {
+             return 0;

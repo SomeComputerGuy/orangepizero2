@@ -1,7 +1,0 @@
-#!/bin/sh
-# pkg-config for the rusticl cross build: libclc's libexecdir is a runtime path on the target (baked into rusticl
-# as DYNAMIC_LIBCLC_PATH), so drop the sysroot prefix PKG_CONFIG_SYSROOT_DIR adds. Everything else is unchanged.
-case " $* " in
-  *" --variable=libexecdir "*libclc*|*" --variable libexecdir "*libclc*) pkg-config "$@" | sed "s|^$PKG_CONFIG_SYSROOT_DIR/|/|" ;;
-  *) exec pkg-config "$@" ;;
-esac

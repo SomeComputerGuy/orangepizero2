@@ -1,2 +1,0 @@
-caselist /root/cts/deqp-vk/mustpass/vk-subset.txt, 5227 cases, 1 s
-Missing                5227

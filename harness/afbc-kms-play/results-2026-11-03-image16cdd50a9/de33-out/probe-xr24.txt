@@ -1,9 +1,0 @@
-connector HDMI-A-1 (74) connected, 10 modes
-mode 3840x2160 594000 kHz 3840x2160 total 4400x2250 -> 60.0000 Hz
-crtc 52, plane 42 (primary 42), format XR24 modifier 0x0000000000000000
-commit phase after previous vblank: mean 1.496 ms max 92.430 ms, 1499 of 1499 later than the 0.667 ms vertical blanking
-flips 1500, 60.041 flips/s over 24.966 s, mode refresh 60.0000 Hz
-frame interval mean 16.655 ms, sd 2.248 ms
-vblank sequence gaps >1: 1 (6 vblanks repeated a frame)
-queue empty at flip (decoder late): 0
-dt histogram: [<15 ms] 0 [15-16.2 ms] 0 [16.2-17.2 ms] 1498 [17.2-18 ms] 0 [18-34 ms] 0 [34-51 ms] 0 [>=51 ms] 1

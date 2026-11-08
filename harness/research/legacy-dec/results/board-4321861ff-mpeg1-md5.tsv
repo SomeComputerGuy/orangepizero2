@@ -1,7 +1,0 @@
-m1-ccm1	mpeg2/ccm1.mpg	rc=0	irqs=129	PASS	match=129/129	hw_frames=129	first_bad=-
-m1-MEI.stream16	mpeg2/MEI.stream16.long	rc=0	irqs=61	FAIL	match=0/61	hw_frames=61	first_bad=0
-m1-MEI	mpeg2/MEI.stream16v2	rc=0	irqs=4	FAIL	match=0/4	hw_frames=4	first_bad=0
-m1-tcela-16	mpeg2/tcela-16.bits	rc=0	irqs=31	FAIL	match=0/31	hw_frames=31	first_bad=0
-m1-tcela-18	mpeg2/tcela-18.bits	rc=218	irqs=0	FAIL	match=0/0	hw_frames=0	first_bad=-
-m1-tcela-19	mpeg2/tcela-19.bits	rc=0	irqs=31	FAIL	match=0/31	hw_frames=31	first_bad=0
-g-mpeg1-1080p30	gen/mpeg1-1080p30.m1v	rc=0	irqs=300	FAIL	match=0/300	hw_frames=300	first_bad=0

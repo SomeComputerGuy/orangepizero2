@@ -1,6 +1,0 @@
-test,status,duration_s,detail
-dEQP-GLES3.functional.rasterization.interpolation.basic.lines,QualityWarning,0.00,Interpolation was calculated using projected coordinateds
-dEQP-GLES3.functional.rasterization.interpolation.projected.lines,QualityWarning,0.00,Interpolation was calculated using projected coordinateds
-dEQP-GLES3.functional.rasterization.interpolation.projected.lines_wide,QualityWarning,0.00,Interpolation was calculated using projected coordinateds
-dEQP-GLES3.functional.rasterization.fbo.texture_2d.interpolation.lines,QualityWarning,0.00,Interpolation was calculated using projected coordinateds
-dEQP-GLES3.functional.rasterization.fbo.rbo_singlesample.interpolation.lines,QualityWarning,0.00,Interpolation was calculated using projected coordinateds

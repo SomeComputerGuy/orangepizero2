@@ -1,3 +1,0 @@
-m4sp-ti_sdtv	720x576	irqs=0	frames=0	exact=0	best=simple	max=0	psnr_min=0.00	env_max=3	env_psnr_min=55.94	NOHW
-m4sp-ti_vga	640x480	irqs=0	frames=0	exact=0	best=simple	max=0	psnr_min=0.00	env_max=3	env_psnr_min=59.78	NOHW
-m4sp-nok_720p	1280x720	irqs=60	frames=60	exact=0	best=simple	max=255	psnr_min=5.98	env_max=69	env_psnr_min=54.63	FAIL

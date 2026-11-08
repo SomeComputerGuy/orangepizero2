@@ -1,6 +1,0 @@
-test,status,mesa_g52_expectation,detail
-dEQP-VK.api.device_init.create_device_global_priority.basic,Fail,g52-fails:Fail,Fail
-dEQP-VK.api.device_init.create_device_global_priority_khr.basic,Fail,g52-fails:Fail,Fail
-dEQP-VK.api.device_init.create_device_global_priority_query.basic,Fail,new,Fail
-dEQP-VK.api.device_init.create_device_global_priority_query_khr.basic,Fail,new,Fail
-dEQP-VK.api.device_init.create_device_unsupported_features.protected_memory_features,Fail,new,Enabling unsupported features didn't return VK_ERROR_FEATURE_NOT_PRESENT.

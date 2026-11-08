@@ -1,5 +1,0 @@
-caselist /root/cts/deqp-gles/mustpass/gles2-main.txt, 17165 cases, 468 s
-CompatibilityWarning   3
-NotSupported           110
-Pass                   17049
-QualityWarning         3

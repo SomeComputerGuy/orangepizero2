@@ -1,7 +1,0 @@
-m1-ccm1	16x16	irqs=129	frames=129	exact=129	best=simple	max=0	psnr_min=99.00	env_max=0	env_psnr_min=99.00	OK
-m1-MEI.stream16	352x240	irqs=61	frames=61	exact=0	best=faani	max=2	psnr_min=64.18	env_max=2	env_psnr_min=59.94	OK
-m1-MEI	352x240	irqs=4	frames=4	exact=0	best=faani	max=2	psnr_min=67.81	env_max=2	env_psnr_min=63.19	OK
-m1-tcela-16	352x240	irqs=31	frames=31	exact=0	best=faani	max=2	psnr_min=62.66	env_max=3	env_psnr_min=58.35	OK
-m1-tcela-18	720x480	irqs=0	frames=0	exact=0	best=simple	max=0	psnr_min=0.00	env_max=0	env_psnr_min=0.00	NOHW
-m1-tcela-19	768x128	irqs=31	frames=31	exact=0	best=faani	max=2	psnr_min=64.39	env_max=2	env_psnr_min=59.95	OK
-g-mpeg1-1080p30	1920x1080	irqs=300	frames=300	exact=0	best=faani	max=3	psnr_min=64.37	env_max=4	env_psnr_min=63.69	OK

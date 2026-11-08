@@ -1,5 +1,0 @@
-g-vp8-1080p60 gen/vp8-1080p60.webm
-g-h264-high-1080i-mbaff gen/h264-high-1080i-mbaff.mkv
-g-h264-high-1080p60 gen/h264-high-1080p60.mkv
-g-h264-high-cavlc-1080p60 gen/h264-high-cavlc-1080p60.mkv
-g-h264-high-2160p30 vdec/h264-high-2160p30.mkv

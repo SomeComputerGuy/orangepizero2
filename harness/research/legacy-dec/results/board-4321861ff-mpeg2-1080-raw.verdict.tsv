@@ -1,3 +1,0 @@
-g-mpeg2-mphl-1080p60	1920x1080	irqs=65	frames=60	exact=0	best=faani	max=3	psnr_min=69.37	env_max=3	env_psnr_min=64.39	OK
-g-mpeg2-mphl-1080i30	1920x1080	irqs=65	frames=60	exact=0	best=faani	max=3	psnr_min=67.94	env_max=3	env_psnr_min=62.97	OK
-g-mpeg2-mphl-1088p60	1920x1088	irqs=65	frames=60	exact=0	best=faani	max=3	psnr_min=69.41	env_max=3	env_psnr_min=64.45	OK

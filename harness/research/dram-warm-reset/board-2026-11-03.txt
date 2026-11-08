@@ -1,46 +1,0 @@
-reboot 1: pre-temp(cpu ddr)=[53360 50363 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-cold 1: pre-temp(cpu ddr)=[53927 49472 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-cold 2: pre-temp(cpu ddr)=[51578 49229 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-cold 3: pre-temp(cpu ddr)=[51497 48095 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 1: pre-temp(cpu ddr)=[50201 48500 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 2: pre-temp(cpu ddr)=[51254 48257 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 3: pre-temp(cpu ddr)=[50849 49553 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 4: pre-temp(cpu ddr)=[51821 48338 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 5: pre-temp(cpu ddr)=[51173 49229 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 6: pre-temp(cpu ddr)=[51983 48257 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 7: pre-temp(cpu ddr)=[52874 50525 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 8: pre-temp(cpu ddr)=[52064 49148 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 9: pre-temp(cpu ddr)=[52469 50444 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 10: pre-temp(cpu ddr)=[53198 50930 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 11: pre-temp(cpu ddr)=[51659 49634 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 12: pre-temp(cpu ddr)=[52226 49229 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 13: pre-temp(cpu ddr)=[53603 50768 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 14: pre-temp(cpu ddr)=[52874 49310 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 15: pre-temp(cpu ddr)=[53927 50444 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 16: pre-temp(cpu ddr)=[52874 49877 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 17: pre-temp(cpu ddr)=[52712 49877 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 18: pre-temp(cpu ddr)=[51578 50039 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-reboot 19: pre-temp(cpu ddr)=[52307 50525 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 1: pre-temp(cpu ddr)=[52631 51335 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 2: pre-temp(cpu ddr)=[52307 50930 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 3: pre-temp(cpu ddr)=[52469 49310 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 4: pre-temp(cpu ddr)=[51983 49796 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 5: pre-temp(cpu ddr)=[52874 50201 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 6: pre-temp(cpu ddr)=[53279 50525 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 7: pre-temp(cpu ddr)=[52955 50363 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 8: pre-temp(cpu ddr)=[52793 50201 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 9: pre-temp(cpu ddr)=[53522 50525 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 10: pre-temp(cpu ddr)=[51497 49796 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 11: pre-temp(cpu ddr)=[52712 49715 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 12: pre-temp(cpu ddr)=[53117 50363 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 13: pre-temp(cpu ddr)=[52550 49229 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 14: pre-temp(cpu ddr)=[52145 48986 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 15: pre-temp(cpu ddr)=[52064 48986 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 16: pre-temp(cpu ddr)=[52955 49634 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 17: pre-temp(cpu ddr)=[52226 50201 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 18: pre-temp(cpu ddr)=[52307 49553 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 19: pre-temp(cpu ddr)=[52631 49715 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-wdt 20: pre-temp(cpu ddr)=[52793 49958 ] dram=[DRAM: 1024 MiB|DRAM:  1 GiB|] memtotal=997772 ssh=1
-stress-heat 1: temp-at-reset(cpu ddr)=[71585 62513 ] dram=[] memtotal=997772 ssh=1
-stress-heat 2: temp-at-reset(cpu ddr)=[76526 67292 ] dram=[] memtotal=997772 ssh=1
-stress-heat 3: temp-at-reset(cpu ddr)=[77984 69479 ] dram=[] memtotal=997772 ssh=1

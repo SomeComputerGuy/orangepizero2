@@ -1,8 +1,0 @@
-=== /dev/video0
-		fail: v4l2-test-controls.cpp(939): try_ext_ctrls returned an error (22)
-		fail: v4l2-test-formats.cpp(317): duplicate format 31305341 (AS01)
-		fail: v4l2-test-formats.cpp(516): pixelformat 5332474d (MG2S) for buftype 2 not reported by ENUM_FMT
-		fail: v4l2-test-formats.cpp(516): pixelformat 5332474d (MG2S) for buftype 2 not reported by ENUM_FMT
-		fail: v4l2-test-formats.cpp(516): pixelformat 5332474d (MG2S) for buftype 2 not reported by ENUM_FMT
-		fail: v4l2-test-codecs.cpp(161): ret
-Total for cedrus device /dev/video0: 49, Succeeded: 43, Failed: 6, Warnings: 0

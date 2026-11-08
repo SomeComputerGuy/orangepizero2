@@ -1,8 +1,0 @@
-hash0 da8dd7361a96d8a9
-1 rc=0 dt=8.0 cpu=1512000/1512000 gpu=306000000 gpugov=simple_ondemand newerr=2 wake=1/0
-2 rc=0 dt=6.7 cpu=1512000/1512000 gpu=306000000 gpugov=simple_ondemand newerr=2 wake=2/0
-3 rc=0 dt=6.7 cpu=1512000/1512000 gpu=306000000 gpugov=simple_ondemand newerr=2 wake=3/0
-4 rc=0 dt=6.7 cpu=1512000/1512000 gpu=306000000 gpugov=simple_ondemand newerr=2 wake=4/0
-5 rc=0 dt=6.8 cpu=1512000/1512000 gpu=306000000 gpugov=simple_ondemand newerr=2 wake=5/0
-hash1 da8dd7361a96d8a9 SAME
-DONE

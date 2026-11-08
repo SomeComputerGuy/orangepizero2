@@ -60,3 +60,11 @@ harness/research/ve-encoder/logs/
 # Runner/test logs stay local, never in the repo (user 2026-11-08)
 logs/
 *.log
+# The repo holds only what is needed to build the image (user 2026-11-08); dev/test tooling and notes stay local.
+/harness/
+/kernel-check/
+/docs/
+/scripts/*
+!/scripts/build-media-debs.sh
+
+/patches/v4l-utils/

@@ -1,7 +1,0 @@
-host ping -M do -s 1994 (frame 2040 incl FCS): 3 received
-host ping -M do -s 1995 (frame 2041 incl FCS): 3 received
-host ping -M do -s 1996 (frame 2042 incl FCS): 3 received
-host ping -M do -s 1997 (frame 2043 incl FCS): 3 received
-host ping -M do -s 1998 (frame 2044 incl FCS): 3 received
-host ping -M do -s 1999 (frame 2045 incl FCS): 0 received
-host ping -M do -s 2000 (frame 2046 incl FCS): 0 received

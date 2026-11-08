@@ -1,5 +1,0 @@
-caselist /root/cts/deqp-gles/mustpass/gles31-main.txt, 37802 cases, 4512 s
-Fail                   1
-NotSupported           7319
-OOM                    2
-Pass                   30480

@@ -1,7 +1,0 @@
-^(Relationals|Thread\ Dimensions|Atomics|Profiling|Events|Printf|Device\ Partitioning|Buffers|Images\ \(API\ Info\)|Images\ \(Kernel\ 1D\ uint\))$
-^(Images\ \(Kernel\ 2D\ uint\))$
-^(Images\ \(Kernel\ 1D\ float\))$
-^(Images\ \(clCopyImage\ 1D\))$
-^(Images\ \(clCopyImage\ 3D\)|Images\ \(clReadWriteImage\)|Images\ \(clFillImage\ int\)|Images\ \(clFillImage\ uint\))$
-^(Images\ \(clFillImage\ float\)|Images\ \(Samplerless\ int\)|Images\ \(Samplerless\ uint\)|Images\ \(Samplerless\ float\)|Mem\ \(Host\ Flags\)|Select|Contractions)$
-^(Math|Integer\ Ops|Half\ Ops|C11\ Atomics|Execution\ Model|Generic\ Address\ Space|Non\ Uniform\ Work\ Groups|Pipes|SVM|Workgroups|Device\ timer|SPIRV\ new|SPIR|Mipmaps\ \(Kernel\)|Mipmaps\ \(clCopyImage\)|Mipmaps\ \(clReadWriteImage\)|Subgroups|cl_ext_cxx_for_opencl|cl_khr_semaphore|cl_khr_command_buffer|cl_khr_command_buffer_mutable_dispatch|cl_khr_kernel_clock)$

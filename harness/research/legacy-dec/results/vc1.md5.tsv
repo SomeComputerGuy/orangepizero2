@@ -1,8 +1,0 @@
-vc1-SA00040	vc1/SA00040.vc1	rc=0	irqs=7	PASS	match=15/15	hw_frames=15	first_bad=-
-vc1-SA00050	vc1/SA00050.vc1	rc=0	irqs=15	PASS	match=30/30	hw_frames=30	first_bad=-
-vc1-SA10091	vc1/SA10091.vc1	rc=0	irqs=14	PASS	match=30/30	hw_frames=30	first_bad=-
-vc1-SA10143	vc1/SA10143.vc1	rc=0	irqs=60	PASS	match=30/30	hw_frames=30	first_bad=-
-vc1-SA20021	vc1/SA20021.vc1	rc=0	irqs=32	PASS	match=60/60	hw_frames=60	first_bad=-
-vc1-ilaced_twomv	vc1/ilaced_twomv.vc1	rc=0	irqs=19	PASS	match=13/13	hw_frames=13	first_bad=-
-wmv3-SMM0005	vc1/SMM0005.rcv	rc=0	irqs=24	FAIL	match=17/24	hw_frames=24	first_bad=9
-wmv3-SMM0015	vc1/SMM0015.rcv	rc=0	irqs=25	PASS	match=25/25	hw_frames=25	first_bad=-

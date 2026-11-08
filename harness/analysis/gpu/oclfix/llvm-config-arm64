@@ -1,5 +1,0 @@
-#!/bin/sh
-# llvm-config for the arm64 sysroot: host llvm-config (same 22.1.8 Ubuntu build) with paths rewritten.
-MW=/home/aruni/orangepizero2/mesa-work
-LD_LIBRARY_PATH=$MW/deps/host-root/usr/lib/x86_64-linux-gnu:$MW/deps/host-root/usr/lib/llvm-22/lib:/usr/lib/llvm-22/lib \
-  $MW/deps/host-root/usr/lib/llvm-22/bin/llvm-config "$@" | sed "s|$MW/deps/host-root/usr/lib/llvm-22|$MW/sysroot/usr/lib/llvm-22|g"

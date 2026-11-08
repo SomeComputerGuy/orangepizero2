@@ -1,8 +1,0 @@
-#version 450
-#extension GL_KHR_shader_subgroup_basic: enable
-#extension GL_KHR_shader_subgroup_ballot: enable
-layout (local_size_x_id = 0, local_size_y_id = 1, local_size_z_id = 2) in;
-layout (set = 0, binding = 0, std430) buffer Buffer1 { uint result[]; };
-uint off() { uvec3 g = gl_NumWorkGroups * gl_WorkGroupSize; return g.x * ((g.y * gl_GlobalInvocationID.z) + gl_GlobalInvocationID.y) + gl_GlobalInvocationID.x; }
-
-void main() { uint v = gl_SubgroupInvocationID + 1u; result[off()] = subgroupBroadcast(v, 0u) * 256u + subgroupBroadcast(v, 3u); }

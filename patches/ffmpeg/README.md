@@ -1,7 +1,7 @@
 # FFmpeg v4l2-request patches
 
 Base: Ubuntu `ffmpeg 7:8.1.2-2ubuntu2` (= FFmpeg tag n8.1.2). Applied in file-name order, appended to
-debian/patches/series (scripts/build-media-debs.sh). All 43 apply with fuzz 0 on the Ubuntu source.
+debian/patches/series (scripts/build-media-debs.sh). All 44 apply with fuzz 0 on the Ubuntu source.
 
 | range | source |
 |---|---|
@@ -21,6 +21,7 @@ debian/patches/series (scripts/build-media-debs.sh). All 43 apply with fuzz 0 on
 | 0320 | crop the decoder's compose offset (cedrus H.265 AFBC is stored 4 lines down; kernel compose rectangle) |
 | 0321 | frames decoded in place (smaller VP9 inter frames) get the line stride the driver reports with VIDIOC_TRY_FMT for their size (cedrus: the stride of a frame of that width); downloads copy the frame's own size |
 | 0322 | frames smaller than the device's minimum frame size (VP9 8x8 ... 66x10) are decoded into buffers of the minimum size instead of failing hwaccel init |
+| 0323 | frames returned after their decoder session closed (a frame thread re-creating the hwaccel for a VP9 key frame of a new size) no longer dereference the freed session: random crashes on the resize-fp-tiles vectors |
 | debian/0001 | packaging: --enable-v4l2-request --enable-libudev |
 
 uAPIs expected by the add-on hwaccels (local copies in libavcodec/v4l2-stateless-*.h, used only when the kernel

@@ -1,0 +1,85 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Sun, 8 Nov 2026 18:11:56 +0000
+Subject: [PATCH 104/104] v4l2videodec: Report frames the device fails to
+ decode
+
+When the driver returns the bitstream or the picture buffer of a frame
+with V4L2_BUF_FLAG_ERROR, for instance because it refuses a format it
+cannot decode, the frame was dropped with gst_video_decoder_drop_frame().
+That is the QoS drop, which marks the decoder as having produced data,
+and it does not count as a decoding error: a stream of which the device
+decoded nothing ended with EOS, no frame and no error or warning, and
+the application could not tell it from an empty stream.
+
+Count the frame as a decoding error through GST_VIDEO_DECODER_ERROR(),
+which honours the max-errors property, and release it with
+gst_video_decoder_release_frame(). The base class then posts "No valid
+frames decoded before end of stream" when no frame of the stream could
+be decoded, while a stream with occasional bad frames carries on as
+before. Frames still pending after the drain were not decoded either:
+release them as well instead of dropping them.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2/gstv4l2videodec.c | 23 +++++++++++++++++++----
+ 1 file changed, 19 insertions(+), 4 deletions(-)
+
+diff --git a/sys/v4l2/gstv4l2videodec.c b/sys/v4l2/gstv4l2videodec.c
+index 98e7af1..d65d75f 100644
+--- a/sys/v4l2/gstv4l2videodec.c
++++ b/sys/v4l2/gstv4l2videodec.c
+@@ -183,14 +183,27 @@ gst_v4l2_video_dec_close (GstVideoDecoder * decoder)
+   return TRUE;
+ }
+ 
++/* The driver returned the bitstream or the picture buffer of a frame with
++ * V4L2_BUF_FLAG_ERROR: it could not decode it. This is a decoding error, not
++ * a QoS drop: release the frame instead of dropping it, so that the base
++ * class does not count it as decoded data and posts an error at the end of a
++ * stream of which no frame could be decoded, and report it through the
++ * max-errors accounting like a software decoder does. */
+ static void
+ gst_v4l2_video_dec_drop_frame (GstVideoDecoder * decoder, guint frame_number)
+ {
+   GstVideoCodecFrame *frame =
+       gst_video_decoder_get_frame (decoder, frame_number);
++  GstFlowReturn ret = GST_FLOW_OK;
+ 
+-  if (frame)
+-    gst_video_decoder_drop_frame (decoder, frame);
++  if (!frame)
++    return;
++
++  GST_VIDEO_DECODER_ERROR (decoder, 1, STREAM, DECODE,
++      ("Failed to decode frame %u", frame_number),
++      ("the device returned the frame with the error flag"), ret);
++  (void) ret;
++  gst_video_decoder_release_frame (decoder, frame);
+ }
+ 
+ static gboolean
+@@ -702,7 +715,9 @@ gst_v4l2_video_dec_finish (GstVideoDecoder * decoder)
+   /* Draining of the capture buffer has completed.
+    * If any pending frames remain at this point there is a decoder error.
+    * This has been observed as a driver bug, where eos is sent too early.
+-   * These frames will never be rendered, so drop them now with a warning */
++   * These frames will never be rendered, so release them now with a warning.
++   * They were not decoded: releasing rather than dropping them keeps them
++   * from counting as decoded data. */
+ 
+   pending_frames = gst_video_decoder_get_frames (decoder);
+   if (pending_frames) {
+@@ -715,7 +730,7 @@ gst_v4l2_video_dec_finish (GstVideoDecoder * decoder)
+       if (!counter)
+         first = last;
+       counter++;
+-      gst_video_decoder_drop_frame (decoder, frame);
++      gst_video_decoder_release_frame (decoder, frame);
+     }
+     if (self->output_flow == GST_FLOW_OK) {
+       g_warning ("%s: %i frames %u-%u left undrained after CMD_STOP, "
+-- 
+2.55.0
+

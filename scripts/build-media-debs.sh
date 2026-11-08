@@ -7,7 +7,8 @@
 #   mpv                 v4l2request hwdec + DRM PRIME interop; needs our ffmpeg (desktop variant only)
 #   gst-plugins-bad1.0  v4l2codecs/kmssink fixes 00xx (patches/gstreamer) and ours 01xx:
 #                       v4l2sljpegdec (cedrus JPEG) and jpegparse sampling-factors caps (every variant)
-#   gst-plugins-good1.0 stateful v4l2jpegdec on cedrus: 1:4:0:0 colorimetry, system memory for an ANY peer
+#   gst-plugins-good1.0 stateful v4l2jpegdec on cedrus: 1:4:0:0 colorimetry, system memory for an ANY peer,
+#                       decode errors reported; jpegdec greyscale with sampling factors above 1
 #                       (every variant)
 #   mesa                our Mesa fork for the Mali-G31 (panfrost/panvk/rusticl fixes, patches/mesa/README.md;
 #                       every variant)
@@ -96,7 +97,7 @@ declare -A VERSION=(
   [gst-plugins-good1.0]=1.28.7-1build1
   [mesa]=26.2.4-1ubuntu1
 )
-declare -A REV=([ffmpeg]=5 [mpv]=1 [gst-plugins-bad1.0]=1 [gst-plugins-good1.0]=1 [mesa]=2)
+declare -A REV=([ffmpeg]=5 [mpv]=1 [gst-plugins-bad1.0]=1 [gst-plugins-good1.0]=2 [mesa]=2)
 declare -A PDIR=([ffmpeg]=ffmpeg [mpv]=mpv [gst-plugins-bad1.0]=gstreamer [gst-plugins-good1.0]=gst-plugins-good1.0 [mesa]=mesa)
 # Architecture: all sources (built with -A); the rest build their arm64 packages
 declare -A BUILD=()

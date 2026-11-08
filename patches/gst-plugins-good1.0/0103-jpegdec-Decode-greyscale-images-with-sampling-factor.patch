@@ -1,0 +1,80 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Sun, 8 Nov 2026 18:11:56 +0000
+Subject: [PATCH 103/104] jpegdec: Decode greyscale images with sampling
+ factors above 1
+
+A single component JPEG may declare sampling factors other than 1x1:
+its scan is non-interleaved and an MCU is one block, but libjpeg still
+hands out raw data one iMCU row at a time, max_v_samp_factor block rows
+high. The greyscale path always asked jpeg_read_raw_data() for 8 lines,
+so with a vertical factor of 2 or more libjpeg failed with "Buffer
+passed to JPEG library is too small" and the frame was dropped: no
+output at all for such an image, while libjpeg-turbo's djpeg decodes it.
+
+Read max_v_samp_factor * DCTSIZE lines per call. Up to 32 rows are
+needed (factor 4); the unused chroma row buffers provide rows 16 to 31.
+The output is identical to djpeg's for every factor from 1x1 to 4x4.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ ext/jpeg/gstjpegdec.c | 22 ++++++++++++++++++----
+ 1 file changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/ext/jpeg/gstjpegdec.c b/ext/jpeg/gstjpegdec.c
+index 7523419..96a1561 100644
+--- a/ext/jpeg/gstjpegdec.c
++++ b/ext/jpeg/gstjpegdec.c
+@@ -680,16 +680,27 @@ static void
+ gst_jpeg_dec_decode_grayscale (GstJpegDec * dec, GstVideoFrame * frame,
+     guint field, guint num_fields)
+ {
+-  guchar *rows[16];
++  guchar *rows[4 * DCTSIZE];
+   guchar **scanarray[1] = { rows };
+   gint i, j, k;
+-  gint lines;
++  gint lines, lines_per_imcu;
+   guint8 *base[1];
+   gint width, height;
+   gint pstride, rstride;
+ 
+   GST_DEBUG_OBJECT (dec, "indirect decoding of grayscale");
+ 
++  /* jpeg_read_raw_data() takes one iMCU row at a time: max_v_samp_factor
++   * block rows. A single component image may still declare sampling factors
++   * other than 1x1 (up to 4), the scan is then non-interleaved but the iMCU
++   * row is still v_samp_factor blocks high. */
++  lines_per_imcu = dec->cinfo.max_v_samp_factor * DCTSIZE;
++  if (G_UNLIKELY (lines_per_imcu > G_N_ELEMENTS (rows))) {
++    GST_WARNING_OBJECT (dec, "unsupported vertical sampling factor %d",
++        dec->cinfo.max_v_samp_factor);
++    return;
++  }
++
+   width = GST_VIDEO_FRAME_WIDTH (frame);
+   height = GST_VIDEO_FRAME_HEIGHT (frame) / num_fields;
+ 
+@@ -704,13 +715,16 @@ gst_jpeg_dec_decode_grayscale (GstJpegDec * dec, GstVideoFrame * frame,
+   pstride = GST_VIDEO_FRAME_COMP_PSTRIDE (frame, 0);
+   rstride = GST_VIDEO_FRAME_COMP_STRIDE (frame, 0) * num_fields;
+ 
++  /* Up to 32 rows: the grey image has no chroma, so the chroma row buffers
++   * serve as rows 16 to 31 */
+   memcpy (rows, dec->idr_y, 16 * sizeof (gpointer));
++  memcpy (rows + 16, dec->idr_u, 16 * sizeof (gpointer));
+ 
+   i = 0;
+   while (i < height) {
+-    lines = jpeg_read_raw_data (&dec->cinfo, scanarray, DCTSIZE);
++    lines = jpeg_read_raw_data (&dec->cinfo, scanarray, lines_per_imcu);
+     if (G_LIKELY (lines > 0)) {
+-      for (j = 0; (j < DCTSIZE) && (i < height); j++, i++) {
++      for (j = 0; (j < lines_per_imcu) && (i < height); j++, i++) {
+         gint p;
+ 
+         p = 0;
+-- 
+2.55.0
+

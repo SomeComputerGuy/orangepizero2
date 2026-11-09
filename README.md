@@ -23,6 +23,6 @@ License: GPL-2.0-only.
 
 ## Testing
 
-Verified on the board (2026-11-08 image, kernel 7.3.3): boot, SD, SPI NOR, DVFS, thermal, suspend, Gigabit Ethernet, WiFi, Bluetooth,
+Verified on the board (2026-11-09 image, kernel 7.3.3): boot, SD, SPI NOR, DVFS, thermal, suspend, Gigabit Ethernet, WiFi, Bluetooth,
 GPU (GLES 3.1, Vulkan 1.1 full dEQP-VK with 0 regressions, OpenCL 3.0), hardware video decode
-(MPEG-2, H.264, HEVC, VP8, VP9, AVS2) and H.264 encode. Not yet tested: HDMI output, USB devices, end-to-end printing.
+(MPEG-2, H.264, HEVC incl. Main10 4K60 and 6K30, VP8, VP9 incl. resolution changes, AVS2, JPEG) and H.264 encode. Not yet tested: HDMI output, USB devices, end-to-end printing.

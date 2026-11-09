@@ -1,0 +1,279 @@
+From 8f2a112e6ea9cc5861484efa488a929736229698 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Mon, 9 Nov 2026 21:45:09 +0000
+Subject: [PATCH] avutil/hwcontext_v4l2request: decode scaled down when the
+ CAPTURE pool does not fit
+
+A CAPTURE buffer of a 6144x3456 10-bit H.265 picture takes 111 MB on
+Cedrus (P010 plus the decoder's hidden reference surface), so the pool
+a decoder needs does not fit on a board with 1 GB of memory: the
+allocation fails part way through the stream, or, on kernels without
+__GFP_RETRY_MAYFAIL, the OOM killer ends other processes.
+
+A decoder that can write the pictures scaled down (Cedrus H.265 10-bit
+from 5K up: half the coded size, the vendor's display path for these
+sizes; the verisilicon G2 post-processor: 1/2, 1/4, 1/8) lists the
+sizes with VIDIOC_ENUM_FRAMESIZES on the CAPTURE pixel format, largest
+first, and selects one with the size of the CAPTURE format. When the
+pool at the coded size (VIDIOC_TRY_FMT sizeimage times the larger of
+the initial pool size and 8: a full DPB, the picture being decoded and
+one being shown) would take more than half of the available memory
+(MemAvailable), use the largest listed size whose pool fits, or else
+the smallest one. The frames then have the CAPTURE size; the cropping
+the decoder exports in coded samples is scaled to it.
+
+Nothing changes for drivers that do not list CAPTURE frame sizes, for
+pools that fit, and for VP9 and AV1, whose frame size changes within a
+stream (smaller frames are decoded into the existing buffers).
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/v4l2_request.c                  |  17 +++
+ libavutil/hwcontext_v4l2request.c          | 156 ++++++++++++++++++++-
+ libavutil/hwcontext_v4l2request_internal.h |   6 +
+ 3 files changed, 176 insertions(+), 3 deletions(-)
+
+diff --git a/libavcodec/v4l2_request.c b/libavcodec/v4l2_request.c
+index 3af3415..143e702 100644
+--- a/libavcodec/v4l2_request.c
++++ b/libavcodec/v4l2_request.c
+@@ -554,6 +554,23 @@ static int v4l2_request_post_process(void *logctx, AVFrame *frame)
+     if (ret)
+         return ret;
+ 
++    /*
++     * Pictures scaled down by the decoder: the cropping the decoder set is
++     * in coded samples, scale it to the CAPTURE size.
++     */
++    if (fctx->internal->capture.coded_width > hwfc->width ||
++        fctx->internal->capture.coded_height > hwfc->height) {
++        int coded_width = fctx->internal->capture.coded_width;
++        int coded_height = fctx->internal->capture.coded_height;
++
++        frame->crop_left = frame->crop_left * hwfc->width / coded_width;
++        frame->crop_right = (frame->crop_right * hwfc->width +
++                             coded_width - 1) / coded_width;
++        frame->crop_top = frame->crop_top * hwfc->height / coded_height;
++        frame->crop_bottom = (frame->crop_bottom * hwfc->height +
++                              coded_height - 1) / coded_height;
++    }
++
+     /*
+      * The picture starts at an offset in the CAPTURE buffer (compose
+      * rectangle): describe the buffer as that much larger and crop the
+diff --git a/libavutil/hwcontext_v4l2request.c b/libavutil/hwcontext_v4l2request.c
+index 066aece..2fca8a8 100644
+--- a/libavutil/hwcontext_v4l2request.c
++++ b/libavutil/hwcontext_v4l2request.c
+@@ -19,6 +19,7 @@
+ #include "config.h"
+ 
+ #include <fcntl.h>
++#include <stdio.h>
+ #include <linux/dma-buf.h>
+ #include <linux/media.h>
+ #include <sys/ioctl.h>
+@@ -290,6 +291,155 @@ static int v4l2request_set_format(AVHWFramesContext *hwfc,
+     return 0;
+ }
+ 
++/*
++ * Minimum number of CAPTURE buffers a decoder works with: a full DPB
++ * (H.265 MaxDpbSize is 6 at the largest picture size of a level), the
++ * picture being decoded and one being shown.
++ */
++#define V4L2REQUEST_MIN_CAPTURE_BUFFERS 8
++
++static int64_t v4l2request_mem_available(void)
++{
++    char line[128];
++    int64_t kb = -1;
++    FILE *f = fopen("/proc/meminfo", "r");
++
++    if (!f)
++        return -1;
++
++    while (fgets(line, sizeof(line), f)) {
++        long long value;
++        if (sscanf(line, "MemAvailable: %lld kB", &value) == 1) {
++            kb = value;
++            break;
++        }
++    }
++    fclose(f);
++
++    return kb < 0 ? -1 : kb * 1024;
++}
++
++static int64_t v4l2request_capture_sizeimage(AVHWFramesContext *hwfc,
++                                             enum v4l2_buf_type type,
++                                             uint32_t pixelformat,
++                                             uint32_t width, uint32_t height)
++{
++    AVV4L2RequestFramesContext *fctx = hwfc->hwctx;
++    AVV4L2RequestFramesContextInternal *fctxi = fctx->internal;
++    struct v4l2_format format = {
++        .type = type,
++    };
++
++    if (V4L2_TYPE_IS_MULTIPLANAR(type)) {
++        format.fmt.pix_mp.width = width;
++        format.fmt.pix_mp.height = height;
++        format.fmt.pix_mp.pixelformat = pixelformat;
++    } else {
++        format.fmt.pix.width = width;
++        format.fmt.pix.height = height;
++        format.fmt.pix.pixelformat = pixelformat;
++    }
++
++    if (ioctl(fctxi->video_fd, VIDIOC_TRY_FMT, &format) < 0)
++        return -1;
++
++    if (V4L2_TYPE_IS_MULTIPLANAR(type)) {
++        int64_t size = 0;
++        for (int i = 0; i < format.fmt.pix_mp.num_planes; i++)
++            size += format.fmt.pix_mp.plane_fmt[i].sizeimage;
++        return size;
++    }
++
++    return format.fmt.pix.sizeimage;
++}
++
++/*
++ * Set the CAPTURE format, at the coded size or at a smaller size the
++ * decoder can scale the pictures down to. A driver that can scale lists
++ * the sizes it can write with VIDIOC_ENUM_FRAMESIZES on the CAPTURE pixel
++ * format, largest first: the coded size, then scaled-down sizes (Cedrus
++ * H.265 10-bit from 5K up: half the coded size; verisilicon G2: 1/2, 1/4,
++ * 1/8). A pool of buffers at the coded size that would take more than
++ * half of the available memory, leaving too little for the consumer of
++ * the frames and the rest of the system, does not fit: then the largest
++ * listed size whose pool fits is used, or the smallest one. On a 1 GB
++ * board a 6144x3456 10-bit P010 pool needs over 850 MB, and allocating
++ * it fails or forces other processes out; the half-size pool of the same
++ * stream needs about 480 MB.
++ *
++ * VP9 and AV1 change the frame size within a stream and decode smaller
++ * frames into the existing buffers, so they keep the coded size.
++ */
++static int v4l2request_set_capture_format(AVHWFramesContext *hwfc,
++                                          enum v4l2_buf_type type,
++                                          uint32_t pixelformat)
++{
++    AVV4L2RequestFramesContext *fctx = hwfc->hwctx;
++    AVV4L2RequestFramesContextInternal *fctxi = fctx->internal;
++    struct v4l2_frmsizeenum frmsize = {
++        .index = 0,
++        .pixel_format = pixelformat,
++    };
++    int coded_width = hwfc->width, coded_height = hwfc->height;
++    int width = coded_width, height = coded_height;
++    int nb_buffers = FFMAX(hwfc->initial_pool_size,
++                           V4L2REQUEST_MIN_CAPTURE_BUFFERS);
++    int64_t available, budget;
++    int ret;
++
++    fctxi->capture.coded_width = coded_width;
++    fctxi->capture.coded_height = coded_height;
++
++    if (fctx->pixelformat == V4L2_PIX_FMT_VP9_FRAME
++#ifdef V4L2_PIX_FMT_AV1_FRAME
++        || fctx->pixelformat == V4L2_PIX_FMT_AV1_FRAME
++#endif
++        )
++        return v4l2request_set_format(hwfc, type, pixelformat, 0);
++
++    available = v4l2request_mem_available();
++    budget = available / 2;
++
++    while (available > 0 &&
++           ioctl(fctxi->video_fd, VIDIOC_ENUM_FRAMESIZES, &frmsize) >= 0) {
++        int64_t size;
++
++        if (frmsize.type != V4L2_FRMSIZE_TYPE_DISCRETE)
++            break;
++
++        if (frmsize.discrete.width <= coded_width &&
++            frmsize.discrete.height <= coded_height &&
++            frmsize.discrete.width && frmsize.discrete.height) {
++            size = v4l2request_capture_sizeimage(hwfc, type, pixelformat,
++                                                 frmsize.discrete.width,
++                                                 frmsize.discrete.height);
++            if (size <= 0)
++                break;
++
++            width = frmsize.discrete.width;
++            height = frmsize.discrete.height;
++            if (size * nb_buffers <= budget)
++                break;
++        }
++
++        frmsize.index++;
++    }
++
++    if (width != coded_width || height != coded_height)
++        av_log(hwfc, AV_LOG_VERBOSE,
++               "CAPTURE buffers of %dx%d do not fit in memory, "
++               "decoding at %dx%d\n",
++               coded_width, coded_height, width, height);
++
++    hwfc->width = width;
++    hwfc->height = height;
++    ret = v4l2request_set_format(hwfc, type, pixelformat, 0);
++    hwfc->width = coded_width;
++    hwfc->height = coded_height;
++
++    return ret;
++}
++
+ static int v4l2request_select_capture_format(AVHWFramesContext *hwfc)
+ {
+     AVV4L2RequestFramesContext *fctx = hwfc->hwctx;
+@@ -317,7 +467,7 @@ static int v4l2request_select_capture_format(AVHWFramesContext *hwfc)
+         if (pixelformat == v4l2request_capture_pixelformats[i].pixelformat &&
+             (fctx->bit_depth == v4l2request_capture_pixelformats[i].bit_depth ||
+              !fctx->bit_depth))
+-            return v4l2request_set_format(hwfc, type, pixelformat, 0);
++            return v4l2request_set_capture_format(hwfc, type, pixelformat);
+     }
+ 
+     // Next try to use the first known format with matching bit depth
+@@ -326,7 +476,7 @@ static int v4l2request_select_capture_format(AVHWFramesContext *hwfc)
+             if (fmtdesc.pixelformat == v4l2request_capture_pixelformats[i].pixelformat) {
+                 if (fctx->bit_depth == v4l2request_capture_pixelformats[i].bit_depth ||
+                     !fctx->bit_depth)
+-                    return v4l2request_set_format(hwfc, type, fmtdesc.pixelformat, 0);
++                    return v4l2request_set_capture_format(hwfc, type, fmtdesc.pixelformat);
+                 else if (!fallback)
+                     fallback = fmtdesc.pixelformat;
+             }
+@@ -337,7 +487,7 @@ static int v4l2request_select_capture_format(AVHWFramesContext *hwfc)
+ 
+     // Fallback to use the first known format
+     if (fallback)
+-        return v4l2request_set_format(hwfc, type, fallback, 0);
++        return v4l2request_set_capture_format(hwfc, type, fallback);
+ 
+     return AVERROR(errno);
+ }
+diff --git a/libavutil/hwcontext_v4l2request_internal.h b/libavutil/hwcontext_v4l2request_internal.h
+index 86dfeca..273a5dd 100644
+--- a/libavutil/hwcontext_v4l2request_internal.h
++++ b/libavutil/hwcontext_v4l2request_internal.h
+@@ -68,6 +68,12 @@ struct AVV4L2RequestFramesContextInternal {
+          * all zero when the driver does not report one.
+          */
+         struct v4l2_rect compose;
++
++        /**
++         * Coded frame size of the CAPTURE queue; larger than the CAPTURE
++         * format when the decoder scales the pictures down.
++         */
++        int coded_width, coded_height;
+     } capture, output;
+ };
+ 
+-- 
+2.55.0
+

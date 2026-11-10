@@ -1,0 +1,82 @@
+From 1f691aa5e0c82940ff64db0943a7607f4092385c Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Tue, 10 Nov 2026 02:45:28 +0000
+Subject: [PATCH 332/332] avcodec/mpegvideo_motion: clip 8x8 and 4MV chroma
+ references to the edge positions
+
+hpel_motion(), chroma_4mv_motion() and the quarter sample 8x8 path of
+mpv_motion_internal() clip the reference position to the picture width
+and height, while the edge emulation pads from h_edge_pos and
+v_edge_pos, which are the macroblock aligned size for MPEG-4. For a
+picture height that is not a multiple of 16 (1080), the lower blocks of
+the last macroblock row lie below the picture height; a downward vector
+there was clipped to the picture height and lost its half sample
+component, so those blocks were predicted from other samples than the
+padded reference that the 16x16 path and other decoders use. The
+difference stays below the picture but reaches visible samples through
+later downward vectors, up to 16 in 1080p streams with four motion
+vectors.
+
+Clip to the edge positions, beyond which every sample is padding.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/mpegvideo_motion.c | 24 ++++++++++++------------
+ 1 file changed, 12 insertions(+), 12 deletions(-)
+
+diff --git a/libavcodec/mpegvideo_motion.c b/libavcodec/mpegvideo_motion.c
+index 5eb93d5e90..23e828b77d 100644
+--- a/libavcodec/mpegvideo_motion.c
++++ b/libavcodec/mpegvideo_motion.c
+@@ -49,11 +49,11 @@ static inline int hpel_motion(MpegEncContext *s,
+     src_y += motion_y >> 1;
+ 
+     /* WARNING: do no forget half pels */
+-    src_x = av_clip(src_x, -16, s->width); // FIXME unneeded for emu?
+-    if (src_x != s->width)
++    src_x = av_clip(src_x, -16, s->h_edge_pos); // FIXME unneeded for emu?
++    if (src_x != s->h_edge_pos)
+         dxy |= motion_x & 1;
+-    src_y = av_clip(src_y, -16, s->height);
+-    if (src_y != s->height)
++    src_y = av_clip(src_y, -16, s->v_edge_pos);
++    if (src_y != s->v_edge_pos)
+         dxy |= (motion_y & 1) << 1;
+     src += src_y * s->linesize + src_x;
+ 
+@@ -479,11 +479,11 @@ static void chroma_4mv_motion(MpegEncContext *s,
+ 
+     src_x = s->mb_x * 8 + mx;
+     src_y = s->mb_y * 8 + my;
+-    src_x = av_clip(src_x, -8, (s->width >> 1));
+-    if (src_x == (s->width >> 1))
++    src_x = av_clip(src_x, -8, (s->h_edge_pos >> 1));
++    if (src_x == (s->h_edge_pos >> 1))
+         dxy &= ~1;
+-    src_y = av_clip(src_y, -8, (s->height >> 1));
+-    if (src_y == (s->height >> 1))
++    src_y = av_clip(src_y, -8, (s->v_edge_pos >> 1));
++    if (src_y == (s->v_edge_pos >> 1))
+         dxy &= ~2;
+ 
+     offset = src_y * s->uvlinesize + src_x;
+@@ -639,11 +639,11 @@ static inline void apply_8x8(MpegEncContext *s,
+             src_y = mb_y * 16 + (motion_y >> 2) + (i >> 1) * 8;
+ 
+             /* WARNING: do no forget half pels */
+-            src_x = av_clip(src_x, -16, s->width);
+-            if (src_x == s->width)
++            src_x = av_clip(src_x, -16, s->h_edge_pos);
++            if (src_x == s->h_edge_pos)
+                 dxy &= ~3;
+-            src_y = av_clip(src_y, -16, s->height);
+-            if (src_y == s->height)
++            src_y = av_clip(src_y, -16, s->v_edge_pos);
++            if (src_y == s->v_edge_pos)
+                 dxy &= ~12;
+ 
+             ptr = ref_picture[0] + (src_y * s->linesize) + (src_x);
+-- 
+2.55.0
+

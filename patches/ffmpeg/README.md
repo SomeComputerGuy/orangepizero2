@@ -1,7 +1,7 @@
 # FFmpeg v4l2-request patches
 
 Base: Ubuntu `ffmpeg 7:8.1.2-2ubuntu2` (= FFmpeg tag n8.1.2). Applied in file-name order, appended to
-debian/patches/series (scripts/build-media-debs.sh). All 48 apply with fuzz 0 on the Ubuntu source.
+debian/patches/series (scripts/build-media-debs.sh). All 52 apply with fuzz 0 on the Ubuntu source.
 
 | range | source |
 |---|---|
@@ -26,6 +26,10 @@ debian/patches/series (scripts/build-media-debs.sh). All 48 apply with fuzz 0 on
 | 0325 | MPEG-4 Part 2 / H.263: the slice parameter arrays grow on demand up to one video packet or GOB per macroblock of a 4096x2304 picture (was 2048 per picture; cedrus accepts 36720 = 4080x2304) |
 | 0326 | pictures the decoder wrote scaled down (CAPTURE format smaller than the coded size, 0324) get the CAPTURE size instead of the coded size: hwdownload no longer reads past the buffer and DRM PRIME consumers get the right framebuffer size |
 | 0327 | H.265 Main/Main 10 pictures larger than any level-5 picture: coded-data (OUTPUT) buffers sized by the stream's level/tier CPB limit (at least level 6, 8,315,536 bytes) instead of an uncompressed 8-bit picture; 94 MB less at 6K, so half-size 6K fits in 1 GB. 4K and smaller unchanged |
+| 0329 | MPEG-4 Part 2 software decoder: interlaced B-VOP field direct mode with frame threads read the co-located P-VOP field vectors from the wrong thread (stale or zero); they are now kept with the picture, so output matches `-threads 1` (upstream PR code.ffmpeg.org #25898) |
+| 0330 | H.265 High tier streams: coded-data buffers sized by the Main tier CPB like 0327 (High tier at level 6 kept the 31.8 MB default and ran out of memory at 6K) |
+| 0331 | MPEG-4 Part 2 / H.263 software decoder: a video packet start no longer overwrites the left macroblock's stored block-3 vector, which B-VOP direct mode reads |
+| 0332 | MPEG-4 Part 2 software decoder: 8x8 and 4MV chroma references are clipped to the padded edge (1088 for 1080p), not the picture height |
 | debian/0001 | packaging: --enable-v4l2-request --enable-libudev |
 
 uAPIs expected by the add-on hwaccels (local copies in libavcodec/v4l2-stateless-*.h, used only when the kernel

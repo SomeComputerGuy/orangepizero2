@@ -46,5 +46,9 @@ c4bd3bcdd1502171b4d0c759a6ec05fad63d6ad41e62998257036c28153ac2f9  0316-avutil-hw
 21c7bc88dd95da7380afe236f6fe3653aba312b9fd026a0791b9536864e8a57f  0325-avcodec-v4l2_request_mpeg4-allow-one-video-packet-pe.patch
 f9a639cb02eab96215619ec2aab571501c429522d154c1f7e273002b746f6363  0326-avcodec-v4l2_request-give-pictures-scaled-down-by-th.patch
 cbf5315551b9c7b85753ca7697dc95ce1648fd9378e7ac2157b63f2bc0f946a1  0327-avcodec-v4l2_request_hevc-size-coded-data-buffers-by-the-CPB.patch
+90448da6840bab2f10054ca6456ac1e1735a0bfc4a71cfedd1811f7706b90c2f  0329-avcodec-mpeg4video-keep-the-co-located-field-vectors.patch
+5e5266e88c6d54fc4276927a76c9f6c00c4dfa46bbde60c3d163a563fceb7775  0330-avcodec-v4l2_request_hevc-size-High-tier-coded-data-buffers-by-the-Main-tier-CPB.patch
+aae82f28237d54c5b442c9da2eea8fa84c300a2ec9191215c73892b6668a8f98  0331-avcodec-h263-do-not-overwrite-a-stored-motion-vector.patch
+d0aa6f9945ffb0d439a48645f954f9050cd2d60dc3bb5526ae647df2109eedd7  0332-avcodec-mpegvideo_motion-clip-8x8-and-4MV-chroma-ref.patch
 bc4e47dc691c4aeb0a1da47504213ca2e0a53a0535211951e156332bf94232cb  debian/0001-debian-Enable-the-V4L2-Request-API-hwaccels-on-Linux.patch
-005b6c25a3ed119a71447172621b47a967392ca4e5d30a338230f506911dc239  README.md
+e9168920d946afda1b0314aa978c75667b7f734ba87e437ae3e5a80b33c50b2d  README.md

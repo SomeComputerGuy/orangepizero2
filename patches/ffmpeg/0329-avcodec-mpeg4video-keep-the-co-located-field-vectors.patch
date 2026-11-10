@@ -1,0 +1,91 @@
+From ca3ce90b614da7f670c79f957557273e4f26aa72 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Tue, 10 Nov 2026 02:24:24 +0000
+Subject: [PATCH] avcodec/mpeg4video: keep the co-located field vectors with
+ the picture
+
+Direct mode in interlaced B-VOPs scales the field motion vectors of the
+co-located macroblock of the next P-VOP. The decoder read them from the
+context (p_field_mv_table), so with frame threading the thread decoding
+the B-VOP used the table of its own context, which did not decode that
+P-VOP: the vectors were stale or zero, and the output differed from
+-threads 1 on interlaced streams with field-predicted P-VOP macroblocks
+and direct-mode B-VOP macroblocks (ISO/IEC 14496-4 vcon_ge_1_asp_l4 and
+vcon-asp14L4; any "-flags +ildct+ilme -bf 2" encode).
+
+Store them also in the P-picture's motion_val[1], which P-pictures do
+not use otherwise, next to the field selects already kept in
+ref_index[0], and read them from next_pic. The B-VOP thread already
+waits for the progress of the co-located row before it reads the
+co-located data. The output with -threads 1 does not change; the
+encoder keeps its table (it reads it back) and never marks a macroblock
+as interlaced, so it does not reach this direct mode path.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/h263.c       |  6 ++++++
+ libavcodec/mpeg4video.c | 21 +++++++++------------
+ 2 files changed, 15 insertions(+), 12 deletions(-)
+
+diff --git a/libavcodec/h263.c b/libavcodec/h263.c
+index 6d2de71..95773a0 100644
+--- a/libavcodec/h263.c
++++ b/libavcodec/h263.c
+@@ -75,6 +75,12 @@ void ff_h263_update_motion_val(MpegEncContext * s){
+             for(i=0; i<2; i++){
+                 s->p_field_mv_table[i][0][mb_xy][0]= s->mv[0][i][0];
+                 s->p_field_mv_table[i][0][mb_xy][1]= s->mv[0][i][1];
++                /* Direct mode in MPEG-4 B-VOPs needs these field vectors
++                 * of the co-located MB; keep them with the picture, where
++                 * the other frame threads see them. P-pictures do not
++                 * use motion_val[1] otherwise. */
++                s->cur_pic.motion_val[1][xy + i][0] = s->mv[0][i][0];
++                s->cur_pic.motion_val[1][xy + i][1] = s->mv[0][i][1];
+             }
+             s->cur_pic.ref_index[0][4*mb_xy    ] =
+             s->cur_pic.ref_index[0][4*mb_xy + 1] = s->field_select[0][0];
+diff --git a/libavcodec/mpeg4video.c b/libavcodec/mpeg4video.c
+index c8fe1dc..6db21c9 100644
+--- a/libavcodec/mpeg4video.c
++++ b/libavcodec/mpeg4video.c
+@@ -135,6 +135,8 @@ int ff_mpeg4_set_direct_mv(MpegEncContext *s, int mx, int my)
+     } else if (IS_INTERLACED(colocated_mb_type)) {
+         s->mv_type = MV_TYPE_FIELD;
+         for (i = 0; i < 2; i++) {
++            /* stored by ff_h263_update_motion_val() */
++            const int16_t *p_mv = s->next_pic.motion_val[1][s->block_index[i]];
+             int field_select = s->next_pic.ref_index[0][4 * mb_index + 2 * i];
+             s->field_select[0][i] = field_select;
+             s->field_select[1][i] = i;
+@@ -145,20 +147,15 @@ int ff_mpeg4_set_direct_mv(MpegEncContext *s, int mx, int my)
+                 time_pp = s->pp_field_time + field_select - i;
+                 time_pb = s->pb_field_time + field_select - i;
+             }
+-            s->mv[0][i][0] = s->p_field_mv_table[i][0][mb_index][0] *
+-                             time_pb / time_pp + mx;
++            s->mv[0][i][0] = p_mv[0] * time_pb / time_pp + mx;
+             /* ISO/IEC 14496-5 scales the vertical field vector in frame
+              * units (twice the field vector), then drops the half line. */
+-            s->mv[0][i][1] = (2 * s->p_field_mv_table[i][0][mb_index][1] *
+-                              time_pb / time_pp + my) >> 1;
+-            s->mv[1][i][0] = mx ? s->mv[0][i][0] -
+-                                  s->p_field_mv_table[i][0][mb_index][0]
+-                                : s->p_field_mv_table[i][0][mb_index][0] *
+-                                  (time_pb - time_pp) / time_pp;
+-            s->mv[1][i][1] = (my ? 2 * s->p_field_mv_table[i][0][mb_index][1] *
+-                                       time_pb / time_pp + my -
+-                                       2 * s->p_field_mv_table[i][0][mb_index][1]
+-                                 : 2 * s->p_field_mv_table[i][0][mb_index][1] *
++            s->mv[0][i][1] = (2 * p_mv[1] * time_pb / time_pp + my) >> 1;
++            s->mv[1][i][0] = mx ? s->mv[0][i][0] - p_mv[0]
++                                : p_mv[0] * (time_pb - time_pp) / time_pp;
++            s->mv[1][i][1] = (my ? 2 * p_mv[1] * time_pb / time_pp + my -
++                                   2 * p_mv[1]
++                                 : 2 * p_mv[1] *
+                                    (time_pb - time_pp) / time_pp) >> 1;
+         }
+         return MB_TYPE_DIRECT2 | MB_TYPE_16x8 |
+-- 
+2.55.0
+

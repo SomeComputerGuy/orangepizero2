@@ -1,0 +1,55 @@
+From 9b1e5834b93ed4230b9c71cacd443d33c7729074 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Tue, 10 Nov 2026 02:45:28 +0000
+Subject: [PATCH 331/332] avcodec/h263: do not overwrite a stored motion vector
+ at a video packet start
+
+When the third block of a macroblock with four motion vectors starts a
+video packet on the first line of the packet, ff_h263_pred_motion()
+cleared the left candidate by writing zero into the motion vector that
+the left macroblock (in the previous packet) stored for its last block.
+That vector is still needed: B-VOPs read it as the co-located vector of
+the direct mode, so every direct macroblock whose co-located macroblock
+was such a left neighbour was predicted from a zero vector instead of
+the decoded one, in the decoder and in the encoder's reconstruction.
+Other decoders, the Allwinner video engine among them, use the decoded
+vector.
+
+Use a zero predictor candidate instead.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/h263.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/libavcodec/h263.c b/libavcodec/h263.c
+index 6d2de715ab..e01584d50e 100644
+--- a/libavcodec/h263.c
++++ b/libavcodec/h263.c
+@@ -183,7 +183,8 @@ int16_t *ff_h263_pred_motion(MpegEncContext * s, int block, int dir,
+                              int *px, int *py)
+ {
+     int wrap;
+-    int16_t *A, *B, *C, (*mot_val)[2];
++    const int16_t *A, *B, *C;
++    int16_t (*mot_val)[2];
+     static const int off[4]= {2, 1, 1, -1};
+ 
+     wrap = s->b8_stride;
+@@ -220,10 +221,11 @@ int16_t *ff_h263_pred_motion(MpegEncContext * s, int block, int dir,
+                 *py = A[1];
+             }
+         }else{ /* block==2*/
++            static const int16_t zero[2] = { 0, 0 };
+             B = mot_val[ - wrap];
+             C = mot_val[off[block] - wrap];
+             if(s->mb_x == s->resync_mb_x) //rare
+-                A[0]=A[1]=0;
++                A = zero;
+ 
+             *px = mid_pred(A[0], B[0], C[0]);
+             *py = mid_pred(A[1], B[1], C[1]);
+-- 
+2.55.0
+

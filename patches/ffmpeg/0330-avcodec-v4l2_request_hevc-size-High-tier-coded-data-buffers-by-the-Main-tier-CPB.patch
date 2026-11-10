@@ -1,0 +1,78 @@
+From 0511e0ee88aaaf67fc469809c9d322cba4ba2c36 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Tue, 10 Nov 2026 02:18:18 +0000
+Subject: [PATCH] avcodec/v4l2_request_hevc: size the coded data buffers of
+ High tier streams by the Main tier CPB
+
+The High tier CPB of level 6 is 33 MB, as large as an uncompressed
+8-bit 4:2:0 6144x3456 picture, so the coded data buffers of High tier
+streams of that size kept the default size and four of them, 127 MB,
+still did not fit next to the CAPTURE buffers on a board with 1 GB.
+Encoders commonly signal the High tier for such streams while their
+coded pictures stay far below the CPB, and decoders made for this size
+class hold the coded data of all queued pictures in about 32 MB.
+
+Use the Main tier CPB of the level for both tiers: 8.3 MB per buffer at
+level 6. A coded picture larger than that fails to decode with an
+error instead of the whole stream failing for lack of memory.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/v4l2_request_hevc.c | 26 ++++++++++++++++----------
+ 1 file changed, 16 insertions(+), 10 deletions(-)
+
+diff --git a/libavcodec/v4l2_request_hevc.c b/libavcodec/v4l2_request_hevc.c
+index 9fd25e9..c429001 100644
+--- a/libavcodec/v4l2_request_hevc.c
++++ b/libavcodec/v4l2_request_hevc.c
+@@ -859,22 +859,28 @@ static int v4l2_request_hevc_init(AVCodecContext *avctx)
+  * Size of the OUTPUT buffers for pictures larger than any level 5.x picture
+  * (MaxLumaPs 8912896): the default, an uncompressed 8-bit 4:2:0 picture, is
+  * 31.9 MB per buffer at 6144x3456, more than a board with little memory can
+- * spare next to the CAPTURE buffers. A coded picture of a conforming stream
+- * fits in the CPB of its level and tier: MaxCPB (Table A.8) in units of
+- * CpbNalFactor bits, 1100 for the Main and Main 10 profiles; level 6 Main
+- * tier gives 8.25 MB. A stream stating a level below 6 for such a picture
+- * is taken as level 6. Other profiles and unknown levels keep the default.
++ * spare next to the CAPTURE buffers. A coded picture of a conforming Main
++ * tier stream fits in the CPB of its level: MaxCPB (Table A.8) in units of
++ * CpbNalFactor bits, 1100 for the Main and Main 10 profiles; level 6 gives
++ * 8.25 MB. The High tier CPB of level 6 is as large as the default, so High
++ * tier streams use the Main tier size of their level too: such streams are
++ * common at these sizes and their coded pictures stay far below their CPB,
++ * and decoders made for this size class hold the coded data of all queued
++ * pictures in a buffer of about four times this size. A larger coded picture
++ * fails to decode with an error. A stream stating a level below 6 for such a
++ * picture is taken as level 6. Other profiles and unknown levels keep the
++ * default.
+  */
+ static uint32_t v4l2_request_hevc_output_size(const HEVCSPS *sps,
+                                               int width, int height)
+ {
+     static const struct {
+         uint8_t level_idc;
+-        uint32_t max_cpb[2];
++        uint32_t max_cpb;
+     } levels[] = {
+-        { 180, {  60000, 240000 } },
+-        { 183, { 120000, 480000 } },
+-        { 186, { 240000, 800000 } },
++        { 180,  60000 },
++        { 183, 120000 },
++        { 186, 240000 },
+     };
+     const PTLCommon *ptl;
+     uint64_t size;
+@@ -895,7 +901,7 @@ static uint32_t v4l2_request_hevc_output_size(const HEVCSPS *sps,
+             break;
+ 
+     // Start codes and the padding the decoder appends are not in the CPB
+-    size = (uint64_t)levels[i].max_cpb[!!ptl->tier_flag] * 1100 / 8 + 64 * 1024;
++    size = (uint64_t)levels[i].max_cpb * 1100 / 8 + 64 * 1024;
+     if (size >= (uint64_t)width * height * 3 / 2)
+         return 0;
+ 
+-- 
+2.55.0
+

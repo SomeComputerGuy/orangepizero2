@@ -1,7 +1,7 @@
 # FFmpeg v4l2-request patches
 
 Base: Ubuntu `ffmpeg 7:8.1.2-2ubuntu2` (= FFmpeg tag n8.1.2). Applied in file-name order, appended to
-debian/patches/series (scripts/build-media-debs.sh). All 45 apply with fuzz 0 on the Ubuntu source.
+debian/patches/series (scripts/build-media-debs.sh). All 48 apply with fuzz 0 on the Ubuntu source.
 
 | range | source |
 |---|---|
@@ -23,6 +23,9 @@ debian/patches/series (scripts/build-media-debs.sh). All 45 apply with fuzz 0 on
 | 0322 | frames smaller than the device's minimum frame size (VP9 8x8 ... 66x10) are decoded into buffers of the minimum size instead of failing hwaccel init |
 | 0323 | frames returned after their decoder session closed (a frame thread re-creating the hwaccel for a VP9 key frame of a new size) no longer dereference the freed session: random crashes on the resize-fp-tiles vectors |
 | 0324 | decode scaled down when the CAPTURE pool at the coded size would take more than half of the available memory and the driver lists smaller CAPTURE frame sizes (cedrus H.265 10-bit from 5K up: half size; 6144x3456 Main10 on a 1 GB board) |
+| 0325 | MPEG-4 Part 2 / H.263: the slice parameter arrays grow on demand up to one video packet or GOB per macroblock of a 4096x2304 picture (was 2048 per picture; cedrus accepts 36720 = 4080x2304) |
+| 0326 | pictures the decoder wrote scaled down (CAPTURE format smaller than the coded size, 0324) get the CAPTURE size instead of the coded size: hwdownload no longer reads past the buffer and DRM PRIME consumers get the right framebuffer size |
+| 0327 | H.265 Main/Main 10 pictures larger than any level-5 picture: coded-data (OUTPUT) buffers sized by the stream's level/tier CPB limit (at least level 6, 8,315,536 bytes) instead of an uncompressed 8-bit picture; 94 MB less at 6K, so half-size 6K fits in 1 GB. 4K and smaller unchanged |
 | debian/0001 | packaging: --enable-v4l2-request --enable-libudev |
 
 uAPIs expected by the add-on hwaccels (local copies in libavcodec/v4l2-stateless-*.h, used only when the kernel

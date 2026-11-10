@@ -1,0 +1,151 @@
+From f56c0ee1ef60a863225213a7a83db725fb960541 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Tue, 10 Nov 2026 00:38:24 +0000
+Subject: [PATCH] avcodec/v4l2_request_hevc: size coded data buffers by the CPB
+ above level 5 pictures
+
+The OUTPUT buffers of a V4L2 request decoder hold one coded picture and
+are sized as an uncompressed 8-bit 4:2:0 picture. Four of them are
+allocated, 127 MB at 6144x3456, which a board with 1 GB cannot spare
+next to the CAPTURE buffers of such a stream: with the decoder scaling
+the pictures down to fit the CAPTURE pool, allocating the CAPTURE
+buffers that a consumer of the frames needs on top still fails.
+
+A coded picture of a conforming H.265 stream fits in the CPB of its
+level and tier. For pictures larger than any level 5.x picture, size
+the buffers of Main and Main 10 streams by the MaxCPB of their level
+(at least level 6) and tier: 8.3 MB at level 6 Main tier. Smaller
+pictures, other profiles and unknown levels keep the default size.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/v4l2_request_hevc.c    | 62 ++++++++++++++++++++++++++++++-
+ libavutil/hwcontext_v4l2request.c |  4 +-
+ libavutil/hwcontext_v4l2request.h |  8 ++++
+ 3 files changed, 71 insertions(+), 3 deletions(-)
+
+diff --git a/libavcodec/v4l2_request_hevc.c b/libavcodec/v4l2_request_hevc.c
+index fb8484a..9fd25e9 100644
+--- a/libavcodec/v4l2_request_hevc.c
++++ b/libavcodec/v4l2_request_hevc.c
+@@ -18,6 +18,8 @@
+ 
+ #include "config.h"
+ 
++#include "libavutil/hwcontext.h"
++#include "libavutil/hwcontext_v4l2request.h"
+ #include "libavutil/mem.h"
+ #include "hevc/hevcdec.h"
+ #include "hwaccel_internal.h"
+@@ -853,15 +855,71 @@ static int v4l2_request_hevc_init(AVCodecContext *avctx)
+                                 v4l2_request_hevc_post_frames_ctx);
+ }
+ 
++/*
++ * Size of the OUTPUT buffers for pictures larger than any level 5.x picture
++ * (MaxLumaPs 8912896): the default, an uncompressed 8-bit 4:2:0 picture, is
++ * 31.9 MB per buffer at 6144x3456, more than a board with little memory can
++ * spare next to the CAPTURE buffers. A coded picture of a conforming stream
++ * fits in the CPB of its level and tier: MaxCPB (Table A.8) in units of
++ * CpbNalFactor bits, 1100 for the Main and Main 10 profiles; level 6 Main
++ * tier gives 8.25 MB. A stream stating a level below 6 for such a picture
++ * is taken as level 6. Other profiles and unknown levels keep the default.
++ */
++static uint32_t v4l2_request_hevc_output_size(const HEVCSPS *sps,
++                                              int width, int height)
++{
++    static const struct {
++        uint8_t level_idc;
++        uint32_t max_cpb[2];
++    } levels[] = {
++        { 180, {  60000, 240000 } },
++        { 183, { 120000, 480000 } },
++        { 186, { 240000, 800000 } },
++    };
++    const PTLCommon *ptl;
++    uint64_t size;
++    int i;
++
++    if (!sps || (int64_t)width * height <= 8912896)
++        return 0;
++
++    ptl = &sps->ptl.general_ptl;
++    if (ptl->profile_idc != AV_PROFILE_HEVC_MAIN &&
++        ptl->profile_idc != AV_PROFILE_HEVC_MAIN_10)
++        return 0;
++    if (ptl->level_idc > levels[FF_ARRAY_ELEMS(levels) - 1].level_idc)
++        return 0;
++
++    for (i = FF_ARRAY_ELEMS(levels) - 1; i > 0; i--)
++        if (ptl->level_idc >= levels[i].level_idc)
++            break;
++
++    // Start codes and the padding the decoder appends are not in the CPB
++    size = (uint64_t)levels[i].max_cpb[!!ptl->tier_flag] * 1100 / 8 + 64 * 1024;
++    if (size >= (uint64_t)width * height * 3 / 2)
++        return 0;
++
++    return size;
++}
++
+ static int v4l2_request_hevc_frame_params(AVCodecContext *avctx,
+                                           AVBufferRef *hw_frames_ctx)
+ {
+     const HEVCContext *h = avctx->priv_data;
+     const HEVCSPS *sps = h && h->pps ? h->pps->sps : NULL;
+     uint8_t bit_depth = sps ? sps->bit_depth : 0;
++    AVHWFramesContext *hwfc = (AVHWFramesContext *)hw_frames_ctx->data;
++    AVV4L2RequestFramesContext *fctx = hwfc->hwctx;
++    int ret;
++
++    ret = ff_v4l2_request_frame_params(avctx, hw_frames_ctx,
++                                       V4L2_PIX_FMT_HEVC_SLICE, bit_depth);
++    if (ret < 0)
++        return ret;
+ 
+-    return ff_v4l2_request_frame_params(avctx, hw_frames_ctx,
+-                                        V4L2_PIX_FMT_HEVC_SLICE, bit_depth);
++    fctx->output_buffer_size = v4l2_request_hevc_output_size(sps, hwfc->width,
++                                                             hwfc->height);
++    return 0;
+ }
+ 
+ const FFHWAccel ff_hevc_v4l2request_hwaccel = {
+diff --git a/libavutil/hwcontext_v4l2request.c b/libavutil/hwcontext_v4l2request.c
+index b800e90..29262ad 100644
+--- a/libavutil/hwcontext_v4l2request.c
++++ b/libavutil/hwcontext_v4l2request.c
+@@ -933,7 +933,9 @@ static int v4l2request_open_decoder(AVHWFramesContext *hwfc)
+     if (!udev)
+         return AVERROR(ENOMEM);
+ 
+-    buffersize = FFMAX(hwfc->width * hwfc->height * 3 / 2, 256 * 1024);
++    buffersize = fctx->output_buffer_size ? fctx->output_buffer_size :
++                 FFMAX(hwfc->width * hwfc->height * 3 / 2, 256 * 1024);
++    av_log(hwfc, AV_LOG_VERBOSE, "OUTPUT buffers of %u bytes\n", buffersize);
+ 
+     // Probe all media devices (auto-detection)
+     ret = v4l2request_probe_media_devices(hwfc, udev, fctx->pixelformat, buffersize);
+diff --git a/libavutil/hwcontext_v4l2request.h b/libavutil/hwcontext_v4l2request.h
+index ec6bead..b3908e0 100644
+--- a/libavutil/hwcontext_v4l2request.h
++++ b/libavutil/hwcontext_v4l2request.h
+@@ -65,6 +65,14 @@ typedef struct AVV4L2RequestFramesContext {
+      */
+     struct v4l2_ext_control *init_controls;
+     int nb_init_controls;
++
++    /**
++     * Optional size in bytes of the OUTPUT (coded data) buffers of a decoder,
++     * 0 for the default: the size of an uncompressed 8-bit 4:2:0 picture.
++     *
++     * This field may be set by caller before av_hwframe_ctx_init() is called.
++     */
++    uint32_t output_buffer_size;
+ } AVV4L2RequestFramesContext;
+ 
+ #endif /* AVUTIL_HWCONTEXT_V4L2REQUEST_H */
+-- 
+2.55.0
+

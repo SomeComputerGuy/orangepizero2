@@ -1,0 +1,50 @@
+From 73e08c2016caa073f206f6a1d18c6497e5bb4776 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Mon, 9 Nov 2026 23:02:15 +0000
+Subject: [PATCH] avcodec/v4l2_request: give pictures scaled down by the
+ decoder the CAPTURE size
+
+avcodec_default_get_buffer2() sets the size of a hardware frame to the
+coded size after av_hwframe_get_buffer(), so a picture the decoder
+wrote scaled down (CAPTURE format smaller than the coded size) was
+returned with the coded size: hwdownload read past the end of the
+smaller buffer, and a DRM PRIME consumer created a framebuffer of the
+coded size over it, which the display driver rejects.
+
+Set the frame size to the CAPTURE size where the cropping is scaled to
+it, before the frame reaches the application.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/v4l2_request.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/libavcodec/v4l2_request.c b/libavcodec/v4l2_request.c
+index 143e7020e6..b20400023f 100644
+--- a/libavcodec/v4l2_request.c
++++ b/libavcodec/v4l2_request.c
+@@ -555,14 +555,18 @@ static int v4l2_request_post_process(void *logctx, AVFrame *frame)
+         return ret;
+ 
+     /*
+-     * Pictures scaled down by the decoder: the cropping the decoder set is
+-     * in coded samples, scale it to the CAPTURE size.
++     * Pictures scaled down by the decoder: the frame size (set to the coded
++     * size by avcodec_default_get_buffer2()) and the cropping the decoder
++     * set are in coded samples, give the frame the CAPTURE size and scale
++     * the cropping to it.
+      */
+     if (fctx->internal->capture.coded_width > hwfc->width ||
+         fctx->internal->capture.coded_height > hwfc->height) {
+         int coded_width = fctx->internal->capture.coded_width;
+         int coded_height = fctx->internal->capture.coded_height;
+ 
++        frame->width = hwfc->width;
++        frame->height = hwfc->height;
+         frame->crop_left = frame->crop_left * hwfc->width / coded_width;
+         frame->crop_right = (frame->crop_right * hwfc->width +
+                              coded_width - 1) / coded_width;
+-- 
+2.55.0
+

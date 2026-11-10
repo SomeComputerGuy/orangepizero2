@@ -1,0 +1,117 @@
+From 1a450230f2d843a97c01ee0a69c8efb7fd0dd703 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Mon, 9 Nov 2026 21:40:25 +0000
+Subject: [PATCH] avcodec/v4l2_request_mpeg4: allow one video packet per
+ macroblock
+
+The slice parameter arrays held 2048 video packets or GOBs, embedded in
+the per-picture private data. A picture with more segments, e.g. a
+1080p VOP with a video packet every few macroblocks (8160 macroblocks),
+failed. The kernel bounds the array with the dimension of the
+SLICE_PARAMS control, which can be one entry per macroblock of a
+4080x2304 picture (36720).
+
+Grow the arrays on demand up to one segment per macroblock of a
+4096x2304 picture, and free them with the picture.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/v4l2_request_mpeg4.c | 44 ++++++++++++++++++++++++++++-----
+ 1 file changed, 38 insertions(+), 6 deletions(-)
+
+diff --git a/libavcodec/v4l2_request_mpeg4.c b/libavcodec/v4l2_request_mpeg4.c
+index 5375f0d983..9d104d3921 100644
+--- a/libavcodec/v4l2_request_mpeg4.c
++++ b/libavcodec/v4l2_request_mpeg4.c
+@@ -22,6 +22,7 @@
+ #include "config_components.h"
+ 
+ #include "libavutil/intreadwrite.h"
++#include "libavutil/mem.h"
+ 
+ #include "hwaccel_internal.h"
+ #include "hwconfig.h"
+@@ -39,8 +40,11 @@
+ _Static_assert(sizeof(struct v4l2_ctrl_mpeg4_slice_params) ==
+                sizeof(struct v4l2_ctrl_h263_slice_params), "slice params");
+ 
+-/* Video packets or GOBs with a header in one picture */
+-#define MPEG4_MAX_SLICES 2048
++/*
++ * Video packets or GOBs with a header in one picture: at most one per
++ * macroblock of the largest picture (4096x2304)
++ */
++#define MPEG4_MAX_SLICES (4096 / 16 * 2304 / 16)
+ 
+ typedef struct V4L2RequestContextMPEG4 {
+     V4L2RequestContext base;
+@@ -65,10 +69,11 @@ typedef struct V4L2RequestControlsMPEG4 {
+     unsigned int start;
+     /* Size of the picture in the bitstream buffer, from its start code */
+     unsigned int size;
+-    struct v4l2_ctrl_mpeg4_slice_params slices[MPEG4_MAX_SLICES];
++    struct v4l2_ctrl_mpeg4_slice_params *slices;
+     /* Bit position of the start code of each slice, from the picture start */
+-    unsigned int slice_pos[MPEG4_MAX_SLICES];
++    unsigned int *slice_pos;
+     unsigned int nb_slices;
++    unsigned int allocated_slices;
+ } V4L2RequestControlsMPEG4;
+ 
+ static int mpeg4_intra_dc_vlc_thr(const Mpeg4DecContext *ctx)
+@@ -435,8 +440,25 @@ static int v4l2_request_mpeg4_decode_slice(AVCodecContext *avctx,
+     unsigned int first = !controls->nb_slices;
+     unsigned int pos, data_pos;
+ 
+-    if (controls->nb_slices >= MPEG4_MAX_SLICES)
+-        return AVERROR(ENOSYS);
++    if (controls->nb_slices >= controls->allocated_slices) {
++        unsigned int count = FFMIN(FFMAX(2 * controls->allocated_slices, 64),
++                                   MPEG4_MAX_SLICES);
++        int ret;
++
++        if (controls->nb_slices >= count)
++            return AVERROR(ENOSYS);
++
++        ret = av_reallocp_array(&controls->slices, count,
++                                sizeof(*controls->slices));
++        if (!ret)
++            ret = av_reallocp_array(&controls->slice_pos, count,
++                                    sizeof(*controls->slice_pos));
++        if (ret < 0) {
++            controls->nb_slices = controls->allocated_slices = 0;
++            return ret;
++        }
++        controls->allocated_slices = count;
++    }
+ 
+     data_pos = get_bits_count(&h->gb) - 8 * controls->start;
+     pos      = first ? 0 : h->resync_pos - 8 * controls->start;
+@@ -455,6 +477,15 @@ static int v4l2_request_mpeg4_decode_slice(AVCodecContext *avctx,
+     return 0;
+ }
+ 
++static void v4l2_request_mpeg4_free_frame_priv(AVRefStructOpaque hwctx,
++                                               void *data)
++{
++    V4L2RequestControlsMPEG4 *controls = data;
++
++    av_freep(&controls->slices);
++    av_freep(&controls->slice_pos);
++}
++
+ static void mpeg4_finish_slices(V4L2RequestControlsMPEG4 *controls)
+ {
+     for (unsigned int i = 0; i < controls->nb_slices; i++) {
+@@ -637,6 +668,7 @@ const FFHWAccel ff_ ## codec ## _v4l2request_hwaccel = {                     \
+     .decode_slice       = v4l2_request_mpeg4_decode_slice,                   \
+     .end_frame          = v4l2_request_mpeg4_end_frame,                      \
+     .flush              = ff_v4l2_request_flush,                             \
++    .free_frame_priv    = v4l2_request_mpeg4_free_frame_priv,                \
+     .frame_priv_data_size = sizeof(V4L2RequestControlsMPEG4),                \
+     .init               = start ## _init,                                    \
+     .uninit             = ff_v4l2_request_uninit,                            \
+-- 
+2.55.0
+

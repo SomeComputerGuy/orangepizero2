@@ -1,0 +1,119 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Mon, 9 Nov 2026 12:00:00 +0000
+Subject: [PATCH 106/106] v4l2videodec: Post flow errors of the processing thread at
+ EOS
+
+The processing thread stores its flow return in output_flow and pauses.
+handle_frame() returns it upstream with the next frame, so the upstream
+element that runs the streaming thread posts the error. When the thread
+fails after the last frame, for instance with not-negotiated because
+downstream refuses the caps of the first decoded picture of a single
+JPEG image, no further frame comes: finish() either finds the task
+already paused and returns GST_FLOW_OK, or returns the error to the base
+class, which does not post an error for a failed drain. Either way the
+stream ended with EOS, no frame and no error, and gst-launch exited 0.
+
+Post the flow error from finish() when the processing thread stopped
+with a fatal flow return (not-linked, or below EOS) that handle_frame()
+has not returned upstream, before the base class forwards EOS, and
+return it.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2/gstv4l2videodec.c | 36 ++++++++++++++++++++++++++++++++++--
+ sys/v4l2/gstv4l2videodec.h |  1 +
+ 2 files changed, 35 insertions(+), 2 deletions(-)
+
+diff --git a/sys/v4l2/gstv4l2videodec.c b/sys/v4l2/gstv4l2videodec.c
+index 1e7c1a5..d40ded4 100644
+--- a/sys/v4l2/gstv4l2videodec.c
++++ b/sys/v4l2/gstv4l2videodec.c
+@@ -751,6 +751,33 @@ done:
+   return ret;
+ }
+ 
++/* Called by the base class at the end of the stream */
++static GstFlowReturn
++gst_v4l2_video_dec_finish_stream (GstVideoDecoder * decoder)
++{
++  GstV4l2VideoDec *self = GST_V4L2_VIDEO_DEC (decoder);
++  GstFlowReturn ret;
++
++  ret = gst_v4l2_video_dec_finish (decoder);
++
++  /* A flow error of the processing thread, e.g. not-negotiated when pushing
++   * a frame, reaches upstream as the return value of the next
++   * handle_frame(). If it happened after the last frame, nothing returns it
++   * upstream and the base class does not post an error for a failed drain:
++   * the stream would end with EOS. Post the error here, before the base
++   * class forwards EOS. */
++  if (self->output_flow == GST_FLOW_NOT_LINKED
++      || self->output_flow < GST_FLOW_EOS) {
++    if (!self->output_flow_returned) {
++      GST_ELEMENT_FLOW_ERROR (self, self->output_flow);
++      self->output_flow_returned = TRUE;
++    }
++    ret = self->output_flow;
++  }
++
++  return ret;
++}
++
+ static GstFlowReturn
+ gst_v4l2_video_dec_drain (GstVideoDecoder * decoder)
+ {
+@@ -995,6 +1022,7 @@ beach:
+       gst_flow_get_name (ret));
+ 
+   gst_buffer_replace (&buffer, NULL);
++  self->output_flow_returned = FALSE;
+   self->output_flow = ret;
+   gst_v4l2_object_unlock (self->v4l2output);
+   gst_pad_pause_task (decoder->srcpad);
+@@ -1104,6 +1132,7 @@ gst_v4l2_video_dec_handle_frame (GstVideoDecoder * decoder,
+         self->output_flow != GST_FLOW_FLUSHING) {
+       GST_DEBUG_OBJECT (self, "Processing loop stopped with error, leaving");
+       ret = self->output_flow;
++      self->output_flow_returned = TRUE;
+       goto drop;
+     }
+ 
+@@ -1129,8 +1158,10 @@ gst_v4l2_video_dec_handle_frame (GstVideoDecoder * decoder,
+ 
+     if (ret == GST_FLOW_FLUSHING) {
+       if (gst_pad_get_task_state (GST_VIDEO_DECODER_SRC_PAD (self)) !=
+-          GST_TASK_STARTED)
++          GST_TASK_STARTED) {
+         ret = self->output_flow;
++        self->output_flow_returned = TRUE;
++      }
+       goto drop;
+     } else if (ret != GST_FLOW_OK) {
+       goto process_failed;
+@@ -1401,7 +1432,8 @@ gst_v4l2_video_dec_class_init (GstV4l2VideoDecClass * klass)
+   video_decoder_class->close = GST_DEBUG_FUNCPTR (gst_v4l2_video_dec_close);
+   video_decoder_class->start = GST_DEBUG_FUNCPTR (gst_v4l2_video_dec_start);
+   video_decoder_class->stop = GST_DEBUG_FUNCPTR (gst_v4l2_video_dec_stop);
+-  video_decoder_class->finish = GST_DEBUG_FUNCPTR (gst_v4l2_video_dec_finish);
++  video_decoder_class->finish =
++      GST_DEBUG_FUNCPTR (gst_v4l2_video_dec_finish_stream);
+   video_decoder_class->flush = GST_DEBUG_FUNCPTR (gst_v4l2_video_dec_flush);
+   video_decoder_class->drain = GST_DEBUG_FUNCPTR (gst_v4l2_video_dec_drain);
+   video_decoder_class->set_format =
+diff --git a/sys/v4l2/gstv4l2videodec.h b/sys/v4l2/gstv4l2videodec.h
+index fbbfb60..a2e2d1d 100644
+--- a/sys/v4l2/gstv4l2videodec.h
++++ b/sys/v4l2/gstv4l2videodec.h
+@@ -62,6 +62,7 @@ struct _GstV4l2VideoDec
+   GstVideoCodecState *input_state;
+   gboolean active;
+   GstFlowReturn output_flow;
++  gboolean output_flow_returned;
+ 
+   /* Source Change Events */
+   gboolean wait_for_source_change;
+-- 
+2.55.0
+

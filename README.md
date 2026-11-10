@@ -1,7 +1,8 @@
 # Orange Pi Zero2 (Allwinner H616) Armbian image
 
 Armbian image for the Orange Pi Zero2: Ubuntu 26.10 ("stonking"), Linux 7.3.x (Armbian `edge`), U-Boot 2026.10,
-CUPS print/scan server. Variants: minimal, server, desktop (GNOME).
+CUPS print/scan server. Variants: minimal, server, desktop (XFCE, as Armbian's own images for this board;
+`OPIZ2_DESKTOP_DE=gnome` builds GNOME instead).
 
 ## Build
 
@@ -25,4 +26,4 @@ License: GPL-2.0-only.
 
 Verified on the board (2026-11-09 image, kernel 7.3.3): boot, SD, SPI NOR, DVFS, thermal, suspend, Gigabit Ethernet, WiFi, Bluetooth,
 GPU (GLES 3.1, Vulkan 1.1 full dEQP-VK with 0 regressions, OpenCL 3.0), hardware video decode
-(MPEG-2, H.264, HEVC incl. Main10 4K60 (6K30 decoder-only; the shipped FFmpeg cannot play 6K Main10 yet), VP8, VP9 incl. resolution changes, AVS2, JPEG) and H.264 encode. Not yet tested: HDMI output, USB devices, end-to-end printing.
+(MPEG-2, H.264, HEVC incl. Main10 4K60 (6K30 decoder-only; the shipped FFmpeg cannot play 6K Main10 yet), VP8, VP9 incl. resolution changes, AVS2, JPEG) and H.264 encode. Not yet tested: HDMI output, USB devices, end-to-end printing, the XFCE desktop image.

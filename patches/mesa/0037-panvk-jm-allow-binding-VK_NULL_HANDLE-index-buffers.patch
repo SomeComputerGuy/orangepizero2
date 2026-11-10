@@ -1,0 +1,47 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ryan Mckeever <ryan.mckeever@collabora.com>
+Date: Sat, 27 Jun 2026 22:01:31 -0700
+Subject: [PATCH] panvk/jm: allow binding VK_NULL_HANDLE index buffers
+
+VK_KHR_maintenance6 allows VK_NULL_HANDLE to be used instead of a valid
+VkBuffer handle when binding an index buffer. In CmdBindIndexBuffer2, we
+set the index buffer size (cmdbuf->state.gfx.ib.size) to 0 if the passed
+buffer is null.
+
+Because we don't advertise nullDescriptor for JM, it is only valid to draw
+with a null index buffer if the draw accesses 0 indices. For direct draws,
+this is covered by checks on instancedCount and indexCount. For indirect
+draws we need to add an additional check, under the assumption that if the
+index buffer is null, the draw must be empty.
+
+Reviewed-by: Erik Faye-Lund <erik.faye-lund@collabora.com>
+Reviewed-by: Eric R. Smith <eric.smith@collabora.com>
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/42516>
+(cherry picked from commit 7e6f47400db1c98b0e81ee700bd05c4457b4aeb4)
+
+Backported to the 26.2.4-based fork; applied as is.
+
+Generated-by: LLM
+---
+ src/panfrost/vulkan/jm/panvk_vX_cmd_draw.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/src/panfrost/vulkan/jm/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/jm/panvk_vX_cmd_draw.c
+index 04f6ccd837a..613a342c6a1 100644
+--- a/src/panfrost/vulkan/jm/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/jm/panvk_vX_cmd_draw.c
+@@ -1877,7 +1877,13 @@ panvk_per_arch(CmdDrawIndexedIndirect)(VkCommandBuffer commandBuffer,
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
+    VK_FROM_HANDLE(panvk_buffer, buffer, _buffer);
+ 
+-   if (drawCount == 0)
++   /* Because we don't currently advertise nullDescriptor for JM, it is only
++    * valid to draw with a null index buffer if the draw accesses 0 indices.
++    * For direct draws, this is covered by checks on instancedCount and
++    * indexCount. For indirect draws we need to add an additional check, under
++    * the assumption that if the index buffer is null, the draw must be empty.
++    */
++   if (drawCount == 0 || cmdbuf->state.gfx.ib.size == 0)
+       return;
+ 
+    /* We cannot support arbitrary draw count on JM */

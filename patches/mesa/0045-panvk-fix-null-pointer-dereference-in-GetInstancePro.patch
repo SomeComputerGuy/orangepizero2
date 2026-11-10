@@ -1,0 +1,39 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Olivia Lee <olivia.lee@collabora.com>
+Date: Mon, 5 Oct 2026 15:26:04 -0700
+Subject: [PATCH] panvk: fix null pointer dereference in GetInstanceProcAddr
+
+&(instance->vk) is considered to dereference the instance pointer even
+though we immediately take a reference to it, so this is technically UB.
+
+Signed-off-by: Olivia Lee <olivia.lee@collabora.com>
+Fixes: d970fe2e9d6a (panfrost: Add a Vulkan driver for Midgard/Bifrost GPUs)
+Reviewed-by: Boris Brezillon <boris.brezillon@collabora.com>
+(cherry picked from commit 35286d01f8fabbcf00256ed5635116d647588336)
+
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/45215>
+(cherry picked from commit 0faf3f2b223)
+
+Backported to the 26.2.4-based fork: the src/ hunks applied as is; .pick_status.json (not in the fork's
+history as such) was left out.
+
+Generated-by: LLM
+---
+ src/panfrost/vulkan/panvk_instance.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/panfrost/vulkan/panvk_instance.c b/src/panfrost/vulkan/panvk_instance.c
+index 00a44106454..102dc938aa6 100644
+--- a/src/panfrost/vulkan/panvk_instance.c
++++ b/src/panfrost/vulkan/panvk_instance.c
+@@ -314,8 +314,8 @@ PFN_vkVoidFunction
+ panvk_GetInstanceProcAddr(VkInstance _instance, const char *pName)
+ {
+    VK_FROM_HANDLE(panvk_instance, instance, _instance);
+-   return vk_instance_get_proc_addr(&instance->vk, &panvk_instance_entrypoints,
+-                                    pName);
++   return vk_instance_get_proc_addr(instance ? &instance->vk : NULL,
++                                    &panvk_instance_entrypoints, pName);
+ }
+ 
+ /* The loader wants us to expose a second GetInstanceProcAddr function

@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ryan Mckeever <ryan.mckeever@collabora.com>
+Date: Sat, 27 Jun 2026 21:19:28 -0700
+Subject: [PATCH] panvk: advertise VK_KHR_maintenance6 on v6-7
+
+Reviewed-by: Erik Faye-Lund <erik.faye-lund@collabora.com>
+Reviewed-by: Eric R. Smith <eric.smith@collabora.com>
+Part-of: <https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/42516>
+(cherry picked from commit 4e2e284654faf92b3cb755f0bd1bd4d7e158b0bc)
+
+Backported to the 26.2.4-based fork; applied as is.
+
+Generated-by: LLM
+---
+ src/panfrost/vulkan/panvk_vX_physical_device.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/panfrost/vulkan/panvk_vX_physical_device.c b/src/panfrost/vulkan/panvk_vX_physical_device.c
+index 34a04c1683d..158059621b9 100644
+--- a/src/panfrost/vulkan/panvk_vX_physical_device.c
++++ b/src/panfrost/vulkan/panvk_vX_physical_device.c
+@@ -82,7 +82,7 @@ panvk_per_arch(get_physical_device_extensions)(
+       .KHR_maintenance3 = true,
+       .KHR_maintenance4 = true,
+       .KHR_maintenance5 = true,
+-      .KHR_maintenance6 = PAN_ARCH >= 10,
++      .KHR_maintenance6 = true,
+       .KHR_maintenance7 = true,
+       .KHR_maintenance8 = true,
+       .KHR_maintenance9 = true,

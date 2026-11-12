@@ -17,7 +17,8 @@ Flash: `sudo ./flash-sd.sh /dev/sdX` (newest image; run without a device to list
 ## Contents
 
 - `userpatches/` — Armbian build profile.
-- `patches/` — FFmpeg, mpv, GStreamer and Mesa patches for the media packages.
+- `patches/` — FFmpeg, mpv, GStreamer and Mesa patches for the media packages (Mesa: upstream 26.3.0 with our
+  Mali-G31 fixes, see `patches/mesa/README.md`).
 - `scripts/build-media-debs.sh` — builds those packages; `build.sh` runs it.
 
 License: GPL-2.0-only.
@@ -26,4 +27,5 @@ License: GPL-2.0-only.
 
 Verified on the board (2026-11-09 image, kernel 7.3.3): boot, SD, SPI NOR, DVFS, thermal, suspend, Gigabit Ethernet, WiFi, Bluetooth,
 GPU (GLES 3.1, Vulkan 1.1 full dEQP-VK with 0 regressions, OpenCL 3.0), hardware video decode
-(MPEG-2, H.264, HEVC incl. Main10 4K60 (6K30 decoder-only; the shipped FFmpeg cannot play 6K Main10 yet), VP8, VP9 incl. resolution changes, AVS2, JPEG) and H.264 encode. Not yet tested: HDMI output, USB devices, end-to-end printing, the XFCE desktop image.
+(MPEG-2, H.264, HEVC incl. Main10 4K60 (6K30 decoder-only; the shipped FFmpeg cannot play 6K Main10 yet), VP8, VP9 incl. resolution changes, AVS2, JPEG) and H.264 encode. Mesa 26.3.0 (from the next image on): A/B on the board against the 26.2.4 build, 0 regressions in the dEQP-VK/GLES/KHR
+subsets and the OpenCL CTS suites. Not yet tested: HDMI output, USB devices, end-to-end printing, the XFCE desktop image.

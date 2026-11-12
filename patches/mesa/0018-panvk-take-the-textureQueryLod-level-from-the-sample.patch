@@ -26,7 +26,7 @@ Generated-by: LLM
  1 file changed, 58 insertions(+)
 
 diff --git a/src/panfrost/vulkan/panvk_vX_nir_lower_descriptors.c b/src/panfrost/vulkan/panvk_vX_nir_lower_descriptors.c
-index 1fd78a3de65..17fa9879cb5 100644
+index 19750a478b9..4d9d992d780 100644
 --- a/src/panfrost/vulkan/panvk_vX_nir_lower_descriptors.c
 +++ b/src/panfrost/vulkan/panvk_vX_nir_lower_descriptors.c
 @@ -819,6 +819,61 @@ lower_tex_immutable(nir_builder *b, nir_tex_instr *tex,
@@ -91,7 +91,7 @@ index 1fd78a3de65..17fa9879cb5 100644
  static bool
  lower_tex(nir_builder *b, nir_tex_instr *tex, const struct lower_desc_ctx *ctx)
  {
-@@ -829,6 +884,9 @@ lower_tex(nir_builder *b, nir_tex_instr *tex, const struct lower_desc_ctx *ctx)
+@@ -840,6 +895,9 @@ lower_tex(nir_builder *b, nir_tex_instr *tex, const struct lower_desc_ctx *ctx)
     lower_tex_immutable(b, tex, ctx);
  
  #if PAN_ARCH < 9

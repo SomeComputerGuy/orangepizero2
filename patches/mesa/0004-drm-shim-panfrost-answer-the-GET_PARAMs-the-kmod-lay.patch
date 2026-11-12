@@ -15,17 +15,20 @@ Mali-G31 can be modelled (PAN_GPU_ID=7093 PAN_SHADER_PRESENT=1).
 Host tooling only; used to compile OpenCL kernels with the real rusticl
 pipeline on x86 and dump the Bifrost code.
 
+Rebased onto Mesa 26.3: upstream now answers L2_FEATURES (0x7120306) itself, so that
+param is left to upstream.
+
 Generated-by: LLM
 Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
 ---
- src/panfrost/drm-shim/panfrost_noop.c | 21 ++++++++++++++++++---
- 1 file changed, 18 insertions(+), 3 deletions(-)
+ src/panfrost/drm-shim/panfrost_noop.c | 20 +++++++++++++++++---
+ 1 file changed, 17 insertions(+), 3 deletions(-)
 
 diff --git a/src/panfrost/drm-shim/panfrost_noop.c b/src/panfrost/drm-shim/panfrost_noop.c
-index d393cd25784..46db7a951be 100644
+index a8f6481535c..261a76259bc 100644
 --- a/src/panfrost/drm-shim/panfrost_noop.c
 +++ b/src/panfrost/drm-shim/panfrost_noop.c
-@@ -64,9 +64,24 @@ panfrost_ioctl_get_param(int fd, unsigned long request, void *arg)
+@@ -64,9 +64,23 @@ panfrost_ioctl_get_param(int fd, unsigned long request, void *arg)
        return 0;
     }
  
@@ -38,7 +41,6 @@ index d393cd25784..46db7a951be 100644
 +      gp->value = sp ? strtol(sp, NULL, 16) : 0xF;
 +      return 0;
 +   }
-+   case DRM_PANFROST_PARAM_L2_FEATURES:
 +   case DRM_PANFROST_PARAM_CORE_FEATURES:
 +   case DRM_PANFROST_PARAM_COHERENCY_FEATURES:
 +   case DRM_PANFROST_PARAM_SELECTED_COHERENCY:
@@ -51,5 +53,5 @@ index d393cd25784..46db7a951be 100644
 +   case DRM_PANFROST_PARAM_NR_CORE_GROUPS:
 +      gp->value = 1;
        return 0;
-    case DRM_PANFROST_PARAM_TILER_FEATURES:
-       gp->value = 0x809;
+    case DRM_PANFROST_PARAM_L2_FEATURES:
+       gp->value = 0x7120306;

@@ -29,12 +29,27 @@ set -euo pipefail
 # --- build recipe begin (this block and the mmdebstrap call below are part of every source's build stamp)
 if [ "${1:-}" = --in-chroot ]; then
   # Runs inside the build chroot (as the unshared root user): fetch, patch, build.
-  src=$2 ver=$3 rev=$4 jobs=$5 pdir_name=${6:-$2} build=${7:-any}
+  src=$2 ver=$3 rev=$4 jobs=$5 pdir_name=${6:-$2} build=${7:-any} debfrom=${8:-}
   export DEBIAN_FRONTEND=noninteractive
   mkdir -p /build/debs && cd /build
   apt-get update -q
-  apt-get source -q --only-source "$src=$ver"
-  dir=$(find . -maxdepth 1 -mindepth 1 -type d -name "${src}-*" | head -1)
+  if [ -n "$debfrom" ]; then
+    # A newer upstream release than the archive's: debian/ comes from the archive source package $debfrom,
+    # the source from the tarballs listed in /tmp/opiz2-upstream/MANIFEST ("file directory" per line)
+    apt-get source -q --only-source "$src=$debfrom"
+    old=$(find . -maxdepth 1 -mindepth 1 -type d -name "${src}-*" | head -1)
+    dir=./$src-${ver%%-*}
+    mkdir "$dir"
+    while read -r tb sub; do
+      mkdir -p "$dir/$sub"
+      tar -C "$dir/$sub" --strip-components=1 -xf "/tmp/opiz2-upstream/$tb"
+    done < /tmp/opiz2-upstream/MANIFEST
+    mv "$old/debian" "$dir/"
+    rm -rf "$old"
+  else
+    apt-get source -q --only-source "$src=$ver"
+    dir=$(find . -maxdepth 1 -mindepth 1 -type d -name "${src}-*" | head -1)
+  fi
   cd "$dir"
   mkdir -p debian/patches; touch debian/patches/series
   for p in /tmp/opiz2-patches/*.patch; do
@@ -95,9 +110,16 @@ declare -A VERSION=(
   [mpv]=0.41.0-2ubuntu5
   [gst-plugins-bad1.0]=1.28.6-1ubuntu1
   [gst-plugins-good1.0]=1.28.7-1build1
-  [mesa]=26.2.4-1ubuntu1
+  [mesa]=26.3.0-0ubuntu1
 )
-declare -A REV=([ffmpeg]=13 [mpv]=1 [gst-plugins-bad1.0]=2 [gst-plugins-good1.0]=4 [mesa]=3)
+declare -A REV=([ffmpeg]=13 [mpv]=1 [gst-plugins-bad1.0]=2 [gst-plugins-good1.0]=4 [mesa]=1)
+# Sources built from a newer upstream release than the archive has: the archive source package whose debian/
+# directory is used (patches/<dir>/debian/*.patch adapt it), and the upstream tarballs unpacked in place of its
+# source ("file sha256 directory url" per tarball; directory relative to the source tree)
+declare -A DEBIAN_FROM=([mesa]=26.2.4-1ubuntu1)
+declare -A UPSTREAM=([mesa]="mesa-26.3.0.tar.xz 91d729aa68bb89e4ec857841300bbe922bcb3e52b1f97566ca83930d3b28343a . https://archive.mesa3d.org/mesa-26.3.0.tar.xz
+venus-protocol-v1.1.3.tar.gz c5a362ca28e0a35042db1baeadaf9183500b216841e49d72714b80bae50b4445 subprojects/venus-protocol-1.1.3 https://gitlab.freedesktop.org/virgl/venus-protocol/-/archive/v1.1.3/venus-protocol-v1.1.3.tar.gz")
+DL=$TOP/build/media-dl         # download cache of the upstream tarballs
 declare -A PDIR=([ffmpeg]=ffmpeg [mpv]=mpv [gst-plugins-bad1.0]=gstreamer [gst-plugins-good1.0]=gst-plugins-good1.0 [mesa]=mesa)
 # Architecture: all sources (built with -A); the rest build their arm64 packages
 declare -A BUILD=()
@@ -150,7 +172,7 @@ mkdir -p "$REPO" "$WORK"
 # build and the mmdebstrap call). An unchanged source is not rebuilt; comments and the source list elsewhere in
 # this script do not count.
 stamp_of() {
-  { echo "${VERSION[$1]} ${REV[$1]}"; sed -n '/^ *# --- build recipe begin/,/^ *# --- build recipe end/p' "$SELF" | sha256sum;
+  { echo "${VERSION[$1]} ${REV[$1]}${DEBIAN_FROM[$1]:+ ${DEBIAN_FROM[$1]} ${UPSTREAM[$1]}}"; sed -n '/^ *# --- build recipe begin/,/^ *# --- build recipe end/p' "$SELF" | sha256sum;
     (cd "$TOP/patches/${PDIR[$1]}" && find . -type f -print0 | sort -z | xargs -0 sha256sum); } | sha256sum | cut -c1-16
 }
 index_repo() {
@@ -160,7 +182,8 @@ index_repo
 # apt runs as the unshared root (a subordinate uid), which can't read $HOME, so
 # the local repository is served from a world-readable copy
 STAGE=$(mktemp -d /tmp/opiz2-media-repo.XXXXXX)   # small; the chroot sees it at the same path
-trap 'rm -rf "$STAGE"' EXIT
+UPSTAGE=$(mktemp -d "${TMPDIR:-/var/tmp}/opiz2-upstream.XXXXXX")   # upstream tarballs (~100 MB for mesa), not on the tmpfs
+trap 'rm -rf "$STAGE" "$UPSTAGE"' EXIT
 chmod 755 "$STAGE"
 
 for src in "${SOURCES[@]}"; do
@@ -182,6 +205,20 @@ for src in "${SOURCES[@]}"; do
   cp "$REPO"/Packages "$STAGE"/
   for d in "$REPO"/*.deb; do if [ -e "$d" ]; then cp "$d" "$STAGE"/; fi; done
   chmod -R a+rX "$STAGE"
+  # Upstream tarballs (sha256-checked, cached in $DL), copied into the chroot as /tmp/opiz2-upstream
+  rm -rf "$UPSTAGE"; mkdir -p "$UPSTAGE" "$DL"
+  if [ -n "${UPSTREAM[$src]:-}" ]; then
+    while read -r tb sum sub url; do
+      [ -n "$tb" ] || continue
+      if ! echo "$sum  $DL/$tb" | sha256sum -c --quiet 2>/dev/null; then
+        curl -fsSL -o "$DL/$tb.part" "$url" && mv "$DL/$tb.part" "$DL/$tb"
+        echo "$sum  $DL/$tb" | sha256sum -c --quiet || { echo "$tb: sha256 mismatch"; exit 1; }
+      fi
+      cp "$DL/$tb" "$UPSTAGE/"
+      echo "$tb $sub" >> "$UPSTAGE/MANIFEST"
+    done <<< "${UPSTREAM[$src]}"
+  fi
+  chmod -R a+rX "$UPSTAGE"
   # --- build recipe begin
   # The local repository is a file:// mirror, so mpv's build-deps resolve to our
   # libav*-dev rather than Ubuntu's. The outer apt reads it at $STAGE on the host,
@@ -198,8 +235,10 @@ for src in "${SOURCES[@]}"; do
     --customize-hook="copy-in '$pdir' /tmp" \
     --customize-hook="mv \"\$1/tmp/${PDIR[$src]}\" \"\$1/tmp/opiz2-patches\"" \
     --customize-hook="copy-in '$SELF' /tmp" \
+    --customize-hook="copy-in '$UPSTAGE' /tmp" \
+    --customize-hook="mv \"\$1/tmp/$(basename "$UPSTAGE")\" \"\$1/tmp/opiz2-upstream\"" \
     "${CCACHE_OPTS[@]}" \
-    --customize-hook="chroot \"\$1\" /bin/bash /tmp/$(basename "$SELF") --in-chroot '$src' '$ver' '$rev' '$JOBS' '${PDIR[$src]}' '${BUILD[$src]:-any}'" \
+    --customize-hook="chroot \"\$1\" /bin/bash /tmp/$(basename "$SELF") --in-chroot '$src' '$ver' '$rev' '$JOBS' '${PDIR[$src]}' '${BUILD[$src]:-any}' '${DEBIAN_FROM[$src]:-}'" \
     --customize-hook="sync-out /build/debs '$w/debs'" \
     "${CCACHE_SYNC[@]}" \
     "$SUITE" /dev/null \

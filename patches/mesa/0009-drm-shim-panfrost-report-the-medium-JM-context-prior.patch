@@ -19,10 +19,10 @@ Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
  1 file changed, 7 insertions(+), 2 deletions(-)
 
 diff --git a/src/panfrost/drm-shim/panfrost_noop.c b/src/panfrost/drm-shim/panfrost_noop.c
-index 46db7a951be..e915aa82a6e 100644
+index 261a76259bc..e56676ba393 100644
 --- a/src/panfrost/drm-shim/panfrost_noop.c
 +++ b/src/panfrost/drm-shim/panfrost_noop.c
-@@ -74,12 +74,16 @@ panfrost_ioctl_get_param(int fd, unsigned long request, void *arg)
+@@ -73,12 +73,16 @@ panfrost_ioctl_get_param(int fd, unsigned long request, void *arg)
     case DRM_PANFROST_PARAM_CORE_FEATURES:
     case DRM_PANFROST_PARAM_COHERENCY_FEATURES:
     case DRM_PANFROST_PARAM_SELECTED_COHERENCY:
@@ -41,7 +41,7 @@ index 46db7a951be..e915aa82a6e 100644
     case DRM_PANFROST_PARAM_NR_CORE_GROUPS:
        gp->value = 1;
        return 0;
-@@ -107,6 +111,7 @@ panfrost_ioctl_get_param(int fd, unsigned long request, void *arg)
+@@ -109,6 +113,7 @@ panfrost_ioctl_get_param(int fd, unsigned long request, void *arg)
        return 0;
     case DRM_PANFROST_PARAM_MAX_THREADS:
     case DRM_PANFROST_PARAM_THREAD_MAX_WORKGROUP_SZ:

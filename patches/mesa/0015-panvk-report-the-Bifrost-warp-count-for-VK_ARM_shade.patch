@@ -24,7 +24,7 @@ Generated-by: LLM
  4 files changed, 26 insertions(+), 5 deletions(-)
 
 diff --git a/src/panfrost/vulkan/panvk_physical_device.c b/src/panfrost/vulkan/panvk_physical_device.c
-index 3f25829a86d..902797e97d3 100644
+index f500314c1c4..309215323c9 100644
 --- a/src/panfrost/vulkan/panvk_physical_device.c
 +++ b/src/panfrost/vulkan/panvk_physical_device.c
 @@ -34,6 +34,7 @@
@@ -33,9 +33,9 @@ index 3f25829a86d..902797e97d3 100644
  
 +#include "compiler/pan_compiler.h"
  #include "pan_afbc.h"
+ #include "pan_compiler.h"
  #include "pan_props.h"
- 
-@@ -915,6 +916,24 @@ panvk_get_max_buffer_size(const struct panvk_physical_device *device)
+@@ -1083,6 +1084,24 @@ panvk_get_max_buffer_size(const struct panvk_physical_device *device)
     return MIN2(max_desc_size, device->memory.max_supported_va);
  }
  
@@ -61,10 +61,10 @@ index 3f25829a86d..902797e97d3 100644
  get_image_format_sample_counts(struct panvk_physical_device *physical_device,
                                 VkFormat format)
 diff --git a/src/panfrost/vulkan/panvk_physical_device.h b/src/panfrost/vulkan/panvk_physical_device.h
-index c44a66113f4..1553bcb0b76 100644
+index 2211e74066a..d835953beb0 100644
 --- a/src/panfrost/vulkan/panvk_physical_device.h
 +++ b/src/panfrost/vulkan/panvk_physical_device.h
-@@ -108,6 +108,9 @@ panvk_get_max_resource_size(const struct panvk_physical_device *device);
+@@ -118,6 +118,9 @@ panvk_get_max_resource_size(const struct panvk_physical_device *device);
  VkDeviceSize
  panvk_get_max_buffer_size(const struct panvk_physical_device *device);
  
@@ -75,10 +75,10 @@ index c44a66113f4..1553bcb0b76 100644
  void panvk_per_arch(get_physical_device_extensions)(
     const struct panvk_physical_device *device,
 diff --git a/src/panfrost/vulkan/panvk_vX_physical_device.c b/src/panfrost/vulkan/panvk_vX_physical_device.c
-index f24f0749200..34a04c1683d 100644
+index 198fcb59eb3..67ec2ee746d 100644
 --- a/src/panfrost/vulkan/panvk_vX_physical_device.c
 +++ b/src/panfrost/vulkan/panvk_vX_physical_device.c
-@@ -1285,8 +1285,7 @@ panvk_per_arch(get_physical_device_properties)(
+@@ -1332,8 +1332,7 @@ panvk_per_arch(get_physical_device_properties)(
        /* VK_ARM_shader_core_builtins */
        .shaderCoreMask = device->kmod.dev->props.shader_present,
        .shaderCoreCount = util_bitcount(device->kmod.dev->props.shader_present),
@@ -89,10 +89,10 @@ index f24f0749200..34a04c1683d 100644
        /* VK_ARM_scheduling_controls */
        .schedulingControlsFlags =
 diff --git a/src/panfrost/vulkan/panvk_vX_shader.c b/src/panfrost/vulkan/panvk_vX_shader.c
-index a7ea67b8e8f..8e24c2c5d09 100644
+index 994124df850..10c2561d448 100644
 --- a/src/panfrost/vulkan/panvk_vX_shader.c
 +++ b/src/panfrost/vulkan/panvk_vX_shader.c
-@@ -503,13 +503,13 @@ panvk_preprocess_nir(struct vk_physical_device *vk_pdev,
+@@ -513,13 +513,13 @@ panvk_preprocess_nir(struct vk_physical_device *vk_pdev,
  #if PAN_ARCH < 9
     /* Bifrost has the core_id and warp_id FAU slots, but what their high
      * words hold is not known, so the core count and the maximum warp id are
@@ -108,4 +108,4 @@ index a7ea67b8e8f..8e24c2c5d09 100644
 +            panvk_get_shader_warps_per_core(pdev) - 1);
  #endif
  
-    pan_preprocess_nir(nir, pdev->kmod.dev->props.gpu_id);
+    pan_preprocess_nir(nir, PAN_ARCH);

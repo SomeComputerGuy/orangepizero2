@@ -25,16 +25,20 @@ block size and is not compressed. That costs one page for the images
 whose data ends on a page boundary and nothing for the others; explicit
 (imported) layouts are unchanged.
 
+Not proven on the hardware yet: the board A/B (old build vs this one,
+kernel that names the BO around a fault) is harness/runner-queue/
+46-rgb-tdim.md.
+
 Generated-by: LLM
 ---
  src/panfrost/lib/pan_layout.c | 28 ++++++++++++++++++++++++++--
  1 file changed, 26 insertions(+), 2 deletions(-)
 
 diff --git a/src/panfrost/lib/pan_layout.c b/src/panfrost/lib/pan_layout.c
-index b0114493623..7d0accbce6f 100644
+index f147720d06f..79bda249a38 100644
 --- a/src/panfrost/lib/pan_layout.c
 +++ b/src/panfrost/lib/pan_layout.c
-@@ -61,6 +61,19 @@ get_mip_level_extent(const struct pan_image_props *props, unsigned plane_idx,
+@@ -63,6 +63,19 @@ get_mip_level_extent(const struct pan_image_props *props, unsigned plane_idx,
     };
  }
  
@@ -54,7 +58,7 @@ index b0114493623..7d0accbce6f 100644
  bool
  pan_image_layout_init(
     unsigned arch, struct pan_image *image, unsigned plane_idx,
-@@ -153,8 +166,19 @@ pan_image_layout_init(
+@@ -178,8 +191,19 @@ pan_image_layout_init(
        assert(!explicit_layout_constraints ||
               explicit_layout_constraints->offset_B ==
                  layout->slices[0].offset_B);

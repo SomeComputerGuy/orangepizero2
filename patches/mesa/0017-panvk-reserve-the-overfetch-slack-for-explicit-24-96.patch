@@ -30,10 +30,10 @@ Generated-by: LLM
  4 files changed, 22 insertions(+), 4 deletions(-)
 
 diff --git a/src/panfrost/lib/pan_image.h b/src/panfrost/lib/pan_image.h
-index 642f4a6f427..ff3225a6c7d 100644
+index 7251bb4686f..bb68966fc4d 100644
 --- a/src/panfrost/lib/pan_image.h
 +++ b/src/panfrost/lib/pan_image.h
-@@ -313,6 +313,11 @@ bool pan_image_layout_init(
+@@ -314,6 +314,11 @@ bool pan_image_layout_init(
     unsigned arch, struct pan_image *image, unsigned plane_idx,
     const struct pan_image_layout_constraints *explicit_layout_constraints);
  
@@ -46,10 +46,10 @@ index 642f4a6f427..ff3225a6c7d 100644
     /* PAN_BIND_xxx flags. */
     uint32_t bind;
 diff --git a/src/panfrost/lib/pan_layout.c b/src/panfrost/lib/pan_layout.c
-index 7d0accbce6f..7188328cda0 100644
+index 79bda249a38..e2391a57dd2 100644
 --- a/src/panfrost/lib/pan_layout.c
 +++ b/src/panfrost/lib/pan_layout.c
-@@ -61,7 +61,7 @@ get_mip_level_extent(const struct pan_image_props *props, unsigned plane_idx,
+@@ -63,7 +63,7 @@ get_mip_level_extent(const struct pan_image_props *props, unsigned plane_idx,
     };
  }
  
@@ -58,7 +58,7 @@ index 7d0accbce6f..7188328cda0 100644
  pan_image_needs_overfetch_pad(enum pipe_format format, unsigned plane_idx)
  {
     if (util_format_is_compressed(format))
-@@ -176,7 +176,7 @@ pan_image_layout_init(
+@@ -201,7 +201,7 @@ pan_image_layout_init(
         * line of slack after these images.
         */
        if (pan_image_needs_overfetch_pad(props->format, plane_idx))
@@ -68,10 +68,10 @@ index 7d0accbce6f..7188328cda0 100644
        layout->data_size_B = ALIGN_POT(size_B, 4096);
     }
 diff --git a/src/panfrost/vulkan/panvk_image.c b/src/panfrost/vulkan/panvk_image.c
-index 892f3014fbf..45b8ccd0da2 100644
+index 2bcd5b04318..6ebdae7315b 100644
 --- a/src/panfrost/vulkan/panvk_image.c
 +++ b/src/panfrost/vulkan/panvk_image.c
-@@ -497,6 +497,13 @@ panvk_image_init_layouts(struct panvk_image *image,
+@@ -516,6 +516,13 @@ panvk_image_init_layouts(struct panvk_image *image,
                              VK_ERROR_INITIALIZATION_FAILED);
        }
  
@@ -85,7 +85,7 @@ index 892f3014fbf..45b8ccd0da2 100644
        if (!is_disjoint(image) && !explicit_info)
           plane_layout.offset_B += image->planes[plane].plane.layout.data_size_B;
     }
-@@ -581,7 +588,8 @@ static uint64_t
+@@ -600,7 +607,8 @@ static uint64_t
  panvk_image_plane_size(const struct panvk_image *image, unsigned plane)
  {
     const struct pan_image_layout *layout = &image->planes[plane].plane.layout;
@@ -95,7 +95,7 @@ index 892f3014fbf..45b8ccd0da2 100644
  }
  
  static uint64_t
-@@ -1013,7 +1021,8 @@ panvk_GetImageMemoryRequirements2(VkDevice device,
+@@ -1067,7 +1075,8 @@ panvk_GetImageMemoryRequirements2(VkDevice device,
        plane_info ? plane_info->planeAspect : image->vk.aspects;
     uint8_t plane = panvk_plane_index(image, aspects);
     const uint64_t size_non_sparse =
@@ -106,7 +106,7 @@ index 892f3014fbf..45b8ccd0da2 100644
     const uint64_t size =
        image->vk.create_flags & VK_IMAGE_CREATE_SPARSE_BINDING_BIT
 diff --git a/src/panfrost/vulkan/panvk_image.h b/src/panfrost/vulkan/panvk_image.h
-index eeb452961d2..4345aff7fea 100644
+index c757f99caa1..4fa72c222bd 100644
 --- a/src/panfrost/vulkan/panvk_image.h
 +++ b/src/panfrost/vulkan/panvk_image.h
 @@ -30,6 +30,10 @@ struct panvk_image_plane {

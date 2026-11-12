@@ -21,10 +21,10 @@ Generated-by: LLM
  1 file changed, 7 insertions(+), 4 deletions(-)
 
 diff --git a/src/panfrost/vulkan/panvk_image.c b/src/panfrost/vulkan/panvk_image.c
-index 45b8ccd0da2..a3950615716 100644
+index 6ebdae7315b..74b65e4485e 100644
 --- a/src/panfrost/vulkan/panvk_image.c
 +++ b/src/panfrost/vulkan/panvk_image.c
-@@ -499,10 +499,13 @@ panvk_image_init_layouts(struct panvk_image *image,
+@@ -518,10 +518,13 @@ panvk_image_init_layouts(struct panvk_image *image,
  
        /* Explicit layouts are exact. Reserve the same overfetch slack in the
         * memory requirements as a layout we choose has, so an imported image

@@ -21,11 +21,11 @@ Generated-by: LLM
  2 files changed, 13 insertions(+), 2 deletions(-)
 
 diff --git a/src/panfrost/compiler/bifrost/bifrost_compile.c b/src/panfrost/compiler/bifrost/bifrost_compile.c
-index 96267e043b5..046f66d3e53 100644
+index 4c2988899ee..3e94ff9bd2c 100644
 --- a/src/panfrost/compiler/bifrost/bifrost_compile.c
 +++ b/src/panfrost/compiler/bifrost/bifrost_compile.c
-@@ -2244,17 +2244,16 @@ bi_emit_intrinsic(bi_builder *b, nir_intrinsic_instr *instr)
-       break;
+@@ -2171,17 +2171,16 @@ bi_emit_intrinsic(bi_builder *b, nir_intrinsic_instr *instr)
+    }
  
     case nir_intrinsic_load_core_id:
 -      assert(b->shader->arch >= 9);
@@ -44,10 +44,10 @@ index 96267e043b5..046f66d3e53 100644
        break;
  
 diff --git a/src/panfrost/vulkan/panvk_vX_shader.c b/src/panfrost/vulkan/panvk_vX_shader.c
-index 249dfeace15..a7ea67b8e8f 100644
+index 0121a152343..994124df850 100644
 --- a/src/panfrost/vulkan/panvk_vX_shader.c
 +++ b/src/panfrost/vulkan/panvk_vX_shader.c
-@@ -500,6 +500,18 @@ panvk_preprocess_nir(struct vk_physical_device *vk_pdev,
+@@ -510,6 +510,18 @@ panvk_preprocess_nir(struct vk_physical_device *vk_pdev,
     NIR_PASS(_, nir, nir_inline_sysval, nir_intrinsic_load_core_max_id_arm,
              core_max_id);
  
@@ -63,6 +63,6 @@ index 249dfeace15..a7ea67b8e8f 100644
 +               (pan_subgroup_size_gpu(pdev->kmod.dev->props.gpu_id) * 2) - 1);
 +#endif
 +
-    pan_preprocess_nir(nir, pdev->kmod.dev->props.gpu_id);
+    pan_preprocess_nir(nir, PAN_ARCH);
  }
  

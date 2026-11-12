@@ -28,10 +28,10 @@ Generated-by: LLM
  1 file changed, 10 insertions(+)
 
 diff --git a/src/gallium/drivers/panfrost/pan_screen.c b/src/gallium/drivers/panfrost/pan_screen.c
-index 5f7c8ac1d22..9a12e832808 100644
+index b094e2abb08..629c63daa16 100644
 --- a/src/gallium/drivers/panfrost/pan_screen.c
 +++ b/src/gallium/drivers/panfrost/pan_screen.c
-@@ -184,6 +184,16 @@ panfrost_is_format_supported(struct pipe_screen *screen,
+@@ -197,6 +197,16 @@ panfrost_is_format_supported(struct pipe_screen *screen,
  
     unsigned pan_bind_flags = pipe_to_pan_bind_flags(bind);
     struct pan_format fmt = dev->formats[format];

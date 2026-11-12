@@ -1,0 +1,72 @@
+From bae0d08f045e7df1157fce9becd23d55de62e728 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Tue, 10 Nov 2026 01:18:08 +0000
+Subject: [PATCH] avcodec/v4l2_request_mpeg4: pass low_delay to the driver
+
+Set V4L2_MPEG4_VOL_FLAG_LOW_DELAY in the VOL control when the VOL has
+no B-VOPs, so that a driver which cannot decode some B-VOPs (Cedrus:
+interlaced ones) refuses the VOL when init() tries it, and FFmpeg falls
+back to software decoding for that driver only.
+
+That replaces the test for interlaced VOLs without low_delay in
+mpeg4_unsupported(), which made every device decode those streams in
+software, the RK3588 VDPU2 included, which decodes them right.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/v4l2-stateless-mpeg4.h |  5 +++++
+ libavcodec/v4l2_request_mpeg4.c   | 16 ++++++++--------
+ 2 files changed, 13 insertions(+), 8 deletions(-)
+
+diff --git a/libavcodec/v4l2-stateless-mpeg4.h b/libavcodec/v4l2-stateless-mpeg4.h
+index e3186a2..85c8db2 100644
+--- a/libavcodec/v4l2-stateless-mpeg4.h
++++ b/libavcodec/v4l2-stateless-mpeg4.h
+@@ -261,4 +261,9 @@ struct v4l2_ctrl_h263_slice_params {
+ 
+ #endif /* V4L2_CID_STATELESS_MPEG4_VOL */
+ 
++/* Added to the proposed VOL flags later: kernel headers may lack it. */
++#ifndef V4L2_MPEG4_VOL_FLAG_LOW_DELAY
++#define V4L2_MPEG4_VOL_FLAG_LOW_DELAY			0x40
++#endif
++
+ #endif /* AVCODEC_V4L2_STATELESS_MPEG4_H */
+diff --git a/libavcodec/v4l2_request_mpeg4.c b/libavcodec/v4l2_request_mpeg4.c
+index 9d104d3..e6f4686 100644
+--- a/libavcodec/v4l2_request_mpeg4.c
++++ b/libavcodec/v4l2_request_mpeg4.c
+@@ -115,6 +115,13 @@ static void mpeg4_fill_vol(AVCodecContext *avctx,
+         vol->flags |= V4L2_MPEG4_VOL_FLAG_DATA_PARTITIONED;
+     if (ctx->rvlc)
+         vol->flags |= V4L2_MPEG4_VOL_FLAG_REVERSIBLE_VLC;
++    /*
++     * Lets drivers which cannot decode some B-VOPs refuse the VOL at init.
++     * A B-VOP behind a wrong low_delay flag clears it, so such a driver
++     * fails that picture instead of decoding it wrongly.
++     */
++    if (s->low_delay)
++        vol->flags |= V4L2_MPEG4_VOL_FLAG_LOW_DELAY;
+ 
+     if (ctx->vol_sprite_usage == GMC_SPRITE) {
+         vol->sprite_enable               = V4L2_MPEG4_SPRITE_ENABLE_GMC;
+@@ -207,14 +214,7 @@ static int mpeg4_unsupported(AVCodecContext *avctx)
+            ctx->vol_sprite_usage == STATIC_SPRITE ||
+            ctx->sprite_brightness_change || ctx->new_pred ||
+            ctx->scalability || ctx->quant_precision != 5 ||
+-           ctx->h.data_partitioning || ctx->rvlc ||
+-           /*
+-            * Cedrus wraps the vertical field vectors of interlaced B-VOPs to
+-            * half their range and refuses them: decode in software when the
+-            * VOL allows B-VOPs. A B-VOP behind a wrong low_delay flag clears
+-            * it, and fails here instead of decoding wrongly.
+-            */
+-           (!s->progressive_sequence && !s->low_delay);
++           ctx->h.data_partitioning || ctx->rvlc;
+ }
+ 
+ static int mpeg4_find_vop(const uint8_t *buf, unsigned int size,
+-- 
+2.55.0
+

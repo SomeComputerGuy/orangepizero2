@@ -6,6 +6,13 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 ab="$here/armbian-build"
+# Ask for the sudo password once, then keep the credential fresh until this build ends:
+# compile.sh relaunches itself under sudo for every variant, and sudo forgets the password after 15 minutes.
+if [[ -z ${OPIZ2_SUDO_KEEPALIVE:-} ]]; then
+	sudo -v
+	export OPIZ2_SUDO_KEEPALIVE=$$
+	( while kill -0 "$OPIZ2_SUDO_KEEPALIVE" 2>/dev/null && sudo -n -v; do sleep 60; done ) >/dev/null 2>&1 &
+fi
 [[ -L $ab/userpatches ]] || { [[ -e $ab/userpatches ]] && { echo "$ab/userpatches exists and is not a symlink" >&2; exit 1; }; ln -s ../userpatches "$ab/userpatches"; }
 echo "armbian-build: $(git -C "$ab" rev-parse --abbrev-ref HEAD) $(git -C "$ab" log -1 --format=%h)"
 # Our package rebuilds (out/debs-media) first, as this user, for every variant (rootless; a source whose version,

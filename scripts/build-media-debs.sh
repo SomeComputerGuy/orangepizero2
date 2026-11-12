@@ -109,10 +109,10 @@ declare -A VERSION=(
   [ffmpeg]=7:8.1.2-2ubuntu2
   [mpv]=0.41.0-2ubuntu5
   [gst-plugins-bad1.0]=1.28.6-1ubuntu1
-  [gst-plugins-good1.0]=1.28.7-1build1
+  [gst-plugins-good1.0]=1.28.7-1ubuntu0.1
   [mesa]=26.3.0-0ubuntu1
 )
-declare -A REV=([ffmpeg]=13 [mpv]=1 [gst-plugins-bad1.0]=2 [gst-plugins-good1.0]=4 [mesa]=1)
+declare -A REV=([ffmpeg]=13 [mpv]=1 [gst-plugins-bad1.0]=2 [gst-plugins-good1.0]=5 [mesa]=1)
 # Sources built from a newer upstream release than the archive has: the archive source package whose debian/
 # directory is used (patches/<dir>/debian/*.patch adapt it), and the upstream tarballs unpacked in place of its
 # source ("file sha256 directory url" per tarball; directory relative to the source tree)
@@ -123,6 +123,9 @@ DL=$TOP/build/media-dl         # download cache of the upstream tarballs
 declare -A PDIR=([ffmpeg]=ffmpeg [mpv]=mpv [gst-plugins-bad1.0]=gstreamer [gst-plugins-good1.0]=gst-plugins-good1.0 [mesa]=mesa)
 # Architecture: all sources (built with -A); the rest build their arm64 packages
 declare -A BUILD=()
+# Extra archive pockets a source needs (its VERSION is only there, e.g. a security update); they are added to that
+# source's build chroot only and are part of its build stamp, so sources without them keep their stamps
+declare -A POCKETS=([gst-plugins-good1.0]="$SUITE-updates $SUITE-security")
 
 FORCE=0
 if [ "${1:-}" = --force ]; then FORCE=1; shift; fi
@@ -172,7 +175,7 @@ mkdir -p "$REPO" "$WORK"
 # build and the mmdebstrap call). An unchanged source is not rebuilt; comments and the source list elsewhere in
 # this script do not count.
 stamp_of() {
-  { echo "${VERSION[$1]} ${REV[$1]}${DEBIAN_FROM[$1]:+ ${DEBIAN_FROM[$1]} ${UPSTREAM[$1]}}"; sed -n '/^ *# --- build recipe begin/,/^ *# --- build recipe end/p' "$SELF" | sha256sum;
+  { echo "${VERSION[$1]} ${REV[$1]}${DEBIAN_FROM[$1]:+ ${DEBIAN_FROM[$1]} ${UPSTREAM[$1]}}${POCKETS[$1]:+ pockets ${POCKETS[$1]}}"; sed -n '/^ *# --- build recipe begin/,/^ *# --- build recipe end/p' "$SELF" | sha256sum;
     (cd "$TOP/patches/${PDIR[$1]}" && find . -type f -print0 | sort -z | xargs -0 sha256sum); } | sha256sum | cut -c1-16
 }
 index_repo() {
@@ -219,6 +222,8 @@ for src in "${SOURCES[@]}"; do
     done <<< "${UPSTREAM[$src]}"
   fi
   chmod -R a+rX "$UPSTAGE"
+  EXTRA_APT=()
+  for pk in ${POCKETS[$src]:-}; do EXTRA_APT+=("deb $MIRROR $pk $COMPONENTS" "deb-src $MIRROR $pk $COMPONENTS"); done
   # --- build recipe begin
   # The local repository is a file:// mirror, so mpv's build-deps resolve to our
   # libav*-dev rather than Ubuntu's. The outer apt reads it at $STAGE on the host,
@@ -244,6 +249,7 @@ for src in "${SOURCES[@]}"; do
     "$SUITE" /dev/null \
     "deb $MIRROR $SUITE $COMPONENTS" \
     "deb-src $MIRROR $SUITE $COMPONENTS" \
+    "${EXTRA_APT[@]}" \
     "deb [trusted=yes] file://$STAGE ./" \
     > "$w/build.log" 2>&1 || { echo "$src failed; see $w/build.log"; tail -20 "$w/build.log"; exit 1; }
   # --- build recipe end

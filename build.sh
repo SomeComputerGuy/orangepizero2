@@ -19,4 +19,6 @@ echo "armbian-build: $(git -C "$ab" rev-parse --abbrev-ref HEAD) $(git -C "$ab" 
 # patches and build recipe are unchanged is skipped, so after the first variant this only checks the stamps):
 # gst-plugins-bad/-good and Mesa go into every variant, FFmpeg/mpv into the desktop variant.
 "$here/scripts/build-media-debs.sh"
+# The desktop also needs two Armbian packages from armbian/external (rootless, stamped like the above).
+[[ " $* " == *" OPIZ2_VARIANT=desktop "* || ${OPIZ2_VARIANT:-} == desktop ]] && "$here/scripts/build-armbian-debs.sh"
 cd "$ab" && exec ./compile.sh opiz2-printserver "$@"

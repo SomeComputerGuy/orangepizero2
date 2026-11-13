@@ -12,6 +12,7 @@
 !/scripts/
 /scripts/*
 !/scripts/build-media-debs.sh
+!/scripts/build-armbian-debs.sh
 __pycache__/
 *.log
 /userpatches/config-example.conf

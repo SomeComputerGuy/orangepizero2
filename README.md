@@ -39,14 +39,16 @@ are skipped when the packages are absent.
 
 Run as a normal user; the scripts ask for the sudo password once. `build.sh` first rebuilds the media and Mesa
 packages (`scripts/build-media-debs.sh`: rootless, needs `mmdebstrap` and qemu-user binfmt on the host; unchanged
-sources are skipped), then runs Armbian's `compile.sh`. Images land in `armbian-build/output/images/`.
+sources are skipped), then runs Armbian's `compile.sh`. For the desktop variant it also builds two Armbian packages
+the desktop install needs and that are otherwise only on apt.armbian.com (`scripts/build-armbian-debs.sh`, same
+requirements). Images land in `armbian-build/output/images/`.
 
 Options (append to either command; Armbian's own `compile.sh` options also work):
 
 | Option | Values | Default |
 |---|---|---|
 | `OPIZ2_VARIANT` | `minimal`, `server`, `desktop` (`build.sh` only; `build-all.sh` builds all three) | `minimal` |
-| `OPIZ2_WIFI_REGDOM` | Two-letter country code in capitals, e.g. `US`. Sets the WiFi regulatory domain at boot. A 5 GHz access point needs it. | unset: world domain, then follows the access point |
+| `OPIZ2_WIFI_REGDOM` | Two-letter country code, e.g. `US` (any case). Sets the WiFi regulatory domain at boot. A 5 GHz access point needs it. Any other value stops the build. | unset: world domain, then follows the access point |
 | `OPIZ2_DESKTOP_DE` | Desktop environment of the desktop variant: `xfce`, `gnome` or another one armbian-config offers | `xfce` |
 | `OPIZ2_ETH_MTU` | Ethernet MTU fixed at boot, 68 to 4070. Every host on the network segment must use the same MTU. | unset: 1500 |
 
@@ -56,7 +58,7 @@ without one.
 
 ## Working here, not yet in mainline
 
-Mainline status as of 2026-11-12 (Linux 7.4-rc2, U-Boot, TF-A, Mesa and FFmpeg development branches). Everything in
+Mainline status as of 2026-11-13 (Linux 7.4-rc2, U-Boot, TF-A, Mesa and FFmpeg development branches). Everything in
 this section is in the current build and was verified on the board, either on an image or on a test kernel carrying
 the same patch. "Sent" means submitted upstream and not merged yet.
 
@@ -175,7 +177,11 @@ GPU
 Video
 - H.264 encoder: regions of interest, intra refresh and the 8x8 transform.
 - AVS2 background and S pictures: waiting for test streams.
-- GStreamer elements for MPEG-4, H.263, Sorenson Spark, AVS and AVS2: being built and tested.
+- GStreamer elements for MPEG-4, H.263, Sorenson Spark, AVS and AVS2: in the build. AVS and AVS2 are bit-exact on the
+  board for most test streams; MPEG-4, H.263 and Sorenson Spark, and one 8-bit AVS2 stream, are being fixed and
+  retested.
+- GStreamer H.264 encoder element: it refused every input format with this single-planar encoder; fixed in the
+  build, being tested on the board.
 - G2D (2D graphics accelerator): the rotation unit works; the mixer does not respond yet.
 - Protected video playback in browsers (Widevine): not started.
 
@@ -185,13 +191,20 @@ Display
 - More than one overlay layer per blend channel, HDMI 3D formats: not started.
 
 Networking
-- Jumbo frames up to the datasheet's 16 KB: in progress. Frames larger than the transmit FIFO are occasionally
-  lost and the cause is not found yet, which is why the limit is MTU 4070 for now.
+- Jumbo frames up to the datasheet's 16 KB: transmit is fixed on a test kernel (the controller's DMA burst length;
+  100,000 frames at MTU 16358 without a loss on the board, and 20,000 over a real link). A continuous stream of
+  16 KB frames received from another host still stalls; being investigated. Until that is fixed the limit stays
+  MTU 4070.
+- Hardware checksums for frames larger than 1500 bytes: some sizes come out corrupted, so above MTU 1500 the kernel
+  computes checksums in software. Not investigated yet.
+- An Ethernet receive fix (a frame spread over several buffers was split when memory allocation failed): ready,
+  being tested on the board.
 - Bluetooth LE connections: waiting for a test device. Wake-up from suspend by WiFi, Bluetooth or USB: not started.
 - A mainline WiFi/Bluetooth driver for the UWE5622: long term.
 
 Kernel and system
-- Rebase of the patch set onto Linux 7.3.4 (six patches need changes), after which the 7.3.3 lock is dropped.
+- Move to the current Armbian main branch and Linux 7.3.4 (six of our patches need changes): in progress; the 7.3.3
+  lock is dropped then. The build follows Armbian's newest `edge` kernel from then on.
 - Crypto engine RSA and ECC; SPI 3-wire mode and frame sizes other than 8 bits.
 - PWM capture, I2C DMA transfers, SPI and I2C target (slave) modes: in the build, not yet tested with a real
   signal or a second device.
@@ -207,8 +220,10 @@ Upstream
 
 All testing is done on one board, driven over serial, Ethernet and a switched power plug.
 
-- The newest images were built on 2026-11-12. The full image check of that build has not run yet. Its kernel
-  patches and its Mesa were each tested on the board beforehand on test kernels.
+- The newest images were built on 2026-11-12. The minimal image passed the full image check (kernel, boot, device
+  checks, GLES, Vulkan, OpenCL, hardware decoding, JPEG; display tests not run without a monitor); the server image
+  was flashed and booted. The desktop image of that build had no desktop installed; the build is fixed and the
+  desktop image is being rebuilt.
 - The previous image (2026-11-09) passed the full image check: boot and device checks, GLES, Vulkan, OpenCL,
   hardware decoding, JPEG.
 - Verified on the board over the course of the project: boot from SD card and from the SPI flash, network boot,
@@ -226,7 +241,7 @@ end-to-end printing.
 
 ## Upstream status
 
-As of 2026-11-12. Nothing is merged in mainline Linux, U-Boot, TF-A or FFmpeg yet.
+As of 2026-11-13. Nothing is merged in mainline Linux, U-Boot, TF-A or FFmpeg yet.
 
 - Linux kernel, sent and waiting: Zero2 device tree fixes and GPU frequency scaling (v3), Ethernet jumbo frames
   (v2), an Ethernet driver error-path fix, panfrost long-running jobs (v2), crypto AES-XTS (v2), SPI dual read, I2C
@@ -248,6 +263,7 @@ As of 2026-11-12. Nothing is merged in mainline Linux, U-Boot, TF-A or FFmpeg ye
 - `patches/`: patches for the rebuilt packages: FFmpeg, mpv, GStreamer (plugins-bad and plugins-good) and Mesa.
   See `patches/ffmpeg/README.md` and `patches/mesa/README.md`.
 - `scripts/build-media-debs.sh`: rebuilds those packages for arm64.
+- `scripts/build-armbian-debs.sh`: builds the two Armbian packages the desktop variant needs.
 
 ## License
 

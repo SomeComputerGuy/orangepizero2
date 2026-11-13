@@ -12,7 +12,8 @@
 #   gst-plugins-good1.0 shared 00xx: v4l2transform input colorimetry, souphttpsrc HEAD probe race, no colorimetry
 #                       probe for compressed OUTPUT formats, v4l2videoenc/v4l2bufferpool error buffers; ours 01xx:
 #                       stateful v4l2jpegdec on cedrus: 1:4:0:0 colorimetry, system memory for an ANY peer,
-#                       decode errors reported; jpegdec greyscale with sampling factors above 1
+#                       decode errors reported; jpegdec greyscale with sampling factors above 1; souphttpsrc
+#                       wakes every waiter; v4l2object leaves caps it can't change alone
 #                       (every variant)
 #   mesa                our Mesa fork for the Mali-G31 (panfrost/panvk/rusticl fixes, patches/mesa/README.md;
 #                       every variant)
@@ -116,7 +117,7 @@ declare -A VERSION=(
   [gst-plugins-good1.0]=1.28.7-1ubuntu0.1
   [mesa]=26.3.0-0ubuntu1
 )
-declare -A REV=([ffmpeg]=14 [mpv]=1 [gst-plugins-bad1.0]=4 [gst-plugins-good1.0]=6 [mesa]=2)
+declare -A REV=([ffmpeg]=14 [mpv]=1 [gst-plugins-bad1.0]=5 [gst-plugins-good1.0]=7 [mesa]=2)
 # Sources built from a newer upstream release than the archive has: the archive source package whose debian/
 # directory is used (patches/<dir>/debian/*.patch adapt it), and the upstream tarballs unpacked in place of its
 # source ("file sha256 directory url" per tarball; directory relative to the source tree)

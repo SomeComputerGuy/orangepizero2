@@ -1,0 +1,58 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 13 Nov 2026 07:10:00 +0000
+Subject: [PATCH 107/108] souphttpsrc: Wake every thread that waits on
+ session_cond
+
+Several threads wait on session_cond for different conditions, but the
+read, stream-clear and session callbacks woke only one of them. When
+create() waited for the HEAD probe and check_seekable() waited in
+stream_clear(), the clear callback woke create(), and the pipeline hung
+(2 of 30 starts on an Orange Pi Zero2). Use g_cond_broadcast().
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ ext/soup/gstsouphttpsrc.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/ext/soup/gstsouphttpsrc.c b/ext/soup/gstsouphttpsrc.c
+index 127a5bc..c4b4f58 100644
+--- a/ext/soup/gstsouphttpsrc.c
++++ b/ext/soup/gstsouphttpsrc.c
+@@ -1270,7 +1270,7 @@ _session_ready_cb (gpointer user_data)
+   GST_DEBUG_OBJECT (src, "thread ready");
+ 
+   g_mutex_lock (&src->session_mutex);
+-  g_cond_signal (&src->session_cond);
++  g_cond_broadcast (&src->session_cond);
+   g_mutex_unlock (&src->session_mutex);
+ 
+   return FALSE;
+@@ -1415,7 +1415,7 @@ _session_close_cb (gpointer user_data)
+ 
+   g_mutex_lock (&src->session_mutex);
+   g_clear_object (&src->session);
+-  g_cond_signal (&src->session_cond);
++  g_cond_broadcast (&src->session_cond);
+   g_mutex_unlock (&src->session_mutex);
+ 
+   return FALSE;
+@@ -2353,7 +2353,7 @@ _session_read_cb (GObject * source, GAsyncResult * ret, gpointer user_data)
+   res->nbytes = g_input_stream_read_finish (G_INPUT_STREAM (source),
+       ret, &res->error);
+ 
+-  g_cond_signal (&res->src->session_cond);
++  g_cond_broadcast (&res->src->session_cond);
+   g_mutex_unlock (&res->src->session_mutex);
+ }
+ 
+@@ -2507,7 +2507,7 @@ _session_stream_clear_cb (gpointer user_data)
+ 
+   g_clear_object (&src->input_stream);
+ 
+-  g_cond_signal (&src->session_cond);
++  g_cond_broadcast (&src->session_cond);
+   g_mutex_unlock (&src->session_mutex);
+ 
+   return FALSE;

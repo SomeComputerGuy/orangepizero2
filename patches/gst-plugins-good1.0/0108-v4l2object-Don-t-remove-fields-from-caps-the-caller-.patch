@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 13 Nov 2026 07:20:00 +0000
+Subject: [PATCH 108/108] v4l2object: Don't remove fields from caps the caller
+ can't change
+
+set_format_full() removes colorimetry or interlace-mode from the caps when
+the driver returns values GStreamer doesn't know. A decoder passes its
+shared input caps, giving "gst_structure_remove_field: assertion
+'IS_MUTABLE (structure)' failed" on every MJPEG stream into v4l2jpegdec
+on cedrus. Only change writable caps.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2/gstv4l2object.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/sys/v4l2/gstv4l2object.c b/sys/v4l2/gstv4l2object.c
+index 493f19d..3f3ec9c 100644
+--- a/sys/v4l2/gstv4l2object.c
++++ b/sys/v4l2/gstv4l2object.c
+@@ -4433,7 +4433,8 @@ gst_v4l2_object_set_format_full (GstV4l2Object * v4l2object, GstCaps * caps,
+     /* The driver (or libv4l2) is miss-behaving, just ignore interlace-mode from
+      * the TRY_FMT */
+     disable_interlacing = TRUE;
+-    if (gst_structure_has_field (s, "interlace-mode"))
++    if (gst_caps_is_writable (caps) &&
++        gst_structure_has_field (s, "interlace-mode"))
+       gst_structure_remove_field (s, "interlace-mode");
+   }
+ 
+@@ -4447,7 +4448,8 @@ gst_v4l2_object_set_format_full (GstV4l2Object * v4l2object, GstCaps * caps,
+     /* The driver (or libv4l2) is miss-behaving, just ignore colorimetry from
+      * the TRY_FMT */
+     disable_colorimetry = TRUE;
+-    if (gst_structure_has_field (s, "colorimetry"))
++    if (gst_caps_is_writable (caps) &&
++        gst_structure_has_field (s, "colorimetry"))
+       gst_structure_remove_field (s, "colorimetry");
+   }
+ 

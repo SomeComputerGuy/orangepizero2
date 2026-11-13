@@ -3,18 +3,45 @@ From: Arun Iyengar <aiyengar1990@gmail.com>
 Date: Fri, 13 Nov 2026 04:19:13 +0000
 Subject: [PATCH 2/2] v4l2codecs: encoder: Support single-planar OUTPUT queues
 
-The helper rejected every raw format of a driver with single-planar
-queues (V4L2_CAP_VIDEO_M2M), such as the H.264 encoder of cedrus:
-"The driver rejected video/x-raw, format=I420". Set the OUTPUT format
-and queue the pictures through struct v4l2_pix_format and m.fd on such
-drivers, as one plane, and add YV12 (YVU420), which cedrus also takes.
+The helper rejected every raw format on single-planar drivers such as
+the cedrus H.264 encoder. Set the OUTPUT format and queue pictures
+through v4l2_pix_format and m.fd there, as one plane. Add YV12 (YVU420,
+which cedrus takes) to the raw formats and the encoder sink templates.
 
 Assisted-by: LLM
 Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
 ---
- sys/v4l2codecs/gstv4l2encoder.c | 66 ++++++++++++++++++++++++++++-----
- 1 file changed, 57 insertions(+), 9 deletions(-)
+ sys/v4l2codecs/gstv4l2codech264enc.c |  2 +-
+ sys/v4l2codecs/gstv4l2codech265enc.c |  2 +-
+ sys/v4l2codecs/gstv4l2encoder.c      | 64 ++++++++++++++++++++++----
+ 3 files changed, 57 insertions(+), 11 deletions(-)
 
+diff --git a/sys/v4l2codecs/gstv4l2codech264enc.c b/sys/v4l2codecs/gstv4l2codech264enc.c
+index a2274b1..8d40006 100644
+--- a/sys/v4l2codecs/gstv4l2codech264enc.c
++++ b/sys/v4l2codecs/gstv4l2codech264enc.c
+@@ -99,7 +99,7 @@ G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (GstV4l2CodecH264Enc,
+ static GstStaticPadTemplate sink_template =
+ GST_STATIC_PAD_TEMPLATE (GST_VIDEO_ENCODER_SINK_NAME,
+     GST_PAD_SINK, GST_PAD_ALWAYS,
+-    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE ("{ NV12, NV21, I420, YUY2, UYVY }")));
++    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE ("{ NV12, NV21, I420, YV12, YUY2, UYVY }")));
+ 
+ static GstStaticPadTemplate src_template =
+ GST_STATIC_PAD_TEMPLATE (GST_VIDEO_ENCODER_SRC_NAME,
+diff --git a/sys/v4l2codecs/gstv4l2codech265enc.c b/sys/v4l2codecs/gstv4l2codech265enc.c
+index 6c8e2c8..91a9f82 100644
+--- a/sys/v4l2codecs/gstv4l2codech265enc.c
++++ b/sys/v4l2codecs/gstv4l2codech265enc.c
+@@ -86,7 +86,7 @@ G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (GstV4l2CodecH265Enc,
+ static GstStaticPadTemplate sink_template =
+ GST_STATIC_PAD_TEMPLATE (GST_VIDEO_ENCODER_SINK_NAME,
+     GST_PAD_SINK, GST_PAD_ALWAYS,
+-    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE ("{ NV12, NV21, I420, YUY2, UYVY }")));
++    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE ("{ NV12, NV21, I420, YV12, YUY2, UYVY }")));
+ 
+ static GstStaticPadTemplate src_template =
+ GST_STATIC_PAD_TEMPLATE (GST_VIDEO_ENCODER_SRC_NAME,
 diff --git a/sys/v4l2codecs/gstv4l2encoder.c b/sys/v4l2codecs/gstv4l2encoder.c
 index edede6c..5777838 100644
 --- a/sys/v4l2codecs/gstv4l2encoder.c
@@ -28,13 +55,11 @@ index edede6c..5777838 100644
    {GST_VIDEO_FORMAT_YUY2, V4L2_PIX_FMT_YUYV},
    {GST_VIDEO_FORMAT_UYVY, V4L2_PIX_FMT_UYVY},
  };
-@@ -631,6 +633,46 @@ sink_fmt_to_video_info (struct v4l2_format *fmt, GstVideoInfo * in_info,
+@@ -631,6 +633,44 @@ sink_fmt_to_video_info (struct v4l2_format *fmt, GstVideoInfo * in_info,
    return TRUE;
  }
  
-+/* VIDIOC_S_FMT on the OUTPUT queue. @fmt is in the multi-planar layout,
-+ * which the rest of the helper uses for both queue types: for a single-planar
-+ * driver it is converted to and from struct v4l2_pix_format, as one plane. */
++/* S_FMT on OUTPUT; @fmt is multi-planar, converted for single-planar drivers. */
 +static gboolean
 +gst_v4l2_encoder_s_sink_fmt (GstV4l2Encoder * self, struct v4l2_format *fmt)
 +{
@@ -75,7 +100,7 @@ index edede6c..5777838 100644
  gboolean
  gst_v4l2_encoder_select_sink_format (GstV4l2Encoder * self,
      GstVideoInfo * in_info, GstVideoInfoDmaDrm * vinfo_drm)
-@@ -638,7 +680,7 @@ gst_v4l2_encoder_select_sink_format (GstV4l2Encoder * self,
+@@ -638,7 +678,7 @@ gst_v4l2_encoder_select_sink_format (GstV4l2Encoder * self,
    struct v4l2_format fmt = {.type = self->sink_buf_type, };
    guint32 pix_fmt = raw_format_to_v4l2 (self, GST_VIDEO_INFO_FORMAT (in_info));
  
@@ -84,7 +109,7 @@ index edede6c..5777838 100644
      GST_ERROR_OBJECT (self, "Unsupported raw format %s",
          gst_video_format_to_string (GST_VIDEO_INFO_FORMAT (in_info)));
      return FALSE;
-@@ -651,7 +693,7 @@ gst_v4l2_encoder_select_sink_format (GstV4l2Encoder * self,
+@@ -651,7 +691,7 @@ gst_v4l2_encoder_select_sink_format (GstV4l2Encoder * self,
    fmt.fmt.pix_mp.field = V4L2_FIELD_NONE;
    colorimetry_to_v4l2 (&in_info->colorimetry, &fmt.fmt.pix_mp);
  
@@ -93,7 +118,7 @@ index edede6c..5777838 100644
      GST_ERROR_OBJECT (self, "VIDIOC_S_FMT failed: %s", g_strerror (errno));
      return FALSE;
    }
-@@ -822,7 +864,7 @@ gst_v4l2_encoder_get_import_memories (GstV4l2Encoder * self,
+@@ -822,7 +862,7 @@ gst_v4l2_encoder_get_import_memories (GstV4l2Encoder * self,
    guint i, n_planes = GST_VIDEO_INFO_N_PLANES (info);
    guint n_mems = pix->num_planes;
  
@@ -102,7 +127,7 @@ index edede6c..5777838 100644
      return 0;
  
    for (i = 0; i < n_mems; i++) {
-@@ -898,7 +940,6 @@ gst_v4l2_encoder_queue_sink_buffer (GstV4l2Encoder * self,
+@@ -898,7 +938,6 @@ gst_v4l2_encoder_queue_sink_buffer (GstV4l2Encoder * self,
      .memory = V4L2_MEMORY_DMABUF,
      .request_fd = request->fd,
      .flags = V4L2_BUF_FLAG_REQUEST_FD,
@@ -110,7 +135,7 @@ index edede6c..5777838 100644
    };
    guint64 ts = GST_V4L2_ENCODER_FRAME_TS (request->frame_id);
    GstMemory *mems[GST_VIDEO_MAX_PLANES];
-@@ -919,12 +960,19 @@ gst_v4l2_encoder_queue_sink_buffer (GstV4l2Encoder * self,
+@@ -919,12 +958,19 @@ gst_v4l2_encoder_queue_sink_buffer (GstV4l2Encoder * self,
      return FALSE;
    }
  

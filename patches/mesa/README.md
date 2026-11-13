@@ -22,8 +22,9 @@ What the image gets:
 - RGB/24/96-bit image overfetch slack, A8 texel buffers refused, rusticl rect copies, lower_cl_images buffer
   textures;
 - drm-shim changes (host-only test tool; mesa-drm-shim package);
-- 0013-0019: panvk on Bifrost: ARM core builtins safe with the real warp count, the JM command-buffer descriptor
+- 0013-0020: panvk on Bifrost: ARM core builtins safe with the real warp count, the JM command-buffer descriptor
   pool allocated on first use, ATOM_CX staging reads counted like ATOM_RETURN, overfetch slack for explicit
-  24/96-bit layouts, textureQueryLod level from the sampler, explicit_pad_B always set.
+  24/96-bit layouts, textureQueryLod level from the sampler, explicit_pad_B always set, texture coordinates
+  rounded to zero when minifying with nearest (as the Arm driver).
 - Vulkan 1.3 on Bifrost comes from Mesa 26.3.0 itself. panvk on v7 still needs PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1
   (set system-wide by the image config).

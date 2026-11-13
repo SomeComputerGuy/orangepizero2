@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 13 Nov 2026 02:44:48 +0000
+Subject: [PATCH] panvk: round texture coordinates to zero when minifying with
+ nearest
+
+With round-to-nearest-even on, a nearest lookup takes the next texel for
+the upper 2^-9 of each texel. panvk only turned it off when both filters
+are nearest, so a nearest minify with a linear magnify filter still
+rounded up; on the 1x1 level of a seamless cube that next texel is on
+the neighbouring face. The Arm driver turns the rounding off whenever
+the minification filter is nearest; do the same, as panfrost does.
+
+Generated-by: LLM
+---
+ src/panfrost/vulkan/panvk_vX_sampler.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/src/panfrost/vulkan/panvk_vX_sampler.c b/src/panfrost/vulkan/panvk_vX_sampler.c
+index ab6aa444c7b..5ca90fa6b5f 100644
+--- a/src/panfrost/vulkan/panvk_vX_sampler.c
++++ b/src/panfrost/vulkan/panvk_vX_sampler.c
+@@ -127,12 +127,14 @@ panvk_sampler_fill_desc(const struct VkSamplerCreateInfo *info,
+        * is used with VK_FILTER_NEAREST.
+        *
+        * Regardless, disabling round_to_nearest_even for NEAREST filters
+-       * is a desirable precision improvement.
++       * is a desirable precision improvement. The Arm driver keys it on the
++       * minification filter alone: with a linear magnify filter, a nearest
++       * minify at the 1x1 level of a seamless cube would otherwise pick the
++       * neighbouring face near an edge.
+        *
+        * [1]: https://gitlab.khronos.org/Tracker/vk-gl-cts/-/issues/5547
+        */
+-      if (min_filter == VK_FILTER_NEAREST &&
+-          mag_filter == VK_FILTER_NEAREST)
++      if (min_filter == VK_FILTER_NEAREST)
+          cfg.round_to_nearest_even = false;
+ 
+       cfg.lod_bias = info->mipLodBias;

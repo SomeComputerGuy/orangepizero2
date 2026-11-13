@@ -116,7 +116,7 @@ declare -A VERSION=(
   [gst-plugins-good1.0]=1.28.7-1ubuntu0.1
   [mesa]=26.3.0-0ubuntu1
 )
-declare -A REV=([ffmpeg]=14 [mpv]=1 [gst-plugins-bad1.0]=4 [gst-plugins-good1.0]=6 [mesa]=1)
+declare -A REV=([ffmpeg]=14 [mpv]=1 [gst-plugins-bad1.0]=4 [gst-plugins-good1.0]=6 [mesa]=2)
 # Sources built from a newer upstream release than the archive has: the archive source package whose debian/
 # directory is used (patches/<dir>/debian/*.patch adapt it), and the upstream tarballs unpacked in place of its
 # source ("file sha256 directory url" per tarball; directory relative to the source tree)

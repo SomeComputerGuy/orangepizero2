@@ -107,7 +107,7 @@ interface it uses is itself still under review.
 - GPU frequency scaling (306 to 600 MHz) with thermal throttling, and a supply voltage floor that prevents
   corrupted 4K video decoding while the GPU idles.
 
-Upstream status: the kernel GPU fixes are sent (dri-devel, v2), the device tree changes are sent (v3). The Mesa
+Upstream status: the kernel GPU fixes are sent (dri-devel, v3), the device tree changes are sent (v3). The Mesa
 fixes are not sent upstream; they are in [our Mesa fork](https://github.com/SomeComputerGuy/mesa).
 
 ### Display engine
@@ -168,21 +168,26 @@ its author.
 None of this is in the build yet unless stated.
 
 GPU
-- OpenGL ES 3.2 (geometry and tessellation shaders): in progress. The shaders render on the board; the remaining
-  conformance failures are being fixed and retested. The build exposes OpenGL ES 3.1.
+- OpenGL ES 3.2 (geometry and tessellation shaders): in progress. On the board the conformance subsets show no
+  regressions and no out-of-memory kills; one tessellation test still runs over the 30 s time limit. The build
+  exposes OpenGL ES 3.1.
 - OpenCL 2.0 features (shared virtual memory, generic address space, pipes, device-side enqueue): implemented in a
-  fork branch, being tested on the board. The kernel part is already in the build.
+  fork branch and passed on the board; not in the build yet. The kernel part is already in the build.
 - Vulkan 1.3: the full conformance run on the board is in progress.
 
 Video
-- H.264 encoder: regions of interest, intra refresh and the 8x8 transform.
-- AVS2 background and S pictures: waiting for test streams.
-- GStreamer elements for MPEG-4, H.263, Sorenson Spark, AVS and AVS2: in the build. AVS and AVS2 are bit-exact on the
-  board for most test streams; MPEG-4, H.263 and Sorenson Spark, and one 8-bit AVS2 stream, are being fixed and
-  retested.
-- GStreamer H.264 encoder element: it refused every input format with this single-planar encoder; fixed in the
-  build, being tested on the board.
-- G2D (2D graphics accelerator): the rotation unit works; the mixer does not respond yet.
+- H.264 encoder: regions of interest (4, the hardware's limit), intra refresh and the 8x8 transform: written,
+  board test pending.
+- AVS2 background and S pictures: bit-exact on the board with new test streams (the official reference encoder is
+  not public; streams made with an extended open encoder).
+- GStreamer elements for MPEG-4, H.263, Sorenson Spark, AVS and AVS2: in the build; MPEG-4, H.263 and Spark are
+  bit-exact on the board. Two 8-bit AVS2 streams needed a kernel fix (passed on a test kernel, not in the build yet).
+- GStreamer H.264 encoder element: fixed in the build and passed on the board (I420, NV12, NV21, YV12).
+- GStreamer: a hang when starting network streams and a V4L2 caps error fixed in the build, passed on the board.
+- The hardware JPEG encoder and 1080p JPEG decoding through GStreamer needed kernel fixes; both now run on a test
+  kernel, with two output mismatches left.
+- G2D (2D graphics accelerator): the vendor's own drivers program it as we do, and the chip reports no mixer; a
+  driver for the rotation unit is written, board test pending.
 - Protected video playback in browsers (Widevine): not started.
 
 Display
@@ -191,22 +196,23 @@ Display
 - More than one overlay layer per blend channel, HDMI 3D formats: not started.
 
 Networking
-- Jumbo frames up to the datasheet's 16 KB: transmit is fixed on a test kernel (the controller's DMA burst length;
-  100,000 frames at MTU 16358 without a loss on the board, and 20,000 over a real link). A continuous stream of
-  16 KB frames received from another host still stalls. A receive fix is written (the controller passes a large
-  frame on as it arrives instead of after the whole frame, as Allwinner's own driver does) and is about to be
-  tested on the board. Until both are proven the limit stays MTU 4070.
+- Jumbo frames up to the datasheet's 16 KB (MTU 16358): on a test kernel an idle link works both ways (TCP 982
+  Mbit/s, no retransmits) and receive checksum offload is correct at every MTU tested. The earlier receive stall was the PC's
+  USB adapter (its driver cannot send above MTU 16354). Still failing: traffic while memory and the video engine are
+  busy, and 16384-byte QinQ frames. Until fixed the limit stays MTU 4070.
 - Hardware checksums for frames larger than 1500 bytes: some sizes come out corrupted, so above MTU 1500 the kernel
   computes checksums in software. Not investigated yet.
 - An Ethernet receive fix (a frame spread over several buffers was split when memory allocation failed): passed on
-  the board, not yet in the image.
+  the board and sent upstream; not yet in the image.
 - Bluetooth LE connections: waiting for a test device. Wake-up from suspend by WiFi, Bluetooth or USB: not started.
 - A mainline WiFi/Bluetooth driver for the UWE5622: long term.
 
 Kernel and system
 - Moved to the current Armbian main branch and Linux 7.3.4 on 2026-11-13; the build follows Armbian's newest `edge`
-  kernel again. No image built from it yet.
-- Crypto engine RSA and ECC; SPI 3-wire mode and frame sizes other than 8 bits.
+  kernel again. The first image from it is being built.
+- Crypto engine RSA (512-4096 bit), ECDH and ECDSA: written, board test pending; ECDSA signing and ECDH P-521 next.
+- Secure boot, OP-TEE and a firmware TPM without burning eFuses, shared with the Orange Pi 5 work: planned.
+- SPI 3-wire mode and frame sizes other than 8 bits.
 - PWM capture, I2C DMA transfers, SPI and I2C target (slave) modes: in the build, not yet tested with a real
   signal or a second device.
 - Out-of-memory handling on 1 GB: a process that runs out of memory can stall the board until the hardware watchdog
@@ -245,7 +251,7 @@ end-to-end printing.
 As of 2026-11-13. Nothing is merged in mainline Linux, U-Boot, TF-A or FFmpeg yet.
 
 - Linux kernel, sent and waiting: Zero2 device tree fixes and GPU frequency scaling (v3), Ethernet jumbo frames
-  (v2), an Ethernet driver error-path fix, panfrost long-running jobs (v2), crypto AES-XTS (v2), SPI dual read, I2C
+  (v2), an Ethernet driver error-path fix, an stmmac receive fix, panfrost long-running jobs (v3), crypto AES-XTS (v2), SPI dual read, I2C
   EEPROM-target autoload, cedrus VP8 fix, H616 clock fixes (acked). On hold at a maintainer's request until the H616
   display driver is merged: an IOMMU fault-report fix.
 - TF-A: H616 CPU idle and suspend, Gerrit changes 56325 and 56326, in review.

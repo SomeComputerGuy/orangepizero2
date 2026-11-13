@@ -1,0 +1,428 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 13 Nov 2026 04:19:13 +0000
+Subject: [PATCH 1/2] v4l2codecs: mpeg4: Send the segments of the picture to
+ drivers that need them
+
+Some decoders (the MPEG engine of the Allwinner video engine, cedrus)
+cannot parse MPEG-4 video packet headers nor H.263 GOB and slice
+headers: they decode a given number of macroblocks from a given bit
+position. Their drivers expose V4L2_CID_STATELESS_MPEG4_SLICE_PARAMS
+and V4L2_CID_STATELESS_H263_SLICE_PARAMS, which the element refused.
+
+Find the segments of the picture that start with a header the way the
+V4L2 Request hwaccel of FFmpeg does: byte aligned resync markers up to
+the next start code for MPEG-4, GOB and slice start codes at any bit
+position for H.263 and Sorenson Spark, in increasing macroblock order,
+and send them with the picture when the driver has the control.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2codecs/gstv4l2codecmpeg4dec.c | 341 +++++++++++++++++++++++++-
+ 1 file changed, 329 insertions(+), 12 deletions(-)
+
+diff --git a/sys/v4l2codecs/gstv4l2codecmpeg4dec.c b/sys/v4l2codecs/gstv4l2codecmpeg4dec.c
+index f36e588..304292d 100644
+--- a/sys/v4l2codecs/gstv4l2codecmpeg4dec.c
++++ b/sys/v4l2codecs/gstv4l2codecmpeg4dec.c
+@@ -151,6 +151,13 @@ struct _GstV4l2CodecMpeg4Dec
+   GstMapInfo bitstream_map;
+ 
+   gboolean copy_frames;
++
++  /* whether the driver takes the segments of the picture (SLICE_PARAMS),
++   * the segments of the current picture and the bit position of their
++   * headers */
++  gboolean has_slice_params;
++  GArray *slices;
++  GArray *slice_pos;
+ };
+ 
+ static GstElementClass *parent_class = NULL;
+@@ -282,16 +289,12 @@ gst_v4l2_codec_mpeg4_dec_negotiate (GstVideoDecoder * decoder)
+     return FALSE;
+   }
+ 
+-  /* Drivers which need the position of each video packet or GOB are not
+-   * supported: the slice parameters are not parsed. */
+-  if (gst_v4l2_decoder_query_control_size (self->decoder,
+-          pixelformat == V4L2_PIX_FMT_MPEG4_SLICE ?
+-          V4L2_CID_STATELESS_MPEG4_SLICE_PARAMS :
+-          V4L2_CID_STATELESS_H263_SLICE_PARAMS, NULL)) {
+-    GST_ELEMENT_ERROR (decoder, STREAM, NOT_IMPLEMENTED, (NULL),
+-        ("The driver needs slice parameters, which are not implemented"));
+-    return FALSE;
+-  }
++  /* Drivers which cannot parse video packet, GOB or slice headers take the
++   * segments of the picture that start with one. */
++  self->has_slice_params = gst_v4l2_decoder_query_control_size (self->decoder,
++      pixelformat == V4L2_PIX_FMT_MPEG4_SLICE ?
++      V4L2_CID_STATELESS_MPEG4_SLICE_PARAMS :
++      V4L2_CID_STATELESS_H263_SLICE_PARAMS, NULL);
+ 
+   if (pixelformat == V4L2_PIX_FMT_MPEG4_SLICE) {
+     self->has_quirks_control = gst_v4l2_decoder_query_control_size
+@@ -744,7 +747,7 @@ gst_v4l2_codec_mpeg4_dec_submit_bitstream (GstV4l2CodecMpeg4Dec * self,
+ {
+   GstV4l2Request *request = NULL;
+   GstVideoCodecFrame *frame;
+-  struct v4l2_ext_control control[4];
++  struct v4l2_ext_control control[5];
+   gsize bytesused;
+   gboolean ret = FALSE;
+   guint count = 0;
+@@ -783,6 +786,18 @@ gst_v4l2_codec_mpeg4_dec_submit_bitstream (GstV4l2CodecMpeg4Dec * self,
+     /* *INDENT-ON* */
+   }
+ 
++  if (self->has_slice_params) {
++    /* *INDENT-OFF* */
++    control[count++] = (struct v4l2_ext_control) {
++      .id = gst_v4l2_codec_mpeg4_dec_is_mpeg4 (self) ?
++          V4L2_CID_STATELESS_MPEG4_SLICE_PARAMS :
++          V4L2_CID_STATELESS_H263_SLICE_PARAMS,
++      .ptr = self->slices->data,
++      .size = sizeof (struct v4l2_ctrl_mpeg4_slice_params) * self->slices->len,
++    };
++    /* *INDENT-ON* */
++  }
++
+   bytesused = self->bitstream_map.size;
+   gst_memory_unmap (self->bitstream, &self->bitstream_map);
+   self->bitstream_map = (GstMapInfo) GST_MAP_INFO_INIT;
+@@ -1023,6 +1038,299 @@ gst_v4l2_codec_mpeg4_dec_fill_h263 (GstV4l2CodecMpeg4Dec * self,
+   return GST_FLOW_OK;
+ }
+ 
++/* The MPEG-4 and H.263 slice parameters share their layout. */
++G_STATIC_ASSERT (sizeof (struct v4l2_ctrl_mpeg4_slice_params) ==
++    sizeof (struct v4l2_ctrl_h263_slice_params));
++
++/* Reads the picture bit by bit, zero bits past its end. */
++typedef struct
++{
++  const guint8 *data;
++  gsize size;
++  guint64 pos;
++} SegmentReader;
++
++static guint32
++segment_peek (const SegmentReader * r, guint64 pos, guint n)
++{
++  guint32 v = 0;
++
++  for (; n; n--, pos++) {
++    guint64 byte = pos >> 3;
++
++    v <<= 1;
++    if (byte < r->size)
++      v |= (r->data[byte] >> (7 - (pos & 7))) & 1;
++  }
++
++  return v;
++}
++
++static guint32
++segment_get (SegmentReader * r, guint n)
++{
++  guint32 v = segment_peek (r, r->pos, n);
++
++  r->pos += n;
++  return v;
++}
++
++static void
++gst_v4l2_codec_mpeg4_dec_add_segment (GstV4l2CodecMpeg4Dec * self,
++    guint64 pos, guint64 data_pos, guint mbn, guint quant)
++{
++  /* *INDENT-OFF* */
++  struct v4l2_ctrl_mpeg4_slice_params slice = {
++    .offset = pos >> 3,
++    .data_bit_offset = data_pos - (pos & ~7),
++    .macroblock_number = mbn,
++    .quant_scale = quant,
++  };
++  /* *INDENT-ON* */
++  guint32 p = pos;
++
++  g_array_append_val (self->slices, slice);
++  g_array_append_val (self->slice_pos, p);
++}
++
++/* video_packet_header() of ISO/IEC 14496-2 for rectangular VOPs, as FFmpeg
++ * reads it (ff_mpeg4_decode_video_packet_header()) */
++static gboolean
++mpeg4_parse_video_packet_header (SegmentReader * r,
++    const GstMpeg4VideoObjectLayer * vol, GstMpeg4Picture * picture,
++    guint prefix, guint mb_num, guint mb_num_bits, guint * mbn, guint * quant)
++{
++  guint len, q;
++
++  if (r->pos + 20 > r->size * 8)
++    return FALSE;
++
++  for (len = 0; len < 32; len++)
++    if (segment_get (r, 1))
++      break;
++  if (len != prefix)
++    return FALSE;
++
++  *mbn = segment_get (r, mb_num_bits);
++  if (*mbn >= mb_num || !*mbn)
++    return FALSE;
++
++  q = segment_get (r, vol->quant_precision);
++  if (q)
++    *quant = q;
++
++  if (segment_get (r, 1)) {     /* header_extension_code */
++    while (segment_get (r, 1) && r->pos < r->size * 8);  /* modulo_time_base */
++    segment_get (r, 1);         /* marker_bit */
++    segment_get (r, vol->vop_time_increment_bits);
++    segment_get (r, 1);         /* marker_bit */
++    segment_get (r, 2);         /* vop_coding_type */
++    segment_get (r, 3);         /* intra_dc_vlc_thr */
++    /* no sprite_trajectory(): GMC is refused */
++    if (picture->coding_type != GST_MPEG4_I_VOP)
++      segment_get (r, 3);       /* vop_fcode_forward */
++    if (picture->coding_type == GST_MPEG4_B_VOP)
++      segment_get (r, 3);       /* vop_fcode_backward */
++  }
++
++  return TRUE;
++}
++
++/* The video packets of a VOP, found as FFmpeg's h263_resync_hwaccel() does:
++ * byte aligned resync markers after the end of the previous header, up to
++ * the next start code, in increasing macroblock order. */
++static void
++gst_v4l2_codec_mpeg4_dec_find_video_packets (GstV4l2CodecMpeg4Dec * self,
++    GstMpeg4Picture * picture, const GstMpeg4VideoObjectLayer * vol)
++{
++  const GstMpeg4VideoObjectPlane *vop = &picture->vop;
++  SegmentReader r = { picture->data, picture->size, 0 };
++  guint mb_num = ((vol->width + 15) / 16) * ((vol->height + 15) / 16);
++  guint mb_num_bits = g_bit_storage (mb_num - 1);
++  guint64 start = picture->header_size;
++  guint quant = vop->quant, prev = 0, prefix;
++
++  switch (picture->coding_type) {
++    case GST_MPEG4_I_VOP:
++      prefix = 16;
++      break;
++    case GST_MPEG4_B_VOP:
++      prefix = MAX (MAX (vop->fcode_forward, vop->fcode_backward), 2) + 15;
++      break;
++    default:
++      prefix = vop->fcode_forward + 15;
++      break;
++  }
++
++  gst_v4l2_codec_mpeg4_dec_add_segment (self, 0, start, 0, quant);
++
++  /* without resync markers, the macroblock data may emulate one */
++  if (vol->resync_marker_disable)
++    return;
++
++  for (;;) {
++    gboolean found = FALSE;
++    guint64 pos, bit = 0;
++    guint mbn = 0, q = quant;
++
++    start = (start + 7) & ~(guint64) 7;
++    for (pos = start >> 3; pos + 3 < picture->size; pos++) {
++      if (picture->data[pos + 1])
++        continue;
++      /* a start code ends the VOP, packed B-VOPs follow it */
++      if (!picture->data[pos] && picture->data[pos + 2] == 1)
++        return;
++      if (picture->data[pos])
++        continue;
++
++      bit = pos * 8;
++      r.pos = bit;
++      q = quant;
++      if (mpeg4_parse_video_packet_header (&r, vol, picture, prefix, mb_num,
++              mb_num_bits, &mbn, &q)) {
++        found = TRUE;
++        break;
++      }
++    }
++
++    if (!found || mbn <= prev)
++      return;
++
++    gst_v4l2_codec_mpeg4_dec_add_segment (self, bit, r.pos, mbn, q);
++    quant = q;
++    prev = mbn;
++    start = r.pos;
++  }
++}
++
++/* gob_header() or slice_header() of ITU-T H.263, as FFmpeg reads them
++ * (h263_decode_gob_header()) from the 16 zero bits of the start code on */
++static gboolean
++h263_parse_gob_header (SegmentReader * r, gboolean slice_structured,
++    guint mb_width, guint mb_height, guint gob_height, guint * mbn,
++    guint * quant)
++{
++  static const guint16 mba_max[6] = { 47, 98, 395, 1583, 6335, 9215 };
++  static const guint8 mba_length[6] = { 6, 7, 9, 11, 13, 14 };
++  guint mb_num = mb_width * mb_height;
++  guint64 left;
++  guint q, i;
++
++  r->pos += 16;
++  left = r->pos < r->size * 8 ? MIN (r->size * 8 - r->pos, 32) : 0;
++  for (; left > 13; left--)
++    if (segment_get (r, 1))
++      break;
++  if (left <= 13)
++    return FALSE;
++
++  if (slice_structured) {
++    if (!segment_get (r, 1))    /* marker before MBA */
++      return FALSE;
++    for (i = 0; i < 5; i++)
++      if (mb_num - 1 <= mba_max[i])
++        break;
++    *mbn = segment_get (r, mba_length[i]);
++    if (mb_num > 1583 && !segment_get (r, 1))
++      return FALSE;
++    q = segment_get (r, 5);     /* SQUANT */
++    if (!segment_get (r, 1))
++      return FALSE;
++    segment_get (r, 2);         /* GFID */
++  } else {
++    guint gn = segment_get (r, 5);
++
++    *mbn = gob_height * gn * mb_width;
++    segment_get (r, 2);         /* GFID */
++    q = segment_get (r, 5);     /* GQUANT */
++  }
++
++  if (*mbn / mb_width >= mb_height || !q)
++    return FALSE;
++
++  *quant = q;
++  return TRUE;
++}
++
++/* The GOBs with a header and the slices of a picture, found at any bit
++ * position as FFmpeg's h263_resync_hwaccel() does, in increasing macroblock
++ * order. */
++static void
++gst_v4l2_codec_mpeg4_dec_find_gobs (GstV4l2CodecMpeg4Dec * self,
++    GstMpeg4Picture * picture)
++{
++  const GstMpeg4H263PictureHeader *hdr = &picture->h263;
++  SegmentReader r = { picture->data, picture->size, 0 };
++  gboolean ss = ! !(hdr->flags & GST_MPEG4_H263_PICTURE_FLAG_SS);
++  guint mb_width = (hdr->width + 15) / 16;
++  guint mb_height = (hdr->height + 15) / 16;
++  guint gob_height = hdr->height <= 400 ? 1 : hdr->height <= 800 ? 2 : 4;
++  guint64 start = picture->header_size;
++  guint quant = hdr->pquant, prev = 0;
++
++  gst_v4l2_codec_mpeg4_dec_add_segment (self, 0, start, 0, quant);
++
++  for (;;) {
++    gboolean found = FALSE;
++    guint64 pos, bit = 0;
++    guint mbn = 0, q = quant;
++
++    for (pos = start >> 3; !found && pos + 3 < picture->size; pos++) {
++      if (picture->data[pos + 1])
++        continue;
++      for (bit = pos * 8; bit < pos * 8 + 8; bit++) {
++        if (bit < start || segment_peek (&r, bit, 16) ||
++            !(segment_peek (&r, bit, 17) & 1))
++          continue;
++        r.pos = bit;
++        if (h263_parse_gob_header (&r, ss, mb_width, mb_height, gob_height,
++                &mbn, &q)) {
++          found = TRUE;
++          break;
++        }
++      }
++    }
++
++    if (!found || mbn <= prev)
++      return;
++
++    gst_v4l2_codec_mpeg4_dec_add_segment (self, bit, r.pos, mbn, q);
++    quant = q;
++    prev = mbn;
++    start = r.pos;
++  }
++}
++
++/* The segments of the picture that start with a header, for drivers which
++ * decode a given number of macroblocks from a given bit position. */
++static void
++gst_v4l2_codec_mpeg4_dec_find_segments (GstV4l2CodecMpeg4Dec * self,
++    GstMpeg4Picture * picture, const GstMpeg4VideoObjectLayer * vol)
++{
++  struct v4l2_ctrl_mpeg4_slice_params *slices;
++  guint i;
++
++  g_array_set_size (self->slices, 0);
++  g_array_set_size (self->slice_pos, 0);
++
++  if (gst_v4l2_codec_mpeg4_dec_is_mpeg4 (self))
++    gst_v4l2_codec_mpeg4_dec_find_video_packets (self, picture, vol);
++  else
++    gst_v4l2_codec_mpeg4_dec_find_gobs (self, picture);
++
++  /* the byte which holds the next header ends a segment */
++  slices = (struct v4l2_ctrl_mpeg4_slice_params *) self->slices->data;
++  for (i = 0; i < self->slices->len; i++) {
++    guint32 end = i + 1 < self->slices->len ?
++        (g_array_index (self->slice_pos, guint32, i + 1) + 7) >> 3 :
++        picture->size;
++
++    slices[i].size = end - slices[i].offset;
++  }
++
++  GST_LOG_OBJECT (self, "%u segments", self->slices->len);
++}
++
+ static GstFlowReturn
+ gst_v4l2_codec_mpeg4_dec_decode_picture (GstMpeg4Decoder * decoder,
+     GstMpeg4Picture * picture, const GstMpeg4VideoObjectLayer * vol,
+@@ -1056,10 +1364,14 @@ gst_v4l2_codec_mpeg4_dec_decode_picture (GstMpeg4Decoder * decoder,
+     return GST_FLOW_ERROR;
+   }
+ 
+-  /* the whole picture: the driver finds the video packets or GOBs */
++  /* the whole picture: the driver finds the video packets or GOBs, or
++   * takes their positions */
+   memcpy (self->bitstream_map.data, picture->data, picture->size);
+   self->bitstream_map.size = picture->size;
+ 
++  if (self->has_slice_params)
++    gst_v4l2_codec_mpeg4_dec_find_segments (self, picture, vol);
++
+   if (!gst_v4l2_codec_mpeg4_dec_submit_bitstream (self, picture))
+     return GST_FLOW_ERROR;
+ 
+@@ -1153,6 +1465,9 @@ gst_v4l2_codec_mpeg4_dec_init (GstV4l2CodecMpeg4Dec * self,
+ {
+   self->decoder = gst_v4l2_decoder_new (klass->device);
+   gst_video_info_dma_drm_init (&self->vinfo_drm);
++  self->slices = g_array_new (FALSE, TRUE,
++      sizeof (struct v4l2_ctrl_mpeg4_slice_params));
++  self->slice_pos = g_array_new (FALSE, FALSE, sizeof (guint32));
+ }
+ 
+ static void
+@@ -1161,6 +1476,8 @@ gst_v4l2_codec_mpeg4_dec_dispose (GObject * object)
+   GstV4l2CodecMpeg4Dec *self = GST_V4L2_CODEC_MPEG4_DEC (object);
+ 
+   g_clear_object (&self->decoder);
++  g_clear_pointer (&self->slices, g_array_unref);
++  g_clear_pointer (&self->slice_pos, g_array_unref);
+ 
+   G_OBJECT_CLASS (parent_class)->dispose (object);
+ }

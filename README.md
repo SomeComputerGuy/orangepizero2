@@ -4,7 +4,7 @@ A general-purpose Armbian build for the Orange Pi Zero2 (Allwinner H616, 1 GB RA
 the chip and the board works, and that every fix goes upstream. Until upstream has them, the fixes are carried here.
 
 - Ubuntu 26.10 ("stonking") userspace
-- Linux 7.3.x (Armbian `edge` branch plus our patch set; currently locked to 7.3.3)
+- Linux 7.3.x (Armbian `edge` branch plus our patch set; 7.3.4 as of 2026-11-13)
 - U-Boot v2026.10, TF-A lts-v2.14.11 with native H616 suspend support
 - Mesa 26.3.0 with our Mali-G31 fixes (panfrost, panvk, rusticl)
 - FFmpeg, mpv and GStreamer rebuilt with hardware video decoding (V4L2 Request API)
@@ -193,18 +193,19 @@ Display
 Networking
 - Jumbo frames up to the datasheet's 16 KB: transmit is fixed on a test kernel (the controller's DMA burst length;
   100,000 frames at MTU 16358 without a loss on the board, and 20,000 over a real link). A continuous stream of
-  16 KB frames received from another host still stalls; being investigated. Until that is fixed the limit stays
-  MTU 4070.
+  16 KB frames received from another host still stalls. A receive fix is written (the controller passes a large
+  frame on as it arrives instead of after the whole frame, as Allwinner's own driver does) and is about to be
+  tested on the board. Until both are proven the limit stays MTU 4070.
 - Hardware checksums for frames larger than 1500 bytes: some sizes come out corrupted, so above MTU 1500 the kernel
   computes checksums in software. Not investigated yet.
-- An Ethernet receive fix (a frame spread over several buffers was split when memory allocation failed): ready,
-  being tested on the board.
+- An Ethernet receive fix (a frame spread over several buffers was split when memory allocation failed): passed on
+  the board, not yet in the image.
 - Bluetooth LE connections: waiting for a test device. Wake-up from suspend by WiFi, Bluetooth or USB: not started.
 - A mainline WiFi/Bluetooth driver for the UWE5622: long term.
 
 Kernel and system
-- Move to the current Armbian main branch and Linux 7.3.4 (six of our patches need changes): in progress; the 7.3.3
-  lock is dropped then. The build follows Armbian's newest `edge` kernel from then on.
+- Moved to the current Armbian main branch and Linux 7.3.4 on 2026-11-13; the build follows Armbian's newest `edge`
+  kernel again. No image built from it yet.
 - Crypto engine RSA and ECC; SPI 3-wire mode and frame sizes other than 8 bits.
 - PWM capture, I2C DMA transfers, SPI and I2C target (slave) modes: in the build, not yet tested with a real
   signal or a second device.

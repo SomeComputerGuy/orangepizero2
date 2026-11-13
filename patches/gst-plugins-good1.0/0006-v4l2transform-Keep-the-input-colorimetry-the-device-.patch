@@ -1,0 +1,179 @@
+From 3342532a29c4ad40e8d0372ea51ff4950c713920 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 30 Oct 2026 03:47:24 +0000
+Subject: [PATCH 6/8] v4l2transform: Keep the input colorimetry the device
+ can't change
+
+Scaling NV12 with the Rockchip RGA (v4l2convert) fails negotiation as
+soon as the output caps don't pin the colorimetry:
+
+  ... ! v4l2slh264dec ! v4l2video3convert !
+      video/x-raw,format=NV12,width=960,height=540 ! v4l2video2convert ! ...
+  ERROR: Device '/dev/video3' does not support bt601 colorimetry
+  Device wants 2:4:16:1 colorimetry
+
+transform_caps() drops the colorimetry, and fixate_caps() never sets
+it, so gst_caps_fixate() takes the first entry of the downstream
+element's probed colorimetry list (or, without one, the size-based
+default, bt601 for SD). The source is bt709. On the CAPTURE queue of a
+V4L2 converter, only the fields the driver flags with V4L2_FMT_FLAG_CSC_*
+can be chosen with V4L2_PIX_FMT_FLAG_SET_CSC. The others follow the
+OUTPUT queue. The RGA advertises CSC_YCBCR_ENC and CSC_QUANTIZATION
+only, so S_FMT keeps the bt709 primaries (REC709 colorspace) and applies
+the requested bt601 matrix. The strict colorimetry check in
+gst_v4l2_object_set_format_full() then rejects the result.
+
+A converter that only scales or changes the YUV layout should keep its
+input colorimetry anyway; videoconvert behaves the same way. When both
+sides are YUV, fixate the output colorimetry to the input one (adding it
+if downstream doesn't constrain it). If the input colorimetry isn't in
+the probed list (a UVC camera's MJPEG decodes to 2:4:5:1, for example),
+pick the entry closest to it, preferring the same primaries and transfer
+function, because those can't be changed on the CAPTURE queue. The output format is fixated first,
+because it decides whether the rule applies. The same applies to
+YUV<->RGB conversions: the matrix and range change, but the primaries
+and transfer function don't, so there the entry with the input's
+primaries and transfer function is preferred (a 4K camera frame to RGB on
+the RGA2 otherwise failed with "does not support 1:1:16:4"). Both plain
+and DMA_DRM caps are handled (rkvdec output is negotiated as
+format=DMA_DRM with drm-format=NV12).
+
+Tested on an Orange Pi 5 (RK3588S, GStreamer 1.28.7): the reproducer
+below now negotiates colorimetry=bt709 on the RGA output, and its output
+is bit-identical to the same pipeline with colorimetry=bt709 forced in
+the caps (62 frames, same md5). Without the change it fails as shown
+above. A 4K MJPEG camera decoded by rkjpegd (NV16, 2:4:5:1) also converts
+to NV12 at 30 fps on the RGA3 now, where it failed the same way before.
+
+Reproducer (any 4K BT.709 H.264 clip, RK3588 with the rockchip-rga
+driver):
+  gst-launch-1.0 filesrc location=bt709-2160p.mkv ! matroskademux !
+    h264parse ! v4l2slh264dec ! <rga3 v4l2convert> !
+    video/x-raw,format=NV12,width=960,height=540 ! <rga2 v4l2convert> !
+    video/x-raw,format=RGB,width=224,height=224 ! fakesink
+---
+ sys/v4l2/gstv4l2transform.c | 101 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 101 insertions(+)
+
+diff --git a/sys/v4l2/gstv4l2transform.c b/sys/v4l2/gstv4l2transform.c
+index f8dc713..9bdfada 100644
+--- a/sys/v4l2/gstv4l2transform.c
++++ b/sys/v4l2/gstv4l2transform.c
+@@ -450,6 +450,106 @@ gst_v4l2_transform_transform_caps (GstBaseTransform * btrans,
+   return result;
+ }
+ 
++static gboolean
++gst_v4l2_transform_format_is_yuv (const GstStructure * s)
++{
++  const gchar *format = gst_structure_get_string (s, "format");
++  GstVideoFormat vformat;
++  const GstVideoFormatInfo *finfo;
++
++  if (!format)
++    return FALSE;
++
++  vformat = gst_video_format_from_string (format);
++  if (vformat == GST_VIDEO_FORMAT_DMA_DRM) {
++    const gchar *drm_format = gst_structure_get_string (s, "drm-format");
++    guint64 modifier;
++    guint32 fourcc;
++
++    if (!drm_format)
++      return FALSE;
++    fourcc = gst_video_dma_drm_fourcc_from_string (drm_format, &modifier);
++    vformat = gst_video_dma_drm_fourcc_to_format (fourcc);
++  }
++
++  finfo = gst_video_format_get_info (vformat);
++  return finfo && GST_VIDEO_FORMAT_INFO_IS_YUV (finfo);
++}
++
++/* A converter that only scales or changes the layout keeps the colorimetry
++ * of its input, and most V4L2 converters cannot change all of it anyway, not
++ * even between YUV and RGB: on the CAPTURE queue, only the parts flagged with
++ * V4L2_FMT_FLAG_CSC_* can be chosen, and the others (typically the
++ * primaries, i.e. the V4L2 colorspace) follow the OUTPUT queue. Leaving the
++ * colorimetry to the generic fixation picks the first entry of the probed
++ * list (or the size-based default, bt601 for SD), which then does not match
++ * what S_FMT returns and fails negotiation. Between formats of the same
++ * family prefer the input colorimetry; in all cases prefer an entry with the
++ * input's primaries and transfer function. */
++static void
++gst_v4l2_transform_fixate_colorimetry (const GstStructure * ins,
++    GstStructure * outs)
++{
++  const gchar *in_colorimetry = gst_structure_get_string (ins, "colorimetry");
++  gboolean same_family;
++
++  if (!in_colorimetry)
++    return;
++
++  /* The output format decides whether the input colorimetry applies, so
++   * fixate it first (gst_caps_fixate() would pick the same one later). */
++  if (gst_structure_has_field (outs, "format"))
++    gst_structure_fixate_field (outs, "format");
++
++  same_family = gst_v4l2_transform_format_is_yuv (ins) ==
++      gst_v4l2_transform_format_is_yuv (outs);
++
++  if (gst_structure_has_field (outs, "colorimetry")) {
++    const GValue *list = gst_structure_get_value (outs, "colorimetry");
++    GstVideoColorimetry in, c;
++    const gchar *best = NULL;
++    gint best_score = -1;
++
++    if (!GST_VALUE_HOLDS_LIST (list) ||
++        !gst_video_colorimetry_from_string (&in, in_colorimetry)) {
++      if (same_family)
++        gst_structure_fixate_field_string (outs, "colorimetry",
++            in_colorimetry);
++      return;
++    }
++
++    /* The input colorimetry may not be one of the probed (standard)
++     * entries. Then prefer the entry the device can produce from it:
++     * same primaries and transfer function first, as those cannot be
++     * changed on the CAPTURE queue, then the same matrix and range. */
++    for (guint i = 0; i < gst_value_list_get_size (list); i++) {
++      const GValue *v = gst_value_list_get_value (list, i);
++      const gchar *str;
++      gint score;
++
++      if (!G_VALUE_HOLDS_STRING (v))
++        continue;
++      str = g_value_get_string (v);
++      if (!gst_video_colorimetry_from_string (&c, str))
++        continue;
++
++      score = (c.primaries == in.primaries) * 8 +
++          (c.transfer == in.transfer) * 4;
++      if (same_family)
++        score += (c.matrix == in.matrix) * 2 + (c.range == in.range);
++      if (score > best_score) {
++        best_score = score;
++        best = str;
++      }
++    }
++    if (best)
++      gst_structure_fixate_field_string (outs, "colorimetry", best);
++  } else if (same_family) {
++    gst_structure_set (outs, "colorimetry", G_TYPE_STRING, in_colorimetry,
++        NULL);
++  }
++}
++
+ static GstCaps *
+ gst_v4l2_transform_fixate_caps (GstBaseTransform * trans,
+     GstPadDirection direction, GstCaps * caps, GstCaps * othercaps)
+@@ -478,6 +578,7 @@ gst_v4l2_transform_fixate_caps (GstBaseTransform * trans,
+       gst_structure_fixate_field_string (outs, "format", in_format);
+     }
+ 
++    gst_v4l2_transform_fixate_colorimetry (ins, outs);
+   }
+ 
+   from_par = gst_structure_get_value (ins, "pixel-aspect-ratio");
+-- 
+2.55.0
+

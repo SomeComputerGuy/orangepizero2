@@ -1,0 +1,112 @@
+From 24b2785fdefa04d4ce266cee63f0fdf1778ae15c Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 30 Oct 2026 05:26:00 +0000
+Subject: [PATCH 7/8] souphttpsrc: Don't resend an in-flight HEAD probe as the
+ stream request
+
+The pipeline
+  souphttpsrc location=http://host/clip.mp4 ! queue2 use-buffering=true !
+      qtdemux ! ...
+fails to start about half of the time with "Internal data stream error,
+streaming stopped, reason error (-5)" before any caps are negotiated.
+The debug log shows two requests racing on the same message:
+
+  queue2 src thread:    gst_soup_http_src_do_request: Running request for method: HEAD
+  basesrc stream thread: gst_soup_http_src_do_request: Running request for method: GET
+  _session_send_cb: Sending message failed: Message is already in session queue
+  gst_soup_http_src_send_message: Didn't get an input stream
+  gst_soup_http_src_create: Returning -5 error
+
+qtdemux sends a SEEKING query from the queue2 source thread as soon as
+it starts. queue2 forwards it, and gst_soup_http_src_is_seekable() ->
+check_seekable() starts a HEAD request to learn whether the server takes
+Range requests. do_request() stores it in src->msg and waits on
+session_cond, which releases session_mutex. Meanwhile the streaming
+thread enters create(), sees no input stream, takes session_mutex and
+calls do_request() with GET. Because src->msg is set, do_request() reuses
+that message (still the in-flight HEAD) and queues it a second time. libsoup
+rejects this, and create() fails with GST_FLOW_ERROR.
+
+check_seekable() already waits for an in-flight GET before probing, but
+create() doesn't wait for an in-flight HEAD. Track the probe with
+head_in_flight, make create() wait for it, and once the probe is done
+drop the HEAD message and its empty body stream. create() then always
+builds a new request with the configured method, rather than continuing
+with the HEAD message.
+
+Reproducer: an HTTP server with Range support serving an MP4, then 30 starts of
+  gst-launch-1.0 souphttpsrc location=http://10.55.0.1:8099/tears_of_steel_2160p_hevc.mp4 !
+    queue2 use-buffering=true max-size-bytes=100000000 ! qtdemux ! h265parse !
+    queue ! v4l2slh265dec ! queue ! waylandsink
+On an Orange Pi 5 (GStreamer 1.28.7, libsoup 3): 15/30 instant failures
+before, 0/30 after. Playback and seeking are otherwise unchanged.
+---
+ ext/soup/gstsouphttpsrc.c | 20 ++++++++++++++++++++
+ ext/soup/gstsouphttpsrc.h |  1 +
+ 2 files changed, 21 insertions(+)
+
+diff --git a/ext/soup/gstsouphttpsrc.c b/ext/soup/gstsouphttpsrc.c
+index 1c19746..127a5bc 100644
+--- a/ext/soup/gstsouphttpsrc.c
++++ b/ext/soup/gstsouphttpsrc.c
+@@ -621,6 +621,7 @@ gst_soup_http_src_reset (GstSoupHTTPSrc * src)
+   src->retry.count = 0;
+   src->have_size = FALSE;
+   src->got_headers = FALSE;
++  src->head_in_flight = FALSE;
+   src->headers_ret = GST_FLOW_OK;
+   src->seekable = FALSE;
+   src->read_position = 0;
+@@ -2559,6 +2560,11 @@ retry:
+   if (!src->input_stream) {
+     *outbuf = NULL;
+     g_mutex_lock (&src->session_mutex);
++    /* A HEAD probe started by check_seekable() from another thread (for
++     * example for a SEEKING query from a demuxer) owns src->msg until it
++     * completes: wait for it rather than sending the same message again. */
++    while (src->head_in_flight && !g_cancellable_is_cancelled (src->cancellable))
++      g_cond_wait (&src->session_cond, &src->session_mutex);
+     ret =
+         gst_soup_http_src_do_request (src,
+         src->method ? src->method : SOUP_METHOD_GET);
+@@ -2748,11 +2754,25 @@ gst_soup_http_src_check_seekable (GstSoupHTTPSrc * src)
+         ret = src->headers_ret;
+       } else {
+         if (gst_soup_http_src_session_open (src)) {
++          src->head_in_flight = TRUE;
+           ret = gst_soup_http_src_do_request (src, SOUP_METHOD_HEAD);
+         }
+       }
+     }
+     g_mutex_unlock (&src->session_mutex);
++
++    if (src->head_in_flight) {
++      /* The HEAD message was only a probe for the headers: drop it and its
++       * (empty) body stream, so that create() builds a new request with the
++       * configured method instead of resending the HEAD message. */
++      gst_soup_http_src_stream_clear (src);
++      g_mutex_lock (&src->session_mutex);
++      if (src->msg && _soup_message_get_method (src->msg) == SOUP_METHOD_HEAD)
++        g_clear_object (&src->msg);
++      src->head_in_flight = FALSE;
++      g_cond_broadcast (&src->session_cond);
++      g_mutex_unlock (&src->session_mutex);
++    }
+   }
+ }
+ 
+diff --git a/ext/soup/gstsouphttpsrc.h b/ext/soup/gstsouphttpsrc.h
+index 36607fb..c1b2903 100644
+--- a/ext/soup/gstsouphttpsrc.h
++++ b/ext/soup/gstsouphttpsrc.h
+@@ -80,6 +80,7 @@ struct _GstSoupHTTPSrc {
+ 
+   GstFlowReturn headers_ret;
+   gboolean got_headers;        /* Already received headers from the server */
++  gboolean head_in_flight;     /* check_seekable() is running a HEAD probe */
+   gboolean have_size;          /* Received and parsed Content-Length
+                                   header. */
+   guint64 content_size;        /* Value of Content-Length header. */
+-- 
+2.55.0
+

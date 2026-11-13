@@ -1,0 +1,67 @@
+From 068df64beaf19f3b7f0cd54e1834230c34077539 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 30 Oct 2026 05:48:29 +0000
+Subject: [PATCH 8/8] v4l2object: Don't probe colorimetry for compressed
+ formats on OUTPUT
+
+A UVC camera's MJPEG stream can't be decoded with v4l2jpegdec:
+
+  v4l2src ! image/jpeg,width=3840,height=2160 ! jpegparse ! v4l2jpegdec ! ...
+  WARN GST_CAPS pre_eventfunc_check:<v4l2jpegdec0:sink> caps image/jpeg, ...
+       colorimetry=(string)2:4:5:1, ... not accepted
+  streaming stopped, reason not-negotiated (-4)
+
+The camera (uvcvideo) reports sRGB, a BT.709 transfer function, the
+BT.601 matrix and the default quantization. GStreamer turns that into
+2:4:5:1. The decoder's sink caps carry a colorimetry list that
+gst_v4l2_object_add_colorspace() probed with TRY_FMT. To avoid flooding
+slow devices with ioctls, it tries only the standard colorspaces and a
+few variants of them, so the list contains combinations such as
+1:4:7:1, but not this valid one. The caps intersection then fails,
+although rkjpegd accepts the format, with its quantization, in TRY_FMT.
+
+For a compressed format on an OUTPUT queue, i.e. the bitstream fed to a
+decoder, the colorimetry describes the stream. The driver carries it over
+to the CAPTURE side and doesn't choose it. A probed closed list adds
+nothing there, and it rejects valid streams. Skip the probe in that case,
+so the sink caps leave the colorimetry unconstrained. Capture
+queues and raw formats are unchanged.
+
+Reproducer (Aluratek UHD 4K camera, RK3588 rkjpegd):
+  gst-launch-1.0 v4l2src device=/dev/video10 num-buffers=60 !
+    image/jpeg,width=3840,height=2160,framerate=30/1 ! jpegparse !
+    v4l2jpegdec ! fakevideosink
+fails with not-negotiated before the change and decodes every frame
+after it.
+---
+ sys/v4l2/gstv4l2object.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/sys/v4l2/gstv4l2object.c b/sys/v4l2/gstv4l2object.c
+index 53f4e08..8016171 100644
+--- a/sys/v4l2/gstv4l2object.c
++++ b/sys/v4l2/gstv4l2object.c
+@@ -2666,6 +2666,20 @@ gst_v4l2_object_add_colorspace (GstV4l2Object * v4l2object, GstStructure * s,
+   GstVideoColorimetry cinfo;
+   enum v4l2_colorspace req_cspace;
+ 
++  /* The colorimetry of a compressed bitstream fed to a decoder is a property
++   * of the stream: the driver only carries it over to the CAPTURE queue. A
++   * probed list is limited to the standard combinations tried below, so it
++   * would reject valid streams such as a UVC camera's MJPEG with 2:4:5:1
++   * (sRGB, BT.601 matrix, BT.709 transfer, default quantization). Leave the
++   * colorimetry unconstrained there. */
++  if (V4L2_TYPE_IS_OUTPUT (v4l2object->type)) {
++    struct v4l2_fmtdesc *desc =
++        gst_v4l2_object_get_format_from_fourcc (v4l2object, pixelformat);
++
++    if (desc && (desc->flags & V4L2_FMT_FLAG_COMPRESSED))
++      return;
++  }
++
+   memset (&fmt, 0, sizeof (fmt));
+   fmt.type = v4l2object->type;
+   fmt.fmt.pix.width = width;
+-- 
+2.55.0
+

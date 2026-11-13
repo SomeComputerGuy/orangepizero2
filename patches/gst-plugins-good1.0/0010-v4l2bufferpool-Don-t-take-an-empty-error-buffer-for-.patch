@@ -1,0 +1,63 @@
+From b73b11436f6a80e2a99f494bdde81cc57796dbd7 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Mon, 2 Nov 2026 06:06:38 +0000
+Subject: [PATCH 2/2] v4l2bufferpool: Don't take an empty error buffer for the
+ end of stream
+
+An M2M encoder that fails a job returns the CAPTURE buffer with
+V4L2_BUF_FLAG_ERROR and bytesused 0: no data was produced. The capture
+path of gst_v4l2_buffer_pool_process() treats any empty buffer from an
+M2M device as the drain marker of legacy drivers and returns
+GST_V4L2_FLOW_LAST_BUFFER. v4l2videoenc then stops its processing loop
+and unlocks its OUTPUT queue, the next input frame fails with
+GST_FLOW_FLUSHING, upstream pauses, and the pipeline never reaches EOS:
+
+  hantro-vpu (RK3588 VEPU121), one injected encoder fault in a 30 frame
+  videotestsrc ! v4l2jpegenc ! multifilesink run:
+  - fault on the first frame: stuck in PREROLLING, 0 frames out
+  - timeout on a later frame: 16 of 30 frames, then stuck
+
+The driver keeps both queues running and returns the failed buffers
+with the error flag, as the stateful encoder interface specifies.
+
+A buffer flagged with an error is no drain marker. Give it back to the
+pool and return GST_V4L2_FLOW_CORRUPTED_BUFFER, which the elements
+already handle by moving on to the next buffer.
+
+With this and the previous change, the same runs end with EOS and 29 of
+30 frames: only the failed frame is missing.
+
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2/gstv4l2bufferpool.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/sys/v4l2/gstv4l2bufferpool.c b/sys/v4l2/gstv4l2bufferpool.c
+index 2b96f2e..787c8e6 100644
+--- a/sys/v4l2/gstv4l2bufferpool.c
++++ b/sys/v4l2/gstv4l2bufferpool.c
+@@ -1999,6 +1999,21 @@ gst_v4l2_buffer_pool_process (GstV4l2BufferPool * pool, GstBuffer ** buf,
+             guint num_queued;
+             gsize size = gst_buffer_get_size (*buf);
+ 
++            /* A capture buffer returned with V4L2_BUF_FLAG_ERROR carries no
++             * valid data, and it may well be empty, e.g. when an encoder
++             * failed to encode a frame. It is not the empty buffer of a
++             * drained legacy M2M device: drop it, and keep the stream
++             * going. */
++            if (size == 0 && GST_V4L2_IS_M2M (obj->device_caps) &&
++                GST_BUFFER_FLAG_IS_SET (*buf, GST_BUFFER_FLAG_CORRUPTED)) {
++              GST_WARNING_OBJECT (pool,
++                  "Dropping empty buffer flagged with an error");
++              gst_v4l2_buffer_pool_resize_buffer (bpool, *buf);
++              gst_buffer_unref (*buf);
++              *buf = NULL;
++              return GST_V4L2_FLOW_CORRUPTED_BUFFER;
++            }
++
+             /* Legacy M2M devices return empty buffer when drained */
+             if (size == 0 && GST_V4L2_IS_M2M (obj->device_caps)) {
+               gst_v4l2_buffer_pool_resize_buffer (bpool, *buf);
+-- 
+2.55.0
+

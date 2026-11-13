@@ -8,7 +8,9 @@
 #   gst-plugins-bad1.0  v4l2codecs/kmssink fixes 00xx (patches/gstreamer) and ours 01xx:
 #                       v4l2sljpegdec (cedrus JPEG) and jpegparse sampling-factors caps; 02xx: MPEG-1 D-pictures,
 #                       AVS1/AVS+, AVS2, MPEG-4 Part 2, H.263 and Sorenson Spark decoders (every variant)
-#   gst-plugins-good1.0 stateful v4l2jpegdec on cedrus: 1:4:0:0 colorimetry, system memory for an ANY peer,
+#   gst-plugins-good1.0 shared 00xx: v4l2transform input colorimetry, souphttpsrc HEAD probe race, no colorimetry
+#                       probe for compressed OUTPUT formats, v4l2videoenc/v4l2bufferpool error buffers; ours 01xx:
+#                       stateful v4l2jpegdec on cedrus: 1:4:0:0 colorimetry, system memory for an ANY peer,
 #                       decode errors reported; jpegdec greyscale with sampling factors above 1
 #                       (every variant)
 #   mesa                our Mesa fork for the Mali-G31 (panfrost/panvk/rusticl fixes, patches/mesa/README.md;
@@ -113,7 +115,7 @@ declare -A VERSION=(
   [gst-plugins-good1.0]=1.28.7-1ubuntu0.1
   [mesa]=26.3.0-0ubuntu1
 )
-declare -A REV=([ffmpeg]=14 [mpv]=1 [gst-plugins-bad1.0]=3 [gst-plugins-good1.0]=5 [mesa]=1)
+declare -A REV=([ffmpeg]=14 [mpv]=1 [gst-plugins-bad1.0]=3 [gst-plugins-good1.0]=6 [mesa]=1)
 # Sources built from a newer upstream release than the archive has: the archive source package whose debian/
 # directory is used (patches/<dir>/debian/*.patch adapt it), and the upstream tarballs unpacked in place of its
 # source ("file sha256 directory url" per tarball; directory relative to the source tree)

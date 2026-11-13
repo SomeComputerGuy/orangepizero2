@@ -1,0 +1,79 @@
+From 066cca84ab668363b5f8cd00e34e78596bc77f86 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Mon, 2 Nov 2026 06:06:37 +0000
+Subject: [PATCH 1/2] v4l2videoenc: Drop the frame of a capture buffer returned
+ with an error
+
+When a stateful encoder fails to encode a frame, the driver returns the
+CAPTURE buffer of the job with V4L2_BUF_FLAG_ERROR. The encoder never
+connected the "capture-error-dequeued" signal of its capture pool, so
+the GstVideoCodecFrame of that job stayed pending, and the processing
+loop stopped on GST_V4L2_FLOW_CORRUPTED_BUFFER as if it was an error.
+
+Drop the frame named by the timestamp of the failed buffer from that
+signal, as v4l2videodec already does, and keep the processing loop
+running when the pool hands back a corrupted buffer, so the frames
+queued after the failed one still come out.
+
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2/gstv4l2videoenc.c | 29 +++++++++++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+diff --git a/sys/v4l2/gstv4l2videoenc.c b/sys/v4l2/gstv4l2videoenc.c
+index 8eedd46..aaeb3a5 100644
+--- a/sys/v4l2/gstv4l2videoenc.c
++++ b/sys/v4l2/gstv4l2videoenc.c
+@@ -649,6 +649,19 @@ check_system_frame_number_too_old (guint32 current, guint32 old)
+   return FALSE;
+ }
+ 
++static void
++gst_v4l2_video_enc_drop_frame (GstVideoEncoder * encoder, guint frame_number)
++{
++  GstVideoCodecFrame *frame =
++      gst_video_encoder_get_frame (encoder, frame_number);
++
++  if (frame) {
++    GST_WARNING_OBJECT (encoder, "Dropping frame %u, the driver failed to "
++        "encode it", frame_number);
++    gst_video_encoder_drop_frame (encoder, frame);
++  }
++}
++
+ static void
+ gst_v4l2_video_enc_loop (GstVideoEncoder * encoder)
+ {
+@@ -672,6 +685,12 @@ gst_v4l2_video_enc_loop (GstVideoEncoder * encoder)
+   GST_LOG_OBJECT (encoder, "Process output buffer");
+   ret = gst_v4l2_buffer_pool_process (cpool, &buffer, NULL);
+   gst_object_unref (cpool);
++
++  /* The frame of a buffer returned with an error has already been dropped
++   * from the capture-error-dequeued signal handler. */
++  if (ret == GST_V4L2_FLOW_CORRUPTED_BUFFER)
++    return;
++
+   if (ret != GST_FLOW_OK)
+     goto beach;
+ 
+@@ -937,6 +956,16 @@ gst_v4l2_video_enc_decide_allocation (GstVideoEncoder *
+     ret = enc_class->decide_allocation (encoder, query);
+   }
+ 
++  /* A capture buffer returned with an error has no output for its frame:
++   * drop the frame, or it would stay pending forever. */
++  if (ret && self->v4l2capture->pool) {
++    g_signal_handlers_disconnect_by_func (self->v4l2capture->pool,
++        gst_v4l2_video_enc_drop_frame, encoder);
++    g_signal_connect_swapped (self->v4l2capture->pool,
++        "capture-error-dequeued", G_CALLBACK (gst_v4l2_video_enc_drop_frame),
++        encoder);
++  }
++
+   /* FIXME This may not be entirely correct, as encoder may keep some
+    * observation without delaying the encoding. Linux Media API need some
+    * more work to explicitly expressed the decoder / encoder latency. This
+-- 
+2.55.0
+

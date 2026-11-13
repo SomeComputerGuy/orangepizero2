@@ -176,8 +176,10 @@ GPU
 - Vulkan 1.3: the full conformance run on the board is in progress.
 
 Video
-- H.264 encoder: regions of interest (4, the hardware's limit), intra refresh and the 8x8 transform: written,
-  board test pending.
+- H.264 encoder: intra refresh works on the board. Regions of interest (4, the hardware's limit): a test-tool bug
+  stopped the first board run; retest pending. 8x8 transform: setting the documented register bit does not change
+  the coded data, and the vendor's software never enables 8x8 on this engine revision; a register sweep on the
+  board is next, since the H616 manual lists 8x8.
 - AVS2 background and S pictures: bit-exact on the board with new test streams (the official reference encoder is
   not public; streams made with an extended open encoder).
 - GStreamer elements for MPEG-4, H.263, Sorenson Spark, AVS and AVS2: in the build; MPEG-4, H.263 and Spark are
@@ -186,14 +188,18 @@ Video
 - GStreamer: a hang when starting network streams and a V4L2 caps error fixed in the build, passed on the board.
 - The hardware JPEG encoder and 1080p JPEG decoding through GStreamer needed kernel fixes; both now run on a test
   kernel, with two output mismatches left.
-- G2D (2D graphics accelerator): the vendor's own drivers program it as we do, and the chip reports no mixer; a
-  driver for the rotation unit is written, board test pending.
+- G2D (2D graphics accelerator): the vendor's own drivers program it as we do, and the chip reports no mixer. A
+  driver for the rotation unit is written; its first board run was stopped by a test-only register sweep that hung
+  the chip, and a safer rerun is queued.
 - Protected video playback in browsers (Widevine): not started.
 
 Display
 - 10-bit, YUV 4:4:4/4:2:2/4:2:0 and HDR10/HLG HDMI output: the code is in the build and passes register and
   capture checks on the board; it has not been tested with a real display.
-- More than one overlay layer per blend channel, HDMI 3D formats: not started.
+- HDR to SDR conversion in the display engine (3D lookup table with colour matrices), all 4 overlay layers per
+  channel as planes, HDMI 3D (frame packing, top-and-bottom, side-by-side half) and two scaler fixes for YUV planes:
+  written, board tests pending. Interlaced frame packing and side-by-side full output need changes to the shared
+  DRM core: planned. 4K frame packing does not fit the display controller's 12-bit line counter.
 
 Networking
 - Jumbo frames up to the datasheet's 16 KB (MTU 16358): on a test kernel an idle link works both ways (TCP 982
@@ -209,8 +215,10 @@ Networking
 
 Kernel and system
 - Moved to the current Armbian main branch and Linux 7.3.4 on 2026-11-13; the build follows Armbian's newest `edge`
-  kernel again. The first image from it is being built.
-- Crypto engine RSA (512-4096 bit), ECDH and ECDSA: written, board test pending; ECDSA signing and ECDH P-521 next.
+  kernel again.
+- Crypto engine RSA (512-4096 bit), ECDH and ECDSA verification: passed on the board on a test kernel. ECDSA
+  signing, ECDH P-521 and Diffie-Hellman: written, board test pending. A kernel crypto fix so that `keyctl` signing
+  picks an implementation that can sign: in progress.
 - Secure boot, OP-TEE and a firmware TPM without burning eFuses, shared with the Orange Pi 5 work: planned.
 - SPI 3-wire mode and frame sizes other than 8 bits.
 - PWM capture, I2C DMA transfers, SPI and I2C target (slave) modes: in the build, not yet tested with a real
@@ -227,10 +235,11 @@ Upstream
 
 All testing is done on one board, driven over serial, Ethernet and a switched power plug.
 
-- The newest images were built on 2026-11-12. The minimal image passed the full image check (kernel, boot, device
-  checks, GLES, Vulkan, OpenCL, hardware decoding, JPEG; display tests not run without a monitor); the server image
-  was flashed and booted. The desktop image of that build had no desktop installed; the build is fixed and the
-  desktop image is being rebuilt.
+- The first Linux 7.3.4 image (desktop) was built on 2026-11-13; all three variants are being built now, then the
+  image check runs.
+- The 2026-11-12 images: the minimal image passed the full image check (kernel, boot, device checks, GLES, Vulkan,
+  OpenCL, hardware decoding, JPEG; display tests not run without a monitor); the server image was flashed and
+  booted.
 - The previous image (2026-11-09) passed the full image check: boot and device checks, GLES, Vulkan, OpenCL,
   hardware decoding, JPEG.
 - Verified on the board over the course of the project: boot from SD card and from the SPI flash, network boot,

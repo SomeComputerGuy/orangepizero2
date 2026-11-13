@@ -3,7 +3,7 @@
 # Usage: sudo ./flash-sd.sh /dev/sdX      (run without a device to list candidates)
 set -euo pipefail
 
-IMG_DIR=/home/aruni/orangepizero2/armbian-build/output/images
+IMG_DIR=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)/armbian-build/output/images
 IMG_XZ=$(ls -t "$IMG_DIR"/Armbian-*Orangepizero2*.img.xz | head -1)
 DEV="${1:-}"
 

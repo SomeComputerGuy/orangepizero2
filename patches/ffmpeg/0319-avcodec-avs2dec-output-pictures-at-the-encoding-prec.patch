@@ -1,0 +1,60 @@
+From 128328f0a32b728996dfd94139ea683436299644 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Tue, 10 Nov 2026 01:42:47 +0000
+Subject: [PATCH] avcodec/avs2dec: output pictures at the encoding precision
+
+A Main10 AVS2 stream can code 8-bit samples at 10 bits
+(sample_precision 1, encoding_precision 2). Its pictures are
+reconstructed at 10 bits: the sample precision only describes the
+source. The decoder and the V4L2 request hwaccel took the output depth
+from sample_precision, so such a stream got 8-bit frames from a decoder
+that writes 10-bit pictures (the kernel decoders take the depth from
+encoding_precision), and failed on hardware that has only a 10-bit
+capture format for it.
+
+Take the pixel format and the hwaccel's frame depth from
+encoding_precision, as davs2 and the kernel AVS2 uAPI do. Streams whose
+two precisions are equal decode as before.
+
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavcodec/avs2dec.c           | 9 +++++++--
+ libavcodec/v4l2_request_avs2.c | 2 +-
+ 2 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/libavcodec/avs2dec.c b/libavcodec/avs2dec.c
+index 898bb1c4ad..ab827a8711 100644
+--- a/libavcodec/avs2dec.c
++++ b/libavcodec/avs2dec.c
+@@ -209,8 +209,13 @@ static int avs2_set_sequence(AVCodecContext *avctx, const AVS2SequenceHeader *se
+         break;
+     }
+ 
+-    s->pix_fmt = seq->sample_precision == 2 ? AV_PIX_FMT_YUV420P10 :
+-                                              AV_PIX_FMT_YUV420P;
++    /*
++     * Pictures are reconstructed at encoding_precision: a Main10 stream may
++     * code 8-bit samples (sample_precision 1) at 10 bits, and its decoded
++     * pictures are 10-bit.
++     */
++    s->pix_fmt = seq->encoding_precision == 2 ? AV_PIX_FMT_YUV420P10 :
++                                                AV_PIX_FMT_YUV420P;
+     s->seq       = *seq;
+     s->seq_valid = 1;
+ 
+diff --git a/libavcodec/v4l2_request_avs2.c b/libavcodec/v4l2_request_avs2.c
+index 54d66509e7..c152067de6 100644
+--- a/libavcodec/v4l2_request_avs2.c
++++ b/libavcodec/v4l2_request_avs2.c
+@@ -267,7 +267,7 @@ static int v4l2_request_avs2_frame_params(AVCodecContext *avctx,
+                                           AVBufferRef *hw_frames_ctx)
+ {
+     const AVS2DecContext *s = avctx->priv_data;
+-    uint8_t bit_depth = s->seq_valid ? 6 + 2 * s->seq.sample_precision : 0;
++    uint8_t bit_depth = s->seq_valid ? 6 + 2 * s->seq.encoding_precision : 0;
+ 
+     return ff_v4l2_request_frame_params(avctx, hw_frames_ctx,
+                                         V4L2_PIX_FMT_AVS2_FRAME, bit_depth);
+-- 
+2.55.0
+

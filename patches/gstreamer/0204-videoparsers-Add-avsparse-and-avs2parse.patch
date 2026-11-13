@@ -1,0 +1,753 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Tue, 10 Nov 2026 01:27:09 +0000
+Subject: [PATCH 204/210] videoparsers: Add avsparse and avs2parse
+
+Add parsers that split AVS1/AVS+ (video/x-cavs) and AVS2
+(video/x-avs2) elementary streams into coded pictures, one per buffer:
+the picture header with its slices and the sequence header, extension
+and user data units in front of it. They start at a sequence header,
+mark buffers without an intra picture as delta units, and set the
+size, frame rate, interlacing and profile from the sequence header in
+the caps, with parsed=true.
+
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ gst/videoparsers/gstavs2parse.c            | 301 +++++++++++++++++++++
+ gst/videoparsers/gstavs2parse.h            |  30 ++
+ gst/videoparsers/gstavsparse.c             | 289 ++++++++++++++++++++
+ gst/videoparsers/gstavsparse.h             |  30 ++
+ gst/videoparsers/gstvideoparserselements.h |   2 +
+ gst/videoparsers/meson.build               |   4 +
+ gst/videoparsers/plugin.c                  |   2 +
+ 7 files changed, 658 insertions(+)
+ create mode 100644 gst/videoparsers/gstavs2parse.c
+ create mode 100644 gst/videoparsers/gstavs2parse.h
+ create mode 100644 gst/videoparsers/gstavsparse.c
+ create mode 100644 gst/videoparsers/gstavsparse.h
+
+diff --git a/gst/videoparsers/gstavs2parse.c b/gst/videoparsers/gstavs2parse.c
+new file mode 100644
+index 0000000..858ec94
+--- /dev/null
++++ b/gst/videoparsers/gstavs2parse.c
+@@ -0,0 +1,301 @@
++/* GStreamer
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++/**
++ * SECTION:element-avs2parse
++ * @title: avs2parse
++ * @short_description: AVS2 video parser
++ *
++ * Splits an AVS2 (GB/T 33475.2) elementary stream into coded pictures, one per buffer: the picture header, its slices and
++ * the sequence header, extension and user data units in front of it.
++ *
++ * ## Example launch line
++ * ```
++ * gst-launch-1.0 filesrc location=video.avs2 ! video/x-avs2 ! avs2parse ! fakesink
++ * ```
++ *
++ * Since: 1.30
++ */
++
++#ifdef HAVE_CONFIG_H
++#include "config.h"
++#endif
++
++#include <gst/codecparsers/gstavs2parser.h>
++#include <gst/base/base.h>
++
++#include "gstvideoparserselements.h"
++#include "gstavs2parse.h"
++
++GST_DEBUG_CATEGORY_STATIC (gst_avs2_parse_debug);
++#define GST_CAT_DEFAULT gst_avs2_parse_debug
++
++struct _GstAvs2Parse
++{
++  GstBaseParse parent;
++
++  /* offset up to which the pending data has been scanned */
++  guint scanned;
++  gboolean have_picture;
++  /* a sequence header was found */
++  gboolean synced;
++
++  gboolean have_sequence;
++  GstAvs2SequenceHeader seq;
++  gboolean update_caps;
++};
++
++static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
++    GST_PAD_SINK, GST_PAD_ALWAYS, GST_STATIC_CAPS ("video/x-avs2"));
++
++static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE ("src",
++    GST_PAD_SRC, GST_PAD_ALWAYS,
++    GST_STATIC_CAPS ("video/x-avs2, parsed = (boolean) true, "
++        "width = (int) [ 1, MAX ], height = (int) [ 1, MAX ]"));
++
++#define parent_class gst_avs2_parse_parent_class
++G_DEFINE_TYPE (GstAvs2Parse, gst_avs2_parse, GST_TYPE_BASE_PARSE);
++GST_ELEMENT_REGISTER_DEFINE_WITH_CODE (avs2parse, "avs2parse",
++    GST_RANK_PRIMARY + 1, GST_TYPE_AVS2_PARSE,
++    videoparsers_element_init (plugin));
++
++static void
++gst_avs2_parse_reset (GstAvs2Parse * self)
++{
++  self->scanned = 0;
++  self->have_picture = FALSE;
++}
++
++static gboolean
++gst_avs2_parse_start (GstBaseParse * parse)
++{
++  GstAvs2Parse *self = GST_AVS2_PARSE (parse);
++
++  gst_avs2_parse_reset (self);
++  self->synced = FALSE;
++  self->have_sequence = FALSE;
++  self->update_caps = TRUE;
++  memset (&self->seq, 0, sizeof (self->seq));
++
++  /* a start code and a picture header */
++  gst_base_parse_set_min_frame_size (parse, 8);
++
++  return TRUE;
++}
++
++static gboolean
++is_picture (guint8 type)
++{
++  return type == GST_AVS2_START_CODE_INTRA_PICTURE ||
++      type == GST_AVS2_START_CODE_INTER_PICTURE;
++}
++
++static void
++gst_avs2_parse_update_src_caps (GstAvs2Parse * self)
++{
++  GstCaps *caps;
++
++  if (!self->update_caps && gst_pad_has_current_caps
++      (GST_BASE_PARSE_SRC_PAD (self)))
++    return;
++
++  caps = gst_caps_new_simple ("video/x-avs2",
++      "parsed", G_TYPE_BOOLEAN, TRUE,
++      "width", G_TYPE_INT, self->seq.horizontal_size,
++      "height", G_TYPE_INT, self->seq.vertical_size,
++      "bit-depth-luma", G_TYPE_UINT,
++      self->seq.encoding_precision == 2 ? 10 : 8,
++      "interlace-mode", G_TYPE_STRING,
++      self->seq.progressive_sequence ? "progressive" : "mixed", NULL);
++
++  if (self->seq.fps_n) {
++    gst_caps_set_simple (caps, "framerate", GST_TYPE_FRACTION,
++        self->seq.fps_n, self->seq.fps_d, NULL);
++    gst_base_parse_set_frame_rate (GST_BASE_PARSE (self), self->seq.fps_n,
++        self->seq.fps_d, 0, 0);
++  }
++
++  switch (self->seq.profile_id) {
++    case GST_AVS2_PROFILE_MAIN_PICTURE:
++      gst_caps_set_simple (caps, "profile", G_TYPE_STRING, "main-picture",
++          NULL);
++      break;
++    case GST_AVS2_PROFILE_MAIN:
++      gst_caps_set_simple (caps, "profile", G_TYPE_STRING, "main", NULL);
++      break;
++    case GST_AVS2_PROFILE_MAIN10:
++      gst_caps_set_simple (caps, "profile", G_TYPE_STRING, "main-10", NULL);
++      break;
++    default:
++      break;
++  }
++
++  GST_INFO_OBJECT (self, "caps %" GST_PTR_FORMAT, caps);
++  gst_pad_set_caps (GST_BASE_PARSE_SRC_PAD (self), caps);
++  gst_caps_unref (caps);
++
++  self->update_caps = FALSE;
++}
++
++/* Parses the sequence headers and finds the picture type of a frame. */
++static void
++gst_avs2_parse_process_frame (GstAvs2Parse * self, GstBaseParseFrame * frame,
++    const guint8 * data, gsize size)
++{
++  GstAvs2Packet packet;
++  guint offset = 0;
++  gboolean intra = FALSE;
++
++  while (gst_avs2_parse (&packet, data, size, offset) == GST_AVS2_PARSER_OK) {
++    if (packet.type == GST_AVS2_START_CODE_SEQUENCE) {
++      GstAvs2SequenceHeader seq;
++
++      if (gst_avs2_parse_sequence_header (&packet, &seq) == GST_AVS2_PARSER_OK) {
++        if (!self->have_sequence || seq.horizontal_size !=
++            self->seq.horizontal_size || seq.vertical_size !=
++            self->seq.vertical_size || seq.profile_id != self->seq.profile_id
++            || seq.progressive_sequence != self->seq.progressive_sequence ||
++            seq.frame_rate_code != self->seq.frame_rate_code)
++          self->update_caps = TRUE;
++        self->seq = seq;
++        self->have_sequence = TRUE;
++      }
++    } else if (is_picture (packet.type)) {
++      intra = packet.type == GST_AVS2_START_CODE_INTRA_PICTURE;
++      break;
++    }
++    offset = packet.offset;
++  }
++
++  if (intra)
++    GST_BUFFER_FLAG_UNSET (frame->buffer, GST_BUFFER_FLAG_DELTA_UNIT);
++  else
++    GST_BUFFER_FLAG_SET (frame->buffer, GST_BUFFER_FLAG_DELTA_UNIT);
++}
++
++static GstFlowReturn
++gst_avs2_parse_handle_frame (GstBaseParse * parse, GstBaseParseFrame * frame,
++    gint * skipsize)
++{
++  GstAvs2Parse *self = GST_AVS2_PARSE (parse);
++  GstByteReader br;
++  GstMapInfo map;
++  gint off, end = -1;
++  GstFlowReturn ret = GST_FLOW_OK;
++
++  if (!gst_buffer_map (frame->buffer, &map, GST_MAP_READ))
++    return GST_FLOW_ERROR;
++
++  gst_byte_reader_init (&br, map.data, map.size);
++
++  if (self->scanned == 0) {
++    /* sync to a sequence header first, then to any start code */
++    off = gst_byte_reader_masked_scan_uint32 (&br,
++        self->synced ? 0xffffff00 : 0xffffffff,
++        self->synced ? 0x00000100 : 0x000001b0, 0, map.size);
++    if (off < 0) {
++      *skipsize = map.size - 3;
++      goto out;
++    }
++    if (off > 0) {
++      *skipsize = off;
++      goto out;
++    }
++    self->have_picture = is_picture (map.data[3]);
++    self->scanned = 4;
++    self->synced = TRUE;
++  }
++
++  /* the frame ends where a sequence header or the next picture starts */
++  while (self->scanned + 4 <= map.size) {
++    guint8 type;
++
++    off = gst_byte_reader_masked_scan_uint32 (&br, 0xffffff00, 0x00000100,
++        self->scanned, map.size - self->scanned);
++    if (off < 0) {
++      self->scanned = map.size - 3;
++      break;
++    }
++
++    type = map.data[off + 3];
++    if (self->have_picture && (is_picture (type) ||
++            type == GST_AVS2_START_CODE_SEQUENCE)) {
++      end = off;
++      break;
++    }
++    if (is_picture (type))
++      self->have_picture = TRUE;
++    self->scanned = off + 4;
++  }
++
++  if (end < 0) {
++    if (!GST_BASE_PARSE_DRAINING (parse) || !self->have_picture)
++      goto out;
++    end = map.size;
++  }
++
++  gst_avs2_parse_process_frame (self, frame, map.data, end);
++  gst_avs2_parse_reset (self);
++  gst_buffer_unmap (frame->buffer, &map);
++
++  gst_avs2_parse_update_src_caps (self);
++  return gst_base_parse_finish_frame (parse, frame, end);
++
++out:
++  gst_buffer_unmap (frame->buffer, &map);
++  return ret;
++}
++
++static gboolean
++gst_avs2_parse_sink_event (GstBaseParse * parse, GstEvent * event)
++{
++  if (GST_EVENT_TYPE (event) == GST_EVENT_FLUSH_STOP)
++    gst_avs2_parse_reset (GST_AVS2_PARSE (parse));
++
++  return GST_BASE_PARSE_CLASS (parent_class)->sink_event (parse, event);
++}
++
++static void
++gst_avs2_parse_class_init (GstAvs2ParseClass * klass)
++{
++  GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
++  GstBaseParseClass *parse_class = GST_BASE_PARSE_CLASS (klass);
++
++  GST_DEBUG_CATEGORY_INIT (gst_avs2_parse_debug, "avs2parse", 0,
++      "AVS2 video parser");
++
++  gst_element_class_add_static_pad_template (element_class, &src_template);
++  gst_element_class_add_static_pad_template (element_class, &sink_template);
++  gst_element_class_set_static_metadata (element_class,
++      "AVS2 video parser", "Codec/Parser/Converter/Video",
++      "Splits AVS2 video into pictures",
++      "Arun Iyengar <aiyengar1990@gmail.com>");
++
++  parse_class->start = GST_DEBUG_FUNCPTR (gst_avs2_parse_start);
++  parse_class->handle_frame = GST_DEBUG_FUNCPTR (gst_avs2_parse_handle_frame);
++  parse_class->sink_event = GST_DEBUG_FUNCPTR (gst_avs2_parse_sink_event);
++}
++
++static void
++gst_avs2_parse_init (GstAvs2Parse * self)
++{
++  gst_base_parse_set_pts_interpolation (GST_BASE_PARSE (self), FALSE);
++  GST_PAD_SET_ACCEPT_INTERSECT (GST_BASE_PARSE_SINK_PAD (self));
++  GST_PAD_SET_ACCEPT_TEMPLATE (GST_BASE_PARSE_SINK_PAD (self));
++}
+diff --git a/gst/videoparsers/gstavs2parse.h b/gst/videoparsers/gstavs2parse.h
+new file mode 100644
+index 0000000..1d01eb7
+--- /dev/null
++++ b/gst/videoparsers/gstavs2parse.h
+@@ -0,0 +1,30 @@
++/* GStreamer
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#pragma once
++
++#include <gst/gst.h>
++#include <gst/base/gstbaseparse.h>
++
++G_BEGIN_DECLS
++
++#define GST_TYPE_AVS2_PARSE (gst_avs2_parse_get_type ())
++G_DECLARE_FINAL_TYPE (GstAvs2Parse, gst_avs2_parse, GST, AVS2_PARSE, GstBaseParse)
++
++G_END_DECLS
+diff --git a/gst/videoparsers/gstavsparse.c b/gst/videoparsers/gstavsparse.c
+new file mode 100644
+index 0000000..36a1092
+--- /dev/null
++++ b/gst/videoparsers/gstavsparse.c
+@@ -0,0 +1,289 @@
++/* GStreamer
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++/**
++ * SECTION:element-avsparse
++ * @title: avsparse
++ * @short_description: AVS1 and AVS+ video parser
++ *
++ * Splits an AVS1 (GB/T 20090.2) or AVS+ (GY/T 257.1) elementary stream
++ * into coded pictures, one per buffer: the picture header, its slices and
++ * the sequence header, extension and user data units in front of it.
++ *
++ * ## Example launch line
++ * ```
++ * gst-launch-1.0 filesrc location=video.avs ! video/x-cavs ! avsparse ! fakesink
++ * ```
++ *
++ * Since: 1.30
++ */
++
++#ifdef HAVE_CONFIG_H
++#include "config.h"
++#endif
++
++#include <gst/codecparsers/gstavsparser.h>
++#include <gst/base/base.h>
++
++#include "gstvideoparserselements.h"
++#include "gstavsparse.h"
++
++GST_DEBUG_CATEGORY_STATIC (gst_avs_parse_debug);
++#define GST_CAT_DEFAULT gst_avs_parse_debug
++
++struct _GstAvsParse
++{
++  GstBaseParse parent;
++
++  /* offset up to which the pending data has been scanned */
++  guint scanned;
++  gboolean have_picture;
++  /* a sequence header was found */
++  gboolean synced;
++
++  gboolean have_sequence;
++  GstAvsSequenceHeader seq;
++  gboolean update_caps;
++};
++
++static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
++    GST_PAD_SINK, GST_PAD_ALWAYS, GST_STATIC_CAPS ("video/x-cavs"));
++
++static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE ("src",
++    GST_PAD_SRC, GST_PAD_ALWAYS,
++    GST_STATIC_CAPS ("video/x-cavs, parsed = (boolean) true, "
++        "width = (int) [ 1, MAX ], height = (int) [ 1, MAX ]"));
++
++#define parent_class gst_avs_parse_parent_class
++G_DEFINE_TYPE (GstAvsParse, gst_avs_parse, GST_TYPE_BASE_PARSE);
++GST_ELEMENT_REGISTER_DEFINE_WITH_CODE (avsparse, "avsparse",
++    GST_RANK_PRIMARY + 1, GST_TYPE_AVS_PARSE,
++    videoparsers_element_init (plugin));
++
++static void
++gst_avs_parse_reset (GstAvsParse * self)
++{
++  self->scanned = 0;
++  self->have_picture = FALSE;
++}
++
++static gboolean
++gst_avs_parse_start (GstBaseParse * parse)
++{
++  GstAvsParse *self = GST_AVS_PARSE (parse);
++
++  gst_avs_parse_reset (self);
++  self->synced = FALSE;
++  self->have_sequence = FALSE;
++  self->update_caps = TRUE;
++  memset (&self->seq, 0, sizeof (self->seq));
++
++  /* a start code and a picture header */
++  gst_base_parse_set_min_frame_size (parse, 8);
++
++  return TRUE;
++}
++
++static gboolean
++is_picture (guint8 type)
++{
++  return type == GST_AVS_START_CODE_I_PICTURE ||
++      type == GST_AVS_START_CODE_PB_PICTURE;
++}
++
++static void
++gst_avs_parse_update_src_caps (GstAvsParse * self)
++{
++  GstCaps *caps;
++
++  if (!self->update_caps && gst_pad_has_current_caps
++      (GST_BASE_PARSE_SRC_PAD (self)))
++    return;
++
++  caps = gst_caps_new_simple ("video/x-cavs",
++      "parsed", G_TYPE_BOOLEAN, TRUE,
++      "width", G_TYPE_INT, self->seq.horizontal_size,
++      "height", G_TYPE_INT, self->seq.vertical_size,
++      "interlace-mode", G_TYPE_STRING,
++      self->seq.progressive_sequence ? "progressive" : "mixed", NULL);
++
++  if (self->seq.fps_n) {
++    gst_caps_set_simple (caps, "framerate", GST_TYPE_FRACTION,
++        self->seq.fps_n, self->seq.fps_d, NULL);
++    gst_base_parse_set_frame_rate (GST_BASE_PARSE (self), self->seq.fps_n,
++        self->seq.fps_d, 0, 0);
++  }
++
++  gst_caps_set_simple (caps, "profile", G_TYPE_STRING,
++      self->seq.profile_id == GST_AVS_PROFILE_GUANGDIAN ? "guangdian" :
++      "jizhun", NULL);
++
++  GST_INFO_OBJECT (self, "caps %" GST_PTR_FORMAT, caps);
++  gst_pad_set_caps (GST_BASE_PARSE_SRC_PAD (self), caps);
++  gst_caps_unref (caps);
++
++  self->update_caps = FALSE;
++}
++
++/* Parses the sequence headers and finds the picture type of a frame. */
++static void
++gst_avs_parse_process_frame (GstAvsParse * self, GstBaseParseFrame * frame,
++    const guint8 * data, gsize size)
++{
++  GstAvsPacket packet;
++  guint offset = 0;
++  gboolean intra = FALSE;
++
++  while (gst_avs_parse (&packet, data, size, offset) == GST_AVS_PARSER_OK) {
++    if (packet.type == GST_AVS_START_CODE_SEQUENCE) {
++      GstAvsSequenceHeader seq;
++
++      if (gst_avs_parse_sequence_header (&packet, &seq) == GST_AVS_PARSER_OK) {
++        if (!self->have_sequence || seq.horizontal_size !=
++            self->seq.horizontal_size || seq.vertical_size !=
++            self->seq.vertical_size || seq.profile_id != self->seq.profile_id
++            || seq.progressive_sequence != self->seq.progressive_sequence ||
++            seq.frame_rate_code != self->seq.frame_rate_code)
++          self->update_caps = TRUE;
++        self->seq = seq;
++        self->have_sequence = TRUE;
++      }
++    } else if (is_picture (packet.type)) {
++      intra = packet.type == GST_AVS_START_CODE_I_PICTURE;
++      break;
++    }
++    offset = packet.offset;
++  }
++
++  if (intra)
++    GST_BUFFER_FLAG_UNSET (frame->buffer, GST_BUFFER_FLAG_DELTA_UNIT);
++  else
++    GST_BUFFER_FLAG_SET (frame->buffer, GST_BUFFER_FLAG_DELTA_UNIT);
++}
++
++static GstFlowReturn
++gst_avs_parse_handle_frame (GstBaseParse * parse, GstBaseParseFrame * frame,
++    gint * skipsize)
++{
++  GstAvsParse *self = GST_AVS_PARSE (parse);
++  GstByteReader br;
++  GstMapInfo map;
++  gint off, end = -1;
++  GstFlowReturn ret = GST_FLOW_OK;
++
++  if (!gst_buffer_map (frame->buffer, &map, GST_MAP_READ))
++    return GST_FLOW_ERROR;
++
++  gst_byte_reader_init (&br, map.data, map.size);
++
++  if (self->scanned == 0) {
++    /* sync to a sequence header first, then to any start code */
++    off = gst_byte_reader_masked_scan_uint32 (&br,
++        self->synced ? 0xffffff00 : 0xffffffff,
++        self->synced ? 0x00000100 : 0x000001b0, 0, map.size);
++    if (off < 0) {
++      *skipsize = map.size - 3;
++      goto out;
++    }
++    if (off > 0) {
++      *skipsize = off;
++      goto out;
++    }
++    self->have_picture = is_picture (map.data[3]);
++    self->scanned = 4;
++    self->synced = TRUE;
++  }
++
++  /* the frame ends where a sequence header or the next picture starts */
++  while (self->scanned + 4 <= map.size) {
++    guint8 type;
++
++    off = gst_byte_reader_masked_scan_uint32 (&br, 0xffffff00, 0x00000100,
++        self->scanned, map.size - self->scanned);
++    if (off < 0) {
++      self->scanned = map.size - 3;
++      break;
++    }
++
++    type = map.data[off + 3];
++    if (self->have_picture && (is_picture (type) ||
++            type == GST_AVS_START_CODE_SEQUENCE)) {
++      end = off;
++      break;
++    }
++    if (is_picture (type))
++      self->have_picture = TRUE;
++    self->scanned = off + 4;
++  }
++
++  if (end < 0) {
++    if (!GST_BASE_PARSE_DRAINING (parse) || !self->have_picture)
++      goto out;
++    end = map.size;
++  }
++
++  gst_avs_parse_process_frame (self, frame, map.data, end);
++  gst_avs_parse_reset (self);
++  gst_buffer_unmap (frame->buffer, &map);
++
++  gst_avs_parse_update_src_caps (self);
++  return gst_base_parse_finish_frame (parse, frame, end);
++
++out:
++  gst_buffer_unmap (frame->buffer, &map);
++  return ret;
++}
++
++static gboolean
++gst_avs_parse_sink_event (GstBaseParse * parse, GstEvent * event)
++{
++  if (GST_EVENT_TYPE (event) == GST_EVENT_FLUSH_STOP)
++    gst_avs_parse_reset (GST_AVS_PARSE (parse));
++
++  return GST_BASE_PARSE_CLASS (parent_class)->sink_event (parse, event);
++}
++
++static void
++gst_avs_parse_class_init (GstAvsParseClass * klass)
++{
++  GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
++  GstBaseParseClass *parse_class = GST_BASE_PARSE_CLASS (klass);
++
++  GST_DEBUG_CATEGORY_INIT (gst_avs_parse_debug, "avsparse", 0,
++      "AVS1/AVS+ video parser");
++
++  gst_element_class_add_static_pad_template (element_class, &src_template);
++  gst_element_class_add_static_pad_template (element_class, &sink_template);
++  gst_element_class_set_static_metadata (element_class,
++      "AVS1/AVS+ video parser", "Codec/Parser/Converter/Video",
++      "Splits AVS1 and AVS+ video into pictures",
++      "Arun Iyengar <aiyengar1990@gmail.com>");
++
++  parse_class->start = GST_DEBUG_FUNCPTR (gst_avs_parse_start);
++  parse_class->handle_frame = GST_DEBUG_FUNCPTR (gst_avs_parse_handle_frame);
++  parse_class->sink_event = GST_DEBUG_FUNCPTR (gst_avs_parse_sink_event);
++}
++
++static void
++gst_avs_parse_init (GstAvsParse * self)
++{
++  gst_base_parse_set_pts_interpolation (GST_BASE_PARSE (self), FALSE);
++  GST_PAD_SET_ACCEPT_INTERSECT (GST_BASE_PARSE_SINK_PAD (self));
++  GST_PAD_SET_ACCEPT_TEMPLATE (GST_BASE_PARSE_SINK_PAD (self));
++}
+diff --git a/gst/videoparsers/gstavsparse.h b/gst/videoparsers/gstavsparse.h
+new file mode 100644
+index 0000000..2bebe4c
+--- /dev/null
++++ b/gst/videoparsers/gstavsparse.h
+@@ -0,0 +1,30 @@
++/* GStreamer
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#pragma once
++
++#include <gst/gst.h>
++#include <gst/base/gstbaseparse.h>
++
++G_BEGIN_DECLS
++
++#define GST_TYPE_AVS_PARSE (gst_avs_parse_get_type ())
++G_DECLARE_FINAL_TYPE (GstAvsParse, gst_avs_parse, GST, AVS_PARSE, GstBaseParse)
++
++G_END_DECLS
+diff --git a/gst/videoparsers/gstvideoparserselements.h b/gst/videoparsers/gstvideoparserselements.h
+index 1bf4bce..53fb082 100644
+--- a/gst/videoparsers/gstvideoparserselements.h
++++ b/gst/videoparsers/gstvideoparserselements.h
+@@ -32,6 +32,8 @@
+ void videoparsers_element_init (GstPlugin * plugin);
+ 
+ GST_ELEMENT_REGISTER_DECLARE (av1parse);
++GST_ELEMENT_REGISTER_DECLARE (avsparse);
++GST_ELEMENT_REGISTER_DECLARE (avs2parse);
+ GST_ELEMENT_REGISTER_DECLARE (diracparse);
+ GST_ELEMENT_REGISTER_DECLARE (h263parse);
+ GST_ELEMENT_REGISTER_DECLARE (h264parse);
+diff --git a/gst/videoparsers/meson.build b/gst/videoparsers/meson.build
+index b8a50d8..1d862dc 100644
+--- a/gst/videoparsers/meson.build
++++ b/gst/videoparsers/meson.build
+@@ -16,6 +16,8 @@ vparse_sources = [
+   'gstvp9parse.c',
+   'gstav1parse.c',
+   'gsth266parse.c',
++  'gstavsparse.c',
++  'gstavs2parse.c',
+ ]
+ 
+ vparse_headers = [
+@@ -35,6 +37,8 @@ vparse_headers = [
+   'gsth266parse.h',
+   'dirac_parse.h',
+   'h263parse.h',
++  'gstavsparse.h',
++  'gstavs2parse.h',
+ ]
+ 
+ doc_sources = []
+diff --git a/gst/videoparsers/plugin.c b/gst/videoparsers/plugin.c
+index 2ce2298..5b8adb2 100644
+--- a/gst/videoparsers/plugin.c
++++ b/gst/videoparsers/plugin.c
+@@ -51,6 +51,8 @@ plugin_init (GstPlugin * plugin)
+    */
+   ret |= GST_ELEMENT_REGISTER (av1parse, plugin);
+   ret |= GST_ELEMENT_REGISTER (h266parse, plugin);
++  ret |= GST_ELEMENT_REGISTER (avsparse, plugin);
++  ret |= GST_ELEMENT_REGISTER (avs2parse, plugin);
+ 
+   return ret;
+ }
+-- 
+2.55.0
+

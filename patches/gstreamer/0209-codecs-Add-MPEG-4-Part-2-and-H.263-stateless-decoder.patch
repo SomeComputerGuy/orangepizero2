@@ -1,0 +1,1880 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Tue, 10 Nov 2026 02:04:32 +0000
+Subject: [PATCH 209/210] codecs: Add MPEG-4 Part 2 and H.263 stateless decoder
+ base class
+
+Add GstMpeg4Decoder, a base class for stateless MPEG-4 Part 2
+(ISO/IEC 14496-2), H.263 and Sorenson Spark decoders, with
+GstMpeg4Picture. The bitstream format follows the sink caps.
+
+It takes one picture per buffer: a VOP with the configuration headers
+before it, as mpeg4videoparse outputs them, an H.263 picture from
+h263parse, or a Sorenson Spark picture from flvdemux. It gives the
+subclass the picture from its start code to its end, the size of its
+header, and its forward and backward references.
+
+For MPEG-4 it parses the video object layers (also from codec_data),
+the group of VOP time codes and the encoder identification in the user
+data, from which it derives the encoder deviations a decoder has to
+reproduce, as libavcodec does. It keeps the VOP times to give B-VOPs
+their TRB and TRD, frame and field based, skips not coded VOPs and
+B-VOPs whose times do not fit their references, and finds the size of
+vop_time_increment from the VOP when the layer gets it wrong. VOPs are
+output in display order: B-VOPs at once, other VOPs when the next one
+of them is decoded, or at once when the stream has no B-VOP.
+
+H.263 picture headers are parsed with the extended picture type
+(PLUSPTYPE), keeping its options until the next UFEP, and Sorenson
+Spark headers with their disposable inter pictures, which are not
+used as references. These pictures are output at once.
+
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ gst-libs/gst/codecs/gstmpeg4decoder.c | 1291 +++++++++++++++++++++++++
+ gst-libs/gst/codecs/gstmpeg4decoder.h |  237 +++++
+ gst-libs/gst/codecs/gstmpeg4picture.c |   55 ++
+ gst-libs/gst/codecs/gstmpeg4picture.h |  204 ++++
+ gst-libs/gst/codecs/meson.build       |    4 +
+ 5 files changed, 1791 insertions(+)
+ create mode 100644 gst-libs/gst/codecs/gstmpeg4decoder.c
+ create mode 100644 gst-libs/gst/codecs/gstmpeg4decoder.h
+ create mode 100644 gst-libs/gst/codecs/gstmpeg4picture.c
+ create mode 100644 gst-libs/gst/codecs/gstmpeg4picture.h
+
+diff --git a/gst-libs/gst/codecs/gstmpeg4decoder.c b/gst-libs/gst/codecs/gstmpeg4decoder.c
+new file mode 100644
+index 0000000..341f93b
+--- /dev/null
++++ b/gst-libs/gst/codecs/gstmpeg4decoder.c
+@@ -0,0 +1,1291 @@
++/* GStreamer
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++
++/**
++ * SECTION:gstmpeg4decoder
++ * @title: GstMpeg4Decoder
++ * @short_description: Base class to implement stateless MPEG-4 Part 2, H.263
++ * and Sorenson Spark decoders
++ * @sources:
++ * - gstmpeg4picture.h
++ *
++ * Takes one coded picture per input buffer: one VOP with the configuration
++ * headers before it (see mpeg4videoparse), one H.263 picture (see h263parse)
++ * or one Sorenson Spark picture (as demuxed from FLV). Keeps the reference
++ * pictures and outputs the pictures in display order: B-VOPs as soon as they
++ * are decoded, other VOPs when the next one of them is decoded, or at once
++ * when the stream cannot have B-VOPs. H.263 and Sorenson Spark pictures are
++ * output at once.
++ *
++ * Since: 1.30
++ */
++
++#ifdef HAVE_CONFIG_H
++#include <config.h>
++#endif
++
++#include <stdio.h>
++#include <string.h>
++
++#include <gst/base/base.h>
++#include "gstmpeg4decoder.h"
++
++GST_DEBUG_CATEGORY (gst_mpeg4_decoder_debug);
++#define GST_CAT_DEFAULT gst_mpeg4_decoder_debug
++
++/* video_object_type_indication */
++#define VO_TYPE_SIMPLE 0x01
++#define VO_TYPE_ADVANCED_SIMPLE 0x11
++
++#define ROUNDED_DIV(a, b) \
++    (((a) >= 0 ? (a) + ((b) >> 1) : (a) - ((b) >> 1)) / (b))
++
++typedef struct
++{
++  GstVideoCodecFrame *frame;
++  GstMpeg4Picture *picture;
++  GstMpeg4Decoder *self;
++} GstMpeg4DecoderOutputFrame;
++
++struct _GstMpeg4DecoderPrivate
++{
++  GstMpeg4DecoderFormat format;
++
++  /* MPEG-4 Part 2 configuration */
++  gboolean have_vo;
++  GstMpeg4VisualObject vo;
++  GstMpeg4VideoSignalType signal_type;
++  gboolean have_vol;
++  GstMpeg4VideoObjectLayer vol;
++  gboolean low_delay;
++  gboolean picture_seen;
++
++  /* encoder identification from the user data, -1 if unknown */
++  gint divx_version;
++  gint divx_build;
++  gint xvid_build;
++  gint lavc_build;
++  gboolean divx_packed;
++
++  /* VOP timing (ISO/IEC 14496-2 7.7.2.1), in ticks */
++  gint64 time_base;
++  gint64 last_time_base;
++  gint64 last_non_b_time;
++  gint64 pp_time;
++  gint64 t_frame;
++
++  /* H.263 extended picture type options, kept until the next UFEP */
++  GstMpeg4H263PictureFlags h263_options;
++  gboolean h263_custom_pcf;
++  guint16 h263_width;
++  guint16 h263_height;
++
++  /* size of the current sequence */
++  gboolean have_sequence;
++  gint width;
++  gint height;
++  gboolean interlaced;
++
++  /* the newest reference first */
++  GstMpeg4Picture *refs[2];
++  /* refs[0], until the next reference picture is decoded */
++  GstMpeg4DecoderOutputFrame held;
++
++  guint preferred_output_delay;
++  GstVecDeque *output_queue;
++  gboolean is_live;
++  gboolean input_state_changed;
++};
++
++#define parent_class gst_mpeg4_decoder_parent_class
++G_DEFINE_ABSTRACT_TYPE_WITH_CODE (GstMpeg4Decoder, gst_mpeg4_decoder,
++    GST_TYPE_VIDEO_DECODER,
++    G_ADD_PRIVATE (GstMpeg4Decoder);
++    GST_DEBUG_CATEGORY_INIT (gst_mpeg4_decoder_debug, "mpeg4decoder", 0,
++        "MPEG-4 Part 2/H.263 Video Decoder"));
++
++static void
++gst_mpeg4_decoder_clear_output_frame (GstMpeg4DecoderOutputFrame * output_frame)
++{
++  if (!output_frame)
++    return;
++
++  if (output_frame->frame) {
++    gst_video_decoder_release_frame (GST_VIDEO_DECODER (output_frame->self),
++        output_frame->frame);
++    output_frame->frame = NULL;
++  }
++
++  gst_clear_mpeg4_picture (&output_frame->picture);
++}
++
++static void
++gst_mpeg4_decoder_clear_refs (GstMpeg4Decoder * self)
++{
++  GstMpeg4DecoderPrivate *priv = self->priv;
++
++  gst_clear_mpeg4_picture (&priv->refs[0]);
++  gst_clear_mpeg4_picture (&priv->refs[1]);
++}
++
++static void
++gst_mpeg4_decoder_reset (GstMpeg4Decoder * self)
++{
++  GstMpeg4DecoderPrivate *priv = self->priv;
++
++  gst_mpeg4_decoder_clear_refs (self);
++  gst_mpeg4_decoder_clear_output_frame (&priv->held);
++  if (priv->output_queue)
++    gst_vec_deque_clear (priv->output_queue);
++}
++
++static gboolean
++gst_mpeg4_decoder_start (GstVideoDecoder * decoder)
++{
++  GstMpeg4Decoder *self = GST_MPEG4_DECODER (decoder);
++  GstMpeg4DecoderPrivate *priv = self->priv;
++
++  priv->have_vo = FALSE;
++  priv->have_vol = FALSE;
++  priv->low_delay = FALSE;
++  priv->picture_seen = FALSE;
++  priv->divx_version = priv->divx_build = -1;
++  priv->xvid_build = priv->lavc_build = -1;
++  priv->divx_packed = FALSE;
++  priv->time_base = priv->last_time_base = 0;
++  priv->last_non_b_time = priv->pp_time = priv->t_frame = 0;
++  priv->h263_options = 0;
++  priv->h263_custom_pcf = FALSE;
++  priv->h263_width = priv->h263_height = 0;
++  priv->have_sequence = FALSE;
++  memset (&priv->held, 0, sizeof (priv->held));
++
++  priv->output_queue =
++      gst_vec_deque_new_for_struct (sizeof (GstMpeg4DecoderOutputFrame), 1);
++  gst_vec_deque_set_clear_func (priv->output_queue,
++      (GDestroyNotify) gst_mpeg4_decoder_clear_output_frame);
++
++  return TRUE;
++}
++
++static gboolean
++gst_mpeg4_decoder_stop (GstVideoDecoder * decoder)
++{
++  GstMpeg4Decoder *self = GST_MPEG4_DECODER (decoder);
++  GstMpeg4DecoderPrivate *priv = self->priv;
++
++  g_clear_pointer (&self->input_state, gst_video_codec_state_unref);
++
++  gst_mpeg4_decoder_reset (self);
++  g_clear_pointer (&priv->output_queue, gst_vec_deque_free);
++
++  return TRUE;
++}
++
++static void
++gst_mpeg4_decoder_drain_output_queue (GstMpeg4Decoder * self, guint num,
++    GstFlowReturn * ret)
++{
++  GstMpeg4DecoderPrivate *priv = self->priv;
++  GstMpeg4DecoderClass *klass = GST_MPEG4_DECODER_GET_CLASS (self);
++
++  g_assert (klass->output_picture);
++
++  while (gst_vec_deque_get_length (priv->output_queue) > num) {
++    GstMpeg4DecoderOutputFrame *output_frame = (GstMpeg4DecoderOutputFrame *)
++        gst_vec_deque_pop_head_struct (priv->output_queue);
++    /* output all queued frames, whatever the flow return */
++    GstFlowReturn flow_ret = klass->output_picture (self,
++        output_frame->frame, output_frame->picture);
++
++    if (*ret == GST_FLOW_OK)
++      *ret = flow_ret;
++  }
++}
++
++static void
++gst_mpeg4_decoder_queue_output (GstMpeg4Decoder * self,
++    GstVideoCodecFrame * frame, GstMpeg4Picture * picture)
++{
++  GstMpeg4DecoderOutputFrame output_frame = {
++    .frame = frame,
++    .picture = picture,
++    .self = self,
++  };
++
++  gst_vec_deque_push_tail_struct (self->priv->output_queue, &output_frame);
++}
++
++static GstFlowReturn
++gst_mpeg4_decoder_drain_internal (GstMpeg4Decoder * self)
++{
++  GstMpeg4DecoderPrivate *priv = self->priv;
++  GstFlowReturn ret = GST_FLOW_OK;
++
++  if (priv->held.frame) {
++    gst_mpeg4_decoder_queue_output (self, priv->held.frame,
++        priv->held.picture);
++    memset (&priv->held, 0, sizeof (priv->held));
++  }
++
++  gst_mpeg4_decoder_drain_output_queue (self, 0, &ret);
++  gst_mpeg4_decoder_clear_refs (self);
++
++  return ret;
++}
++
++static GstFlowReturn
++gst_mpeg4_decoder_finish (GstVideoDecoder * decoder)
++{
++  GST_DEBUG_OBJECT (decoder, "finish");
++
++  return gst_mpeg4_decoder_drain_internal (GST_MPEG4_DECODER (decoder));
++}
++
++static GstFlowReturn
++gst_mpeg4_decoder_drain (GstVideoDecoder * decoder)
++{
++  GST_DEBUG_OBJECT (decoder, "drain");
++
++  return gst_mpeg4_decoder_drain_internal (GST_MPEG4_DECODER (decoder));
++}
++
++static gboolean
++gst_mpeg4_decoder_flush (GstVideoDecoder * decoder)
++{
++  GST_DEBUG_OBJECT (decoder, "flush");
++
++  gst_mpeg4_decoder_reset (GST_MPEG4_DECODER (decoder));
++
++  return TRUE;
++}
++
++static GstFlowReturn
++gst_mpeg4_decoder_new_sequence (GstMpeg4Decoder * self,
++    const GstMpeg4VideoObjectLayer * vol, gint width, gint height,
++    gboolean interlaced)
++{
++  GstMpeg4DecoderPrivate *priv = self->priv;
++  GstMpeg4DecoderClass *klass = GST_MPEG4_DECODER_GET_CLASS (self);
++  GstFlowReturn ret;
++
++  if (priv->have_sequence && priv->width == width && priv->height == height
++      && priv->interlaced == interlaced)
++    return GST_FLOW_OK;
++
++  GST_INFO_OBJECT (self, "new sequence: %dx%d%s", width, height,
++      interlaced ? " interlaced" : "");
++
++  ret = gst_mpeg4_decoder_drain_internal (self);
++  if (ret != GST_FLOW_OK)
++    return ret;
++
++  priv->width = width;
++  priv->height = height;
++  priv->interlaced = interlaced;
++  priv->have_sequence = TRUE;
++
++  if (klass->get_preferred_output_delay)
++    priv->preferred_output_delay =
++        klass->get_preferred_output_delay (self, priv->is_live);
++  else
++    priv->preferred_output_delay = 0;
++
++  g_assert (klass->new_sequence);
++
++  /* two references, the picture being decoded and the preferred delay */
++  return klass->new_sequence (self, vol, width, height,
++      3 + priv->preferred_output_delay);
++}
++
++/* The encoder identification of ISO/IEC 14496-2 user data, as written by
++ * DivX, Xvid and libavcodec. */
++static void
++gst_mpeg4_decoder_parse_user_data (GstMpeg4Decoder * self,
++    const guint8 * data, gsize size)
++{
++  GstMpeg4DecoderPrivate *priv = self->priv;
++  gchar buf[256];
++  gint e, ver = 0, ver2 = 0, ver3 = 0, build = 0;
++  gchar last = 0;
++
++  size = MIN (size, sizeof (buf) - 1);
++  memcpy (buf, data, size);
++  buf[size] = '\0';
++
++  e = sscanf (buf, "DivX%dBuild%d%c", &ver, &build, &last);
++  if (e < 2)
++    e = sscanf (buf, "DivX%db%d%c", &ver, &build, &last);
++  if (e >= 2) {
++    priv->divx_version = ver;
++    priv->divx_build = build;
++    priv->divx_packed = e == 3 && last == 'p';
++  }
++
++  if (sscanf (buf, "FFmpe%*[^b]b%d", &build) == 1) {
++    priv->lavc_build = build;
++  } else if (sscanf (buf, "FFmpeg v%d.%d.%d / libavcodec build: %d", &ver,
++          &ver2, &ver3, &build) == 4) {
++    priv->lavc_build = build;
++  } else if (sscanf (buf, "Lavc%d.%d.%d", &ver, &ver2, &ver3) == 3) {
++    priv->lavc_build = ((ver & 0xff) << 16) + ((ver2 & 0xff) << 8) +
++        (ver3 & 0xff);
++  } else if (strcmp (buf, "ffmpeg") == 0) {
++    priv->lavc_build = 4600;
++  }
++
++  if (sscanf (buf, "XviD%d", &build) == 1)
++    priv->xvid_build = build;
++
++  GST_DEBUG_OBJECT (self, "user data \"%s\": divx %d build %d%s xvid %d "
++      "lavc %d", buf, priv->divx_version, priv->divx_build,
++      priv->divx_packed ? " packed" : "", priv->xvid_build, priv->lavc_build);
++}
++
++/* group_of_vop_start_code is followed by time_code, closed_gov and
++ * broken_link */
++static void
++gst_mpeg4_decoder_parse_gov (GstMpeg4Decoder * self, const guint8 * data,
++    gsize size)
++{
++  GstMpeg4DecoderPrivate *priv = self->priv;
++  GstBitReader br = GST_BIT_READER_INIT (data, size);
++  guint8 hours, minutes, marker, seconds;
++
++  if (!gst_bit_reader_skip (&br, 8) ||
++      !gst_bit_reader_get_bits_uint8 (&br, &hours, 5) ||
++      !gst_bit_reader_get_bits_uint8 (&br, &minutes, 6) ||
++      !gst_bit_reader_get_bits_uint8 (&br, &marker, 1) ||
++      !gst_bit_reader_get_bits_uint8 (&br, &seconds, 6)) {
++    GST_WARNING_OBJECT (self, "Invalid group of VOP header");
++    return;
++  }
++
++  priv->time_base = seconds + 60 * (minutes + 60 * hours);
++}
++
++static GstFlowReturn
++gst_mpeg4_decoder_process_vol (GstMpeg4Decoder * self, const guint8 * data,
++    gsize size)
++{
++  GstMpeg4DecoderPrivate *priv = self->priv;
++  GstMpeg4VideoObjectLayer vol;
++
++  if (gst_mpeg4_parse_video_object_layer (&vol,
++          priv->have_vo ? &priv->vo : NULL, data, size) !=
++      GST_MPEG4_PARSER_OK) {
++    GST_WARNING_OBJECT (self, "Invalid video object layer");
++    return GST_FLOW_OK;
++  }
++
++  if (!vol.width || !vol.height || !vol.vop_time_increment_resolution) {
++    GST_WARNING_OBJECT (self, "Invalid video object layer size or rate");
++    return GST_FLOW_OK;
++  }
++
++  priv->vol = vol;
++  priv->have_vol = TRUE;
++
++  /* Without vol_control_parameters, Simple and Advanced Simple encoders
++   * are taken to be low delay until a B-VOP shows up, and so are some old
++   * DivX 4, Xvid and OpenDivX encoders with a reserved object type. */
++  if (vol.control_parameters)
++    priv->low_delay = vol.low_delay;
++  else if (!priv->picture_seen)
++    priv->low_delay = vol.video_object_type_indication == VO_TYPE_SIMPLE ||
++        vol.video_object_type_indication == VO_TYPE_ADVANCED_SIMPLE ||
++        (vol.video_object_type_indication == 0 && priv->divx_version < 0);
++
++  return gst_mpeg4_decoder_new_sequence (self, &priv->vol, vol.width,
++      vol.height, vol.interlaced);
++}
++
++/* Parses the configuration packets of @data and finds its first VOP. */
++static GstFlowReturn
++gst_mpeg4_decoder_parse_mpeg4 (GstMpeg4Decoder * self, const guint8 * data,
++    gsize size, GstMpeg4Packet * vop_packet)
++{
++  GstMpeg4DecoderPrivate *priv = self->priv;
++  GstMpeg4Packet packet;
++  GstMpeg4ParseResult res;
++  guint offset = 0;
++  GstFlowReturn ret;
++
++  if (vop_packet)
++    vop_packet->type = 0;
++
++  while (offset < size) {
++    const guint8 *payload;
++
++    res = gst_mpeg4_parse (&packet, FALSE, NULL, data, offset, size);
++    if (res == GST_MPEG4_PARSER_NO_PACKET_END)
++      packet.size = size - packet.offset;
++    else if (res != GST_MPEG4_PARSER_OK)
++      break;
++
++    /* the packets start with their start code value */
++    payload = data + packet.offset;
++    offset = packet.offset + packet.size;
++
++    switch (packet.type) {
++      case GST_MPEG4_USER_DATA:
++        gst_mpeg4_decoder_parse_user_data (self, payload + 1, packet.size - 1);
++        break;
++      case GST_MPEG4_VISUAL_OBJ:
++        priv->have_vo = gst_mpeg4_parse_visual_object (&priv->vo,
++            &priv->signal_type, payload, packet.size) == GST_MPEG4_PARSER_OK;
++        break;
++      case GST_MPEG4_GROUP_OF_VOP:
++        gst_mpeg4_decoder_parse_gov (self, payload, packet.size);
++        break;
++      case GST_MPEG4_VIDEO_OBJ_PLANE:
++        if (vop_packet) {
++          *vop_packet = packet;
++          return GST_FLOW_OK;
++        }
++        break;
++      default:
++        if (packet.type >= GST_MPEG4_VIDEO_LAYER_FIRST &&
++            packet.type <= GST_MPEG4_VIDEO_LAYER_LAST) {
++          ret = gst_mpeg4_decoder_process_vol (self, payload, packet.size);
++          if (ret != GST_FLOW_OK)
++            return ret;
++        }
++        break;
++    }
++  }
++
++  return GST_FLOW_OK;
++}
++
++static gboolean
++gst_mpeg4_decoder_set_format (GstVideoDecoder * decoder,
++    GstVideoCodecState * state)
++{
++  GstMpeg4Decoder *self = GST_MPEG4_DECODER (decoder);
++  GstMpeg4DecoderPrivate *priv = self->priv;
++  GstStructure *s;
++  const gchar *name;
++  GstQuery *query;
++
++  GST_DEBUG_OBJECT (decoder, "Set format");
++
++  s = gst_caps_get_structure (state->caps, 0);
++  name = gst_structure_get_name (s);
++  if (g_str_equal (name, "video/x-h263"))
++    priv->format = GST_MPEG4_DECODER_FORMAT_H263;
++  else if (g_str_equal (name, "video/x-flash-video"))
++    priv->format = GST_MPEG4_DECODER_FORMAT_SPARK;
++  else
++    priv->format = GST_MPEG4_DECODER_FORMAT_MPEG4;
++
++  priv->input_state_changed = TRUE;
++
++  if (self->input_state)
++    gst_video_codec_state_unref (self->input_state);
++
++  self->input_state = gst_video_codec_state_ref (state);
++
++  query = gst_query_new_latency ();
++  if (gst_pad_peer_query (GST_VIDEO_DECODER_SINK_PAD (self), query))
++    gst_query_parse_latency (query, &priv->is_live, NULL, NULL);
++  gst_query_unref (query);
++
++  if (priv->format == GST_MPEG4_DECODER_FORMAT_MPEG4 && state->codec_data) {
++    GstMapInfo map;
++
++    if (gst_buffer_map (state->codec_data, &map, GST_MAP_READ)) {
++      GstFlowReturn ret = gst_mpeg4_decoder_parse_mpeg4 (self, map.data,
++          map.size, NULL);
++
++      gst_buffer_unmap (state->codec_data, &map);
++      if (ret != GST_FLOW_OK)
++        return FALSE;
++    }
++  }
++
++  return TRUE;
++}
++
++static gboolean
++gst_mpeg4_decoder_negotiate (GstVideoDecoder * decoder)
++{
++  GstMpeg4Decoder *self = GST_MPEG4_DECODER (decoder);
++
++  /* output state must be updated by subclass using new input state already */
++  self->priv->input_state_changed = FALSE;
++
++  return GST_VIDEO_DECODER_CLASS (parent_class)->negotiate (decoder);
++}
++
++/* Updates the VOP times (ISO/IEC 14496-2 7.7.2.1) as the reference decoder
++ * of libavcodec does. Returns FALSE for a B-VOP whose times do not fit the
++ * reference pictures, which is skipped. */
++static gboolean
++gst_mpeg4_decoder_update_times (GstMpeg4Decoder * self,
++    GstMpeg4Picture * picture)
++{
++  GstMpeg4DecoderPrivate *priv = self->priv;
++  const GstMpeg4VideoObjectPlane *vop = &picture->vop;
++  gint64 resolution = priv->vol.vop_time_increment_resolution;
++  gint64 time, pb_time, pp_field_time, pb_field_time, last_ref_time;
++
++  if (vop->coding_type != GST_MPEG4_B_VOP) {
++    priv->last_time_base = priv->time_base;
++    priv->time_base += vop->modulo_time_base;
++    time = priv->time_base * resolution + vop->time_increment;
++    priv->pp_time = time - priv->last_non_b_time;
++    priv->last_non_b_time = time;
++    return TRUE;
++  }
++
++  time = (priv->last_time_base + vop->modulo_time_base) * resolution +
++      vop->time_increment;
++  pb_time = priv->pp_time - (priv->last_non_b_time - time);
++  if (priv->pp_time <= pb_time || priv->pp_time <= priv->pp_time - pb_time ||
++      priv->pp_time <= 0) {
++    GST_DEBUG_OBJECT (self, "B-VOP times out of order");
++    return FALSE;
++  }
++
++  if (!priv->t_frame)
++    priv->t_frame = pb_time ? pb_time : 1;
++
++  last_ref_time = ROUNDED_DIV (priv->last_non_b_time - priv->pp_time,
++      priv->t_frame);
++  pp_field_time =
++      (ROUNDED_DIV (priv->last_non_b_time, priv->t_frame) - last_ref_time) * 2;
++  pb_field_time = (ROUNDED_DIV (time, priv->t_frame) - last_ref_time) * 2;
++  if (pp_field_time <= pb_field_time || pb_field_time <= 1) {
++    pb_field_time = 2;
++    pp_field_time = 4;
++    if (priv->vol.interlaced) {
++      GST_DEBUG_OBJECT (self, "B-VOP field times out of order");
++      return FALSE;
++    }
++  }
++
++  picture->trb = pb_time;
++  picture->trd = priv->pp_time;
++  picture->trb_field = pb_field_time;
++  picture->trd_field = pp_field_time;
++
++  return TRUE;
++}
++
++/* Some encoders write a vop_time_increment of another size than the video
++ * object layer implies. Finds the size from the bits which follow it, as
++ * libavcodec does. */
++static void
++gst_mpeg4_decoder_check_time_increment_bits (GstMpeg4Decoder * self,
++    const guint8 * data, gsize size)
++{
++  GstMpeg4DecoderPrivate *priv = self->priv;
++  GstBitReader br = GST_BIT_READER_INIT (data, size);
++  guint8 coding_type, bit;
++  guint32 v;
++  guint bits = priv->vol.vop_time_increment_bits;
++
++  /* start code value, vop_coding_type, modulo_time_base, marker */
++  if (!gst_bit_reader_skip (&br, 8) ||
++      !gst_bit_reader_get_bits_uint8 (&br, &coding_type, 2))
++    return;
++  do {
++    if (!gst_bit_reader_get_bits_uint8 (&br, &bit, 1))
++      return;
++  } while (bit);
++  if (!gst_bit_reader_skip (&br, 1))
++    return;
++
++  if (bits && gst_bit_reader_peek_bits_uint32 (&br, &v, bits + 1) && (v & 1))
++    return;
++
++  for (bits = 1; bits < 16; bits++) {
++    if (coding_type == GST_MPEG4_P_VOP || (coding_type == GST_MPEG4_S_VOP &&
++            priv->vol.sprite_enable == GST_MPEG4_SPRITE_GMG)) {
++      if (gst_bit_reader_peek_bits_uint32 (&br, &v, bits + 6) &&
++          (v & 0x37) == 0x30)
++        break;
++    } else if (gst_bit_reader_peek_bits_uint32 (&br, &v, bits + 5) &&
++        (v & 0x1f) == 0x18) {
++      break;
++    }
++  }
++
++  GST_WARNING_OBJECT (self, "vop_time_increment of %u bits, not %u", bits,
++      priv->vol.vop_time_increment_bits);
++  priv->vol.vop_time_increment_bits = bits;
++}
++
++/* Returns the picture to decode, NULL to skip the frame. */
++static GstMpeg4Picture *
++gst_mpeg4_decoder_parse_vop (GstMpeg4Decoder * self, const guint8 * data,
++    gsize size, GstFlowReturn * ret)
++{
++  GstMpeg4DecoderPrivate *priv = self->priv;
++  GstMpeg4Packet packet;
++  GstMpeg4Picture *picture;
++  const guint8 *vop_data;
++  gsize vop_size;
++
++  *ret = gst_mpeg4_decoder_parse_mpeg4 (self, data, size, &packet);
++  if (*ret != GST_FLOW_OK)
++    return NULL;
++
++  if (packet.type != GST_MPEG4_VIDEO_OBJ_PLANE) {
++    GST_DEBUG_OBJECT (self, "No VOP in the buffer");
++    return NULL;
++  }
++
++  if (!priv->have_vol) {
++    GST_DEBUG_OBJECT (self, "No video object layer yet, dropping VOP");
++    return NULL;
++  }
++
++  /* from the VOP start code to the next start code, if any */
++  vop_data = data + packet.offset - 3;
++  vop_size = packet.size + 3;
++
++  gst_mpeg4_decoder_check_time_increment_bits (self, vop_data + 3,
++      vop_size - 3);
++
++  picture = gst_mpeg4_picture_new ();
++  if (gst_mpeg4_parse_video_object_plane (&picture->vop, NULL,
++          &priv->vol, vop_data + 3, vop_size - 3) != GST_MPEG4_PARSER_OK) {
++    GST_WARNING_OBJECT (self, "Invalid VOP header");
++    goto skip;
++  }
++
++  picture->coding_type = picture->vop.coding_type;
++
++  if (!gst_mpeg4_decoder_update_times (self, picture))
++    goto skip;
++
++  if (!picture->vop.coded) {
++    GST_DEBUG_OBJECT (self, "VOP not coded");
++    goto skip;
++  }
++
++  priv->picture_seen = TRUE;
++
++  /* a B-VOP proves the guess of low delay wrong */
++  if (picture->coding_type == GST_MPEG4_B_VOP && priv->low_delay &&
++      !priv->vol.control_parameters) {
++    GST_INFO_OBJECT (self, "B-VOP in a low delay stream, clearing low delay");
++    priv->low_delay = FALSE;
++  }
++
++  picture->data = vop_data;
++  picture->size = vop_size;
++  /* the parser counts from the start code value, after the prefix */
++  picture->header_size = 24 + picture->vop.size;
++
++  return picture;
++
++skip:
++  gst_mpeg4_picture_unref (picture);
++  return NULL;
++}
++
++typedef struct
++{
++  GstBitReader br;
++  gboolean error;
++} GstMpeg4DecoderBits;
++
++static guint32
++read_bits (GstMpeg4DecoderBits * bits, guint n)
++{
++  guint32 v = 0;
++
++  if (!gst_bit_reader_get_bits_uint32 (&bits->br, &v, n))
++    bits->error = TRUE;
++
++  return v;
++}
++
++/* PEI and PSUPP: extra insertion information */
++static void
++skip_extra_information (GstMpeg4DecoderBits * bits)
++{
++  while (read_bits (bits, 1) && !bits->error)
++    read_bits (bits, 8);
++}
++
++/* Width and height of the source formats 1 to 5 */
++static const guint16 h263_formats[6][2] = {
++  {0, 0}, {128, 96}, {176, 144}, {352, 288}, {704, 576}, {1408, 1152},
++};
++
++/* ITU-T H.263 5.1 (version 1 and PLUSPTYPE), as libavcodec reads it */
++static gboolean
++gst_mpeg4_decoder_parse_h263_header (GstMpeg4Decoder * self,
++    GstMpeg4DecoderBits * bits, GstMpeg4H263PictureHeader * hdr,
++    GstMpeg4VideoObjectCodingType * coding_type)
++{
++  GstMpeg4DecoderPrivate *priv = self->priv;
++  guint format, ufep = 0, type;
++  gboolean pb_frame = FALSE;
++
++  if (read_bits (bits, 22) != 0x20)
++    return FALSE;
++
++  hdr->temporal_reference = read_bits (bits, 8);
++
++  /* PTYPE: marker, H.261 distinction, split screen, document camera,
++   * freeze picture release */
++  if (read_bits (bits, 1) != 1 || read_bits (bits, 1) != 0)
++    return FALSE;
++  read_bits (bits, 3);
++
++  format = read_bits (bits, 3);
++  if (format != 6 && format != 7) {
++    if (format == 0)
++      return FALSE;
++    hdr->width = h263_formats[format][0];
++    hdr->height = h263_formats[format][1];
++    *coding_type = read_bits (bits, 1) ? GST_MPEG4_P_VOP : GST_MPEG4_I_VOP;
++    if (read_bits (bits, 1))
++      hdr->flags |= GST_MPEG4_H263_PICTURE_FLAG_UMV;
++    if (read_bits (bits, 1))
++      hdr->flags |= GST_MPEG4_H263_PICTURE_FLAG_SAC;
++    if (read_bits (bits, 1))
++      hdr->flags |= GST_MPEG4_H263_PICTURE_FLAG_AP;
++    pb_frame = read_bits (bits, 1);
++    hdr->pquant = read_bits (bits, 5);
++    /* CPM */
++    read_bits (bits, 1);
++  } else {
++    gboolean ss;
++
++    hdr->flags |= format == 7 ? GST_MPEG4_H263_PICTURE_FLAG_PLUSPTYPE : 0;
++
++    ufep = read_bits (bits, 3);
++    if (ufep == 1) {
++      GstMpeg4H263PictureFlags options = 0;
++
++      /* OPPTYPE */
++      format = read_bits (bits, 3);
++      priv->h263_custom_pcf = read_bits (bits, 1);
++      options |= read_bits (bits, 1) ? GST_MPEG4_H263_PICTURE_FLAG_UMV : 0;
++      options |= read_bits (bits, 1) ? GST_MPEG4_H263_PICTURE_FLAG_SAC : 0;
++      options |= read_bits (bits, 1) ? GST_MPEG4_H263_PICTURE_FLAG_AP : 0;
++      options |= read_bits (bits, 1) ? GST_MPEG4_H263_PICTURE_FLAG_AIC : 0;
++      options |= read_bits (bits, 1) ? GST_MPEG4_H263_PICTURE_FLAG_DF : 0;
++      options |= read_bits (bits, 1) ? GST_MPEG4_H263_PICTURE_FLAG_SS : 0;
++      options |= read_bits (bits, 1) ? GST_MPEG4_H263_PICTURE_FLAG_RPS : 0;
++      options |= read_bits (bits, 1) ? GST_MPEG4_H263_PICTURE_FLAG_ISD : 0;
++      options |= read_bits (bits, 1) ? GST_MPEG4_H263_PICTURE_FLAG_AIV : 0;
++      options |= read_bits (bits, 1) ? GST_MPEG4_H263_PICTURE_FLAG_MQ : 0;
++      /* marker and reserved bits */
++      read_bits (bits, 4);
++      priv->h263_options = options;
++    } else if (ufep != 0) {
++      return FALSE;
++    }
++
++    /* MPPTYPE */
++    type = read_bits (bits, 3);
++    switch (type) {
++      case 0:
++      case 7:
++        *coding_type = GST_MPEG4_I_VOP;
++        break;
++      case 1:
++        *coding_type = GST_MPEG4_P_VOP;
++        break;
++      case 2:
++        *coding_type = GST_MPEG4_P_VOP;
++        pb_frame = TRUE;
++        break;
++      case 3:
++        *coding_type = GST_MPEG4_B_VOP;
++        break;
++      default:
++        /* EI and EP pictures (annex O) */
++        GST_WARNING_OBJECT (self, "Unsupported picture type %u", type);
++        return FALSE;
++    }
++    if (read_bits (bits, 1))
++      hdr->flags |= GST_MPEG4_H263_PICTURE_FLAG_RPR;
++    if (read_bits (bits, 1))
++      hdr->flags |= GST_MPEG4_H263_PICTURE_FLAG_RRU;
++    if (read_bits (bits, 1))
++      hdr->flags |= GST_MPEG4_H263_PICTURE_FLAG_ROUNDING_TYPE;
++    /* reserved bits, marker and CPM */
++    read_bits (bits, 4);
++
++    hdr->flags |= priv->h263_options;
++    ss = priv->h263_options & GST_MPEG4_H263_PICTURE_FLAG_SS;
++
++    if (ufep) {
++      if (format == 6) {
++        /* CPFMT */
++        guint par = read_bits (bits, 4);
++
++        priv->h263_width = (read_bits (bits, 9) + 1) * 4;
++        read_bits (bits, 1);
++        priv->h263_height = read_bits (bits, 9) * 4;
++        /* EPAR */
++        if (par == 15)
++          read_bits (bits, 16);
++      } else if (format >= 1 && format <= 5) {
++        priv->h263_width = h263_formats[format][0];
++        priv->h263_height = h263_formats[format][1];
++      } else {
++        return FALSE;
++      }
++      /* CPCFC */
++      if (priv->h263_custom_pcf)
++        read_bits (bits, 8);
++    }
++    hdr->width = priv->h263_width;
++    hdr->height = priv->h263_height;
++
++    /* ETR */
++    if (priv->h263_custom_pcf)
++      read_bits (bits, 2);
++
++    if (ufep) {
++      /* UUI */
++      if ((priv->h263_options & GST_MPEG4_H263_PICTURE_FLAG_UMV) &&
++          !read_bits (bits, 1))
++        read_bits (bits, 1);
++      /* SSS */
++      if (ss) {
++        if (read_bits (bits, 1))
++          hdr->flags |= GST_MPEG4_H263_PICTURE_FLAG_SS_RECTANGULAR;
++        if (read_bits (bits, 1))
++          hdr->flags |= GST_MPEG4_H263_PICTURE_FLAG_SS_ARBITRARY;
++      }
++      /* ELNUM, RLNUM */
++      if (*coding_type == GST_MPEG4_B_VOP)
++        read_bits (bits, ufep == 1 ? 8 : 4);
++    }
++
++    hdr->pquant = read_bits (bits, 5);
++  }
++
++  if (!hdr->width || !hdr->height)
++    return FALSE;
++
++  if (pb_frame) {
++    hdr->flags |= GST_MPEG4_H263_PICTURE_FLAG_PB_FRAMES;
++    /* TRB and DBQUANT */
++    read_bits (bits, priv->h263_custom_pcf ? 7 : 5);
++  }
++
++  skip_extra_information (bits);
++
++  if (hdr->flags & GST_MPEG4_H263_PICTURE_FLAG_SS) {
++    static const guint mba_max[] = { 47, 98, 395, 1583, 6335, 9215 };
++    static const guint mba_length[] = { 6, 7, 9, 11, 13, 14 };
++    guint mb_num = ((hdr->width + 15) / 16) * ((hdr->height + 15) / 16);
++    guint i;
++
++    for (i = 0; i < G_N_ELEMENTS (mba_max) - 1; i++)
++      if (mb_num - 1 <= mba_max[i])
++        break;
++
++    /* SEPB1, MBA, SEPB2 */
++    read_bits (bits, 1);
++    read_bits (bits, mba_length[i]);
++    read_bits (bits, 1);
++  }
++
++  return !bits->error;
++}
++
++/* The picture header of Sorenson Spark, as libavcodec reads it */
++static gboolean
++gst_mpeg4_decoder_parse_spark_header (GstMpeg4Decoder * self,
++    GstMpeg4DecoderBits * bits, GstMpeg4H263PictureHeader * hdr,
++    GstMpeg4VideoObjectCodingType * coding_type)
++{
++  static const guint16 sizes[5][2] = {
++    {352, 288}, {176, 144}, {128, 96}, {320, 240}, {160, 120},
++  };
++  guint format, type;
++
++  if (read_bits (bits, 17) != 1)
++    return FALSE;
++
++  hdr->spk_version = read_bits (bits, 5);
++  if (hdr->spk_version > 1)
++    return FALSE;
++
++  hdr->temporal_reference = read_bits (bits, 8);
++
++  format = read_bits (bits, 3);
++  switch (format) {
++    case 0:
++      hdr->width = read_bits (bits, 8);
++      hdr->height = read_bits (bits, 8);
++      break;
++    case 1:
++      hdr->width = read_bits (bits, 16);
++      hdr->height = read_bits (bits, 16);
++      break;
++    case 7:
++      return FALSE;
++    default:
++      hdr->width = sizes[format - 2][0];
++      hdr->height = sizes[format - 2][1];
++      break;
++  }
++
++  if (!hdr->width || !hdr->height)
++    return FALSE;
++
++  type = read_bits (bits, 2);
++  *coding_type = type ? GST_MPEG4_P_VOP : GST_MPEG4_I_VOP;
++  if (type > 1)
++    hdr->flags |= GST_MPEG4_H263_PICTURE_FLAG_DISPOSABLE;
++
++  /* deblocking flag, a hint only */
++  read_bits (bits, 1);
++  hdr->pquant = read_bits (bits, 5);
++
++  skip_extra_information (bits);
++
++  return !bits->error;
++}
++
++/* Returns the picture to decode, NULL to skip the frame. */
++static GstMpeg4Picture *
++gst_mpeg4_decoder_parse_h263 (GstMpeg4Decoder * self, const guint8 * data,
++    gsize size, GstFlowReturn * ret)
++{
++  GstMpeg4DecoderPrivate *priv = self->priv;
++  gboolean spark = priv->format == GST_MPEG4_DECODER_FORMAT_SPARK;
++  GstMpeg4Picture *picture;
++  GstMpeg4DecoderBits bits;
++  gboolean ok;
++  gsize start;
++
++  *ret = GST_FLOW_OK;
++
++  /* the picture start code is byte aligned in the buffer */
++  for (start = 0; start + 2 < size; start++) {
++    if (!data[start] && !data[start + 1] &&
++        (data[start + 2] & (spark ? 0xf8 : 0xfc)) == 0x80)
++      break;
++  }
++  if (start + 2 >= size) {
++    GST_DEBUG_OBJECT (self, "No picture start code in the buffer");
++    return NULL;
++  }
++
++  picture = gst_mpeg4_picture_new ();
++  gst_bit_reader_init (&bits.br, data + start, size - start);
++  bits.error = FALSE;
++
++  if (spark)
++    ok = gst_mpeg4_decoder_parse_spark_header (self, &bits, &picture->h263,
++        &picture->coding_type);
++  else
++    ok = gst_mpeg4_decoder_parse_h263_header (self, &bits, &picture->h263,
++        &picture->coding_type);
++
++  if (!ok) {
++    GST_WARNING_OBJECT (self, "Invalid picture header");
++    gst_mpeg4_picture_unref (picture);
++    return NULL;
++  }
++
++  *ret = gst_mpeg4_decoder_new_sequence (self, NULL, picture->h263.width,
++      picture->h263.height, FALSE);
++  if (*ret != GST_FLOW_OK) {
++    gst_mpeg4_picture_unref (picture);
++    return NULL;
++  }
++
++  picture->data = data + start;
++  picture->size = size - start;
++  picture->header_size = gst_bit_reader_get_pos (&bits.br);
++
++  return picture;
++}
++
++static GstFlowReturn
++gst_mpeg4_decoder_handle_frame (GstVideoDecoder * decoder,
++    GstVideoCodecFrame * frame)
++{
++  GstMpeg4Decoder *self = GST_MPEG4_DECODER (decoder);
++  GstMpeg4DecoderClass *klass = GST_MPEG4_DECODER_GET_CLASS (self);
++  GstMpeg4DecoderPrivate *priv = self->priv;
++  GstBuffer *in_buf = frame->input_buffer;
++  GstMpeg4Picture *picture = NULL;
++  GstMpeg4Picture *forward_ref = NULL, *backward_ref = NULL;
++  const GstMpeg4VideoObjectLayer *vol = NULL;
++  gboolean reference, output_now;
++  GstMapInfo map;
++  GstFlowReturn ret = GST_FLOW_OK;
++  GstFlowReturn output_ret = GST_FLOW_OK;
++
++  GST_LOG_OBJECT (self, "handle frame, PTS: %" GST_TIME_FORMAT ", DTS: %"
++      GST_TIME_FORMAT, GST_TIME_ARGS (GST_BUFFER_PTS (in_buf)),
++      GST_TIME_ARGS (GST_BUFFER_DTS (in_buf)));
++
++  if (!gst_buffer_map (in_buf, &map, GST_MAP_READ)) {
++    GST_ERROR_OBJECT (self, "Cannot map buffer");
++    ret = GST_FLOW_ERROR;
++    goto error;
++  }
++
++  if (priv->format == GST_MPEG4_DECODER_FORMAT_MPEG4) {
++    picture = gst_mpeg4_decoder_parse_vop (self, map.data, map.size, &ret);
++    vol = &priv->vol;
++  } else {
++    picture = gst_mpeg4_decoder_parse_h263 (self, map.data, map.size, &ret);
++  }
++
++  if (!picture) {
++    gst_buffer_unmap (in_buf, &map);
++    if (ret != GST_FLOW_OK)
++      goto error;
++    gst_video_decoder_release_frame (decoder, frame);
++    return GST_FLOW_OK;
++  }
++
++  switch (picture->coding_type) {
++    case GST_MPEG4_I_VOP:
++      break;
++    case GST_MPEG4_P_VOP:
++    case GST_MPEG4_S_VOP:
++      forward_ref = priv->refs[0];
++      break;
++    case GST_MPEG4_B_VOP:
++      forward_ref = priv->refs[1];
++      backward_ref = priv->refs[0];
++      break;
++  }
++
++  /* missing references at the start of the stream or after a seek */
++  if ((picture->coding_type != GST_MPEG4_I_VOP && !priv->refs[0]) ||
++      (picture->coding_type == GST_MPEG4_B_VOP && !priv->refs[1])) {
++    GST_DEBUG_OBJECT (self, "Missing reference, dropping %c picture",
++        "IPBS"[picture->coding_type]);
++    gst_mpeg4_picture_unref (picture);
++    gst_buffer_unmap (in_buf, &map);
++    gst_video_decoder_release_frame (decoder, frame);
++    return GST_FLOW_OK;
++  }
++
++  GST_CODEC_PICTURE_FRAME_NUMBER (picture) = frame->system_frame_number;
++
++  if (priv->input_state_changed) {
++    gst_mpeg4_picture_set_discont_state (picture, self->input_state);
++    priv->input_state_changed = FALSE;
++  }
++
++  if (klass->new_picture) {
++    ret = klass->new_picture (self, frame, picture);
++    if (ret != GST_FLOW_OK) {
++      GST_WARNING_OBJECT (self, "subclass failed to handle new picture");
++      gst_buffer_unmap (in_buf, &map);
++      goto error;
++    }
++  }
++
++  g_assert (klass->decode_picture);
++  ret = klass->decode_picture (self, picture, vol, forward_ref, backward_ref);
++  picture->data = NULL;
++  gst_buffer_unmap (in_buf, &map);
++  if (ret != GST_FLOW_OK) {
++    GST_WARNING_OBJECT (self, "subclass failed to decode current picture");
++    goto error;
++  }
++
++  reference = picture->coding_type != GST_MPEG4_B_VOP &&
++      !(picture->h263.flags & GST_MPEG4_H263_PICTURE_FLAG_DISPOSABLE);
++  /* VOPs are output at once when the stream has no B-VOP: signalled, or
++   * guessed for the Simple profile, which has none */
++  output_now = priv->format != GST_MPEG4_DECODER_FORMAT_MPEG4 ||
++      (priv->low_delay && (priv->vol.control_parameters ||
++          priv->vol.video_object_type_indication == VO_TYPE_SIMPLE));
++
++  if (!reference) {
++    gst_mpeg4_decoder_queue_output (self, frame, picture);
++  } else {
++    if (priv->held.frame) {
++      gst_mpeg4_decoder_queue_output (self, priv->held.frame,
++          priv->held.picture);
++      memset (&priv->held, 0, sizeof (priv->held));
++    }
++
++    gst_mpeg4_picture_replace (&priv->refs[1], priv->refs[0]);
++    gst_mpeg4_picture_replace (&priv->refs[0], picture);
++
++    if (output_now) {
++      gst_mpeg4_decoder_queue_output (self, frame, picture);
++    } else {
++      priv->held.frame = frame;
++      priv->held.picture = picture;
++      priv->held.self = self;
++    }
++  }
++
++  gst_mpeg4_decoder_drain_output_queue (self, priv->preferred_output_delay,
++      &output_ret);
++
++  return output_ret;
++
++error:
++  if (picture)
++    gst_mpeg4_picture_unref (picture);
++
++  if (ret == GST_FLOW_ERROR) {
++    GST_VIDEO_DECODER_ERROR (self, 1, STREAM, DECODE,
++        ("Failed to decode data"), (NULL), ret);
++  }
++
++  gst_video_decoder_release_frame (decoder, frame);
++
++  return ret;
++}
++
++/**
++ * gst_mpeg4_decoder_get_format:
++ * @decoder: a #GstMpeg4Decoder
++ *
++ * Returns: the bitstream format of the sink caps
++ *
++ * Since: 1.30
++ */
++GstMpeg4DecoderFormat
++gst_mpeg4_decoder_get_format (GstMpeg4Decoder * decoder)
++{
++  g_return_val_if_fail (GST_IS_MPEG4_DECODER (decoder),
++      GST_MPEG4_DECODER_FORMAT_NONE);
++
++  return decoder->priv->format;
++}
++
++/**
++ * gst_mpeg4_decoder_get_encoder_bugs:
++ * @decoder: a #GstMpeg4Decoder
++ *
++ * Returns the deviations from ISO/IEC 14496-2 of the encoder of the
++ * MPEG-4 Part 2 stream, as identified by its user data, which a decoder
++ * has to reproduce. They are those which libavcodec detects.
++ *
++ * Returns: the #GstMpeg4DecoderEncoderBugs of the stream
++ *
++ * Since: 1.30
++ */
++GstMpeg4DecoderEncoderBugs
++gst_mpeg4_decoder_get_encoder_bugs (GstMpeg4Decoder * decoder)
++{
++  GstMpeg4DecoderPrivate *priv;
++  GstMpeg4DecoderEncoderBugs bugs = 0;
++  gint divx_version, divx_build, xvid, lavc;
++
++  g_return_val_if_fail (GST_IS_MPEG4_DECODER (decoder), 0);
++
++  priv = decoder->priv;
++  divx_version = priv->divx_version;
++  divx_build = priv->divx_build;
++  xvid = priv->xvid_build;
++  lavc = priv->lavc_build;
++
++  /* Xvid user data also in a stream that claims to be DivX */
++  if (xvid >= 0 && divx_version >= 0)
++    divx_version = divx_build = -1;
++
++  if (divx_version >= 500 && divx_build < 1814)
++    bugs |= GST_MPEG4_DECODER_BUG_QPEL_CHROMA;
++  if (divx_version > 502 && divx_build < 1814)
++    bugs |= GST_MPEG4_DECODER_BUG_QPEL_CHROMA2;
++  if (divx_version >= 0)
++    bugs |= GST_MPEG4_DECODER_BUG_DIRECT_BLOCKSIZE |
++        GST_MPEG4_DECODER_BUG_HPEL_CHROMA;
++  if (divx_version >= 0 && divx_version < 500)
++    bugs |= GST_MPEG4_DECODER_BUG_EDGE;
++  if (divx_version == 500 && divx_build == 413)
++    bugs |= GST_MPEG4_DECODER_BUG_GMC_UNSCALED_REF;
++
++  if (xvid >= 0 && xvid <= 1)
++    bugs |= GST_MPEG4_DECODER_BUG_QPEL_CHROMA;
++  if (xvid >= 0 && xvid <= 12)
++    bugs |= GST_MPEG4_DECODER_BUG_EDGE;
++  if (xvid >= 0 && xvid <= 32)
++    bugs |= GST_MPEG4_DECODER_BUG_DC_CLIP;
++
++  if (lavc >= 0 && lavc < 4653)
++    bugs |= GST_MPEG4_DECODER_BUG_STD_QPEL;
++  if (lavc >= 0 && lavc < 4655)
++    bugs |= GST_MPEG4_DECODER_BUG_DIRECT_BLOCKSIZE;
++  if (lavc >= 0 && lavc < 4670)
++    bugs |= GST_MPEG4_DECODER_BUG_EDGE;
++  if (lavc >= 0 && lavc <= 4712)
++    bugs |= GST_MPEG4_DECODER_BUG_DC_CLIP;
++  if ((lavc & 0xff) >= 100 && lavc > 3621476 && lavc < 3752552 &&
++      (lavc < 3752037 || lavc > 3752191))
++    bugs |= GST_MPEG4_DECODER_BUG_IEDGE;
++
++  if (priv->divx_packed)
++    bugs |= GST_MPEG4_DECODER_BUG_PACKED_BITSTREAM;
++
++  return bugs;
++}
++
++/**
++ * gst_mpeg4_decoder_get_low_delay:
++ * @decoder: a #GstMpeg4Decoder
++ *
++ * Returns: whether the MPEG-4 Part 2 stream is low delay (has no B-VOP), as
++ *   signalled by its video object layer or guessed from its object type
++ *   until a B-VOP shows up
++ *
++ * Since: 1.30
++ */
++gboolean
++gst_mpeg4_decoder_get_low_delay (GstMpeg4Decoder * decoder)
++{
++  g_return_val_if_fail (GST_IS_MPEG4_DECODER (decoder), FALSE);
++
++  return decoder->priv->low_delay;
++}
++
++static void
++gst_mpeg4_decoder_init (GstMpeg4Decoder * self)
++{
++  gst_video_decoder_set_packetized (GST_VIDEO_DECODER (self), TRUE);
++  gst_video_decoder_set_needs_format (GST_VIDEO_DECODER (self), TRUE);
++
++  self->priv = gst_mpeg4_decoder_get_instance_private (self);
++}
++
++static void
++gst_mpeg4_decoder_class_init (GstMpeg4DecoderClass * klass)
++{
++  GstVideoDecoderClass *decoder_class = GST_VIDEO_DECODER_CLASS (klass);
++
++  decoder_class->start = GST_DEBUG_FUNCPTR (gst_mpeg4_decoder_start);
++  decoder_class->stop = GST_DEBUG_FUNCPTR (gst_mpeg4_decoder_stop);
++  decoder_class->set_format = GST_DEBUG_FUNCPTR (gst_mpeg4_decoder_set_format);
++  decoder_class->negotiate = GST_DEBUG_FUNCPTR (gst_mpeg4_decoder_negotiate);
++  decoder_class->finish = GST_DEBUG_FUNCPTR (gst_mpeg4_decoder_finish);
++  decoder_class->flush = GST_DEBUG_FUNCPTR (gst_mpeg4_decoder_flush);
++  decoder_class->drain = GST_DEBUG_FUNCPTR (gst_mpeg4_decoder_drain);
++  decoder_class->handle_frame =
++      GST_DEBUG_FUNCPTR (gst_mpeg4_decoder_handle_frame);
++}
+diff --git a/gst-libs/gst/codecs/gstmpeg4decoder.h b/gst-libs/gst/codecs/gstmpeg4decoder.h
+new file mode 100644
+index 0000000..de6b7ac
+--- /dev/null
++++ b/gst-libs/gst/codecs/gstmpeg4decoder.h
+@@ -0,0 +1,237 @@
++/* GStreamer
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++
++#pragma once
++
++#include <gst/codecs/codecs-prelude.h>
++
++#include <gst/video/video.h>
++#include <gst/codecparsers/gstmpeg4parser.h>
++#include <gst/codecs/gstmpeg4picture.h>
++
++G_BEGIN_DECLS
++
++#define GST_TYPE_MPEG4_DECODER            (gst_mpeg4_decoder_get_type())
++#define GST_MPEG4_DECODER(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_MPEG4_DECODER,GstMpeg4Decoder))
++#define GST_MPEG4_DECODER_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_MPEG4_DECODER,GstMpeg4DecoderClass))
++#define GST_MPEG4_DECODER_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS((obj),GST_TYPE_MPEG4_DECODER,GstMpeg4DecoderClass))
++#define GST_IS_MPEG4_DECODER(obj)         (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_MPEG4_DECODER))
++#define GST_IS_MPEG4_DECODER_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_MPEG4_DECODER))
++#define GST_MPEG4_DECODER_CAST(obj)       ((GstMpeg4Decoder*)obj)
++
++typedef struct _GstMpeg4Decoder GstMpeg4Decoder;
++typedef struct _GstMpeg4DecoderClass GstMpeg4DecoderClass;
++typedef struct _GstMpeg4DecoderPrivate GstMpeg4DecoderPrivate;
++
++/**
++ * GstMpeg4DecoderFormat:
++ * @GST_MPEG4_DECODER_FORMAT_NONE: no input format yet
++ * @GST_MPEG4_DECODER_FORMAT_MPEG4: MPEG-4 Part 2 (video/mpeg, mpegversion 4)
++ * @GST_MPEG4_DECODER_FORMAT_H263: H.263 (video/x-h263, variant itu)
++ * @GST_MPEG4_DECODER_FORMAT_SPARK: Sorenson Spark (video/x-flash-video,
++ *   flvversion 1)
++ *
++ * The bitstream format, chosen by the sink caps.
++ *
++ * Since: 1.30
++ */
++typedef enum
++{
++  GST_MPEG4_DECODER_FORMAT_NONE,
++  GST_MPEG4_DECODER_FORMAT_MPEG4,
++  GST_MPEG4_DECODER_FORMAT_H263,
++  GST_MPEG4_DECODER_FORMAT_SPARK,
++} GstMpeg4DecoderFormat;
++
++/**
++ * GstMpeg4DecoderEncoderBugs:
++ * @GST_MPEG4_DECODER_BUG_EDGE: motion vectors point outside the picture
++ *   relative to its exact size, not its macroblock aligned size
++ * @GST_MPEG4_DECODER_BUG_QPEL_CHROMA: quarter sample chroma vectors are
++ *   derived with the rounding of old DivX 5 and Xvid releases
++ * @GST_MPEG4_DECODER_BUG_QPEL_CHROMA2: quarter sample chroma vectors are
++ *   derived with the rounding of DivX 5.0.3 and later
++ * @GST_MPEG4_DECODER_BUG_STD_QPEL: quarter sample interpolation of old
++ *   libavcodec releases
++ * @GST_MPEG4_DECODER_BUG_DIRECT_BLOCKSIZE: direct mode chroma vectors of
++ *   quarter sample B-VOPs are derived per macroblock
++ * @GST_MPEG4_DECODER_BUG_HPEL_CHROMA: chroma vectors of field macroblocks are
++ *   rounded as frame vectors
++ * @GST_MPEG4_DECODER_BUG_DC_CLIP: intra DC values are not clipped
++ * @GST_MPEG4_DECODER_BUG_IEDGE: intra blocks use edge emulation (some
++ *   libavcodec 54 to 57 releases)
++ * @GST_MPEG4_DECODER_BUG_GMC_UNSCALED_REF: GMC reference points are not
++ *   scaled (DivX 5.0.0 build 413)
++ * @GST_MPEG4_DECODER_BUG_PACKED_BITSTREAM: the encoder packs B-VOPs with the
++ *   following VOP (DivX packed bitstream)
++ *
++ * The deviations from ISO/IEC 14496-2 of the encoder of the stream, as far
++ * as they can be detected from its user data.
++ *
++ * Since: 1.30
++ */
++typedef enum
++{
++  GST_MPEG4_DECODER_BUG_EDGE = (1 << 0),
++  GST_MPEG4_DECODER_BUG_QPEL_CHROMA = (1 << 1),
++  GST_MPEG4_DECODER_BUG_QPEL_CHROMA2 = (1 << 2),
++  GST_MPEG4_DECODER_BUG_STD_QPEL = (1 << 3),
++  GST_MPEG4_DECODER_BUG_DIRECT_BLOCKSIZE = (1 << 4),
++  GST_MPEG4_DECODER_BUG_HPEL_CHROMA = (1 << 5),
++  GST_MPEG4_DECODER_BUG_DC_CLIP = (1 << 6),
++  GST_MPEG4_DECODER_BUG_IEDGE = (1 << 7),
++  GST_MPEG4_DECODER_BUG_GMC_UNSCALED_REF = (1 << 8),
++  GST_MPEG4_DECODER_BUG_PACKED_BITSTREAM = (1 << 9),
++} GstMpeg4DecoderEncoderBugs;
++
++/**
++ * GstMpeg4Decoder:
++ *
++ * The opaque #GstMpeg4Decoder data structure.
++ *
++ * Since: 1.30
++ */
++struct _GstMpeg4Decoder
++{
++  /*< private >*/
++  GstVideoDecoder parent;
++
++  /*< protected >*/
++  GstVideoCodecState * input_state;
++
++  /*< private >*/
++  GstMpeg4DecoderPrivate *priv;
++  gpointer padding[GST_PADDING_LARGE];
++};
++
++/**
++ * GstMpeg4DecoderClass:
++ *
++ * Since: 1.30
++ */
++struct _GstMpeg4DecoderClass
++{
++  /*< private >*/
++  GstVideoDecoderClass parent_class;
++
++  /**
++   * GstMpeg4DecoderClass::new_sequence:
++   * @decoder: a #GstMpeg4Decoder
++   * @vol: (nullable): the new #GstMpeg4VideoObjectLayer, %NULL for H.263
++   *   and Sorenson Spark
++   * @width: the picture width
++   * @height: the picture height
++   * @max_dpb_size: the number of pictures the decoder holds at most: the
++   *   references, the picture being decoded and the preferred output delay
++   *
++   * Notifies the subclass of a new sequence: the first one, a video object
++   * layer of a different size or scan, or an H.263 picture of a different
++   * size. Pictures of the previous sequence have been output.
++   *
++   * Since: 1.30
++   */
++  GstFlowReturn (*new_sequence)     (GstMpeg4Decoder * decoder,
++                                     const GstMpeg4VideoObjectLayer * vol,
++                                     gint width,
++                                     gint height,
++                                     gint max_dpb_size);
++
++  /**
++   * GstMpeg4DecoderClass::new_picture:
++   * @decoder: a #GstMpeg4Decoder
++   * @frame: (transfer none): a #GstVideoCodecFrame
++   * @picture: (transfer none): a #GstMpeg4Picture
++   *
++   * Optional. Called whenever a new #GstMpeg4Picture is created.
++   *
++   * Since: 1.30
++   */
++  GstFlowReturn (*new_picture)      (GstMpeg4Decoder * decoder,
++                                     GstVideoCodecFrame * frame,
++                                     GstMpeg4Picture * picture);
++
++  /**
++   * GstMpeg4DecoderClass::decode_picture:
++   * @decoder: a #GstMpeg4Decoder
++   * @picture: (transfer none): the #GstMpeg4Picture to decode
++   * @vol: (nullable): the active #GstMpeg4VideoObjectLayer, %NULL for H.263
++   *   and Sorenson Spark
++   * @forward_ref: (transfer none) (nullable): the forward reference of P, S
++   *   and B pictures
++   * @backward_ref: (transfer none) (nullable): the backward reference of B
++   *   pictures
++   *
++   * Decodes one picture.
++   *
++   * Since: 1.30
++   */
++  GstFlowReturn (*decode_picture)   (GstMpeg4Decoder * decoder,
++                                     GstMpeg4Picture * picture,
++                                     const GstMpeg4VideoObjectLayer * vol,
++                                     GstMpeg4Picture * forward_ref,
++                                     GstMpeg4Picture * backward_ref);
++
++  /**
++   * GstMpeg4DecoderClass::output_picture:
++   * @decoder: a #GstMpeg4Decoder
++   * @frame: (transfer full): a #GstVideoCodecFrame
++   * @picture: (transfer full): a #GstMpeg4Picture
++   *
++   * Called with a #GstMpeg4Picture which is to be output, in display order.
++   * The #GstVideoCodecFrame must be consumed by the subclass.
++   *
++   * Since: 1.30
++   */
++  GstFlowReturn (*output_picture)   (GstMpeg4Decoder * decoder,
++                                     GstVideoCodecFrame * frame,
++                                     GstMpeg4Picture * picture);
++
++  /**
++   * GstMpeg4DecoderClass::get_preferred_output_delay:
++   * @decoder: a #GstMpeg4Decoder
++   * @is_live: whether upstream is live or not
++   *
++   * Optional. Returns the number of pictures by which the subclass prefers
++   * the output to be delayed, so that it can keep decoding meanwhile.
++   *
++   * Since: 1.30
++   */
++  guint (*get_preferred_output_delay) (GstMpeg4Decoder * decoder,
++                                       gboolean is_live);
++
++  /*< private >*/
++  gpointer padding[GST_PADDING_LARGE];
++};
++
++G_DEFINE_AUTOPTR_CLEANUP_FUNC(GstMpeg4Decoder, gst_object_unref)
++
++GST_CODECS_API
++GType gst_mpeg4_decoder_get_type (void);
++
++GST_CODECS_API
++GstMpeg4DecoderFormat gst_mpeg4_decoder_get_format (GstMpeg4Decoder * decoder);
++
++GST_CODECS_API
++GstMpeg4DecoderEncoderBugs gst_mpeg4_decoder_get_encoder_bugs (GstMpeg4Decoder * decoder);
++
++GST_CODECS_API
++gboolean gst_mpeg4_decoder_get_low_delay (GstMpeg4Decoder * decoder);
++
++G_END_DECLS
+diff --git a/gst-libs/gst/codecs/gstmpeg4picture.c b/gst-libs/gst/codecs/gstmpeg4picture.c
+new file mode 100644
+index 0000000..7282e5a
+--- /dev/null
++++ b/gst-libs/gst/codecs/gstmpeg4picture.c
+@@ -0,0 +1,55 @@
++/* GStreamer
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#ifdef HAVE_CONFIG_H
++#include <config.h>
++#endif
++
++#include "gstmpeg4picture.h"
++#include "gstcodecpicture-private.h"
++
++GST_DEBUG_CATEGORY_EXTERN (gst_mpeg4_decoder_debug);
++#define GST_CAT_DEFAULT gst_mpeg4_decoder_debug
++
++GST_DEFINE_MINI_OBJECT_TYPE (GstMpeg4Picture, gst_mpeg4_picture);
++
++/**
++ * gst_mpeg4_picture_new:
++ *
++ * Create new #GstMpeg4Picture
++ *
++ * Returns: a new #GstMpeg4Picture
++ *
++ * Since: 1.30
++ */
++GstMpeg4Picture *
++gst_mpeg4_picture_new (void)
++{
++  GstMpeg4Picture *pic;
++
++  pic = g_new0 (GstMpeg4Picture, 1);
++
++  gst_mini_object_init (GST_MINI_OBJECT_CAST (pic), 0,
++      GST_TYPE_MPEG4_PICTURE, NULL, NULL,
++      (GstMiniObjectFreeFunction) gst_codec_picture_free);
++
++  GST_TRACE ("New picture %p", pic);
++
++  return pic;
++}
+diff --git a/gst-libs/gst/codecs/gstmpeg4picture.h b/gst-libs/gst/codecs/gstmpeg4picture.h
+new file mode 100644
+index 0000000..2e534f3
+--- /dev/null
++++ b/gst-libs/gst/codecs/gstmpeg4picture.h
+@@ -0,0 +1,204 @@
++/* GStreamer
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++
++#pragma once
++
++#include <gst/codecs/codecs-prelude.h>
++#include <gst/codecs/gstcodecpicture.h>
++#include <gst/codecparsers/gstmpeg4parser.h>
++
++G_BEGIN_DECLS
++
++#define GST_TYPE_MPEG4_PICTURE     (gst_mpeg4_picture_get_type())
++#define GST_IS_MPEG4_PICTURE(obj)  (GST_IS_MINI_OBJECT_TYPE(obj, GST_TYPE_MPEG4_PICTURE))
++#define GST_MPEG4_PICTURE(obj)     ((GstMpeg4Picture *)obj)
++
++typedef struct _GstMpeg4Picture GstMpeg4Picture;
++typedef struct _GstMpeg4H263PictureHeader GstMpeg4H263PictureHeader;
++
++/**
++ * GstMpeg4H263PictureFlags:
++ * @GST_MPEG4_H263_PICTURE_FLAG_PLUSPTYPE: the picture header has an extended
++ *   picture type (PLUSPTYPE, H.263 version 2 and later)
++ * @GST_MPEG4_H263_PICTURE_FLAG_UMV: unrestricted motion vectors (annex D)
++ * @GST_MPEG4_H263_PICTURE_FLAG_SAC: syntax-based arithmetic coding (annex E)
++ * @GST_MPEG4_H263_PICTURE_FLAG_AP: advanced prediction (annex F)
++ * @GST_MPEG4_H263_PICTURE_FLAG_PB_FRAMES: PB-frame (annex G) or improved
++ *   PB-frame (annex M)
++ * @GST_MPEG4_H263_PICTURE_FLAG_AIC: advanced intra coding (annex I)
++ * @GST_MPEG4_H263_PICTURE_FLAG_DF: deblocking filter (annex J)
++ * @GST_MPEG4_H263_PICTURE_FLAG_SS: slice structured (annex K)
++ * @GST_MPEG4_H263_PICTURE_FLAG_SS_RECTANGULAR: rectangular slices
++ * @GST_MPEG4_H263_PICTURE_FLAG_SS_ARBITRARY: arbitrary slice ordering
++ * @GST_MPEG4_H263_PICTURE_FLAG_RPS: reference picture selection (annex N)
++ * @GST_MPEG4_H263_PICTURE_FLAG_ISD: independent segment decoding (annex R)
++ * @GST_MPEG4_H263_PICTURE_FLAG_AIV: alternative inter VLC (annex S)
++ * @GST_MPEG4_H263_PICTURE_FLAG_MQ: modified quantization (annex T)
++ * @GST_MPEG4_H263_PICTURE_FLAG_RPR: reference picture resampling (annex P)
++ * @GST_MPEG4_H263_PICTURE_FLAG_RRU: reduced resolution update (annex Q)
++ * @GST_MPEG4_H263_PICTURE_FLAG_ROUNDING_TYPE: rounding type (RTYPE)
++ * @GST_MPEG4_H263_PICTURE_FLAG_DISPOSABLE: Sorenson Spark disposable
++ *   inter picture, not used as a reference
++ *
++ * Since: 1.30
++ */
++typedef enum
++{
++  GST_MPEG4_H263_PICTURE_FLAG_PLUSPTYPE = (1 << 0),
++  GST_MPEG4_H263_PICTURE_FLAG_UMV = (1 << 1),
++  GST_MPEG4_H263_PICTURE_FLAG_SAC = (1 << 2),
++  GST_MPEG4_H263_PICTURE_FLAG_AP = (1 << 3),
++  GST_MPEG4_H263_PICTURE_FLAG_PB_FRAMES = (1 << 4),
++  GST_MPEG4_H263_PICTURE_FLAG_AIC = (1 << 5),
++  GST_MPEG4_H263_PICTURE_FLAG_DF = (1 << 6),
++  GST_MPEG4_H263_PICTURE_FLAG_SS = (1 << 7),
++  GST_MPEG4_H263_PICTURE_FLAG_SS_RECTANGULAR = (1 << 8),
++  GST_MPEG4_H263_PICTURE_FLAG_SS_ARBITRARY = (1 << 9),
++  GST_MPEG4_H263_PICTURE_FLAG_RPS = (1 << 10),
++  GST_MPEG4_H263_PICTURE_FLAG_ISD = (1 << 11),
++  GST_MPEG4_H263_PICTURE_FLAG_AIV = (1 << 12),
++  GST_MPEG4_H263_PICTURE_FLAG_MQ = (1 << 13),
++  GST_MPEG4_H263_PICTURE_FLAG_RPR = (1 << 14),
++  GST_MPEG4_H263_PICTURE_FLAG_RRU = (1 << 15),
++  GST_MPEG4_H263_PICTURE_FLAG_ROUNDING_TYPE = (1 << 16),
++  GST_MPEG4_H263_PICTURE_FLAG_DISPOSABLE = (1 << 17),
++} GstMpeg4H263PictureFlags;
++
++/**
++ * GstMpeg4H263PictureHeader:
++ * @temporal_reference: temporal reference (TR)
++ * @flags: see #GstMpeg4H263PictureFlags
++ * @width: the width in luma samples
++ * @height: the height in luma samples
++ * @pquant: the picture quantizer (PQUANT)
++ * @spk_version: the Sorenson Spark bitstream version, 0 or 1, 0 for H.263
++ *
++ * The picture header of an H.263 (ITU-T H.263, version 1 and 2) or Sorenson
++ * Spark picture.
++ *
++ * Since: 1.30
++ */
++struct _GstMpeg4H263PictureHeader
++{
++  guint8 temporal_reference;
++  GstMpeg4H263PictureFlags flags;
++  guint16 width;
++  guint16 height;
++  guint8 pquant;
++  guint8 spk_version;
++};
++
++/**
++ * GstMpeg4Picture:
++ * @coding_type: the coding type of the picture (I, P, B or S)
++ * @vop: the VOP header (MPEG-4 Part 2)
++ * @trb: TRB of a B-VOP, in ticks of vop_time_increment_resolution
++ * @trd: TRD of a B-VOP
++ * @trb_field: TRB of the field macroblocks of a B-VOP, in field periods
++ * @trd_field: TRD of the field macroblocks of a B-VOP
++ * @h263: the picture header (H.263 and Sorenson Spark)
++ * @data: the coded picture, from the first byte of its start code (VOP start
++ *   code or picture start code) to its end; only valid while the picture is
++ *   decoded
++ * @size: the size of @data
++ * @header_size: the size in bits of the picture header, from the first bit
++ *   of @data to the first macroblock
++ *
++ * Since: 1.30
++ */
++struct _GstMpeg4Picture
++{
++  /*< private >*/
++  GstCodecPicture parent;
++
++  /*< public >*/
++  GstMpeg4VideoObjectCodingType coding_type;
++
++  GstMpeg4VideoObjectPlane vop;
++  guint32 trb;
++  guint32 trd;
++  guint16 trb_field;
++  guint16 trd_field;
++
++  GstMpeg4H263PictureHeader h263;
++
++  const guint8 *data;
++  gsize size;
++  guint header_size;
++};
++
++GST_CODECS_API
++GType gst_mpeg4_picture_get_type (void);
++
++GST_CODECS_API
++GstMpeg4Picture * gst_mpeg4_picture_new (void) G_GNUC_WARN_UNUSED_RESULT;
++
++static inline GstMpeg4Picture *
++gst_mpeg4_picture_ref (GstMpeg4Picture * picture)
++{
++  return (GstMpeg4Picture *) gst_mini_object_ref (GST_MINI_OBJECT_CAST (picture));
++}
++
++static inline void
++gst_mpeg4_picture_unref (GstMpeg4Picture * picture)
++{
++  gst_mini_object_unref (GST_MINI_OBJECT_CAST (picture));
++}
++
++static inline gboolean
++gst_mpeg4_picture_replace (GstMpeg4Picture ** old_picture,
++    GstMpeg4Picture * new_picture)
++{
++  return gst_mini_object_replace ((GstMiniObject **) old_picture,
++      (GstMiniObject *) new_picture);
++}
++
++static inline void
++gst_clear_mpeg4_picture (GstMpeg4Picture ** picture)
++{
++  if (picture && *picture) {
++    gst_mpeg4_picture_unref (*picture);
++    *picture = NULL;
++  }
++}
++
++static inline void
++gst_mpeg4_picture_set_user_data (GstMpeg4Picture * picture, gpointer user_data,
++    GDestroyNotify notify)
++{
++  gst_codec_picture_set_user_data (GST_CODEC_PICTURE (picture),
++      user_data, notify);
++}
++
++static inline gpointer
++gst_mpeg4_picture_get_user_data (GstMpeg4Picture * picture)
++{
++  return gst_codec_picture_get_user_data (GST_CODEC_PICTURE (picture));
++}
++
++static inline void
++gst_mpeg4_picture_set_discont_state (GstMpeg4Picture * picture,
++    GstVideoCodecState * discont_state)
++{
++  gst_codec_picture_set_discont_state (GST_CODEC_PICTURE (picture),
++      discont_state);
++}
++
++G_END_DECLS
+diff --git a/gst-libs/gst/codecs/meson.build b/gst-libs/gst/codecs/meson.build
+index f63cce5..8a87300 100644
+--- a/gst-libs/gst/codecs/meson.build
++++ b/gst-libs/gst/codecs/meson.build
+@@ -19,6 +19,8 @@ codecs_sources = files(
+   'gstavspicture.c',
+   'gstavs2decoder.c',
+   'gstavs2picture.c',
++  'gstmpeg4decoder.c',
++  'gstmpeg4picture.c',
+ )
+ 
+ codecs_headers = files(
+@@ -42,6 +44,8 @@ codecs_headers = files(
+   'gstavspicture.h',
+   'gstavs2decoder.h',
+   'gstavs2picture.h',
++  'gstmpeg4decoder.h',
++  'gstmpeg4picture.h',
+ )
+ 
+ cp_args = [
+-- 
+2.55.0
+

@@ -1,7 +1,7 @@
 # FFmpeg v4l2-request patches
 
 Base: Ubuntu `ffmpeg 7:8.1.2-2ubuntu2` (= FFmpeg tag n8.1.2). Applied in file-name order, appended to
-debian/patches/series (scripts/build-media-debs.sh). All 53 apply with fuzz 0 on the Ubuntu source.
+debian/patches/series (scripts/build-media-debs.sh). All 54 apply with fuzz 0 on the Ubuntu source.
 
 | range | source |
 |---|---|
@@ -18,6 +18,7 @@ debian/patches/series (scripts/build-media-debs.sh). All 53 apply with fuzz 0 on
 | 0313 | AVS2 decoder output hold-back for asynchronous hwaccels (two decode requests in flight on v4l2request; `-flags low_delay` turns it off) |
 | 0314 | MPEG-4 field quarter-sample MC mirrors the 16x8 block at its edges, not in the middle (ISO/IEC 14496-2 7.6.2.2; software decoder; matches the ISO/IEC 14496-5 reference decoder on the interlaced qpel vectors). Shared with the Orange Pi 5 build |
 | 0315-0317 | Shared with the Orange Pi 5 build: 64-bit CAPTURE buffer index mask (cedrus allows 64 CAPTURE buffers); change the frame size of a running session (VIDIOC_REMOVE_BUFS); VP9 keeps the hwaccel across frame size changes of non-key frames (smaller frames decoded in place, larger ones grow the CAPTURE buffers) |
+| 0319 | AVS2: pictures are output at the encoding precision, not the sample precision (a Main10 stream coding 8-bit samples at 10 bits gives 10-bit frames, as the kernel uAPI and cedrus decode them). Shared with the Orange Pi 5 build |
 | 0320 | crop the decoder's compose offset (cedrus H.265 AFBC is stored 4 lines down; kernel compose rectangle) |
 | 0321 | frames decoded in place (smaller VP9 inter frames) get the line stride the driver reports with VIDIOC_TRY_FMT for their size (cedrus: the stride of a frame of that width); downloads copy the frame's own size |
 | 0322 | frames smaller than the device's minimum frame size (VP9 8x8 ... 66x10) are decoded into buffers of the minimum size instead of failing hwaccel init |

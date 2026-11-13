@@ -1,0 +1,476 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Thu, 5 Nov 2026 12:45:53 +0000
+Subject: [PATCH] v4l2codecs: Register the most capable encoder first, with
+ stable names
+
+When several devices encode the same codec, the first one probed got the
+plain element name (v4l2slh264enc) and the others one with the video
+device node (v4l2slvideo8h264enc). The probe order is not stable: on the
+RK3588 the 1080p Hantro H1 got v4l2slh264enc and the 4K VEPU580 a name
+whose node number changed between boots, and as all had the same rank,
+autoplugging (encodebin) chose the slower H1.
+
+Collect the encoder devices first and register them per codec biggest
+supported picture first, with a probe order independent tie break. The
+first one gets the plain name and rank primary + 1. The others get one
+rank less, as the VA plugin does for its secondary devices, and a name
+from their driver (v4l2slhantrovpuh264enc for "hantro-vpu"), with the
+bus address added when two devices share a driver
+(v4l2slhantrovpufdb50000h264enc). The video device name stays the last
+resort.
+
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/v4l2codecs/gstv4l2codech264enc.c |  13 ++-
+ sys/v4l2codecs/gstv4l2codech264enc.h |   2 +-
+ sys/v4l2codecs/gstv4l2codech265enc.c |  13 ++-
+ sys/v4l2codecs/gstv4l2codech265enc.h |   2 +-
+ sys/v4l2codecs/gstv4l2encoder.c      |  95 ++++++++++++++++++++--
+ sys/v4l2codecs/gstv4l2encoder.h      |   4 +
+ sys/v4l2codecs/plugin.c              | 116 ++++++++++++++++++++++++---
+ 7 files changed, 219 insertions(+), 26 deletions(-)
+
+diff --git a/sys/v4l2codecs/gstv4l2codech264enc.c b/sys/v4l2codecs/gstv4l2codech264enc.c
+index 746c2e4..a2274b1 100644
+--- a/sys/v4l2codecs/gstv4l2codech264enc.c
++++ b/sys/v4l2codecs/gstv4l2codech264enc.c
+@@ -510,10 +510,12 @@ gst_v4l2_codec_h264_enc_subclass_init (GstV4l2CodecBaseEncClass * klass,
+   gst_v4l2_codec_base_enc_install_device_properties (gobject_class, device);
+ }
+ 
+-void
++gboolean
+ gst_v4l2_codec_h264_enc_register (GstPlugin * plugin, GstV4l2Encoder * encoder,
+     GstV4l2CodecDevice * device, guint rank)
+ {
++  gchar *name = NULL;
++  gboolean registered;
+   guint version;
+ 
+   GST_DEBUG_CATEGORY_INIT (v4l2_h264enc_debug, "v4l2codecs-h264enc", 0,
+@@ -527,12 +529,17 @@ gst_v4l2_codec_h264_enc_register (GstPlugin * plugin, GstV4l2Encoder * encoder,
+ 
+   if (!gst_v4l2_codec_h264_enc_api_check (encoder)) {
+     GST_WARNING ("Not registering the H.264 encoder, it failed the API check");
+-    return;
++    return FALSE;
+   }
+ 
+   gst_v4l2_encoder_register (plugin, GST_TYPE_V4L2_CODEC_H264_ENC,
+       (GClassInitFunc) gst_v4l2_codec_h264_enc_subclass_init,
+       gst_mini_object_ref (GST_MINI_OBJECT (device)),
+       (GInstanceInitFunc) gst_v4l2_codec_h264_enc_subinit,
+-      "v4l2sl%sh264enc", device, rank, NULL);
++      "v4l2sl%sh264enc", encoder, device, rank, &name);
++
++  registered = name != NULL;
++  g_free (name);
++
++  return registered;
+ }
+diff --git a/sys/v4l2codecs/gstv4l2codech264enc.h b/sys/v4l2codecs/gstv4l2codech264enc.h
+index 7a5b50c..38989b6 100644
+--- a/sys/v4l2codecs/gstv4l2codech264enc.h
++++ b/sys/v4l2codecs/gstv4l2codech264enc.h
+@@ -24,7 +24,7 @@
+ 
+ G_BEGIN_DECLS
+ 
+-void gst_v4l2_codec_h264_enc_register (GstPlugin * plugin,
++gboolean gst_v4l2_codec_h264_enc_register (GstPlugin * plugin,
+                                        GstV4l2Encoder * encoder,
+                                        GstV4l2CodecDevice * device,
+                                        guint rank);
+diff --git a/sys/v4l2codecs/gstv4l2codech265enc.c b/sys/v4l2codecs/gstv4l2codech265enc.c
+index cd48538..6c8e2c8 100644
+--- a/sys/v4l2codecs/gstv4l2codech265enc.c
++++ b/sys/v4l2codecs/gstv4l2codech265enc.c
+@@ -384,21 +384,28 @@ gst_v4l2_codec_h265_enc_subclass_init (GstV4l2CodecBaseEncClass * klass,
+   gst_v4l2_codec_base_enc_install_device_properties (gobject_class, device);
+ }
+ 
+-void
++gboolean
+ gst_v4l2_codec_h265_enc_register (GstPlugin * plugin, GstV4l2Encoder * encoder,
+     GstV4l2CodecDevice * device, guint rank)
+ {
++  gchar *name = NULL;
++  gboolean registered;
+   GST_DEBUG_CATEGORY_INIT (v4l2_h265enc_debug, "v4l2codecs-h265enc", 0,
+       "V4L2 stateless H.265 encoder");
+ 
+   if (!gst_v4l2_codec_h265_enc_api_check (encoder)) {
+     GST_WARNING ("Not registering the H.265 encoder, it failed the API check");
+-    return;
++    return FALSE;
+   }
+ 
+   gst_v4l2_encoder_register (plugin, GST_TYPE_V4L2_CODEC_H265_ENC,
+       (GClassInitFunc) gst_v4l2_codec_h265_enc_subclass_init,
+       gst_mini_object_ref (GST_MINI_OBJECT (device)),
+       (GInstanceInitFunc) gst_v4l2_codec_h265_enc_subinit,
+-      "v4l2sl%sh265enc", device, rank, NULL);
++      "v4l2sl%sh265enc", encoder, device, rank, &name);
++
++  registered = name != NULL;
++  g_free (name);
++
++  return registered;
+ }
+diff --git a/sys/v4l2codecs/gstv4l2codech265enc.h b/sys/v4l2codecs/gstv4l2codech265enc.h
+index 89f3096..6ef59f0 100644
+--- a/sys/v4l2codecs/gstv4l2codech265enc.h
++++ b/sys/v4l2codecs/gstv4l2codech265enc.h
+@@ -24,7 +24,7 @@
+ 
+ G_BEGIN_DECLS
+ 
+-void gst_v4l2_codec_h265_enc_register (GstPlugin * plugin,
++gboolean gst_v4l2_codec_h265_enc_register (GstPlugin * plugin,
+                                        GstV4l2Encoder * encoder,
+                                        GstV4l2CodecDevice * device,
+                                        guint rank);
+diff --git a/sys/v4l2codecs/gstv4l2encoder.c b/sys/v4l2codecs/gstv4l2encoder.c
+index b538927..edede6c 100644
+--- a/sys/v4l2codecs/gstv4l2encoder.c
++++ b/sys/v4l2codecs/gstv4l2encoder.c
+@@ -88,6 +88,8 @@ struct _GstV4l2Encoder
+   gint video_fd;
+   GQueue request_pool;
+   guint version;
++  gchar driver[16];
++  gchar bus_info[32];
+ 
+   enum v4l2_buf_type sink_buf_type;
+   enum v4l2_buf_type src_buf_type;
+@@ -280,6 +282,10 @@ gst_v4l2_encoder_open (GstV4l2Encoder * self)
+   }
+ 
+   self->version = querycap.version;
++  g_strlcpy (self->driver, (const gchar *) querycap.driver,
++      sizeof (self->driver));
++  g_strlcpy (self->bus_info, (const gchar *) querycap.bus_info,
++      sizeof (self->bus_info));
+ 
+   if (querycap.capabilities & V4L2_CAP_DEVICE_CAPS)
+     capabilities = querycap.device_caps;
+@@ -1140,6 +1146,56 @@ gst_v4l2_encoder_get_property (GObject * object, guint prop_id,
+   }
+ }
+ 
++/* Keep the ASCII letters and digits of @str, in lower case. */
++static void
++append_alnum (GString * tag, const gchar * str)
++{
++  for (; *str; str++) {
++    if (g_ascii_isalnum (*str))
++      g_string_append_c (tag, g_ascii_tolower (*str));
++  }
++}
++
++/**
++ * gst_v4l2_encoder_get_device_tag:
++ * @self: an opened #GstV4l2Encoder
++ * @with_bus: append the bus address
++ *
++ * Returns: (transfer full): a short tag for element names that does not
++ * depend on the device probe order: the driver name ("hantrovpu" for
++ * "hantro-vpu"), followed by the address part of the bus info when
++ * @with_bus ("hantrovpufdb50000" for "platform:fdb50000.video-codec").
++ * %NULL if the tag would be empty.
++ */
++gchar *
++gst_v4l2_encoder_get_device_tag (GstV4l2Encoder * self, gboolean with_bus)
++{
++  GString *tag = g_string_new (NULL);
++
++  append_alnum (tag, self->driver);
++
++  if (with_bus && tag->len) {
++    const gchar *bus = strchr (self->bus_info, ':');
++    gchar *addr = g_strdup (bus ? bus + 1 : self->bus_info);
++    gchar *dot = strchr (addr, '.');
++
++    if (dot)
++      *dot = '\0';
++    if (*addr)
++      append_alnum (tag, addr);
++    else
++      g_string_truncate (tag, 0);
++    g_free (addr);
++  }
++
++  if (!tag->len) {
++    g_string_free (tag, TRUE);
++    return NULL;
++  }
++
++  return g_string_free (tag, FALSE);
++}
++
+ /**
+  * gst_v4l2_encoder_register:
+  * @plugin: a #GstPlugin
+@@ -1149,24 +1205,31 @@ gst_v4l2_encoder_get_property (GObject * object, guint prop_id,
+  * @instance_init: The #GInstanceInitFunc for #enc_type
+  * @element_name_tmpl: A string to use for the first codec found and as a
+  *   template for the next ones.
++ * @encoder: the opened #GstV4l2Encoder of @device
+  * @device: (transfer full) A #GstV4l2CodecDevice
+  * @rank: The rank to use for the element
+  * @element_name: (nullable) (out) Sets the pointer to the new element name
+  *
+  * Registers an encoder element as a subtype of @enc_type for @plugin. The
+- * first device gets a constant name like v4l2slh264enc, the next ones one
+- * that contains the video device name.
++ * first device gets a constant name like v4l2slh264enc. The callers register
++ * the devices of a codec most capable first (see plugin.c), so that is the
++ * best encoder of the system. The next ones are named after the driver, like
++ * v4l2slhantrovpuh264enc, with the bus address added if two devices share a
++ * driver, so the names do not depend on the probe order. The video device
++ * name (v4l2slvideo4h264enc), as for the decoders, is the last resort.
+  */
+ void
+ gst_v4l2_encoder_register (GstPlugin * plugin, GType enc_type,
+     GClassInitFunc class_init, gconstpointer class_data,
+     GInstanceInitFunc instance_init, const gchar * element_name_tmpl,
+-    GstV4l2CodecDevice * device, guint rank, gchar ** element_name)
++    GstV4l2Encoder * encoder, GstV4l2CodecDevice * device, guint rank,
++    gchar ** element_name)
+ {
+   GTypeQuery type_query;
+   GTypeInfo type_info = { 0, };
+   GType subtype;
+   gchar *type_name;
++  gint i;
+ 
+   g_type_query (enc_type, &type_query);
+   type_info.class_size = type_query.class_size;
+@@ -1179,11 +1242,31 @@ gst_v4l2_encoder_register (GstPlugin * plugin, GType enc_type,
+     GST_MINI_OBJECT_FLAG_SET (device, GST_MINI_OBJECT_FLAG_MAY_BE_LEAKED);
+ 
+   type_name = g_strdup_printf (element_name_tmpl, "");
++
++  for (i = 0; i < 3 && g_type_from_name (type_name) != 0; i++) {
++    gchar *tag;
++
++    if (i < 2)
++      tag = gst_v4l2_encoder_get_device_tag (encoder, i == 1);
++    else
++      tag = g_path_get_basename (device->video_device_path);
++
++    if (!tag)
++      continue;
++
++    g_free (type_name);
++    type_name = g_strdup_printf (element_name_tmpl, tag);
++    g_free (tag);
++  }
++
+   if (g_type_from_name (type_name) != 0) {
+-    gchar *basename = g_path_get_basename (device->video_device_path);
++    GST_WARNING ("Element name '%s' is already in use", type_name);
+     g_free (type_name);
+-    type_name = g_strdup_printf (element_name_tmpl, basename);
+-    g_free (basename);
++    if (class_data == device)
++      gst_mini_object_unref (GST_MINI_OBJECT (device));
++    if (element_name)
++      *element_name = NULL;
++    return;
+   }
+ 
+   subtype = g_type_register_static (enc_type, type_name, &type_info, 0);
+diff --git a/sys/v4l2codecs/gstv4l2encoder.h b/sys/v4l2codecs/gstv4l2encoder.h
+index 7a955ca..2b68380 100644
+--- a/sys/v4l2codecs/gstv4l2encoder.h
++++ b/sys/v4l2codecs/gstv4l2encoder.h
+@@ -115,12 +115,16 @@ void              gst_v4l2_encoder_set_property (GObject * object, guint prop_id
+ void              gst_v4l2_encoder_get_property (GObject * object, guint prop_id,
+                                                  GValue * value, GParamSpec * pspec);
+ 
++gchar *           gst_v4l2_encoder_get_device_tag (GstV4l2Encoder * self,
++                                                   gboolean with_bus);
++
+ void              gst_v4l2_encoder_register (GstPlugin * plugin,
+                                              GType enc_type,
+                                              GClassInitFunc class_init,
+                                              gconstpointer class_data,
+                                              GInstanceInitFunc instance_init,
+                                              const gchar * element_name_tmpl,
++                                             GstV4l2Encoder * encoder,
+                                              GstV4l2CodecDevice * device,
+                                              guint rank,
+                                              gchar ** element_name);
+diff --git a/sys/v4l2codecs/plugin.c b/sys/v4l2codecs/plugin.c
+index 27b8451..79a86c7 100644
+--- a/sys/v4l2codecs/plugin.c
++++ b/sys/v4l2codecs/plugin.c
+@@ -122,8 +122,49 @@ register_video_decoder (GstPlugin * plugin, GstV4l2CodecDevice * device)
+   g_object_unref (decoder);
+ }
+ 
++/* An encoder device and one coded format it supports */
++typedef struct
++{
++  GstV4l2CodecDevice *device;
++  GstV4l2Encoder *encoder;
++  guint32 pix_fmt;
++  guint64 max_area;
++} EncoderCandidate;
++
+ static void
+-register_video_encoder (GstPlugin * plugin, GstV4l2CodecDevice * device)
++encoder_candidate_free (EncoderCandidate * c)
++{
++  g_object_unref (c->encoder);
++  gst_mini_object_unref (GST_MINI_OBJECT (c->device));
++  g_free (c);
++}
++
++/* Biggest picture first, then a probe order independent tie break. */
++static gint
++encoder_candidate_compare (gconstpointer pa, gconstpointer pb)
++{
++  const EncoderCandidate *a = *(const EncoderCandidate **) pa;
++  const EncoderCandidate *b = *(const EncoderCandidate **) pb;
++  gchar *ta, *tb;
++  gint ret;
++
++  if (a->max_area != b->max_area)
++    return a->max_area > b->max_area ? -1 : 1;
++
++  ta = gst_v4l2_encoder_get_device_tag (a->encoder, TRUE);
++  tb = gst_v4l2_encoder_get_device_tag (b->encoder, TRUE);
++  ret = g_strcmp0 (ta, tb);
++  g_free (ta);
++  g_free (tb);
++
++  if (ret == 0)
++    ret = g_strcmp0 (a->device->name, b->device->name);
++
++  return ret;
++}
++
++static void
++add_video_encoder (GPtrArray * candidates, GstV4l2CodecDevice * device)
+ {
+   GstV4l2Encoder *encoder = gst_v4l2_encoder_new (device);
+   guint32 fmt;
+@@ -135,33 +176,78 @@ register_video_encoder (GstPlugin * plugin, GstV4l2CodecDevice * device)
+   }
+ 
+   for (i = 0; gst_v4l2_encoder_enum_src_formats (encoder, i, &fmt); i++) {
++    struct v4l2_frmsize_stepwise range = { 0, };
++    EncoderCandidate *c;
++
+     switch (fmt) {
+       case V4L2_PIX_FMT_H264_SLICE:
+-        GST_INFO_OBJECT (encoder, "Registering %s as H264 Encoder",
+-            device->name);
+-        gst_v4l2_codec_h264_enc_register (plugin, encoder, device,
+-            GST_RANK_PRIMARY + 1);
+-        break;
+       case V4L2_PIX_FMT_HEVC_SLICE:
+-        GST_INFO_OBJECT (encoder, "Registering %s as H265 Encoder",
+-            device->name);
+-        gst_v4l2_codec_h265_enc_register (plugin, encoder, device,
+-            GST_RANK_PRIMARY + 1);
+         break;
+       default:
+         GST_FIXME_OBJECT (encoder, "%" GST_FOURCC_FORMAT " is not supported.",
+             GST_FOURCC_ARGS (fmt));
+-        break;
++        continue;
+     }
++
++    c = g_new0 (EncoderCandidate, 1);
++    c->device = GST_V4L2_CODEC_DEVICE (gst_mini_object_ref (GST_MINI_OBJECT
++            (device)));
++    c->encoder = g_object_ref (encoder);
++    c->pix_fmt = fmt;
++    if (gst_v4l2_encoder_get_frame_size_range (encoder, fmt, &range))
++      c->max_area = (guint64) range.max_width * range.max_height;
++    g_ptr_array_add (candidates, c);
+   }
+ 
+   g_object_unref (encoder);
+ }
+ 
++/*
++ * Several devices of one system can encode the same codec, like the Hantro
++ * H1 (1080p) and the VEPU580 (4K) H.264 encoders of the RK3588. The probe
++ * order of the devices is not stable, so they are registered most capable
++ * (biggest picture) first: that one gets the plain name (v4l2slh264enc) and
++ * the highest rank, so autoplugging picks it. The others get a name from
++ * their driver (see gst_v4l2_encoder_register()) and one rank less, as the
++ * VA plugin does for its secondary devices.
++ */
++static void
++register_video_encoders (GstPlugin * plugin, GPtrArray * candidates)
++{
++  guint n_h264 = 0, n_h265 = 0;
++  guint i;
++
++  g_ptr_array_sort (candidates, encoder_candidate_compare);
++
++  for (i = 0; i < candidates->len; i++) {
++    EncoderCandidate *c = g_ptr_array_index (candidates, i);
++
++    switch (c->pix_fmt) {
++      case V4L2_PIX_FMT_H264_SLICE:
++        GST_INFO_OBJECT (c->encoder, "Registering %s as H264 Encoder",
++            c->device->name);
++        if (gst_v4l2_codec_h264_enc_register (plugin, c->encoder, c->device,
++                n_h264 ? GST_RANK_PRIMARY : GST_RANK_PRIMARY + 1))
++          n_h264++;
++        break;
++      case V4L2_PIX_FMT_HEVC_SLICE:
++        GST_INFO_OBJECT (c->encoder, "Registering %s as H265 Encoder",
++            c->device->name);
++        if (gst_v4l2_codec_h265_enc_register (plugin, c->encoder, c->device,
++                n_h265 ? GST_RANK_PRIMARY : GST_RANK_PRIMARY + 1))
++          n_h265++;
++        break;
++      default:
++        g_assert_not_reached ();
++    }
++  }
++}
++
+ static gboolean
+ plugin_init (GstPlugin * plugin)
+ {
+   GList *devices, *d;
++  GPtrArray *encoders;
+   const gchar *paths[] = { "/dev", NULL };
+   const gchar *names[] = { "media", NULL };
+ 
+@@ -173,6 +259,9 @@ plugin_init (GstPlugin * plugin)
+   gst_plugin_add_dependency (plugin,
+       NULL, paths, names, GST_PLUGIN_DEPENDENCY_FLAG_FILE_NAME_IS_PREFIX);
+ 
++  encoders =
++      g_ptr_array_new_with_free_func ((GDestroyNotify) encoder_candidate_free);
++
+   devices = gst_v4l2_codec_find_devices ();
+   for (d = devices; d; d = g_list_next (d)) {
+     GstV4l2CodecDevice *device = d->data;
+@@ -181,9 +270,12 @@ plugin_init (GstPlugin * plugin)
+       register_video_decoder (plugin, device);
+ 
+     if (device->function == MEDIA_ENT_F_PROC_VIDEO_ENCODER)
+-      register_video_encoder (plugin, device);
++      add_video_encoder (encoders, device);
+   }
+ 
++  register_video_encoders (plugin, encoders);
++  g_ptr_array_unref (encoders);
++
+   gst_v4l2_codec_device_list_free (devices);
+   return TRUE;
+ }
+-- 
+2.55.0
+

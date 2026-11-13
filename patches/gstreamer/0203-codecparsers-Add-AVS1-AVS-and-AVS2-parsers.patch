@@ -1,0 +1,1734 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Tue, 10 Nov 2026 01:27:09 +0000
+Subject: [PATCH 203/210] codecparsers: Add AVS1/AVS+ and AVS2 parsers
+
+Add parsers for the start code units, sequence headers and picture
+headers of AVS1 (GB/T 20090.2) and AVS+ (GY/T 257.1) streams, and of
+AVS2 (GB/T 33475.2) streams, for stateless decoders.
+
+The headers are read without the two stuffing bits that follow two zero
+bytes in front of a 0x02 byte (pseudo start code method), which both
+standards use. For AVS1, streams of the pre-final revision of the
+standard without the marker bit after time_code are told apart from the
+picture header values. For AVS2, the reference configuration set of
+each picture is resolved from the sequence header, the weighting
+quantization matrices that apply to a picture are resolved from the
+default, sequence or picture header matrices or parameters (section
+9.2.4), and the adaptive loop filter parameters give the filter of each
+of the 16 regions.
+
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ gst-libs/gst/codecparsers/gstavs2parser.c     | 605 ++++++++++++++++++
+ gst-libs/gst/codecparsers/gstavs2parser.h     | 295 +++++++++
+ .../codecparsers/gstavsbitreader-private.h    | 141 ++++
+ gst-libs/gst/codecparsers/gstavsparser.c      | 343 ++++++++++
+ gst-libs/gst/codecparsers/gstavsparser.h      | 260 ++++++++
+ gst-libs/gst/codecparsers/meson.build         |   4 +
+ 6 files changed, 1648 insertions(+)
+ create mode 100644 gst-libs/gst/codecparsers/gstavs2parser.c
+ create mode 100644 gst-libs/gst/codecparsers/gstavs2parser.h
+ create mode 100644 gst-libs/gst/codecparsers/gstavsbitreader-private.h
+ create mode 100644 gst-libs/gst/codecparsers/gstavsparser.c
+ create mode 100644 gst-libs/gst/codecparsers/gstavsparser.h
+
+diff --git a/gst-libs/gst/codecparsers/gstavs2parser.c b/gst-libs/gst/codecparsers/gstavs2parser.c
+new file mode 100644
+index 0000000..b9a3549
+--- /dev/null
++++ b/gst-libs/gst/codecparsers/gstavs2parser.c
+@@ -0,0 +1,605 @@
++/* GStreamer
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++
++/**
++ * SECTION:gstavs2parser
++ * @title: GstAvs2Parser
++ * @short_description: Convenience library for parsing AVS2 video bitstreams.
++ *
++ * Parses the start code units, the sequence header and the picture headers
++ * of AVS2 (GB/T 33475.2, IEEE 1857.4) elementary streams.
++ *
++ * Since: 1.30
++ */
++
++#ifdef HAVE_CONFIG_H
++#include "config.h"
++#endif
++
++#include "gstavs2parser.h"
++#include "gstavsbitreader-private.h"
++
++#include <gst/base/gstbytereader.h>
++#include <string.h>
++
++#ifndef GST_DISABLE_GST_DEBUG
++#define GST_CAT_DEFAULT gst_avs2_debug_category_get ()
++static GstDebugCategory *
++gst_avs2_debug_category_get (void)
++{
++  static gsize cat_gonce = 0;
++
++  if (g_once_init_enter (&cat_gonce)) {
++    GstDebugCategory *cat = NULL;
++
++    GST_DEBUG_CATEGORY_INIT (cat, "codecparsers_avs2", 0,
++        "avs2 parser library");
++
++    g_once_init_leave (&cat_gonce, (gsize) cat);
++  }
++
++  return (GstDebugCategory *) cat_gonce;
++}
++#endif /* GST_DISABLE_GST_DEBUG */
++
++static const struct
++{
++  gint n, d;
++} frame_rates[16] = {
++  {0, 1}, {24000, 1001}, {24, 1}, {25, 1}, {30000, 1001}, {30, 1}, {50, 1},
++  {60000, 1001}, {60, 1}, {100, 1}, {120, 1}, {200, 1}, {240, 1}, {300, 1},
++};
++
++/*
++ * Weighting quantization defaults, GB/T 33475.2 section 9.2.4: the
++ * parameter sets of weighting_quant_param_index (0 = detailed,
++ * 1 = undetailed), the default 4x4 and 8x8 matrices in raster order and the
++ * position maps of the four weighting_quant_model values. The 8x8 default
++ * entry [3][7] is 28, as in the AVS2 reference decoder.
++ */
++static const guint8 wq_param_default[2][6] = {
++  {64, 49, 53, 58, 58, 64},
++  {67, 71, 71, 80, 80, 106},
++};
++
++static const guint8 wq_default_4x4[16] = {
++  64, 64, 64, 68,
++  64, 64, 68, 72,
++  64, 68, 76, 80,
++  72, 76, 84, 96,
++};
++
++static const guint8 wq_default_8x8[64] = {
++  64, 64, 64, 64, 68, 68, 72, 76,
++  64, 64, 64, 68, 72, 76, 84, 92,
++  64, 64, 68, 72, 76, 80, 88, 100,
++  64, 68, 72, 80, 84, 92, 100, 28,
++  68, 72, 80, 84, 92, 104, 112, 128,
++  76, 80, 84, 92, 104, 116, 132, 152,
++  96, 100, 104, 116, 124, 140, 164, 188,
++  104, 108, 116, 128, 152, 172, 192, 216,
++};
++
++static const guint8 wq_model_8x8[4][64] = {
++  {
++        0, 0, 0, 4, 4, 4, 5, 5,
++        0, 0, 3, 3, 3, 3, 5, 5,
++        0, 3, 2, 2, 1, 1, 5, 5,
++        4, 3, 2, 2, 1, 5, 5, 5,
++        4, 3, 1, 1, 5, 5, 5, 5,
++        4, 3, 1, 5, 5, 5, 5, 5,
++        5, 5, 5, 5, 5, 5, 5, 5,
++      5, 5, 5, 5, 5, 5, 5, 5},
++  {
++        0, 0, 0, 4, 4, 4, 5, 5,
++        0, 0, 4, 4, 4, 4, 5, 5,
++        0, 3, 2, 2, 2, 1, 5, 5,
++        3, 3, 2, 2, 1, 5, 5, 5,
++        3, 3, 2, 1, 5, 5, 5, 5,
++        3, 3, 1, 5, 5, 5, 5, 5,
++        5, 5, 5, 5, 5, 5, 5, 5,
++      5, 5, 5, 5, 5, 5, 5, 5},
++  {
++        0, 0, 0, 4, 4, 3, 5, 5,
++        0, 0, 4, 4, 3, 2, 5, 5,
++        0, 4, 4, 3, 2, 1, 5, 5,
++        4, 4, 3, 2, 1, 5, 5, 5,
++        4, 3, 2, 1, 5, 5, 5, 5,
++        3, 2, 1, 5, 5, 5, 5, 5,
++        5, 5, 5, 5, 5, 5, 5, 5,
++      5, 5, 5, 5, 5, 5, 5, 5},
++  {
++        0, 0, 0, 3, 2, 1, 5, 5,
++        0, 0, 4, 3, 2, 1, 5, 5,
++        0, 4, 4, 3, 2, 1, 5, 5,
++        3, 3, 3, 3, 2, 5, 5, 5,
++        2, 2, 2, 2, 5, 5, 5, 5,
++        1, 1, 1, 5, 5, 5, 5, 5,
++        5, 5, 5, 5, 5, 5, 5, 5,
++      5, 5, 5, 5, 5, 5, 5, 5},
++};
++
++static const guint8 wq_model_4x4[4][16] = {
++  {0, 4, 3, 5, 4, 2, 1, 5, 3, 1, 1, 5, 5, 5, 5, 5},
++  {0, 4, 4, 5, 3, 2, 2, 5, 3, 2, 1, 5, 5, 5, 5, 5},
++  {0, 4, 3, 5, 4, 3, 2, 5, 3, 2, 1, 5, 5, 5, 5, 5},
++  {0, 3, 1, 5, 3, 4, 2, 5, 1, 2, 2, 5, 5, 5, 5, 5},
++};
++
++/**
++ * gst_avs2_parse:
++ * @packet: (out): the #GstAvs2Packet to fill
++ * @data: the data to parse
++ * @size: the size of @data
++ * @offset: the offset in @data from which to look for a start code
++ *
++ * Finds the next start code in @data from @offset and fills @packet with
++ * its type, the offset of the data after it and its size.
++ *
++ * Returns: %GST_AVS2_PARSER_OK if a start code was found.
++ *
++ * Since: 1.30
++ */
++GstAvs2ParserResult
++gst_avs2_parse (GstAvs2Packet * packet, const guint8 * data, gsize size,
++    guint offset)
++{
++  GstByteReader br;
++  gint off;
++
++  g_return_val_if_fail (packet != NULL, GST_AVS2_PARSER_ERROR);
++
++  if (size <= offset + 3)
++    return GST_AVS2_PARSER_NO_PACKET;
++
++  gst_byte_reader_init (&br, data, size);
++  off = gst_byte_reader_masked_scan_uint32 (&br, 0xffffff00, 0x00000100,
++      offset, size - offset);
++  if (off < 0)
++    return GST_AVS2_PARSER_NO_PACKET;
++
++  packet->data = data;
++  packet->type = data[off + 3];
++  packet->offset = off + 4;
++  packet->size = size - packet->offset;
++
++  if (size > packet->offset + 3) {
++    off = gst_byte_reader_masked_scan_uint32 (&br, 0xffffff00, 0x00000100,
++        packet->offset, size - packet->offset);
++    if (off >= 0)
++      packet->size = off - packet->offset;
++  }
++
++  return GST_AVS2_PARSER_OK;
++}
++
++static gboolean
++parse_rcs (GstAvsBitReader * br, GstAvs2Rcs * rcs)
++{
++  guint i;
++
++  rcs->refered_by_others = gst_avs_bit_reader_get (br, 1);
++  rcs->num_of_reference_picture = gst_avs_bit_reader_get (br, 3);
++  if (rcs->num_of_reference_picture > GST_AVS2_MAX_REFS)
++    return FALSE;
++  for (i = 0; i < rcs->num_of_reference_picture; i++)
++    rcs->delta_doi_of_reference_picture[i] = gst_avs_bit_reader_get (br, 6);
++  rcs->num_of_removed_picture = gst_avs_bit_reader_get (br, 3);
++  if (rcs->num_of_removed_picture > GST_AVS2_MAX_REFS)
++    return FALSE;
++  for (i = 0; i < rcs->num_of_removed_picture; i++)
++    rcs->delta_doi_of_removed_picture[i] = gst_avs_bit_reader_get (br, 6);
++  gst_avs_bit_reader_get (br, 1);       /* marker_bit */
++
++  return !br->overrun;
++}
++
++static gboolean
++parse_wq_matrix (GstAvsBitReader * br, guint8 wqm[2][64])
++{
++  guint i, v;
++
++  for (i = 0; i < 16; i++) {
++    v = gst_avs_bit_reader_get_ue (br);
++    if (v > 255)
++      return FALSE;
++    wqm[0][i] = v;
++  }
++  for (i = 0; i < 64; i++) {
++    v = gst_avs_bit_reader_get_ue (br);
++    if (v > 255)
++      return FALSE;
++    wqm[1][i] = v;
++  }
++
++  return !br->overrun;
++}
++
++/**
++ * gst_avs2_parse_sequence_header:
++ * @packet: a #GstAvs2Packet of type %GST_AVS2_START_CODE_SEQUENCE
++ * @seq: (out): the #GstAvs2SequenceHeader to fill
++ *
++ * Returns: %GST_AVS2_PARSER_OK if the sequence header was parsed.
++ *
++ * Since: 1.30
++ */
++GstAvs2ParserResult
++gst_avs2_parse_sequence_header (const GstAvs2Packet * packet,
++    GstAvs2SequenceHeader * seq)
++{
++  GstAvsBitReader br;
++  guint32 lower, upper;
++  guint i;
++
++  g_return_val_if_fail (packet != NULL, GST_AVS2_PARSER_ERROR);
++  g_return_val_if_fail (seq != NULL, GST_AVS2_PARSER_ERROR);
++
++  if (packet->type != GST_AVS2_START_CODE_SEQUENCE)
++    return GST_AVS2_PARSER_ERROR;
++
++  gst_avs_bit_reader_init (&br, packet->data + packet->offset, packet->size);
++  memset (seq, 0, sizeof (*seq));
++
++  seq->profile_id = gst_avs_bit_reader_get (&br, 8);
++  seq->level_id = gst_avs_bit_reader_get (&br, 8);
++  seq->progressive_sequence = gst_avs_bit_reader_get (&br, 1);
++  seq->field_coded_sequence = gst_avs_bit_reader_get (&br, 1);
++  seq->horizontal_size = gst_avs_bit_reader_get (&br, 14);
++  seq->vertical_size = gst_avs_bit_reader_get (&br, 14);
++  seq->chroma_format = gst_avs_bit_reader_get (&br, 2);
++  seq->sample_precision = gst_avs_bit_reader_get (&br, 3);
++  if (seq->profile_id == GST_AVS2_PROFILE_MAIN10)
++    seq->encoding_precision = gst_avs_bit_reader_get (&br, 3);
++  else
++    seq->encoding_precision = 1;
++  seq->aspect_ratio = gst_avs_bit_reader_get (&br, 4);
++  seq->frame_rate_code = gst_avs_bit_reader_get (&br, 4);
++  lower = gst_avs_bit_reader_get (&br, 18);
++  gst_avs_bit_reader_get (&br, 1);      /* marker_bit */
++  upper = gst_avs_bit_reader_get (&br, 12);
++  seq->bit_rate = (upper << 18) | lower;
++  seq->low_delay = gst_avs_bit_reader_get (&br, 1);
++  gst_avs_bit_reader_get (&br, 1);      /* marker_bit */
++  seq->temporal_id_enable = gst_avs_bit_reader_get (&br, 1);
++  seq->bbv_buffer_size = gst_avs_bit_reader_get (&br, 18);
++  seq->lcu_size = gst_avs_bit_reader_get (&br, 3);
++
++  seq->weight_quant_enable = gst_avs_bit_reader_get (&br, 1);
++  if (seq->weight_quant_enable) {
++    if (gst_avs_bit_reader_get (&br, 1)) {      /* load_seq_weight_quant_data_flag */
++      if (!parse_wq_matrix (&br, seq->wqm))
++        goto invalid;
++    } else {
++      memcpy (seq->wqm[0], wq_default_4x4, 16);
++      memcpy (seq->wqm[1], wq_default_8x8, 64);
++    }
++  }
++
++  seq->background_picture_enable = !gst_avs_bit_reader_get (&br, 1);
++  seq->mhp_skip_enable = gst_avs_bit_reader_get (&br, 1);
++  seq->dhp_enable = gst_avs_bit_reader_get (&br, 1);
++  seq->wsm_enable = gst_avs_bit_reader_get (&br, 1);
++  seq->amp_enable = gst_avs_bit_reader_get (&br, 1);
++  seq->nsqt_enable = gst_avs_bit_reader_get (&br, 1);
++  seq->nsip_enable = gst_avs_bit_reader_get (&br, 1);
++  seq->secondary_transform_enable = gst_avs_bit_reader_get (&br, 1);
++  seq->sao_enable = gst_avs_bit_reader_get (&br, 1);
++  seq->alf_enable = gst_avs_bit_reader_get (&br, 1);
++  seq->pmvr_enable = gst_avs_bit_reader_get (&br, 1);
++  gst_avs_bit_reader_get (&br, 1);      /* marker_bit */
++
++  seq->num_of_rcs = gst_avs_bit_reader_get (&br, 6);
++  if (seq->num_of_rcs > GST_AVS2_MAX_RCS) {
++    GST_WARNING ("too many reference configuration sets: %u",
++        seq->num_of_rcs);
++    goto invalid;
++  }
++  for (i = 0; i < seq->num_of_rcs; i++) {
++    if (!parse_rcs (&br, &seq->rcs[i]))
++      goto invalid;
++  }
++
++  if (!seq->low_delay)
++    seq->picture_reorder_delay = gst_avs_bit_reader_get (&br, 5);
++  seq->cross_slice_loopfilter_enable = gst_avs_bit_reader_get (&br, 1);
++  /* only the profiles 0x21 and 0x23 code bcbr_enable here */
++  if ((seq->profile_id | 2) == 0x23 && seq->background_picture_enable)
++    seq->bcbr_enable = gst_avs_bit_reader_get (&br, 1);
++
++  if (br.overrun)
++    goto invalid;
++
++  if (seq->lcu_size < 4 || seq->lcu_size > 6 ||
++      seq->sample_precision < 1 || seq->sample_precision > 2 ||
++      seq->encoding_precision < 1 || seq->encoding_precision > 2 ||
++      seq->horizontal_size < 16 || seq->vertical_size < 16)
++    goto invalid;
++
++  seq->fps_n = frame_rates[seq->frame_rate_code].n;
++  seq->fps_d = frame_rates[seq->frame_rate_code].d;
++
++  GST_LOG ("profile 0x%02x level 0x%02x %ux%u low_delay %u reorder %u",
++      seq->profile_id, seq->level_id, seq->horizontal_size,
++      seq->vertical_size, seq->low_delay, seq->picture_reorder_delay);
++
++  return GST_AVS2_PARSER_OK;
++
++invalid:
++  GST_WARNING ("invalid sequence header");
++  return GST_AVS2_PARSER_ERROR;
++}
++
++static gboolean
++parse_alf (GstAvsBitReader * br, GstAvs2AlfParams * alf)
++{
++  guint8 pattern[16] = { 0 };
++  guint pre = 0, n, f, i, c;
++
++  memset (alf, 0, sizeof (*alf));
++  for (i = 0; i < 3; i++)
++    alf->enable[i] = gst_avs_bit_reader_get (br, 1);
++
++  if (alf->enable[0]) {
++    n = gst_avs_bit_reader_get_ue (br) + 1;
++    if (n > GST_AVS2_ALF_MAX_FILTERS)
++      return FALSE;
++    alf->num_luma_filters = n;
++
++    for (f = 0; f < n; f++) {
++      if (f > 0) {
++        /* alf_region_distance is not coded for 16 filters */
++        guint dist = n == GST_AVS2_ALF_MAX_FILTERS ? 1 :
++            gst_avs_bit_reader_get_ue (br);
++
++        pre += dist;
++        if (pre > 15)
++          return FALSE;
++        pattern[pre] = 1;
++      }
++      for (i = 0; i < GST_AVS2_ALF_NUM_COEFFS; i++)
++        alf->luma_coeff[f][i] = gst_avs_bit_reader_get_se (br);
++    }
++
++    /* a region uses the filter of the last region that starts a filter */
++    for (i = 1; i < 16; i++)
++      alf->region_filter[i] = alf->region_filter[i - 1] + (n > 1
++          && pattern[i]);
++  }
++
++  for (c = 0; c < 2; c++) {
++    if (alf->enable[1 + c]) {
++      for (i = 0; i < GST_AVS2_ALF_NUM_COEFFS; i++)
++        alf->chroma_coeff[c][i] = gst_avs_bit_reader_get_se (br);
++    }
++  }
++
++  return !br->overrun;
++}
++
++static void
++resolve_wq (GstAvs2PictureHeader * pic, const GstAvs2SequenceHeader * seq,
++    guint data_index, guint param_index, guint model, const gint delta[6],
++    const guint8 pic_wqm[2][64])
++{
++  gint param[6];
++  guint i;
++
++  if (!seq->weight_quant_enable || !pic->weight_quant_enable) {
++    memset (pic->wqm, 64, sizeof (pic->wqm));
++    return;
++  }
++
++  switch (data_index) {
++    case 0:
++      memcpy (pic->wqm, seq->wqm, sizeof (pic->wqm));
++      break;
++    case 1:
++      for (i = 0; i < 6; i++) {
++        if (param_index == 0)
++          param[i] = wq_param_default[0][i];
++        else if (param_index == 1)
++          param[i] = delta[i] + wq_param_default[1][i];
++        else
++          param[i] = delta[i] + wq_param_default[0][i];
++        param[i] = CLAMP (param[i], 0, 255);
++      }
++      for (i = 0; i < 64; i++)
++        pic->wqm[1][i] = param[wq_model_8x8[model][i]];
++      for (i = 0; i < 16; i++)
++        pic->wqm[0][i] = param[wq_model_4x4[model][i]];
++      break;
++    default:
++      memcpy (pic->wqm, pic_wqm, sizeof (pic->wqm));
++      break;
++  }
++}
++
++/* the part of the picture header shared by intra and inter pictures */
++static gboolean
++parse_picture_tail (GstAvsBitReader * br, GstAvs2PictureHeader * pic,
++    const GstAvs2SequenceHeader * seq)
++{
++  guint data_index = 0, param_index = 0, model = 0, i;
++  gint delta[6] = { 0 };
++  guint8 pic_wqm[2][64] = { {0} };
++
++  gint32 v;
++
++  pic->loop_filter_disable = gst_avs_bit_reader_get (br, 1);
++  if (!pic->loop_filter_disable && gst_avs_bit_reader_get (br, 1)) {
++    v = gst_avs_bit_reader_get_se (br);
++    pic->alpha_c_offset = CLAMP (v, -8, 8);
++    v = gst_avs_bit_reader_get_se (br);
++    pic->beta_offset = CLAMP (v, -8, 8);
++  }
++  if (!gst_avs_bit_reader_get (br, 1)) {        /* chroma_quant_param_disable */
++    v = gst_avs_bit_reader_get_se (br);
++    pic->chroma_quant_param_delta_cb = CLAMP (v, -16, 16);
++    v = gst_avs_bit_reader_get_se (br);
++    pic->chroma_quant_param_delta_cr = CLAMP (v, -16, 16);
++  }
++
++  if (seq->weight_quant_enable) {
++    pic->weight_quant_enable = gst_avs_bit_reader_get (br, 1);
++    if (pic->weight_quant_enable) {
++      data_index = gst_avs_bit_reader_get (br, 2);
++      if (data_index == 1) {
++        gst_avs_bit_reader_get (br, 1); /* reserved_bits */
++        param_index = gst_avs_bit_reader_get (br, 2);
++        model = gst_avs_bit_reader_get (br, 2);
++        if (param_index == 1 || param_index == 2) {
++          for (i = 0; i < 6; i++)
++            delta[i] = gst_avs_bit_reader_get_se (br);
++        }
++      } else if (data_index == 2) {
++        if (!parse_wq_matrix (br, pic_wqm))
++          return FALSE;
++      }
++    }
++  }
++  resolve_wq (pic, seq, data_index, param_index, model, delta, pic_wqm);
++
++  if (seq->alf_enable && !parse_alf (br, &pic->alf))
++    return FALSE;
++
++  return !br->overrun;
++}
++
++/**
++ * gst_avs2_parse_picture_header:
++ * @packet: a #GstAvs2Packet of type %GST_AVS2_START_CODE_INTRA_PICTURE or
++ *   %GST_AVS2_START_CODE_INTER_PICTURE
++ * @seq: the active #GstAvs2SequenceHeader
++ * @pic: (out): the #GstAvs2PictureHeader to fill
++ *
++ * Returns: %GST_AVS2_PARSER_OK if the picture header was parsed.
++ *
++ * Since: 1.30
++ */
++GstAvs2ParserResult
++gst_avs2_parse_picture_header (const GstAvs2Packet * packet,
++    const GstAvs2SequenceHeader * seq, GstAvs2PictureHeader * pic)
++{
++  GstAvsBitReader br;
++  gboolean intra;
++
++  g_return_val_if_fail (packet != NULL, GST_AVS2_PARSER_ERROR);
++  g_return_val_if_fail (seq != NULL, GST_AVS2_PARSER_ERROR);
++  g_return_val_if_fail (pic != NULL, GST_AVS2_PARSER_ERROR);
++
++  if (packet->type == GST_AVS2_START_CODE_INTRA_PICTURE)
++    intra = TRUE;
++  else if (packet->type == GST_AVS2_START_CODE_INTER_PICTURE)
++    intra = FALSE;
++  else
++    return GST_AVS2_PARSER_ERROR;
++
++  gst_avs_bit_reader_init (&br, packet->data + packet->offset, packet->size);
++  memset (pic, 0, sizeof (*pic));
++
++  gst_avs_bit_reader_get (&br, 32);     /* bbv_delay */
++
++  if (intra) {
++    pic->picture_type = GST_AVS2_PICTURE_TYPE_I;
++    if (gst_avs_bit_reader_get (&br, 1))        /* time_code_flag */
++      gst_avs_bit_reader_get (&br, 24); /* time_code */
++    if (seq->background_picture_enable) {
++      pic->background_picture = gst_avs_bit_reader_get (&br, 1);
++      if (pic->background_picture)
++        pic->background_picture_output = gst_avs_bit_reader_get (&br, 1);
++    }
++  } else {
++    pic->picture_type = gst_avs_bit_reader_get (&br, 2);
++    if (pic->picture_type == GST_AVS2_PICTURE_TYPE_I) {
++      GST_WARNING ("invalid picture_coding_type");
++      return GST_AVS2_PARSER_ERROR;
++    }
++    if (seq->background_picture_enable) {
++      if (pic->picture_type == GST_AVS2_PICTURE_TYPE_P)
++        pic->background_pred = gst_avs_bit_reader_get (&br, 1);
++      if (pic->picture_type != GST_AVS2_PICTURE_TYPE_B &&
++          !pic->background_pred)
++        pic->background_reference = gst_avs_bit_reader_get (&br, 1);
++    }
++  }
++
++  pic->decode_order_index = gst_avs_bit_reader_get (&br, 8);
++  if (seq->temporal_id_enable)
++    pic->temporal_id = gst_avs_bit_reader_get (&br, 3);
++
++  /* a background picture that is not output (GB) has no output delay */
++  if (!seq->low_delay &&
++      !(pic->background_picture && !pic->background_picture_output)) {
++    guint delay = gst_avs_bit_reader_get_ue (&br);
++
++    if (delay > 63)
++      goto invalid;
++    pic->picture_output_delay = delay;
++    pic->output_delay_present = 1;
++  }
++
++  if (gst_avs_bit_reader_get (&br, 1)) {        /* reference_configuration_set_flag */
++    guint idx = gst_avs_bit_reader_get (&br, 5);
++
++    if (idx >= seq->num_of_rcs)
++      goto invalid;
++    pic->rcs = seq->rcs[idx];
++  } else if (!parse_rcs (&br, &pic->rcs)) {
++    goto invalid;
++  }
++
++  if (seq->low_delay)
++    gst_avs_bit_reader_get_ue (&br);    /* bbv_check_times */
++
++  pic->progressive_frame = gst_avs_bit_reader_get (&br, 1);
++  pic->picture_structure = pic->progressive_frame ? 1 :
++      gst_avs_bit_reader_get (&br, 1);
++  pic->top_field_first = gst_avs_bit_reader_get (&br, 1);
++  pic->repeat_first_field = gst_avs_bit_reader_get (&br, 1);
++  if (seq->field_coded_sequence) {
++    pic->is_top_field = gst_avs_bit_reader_get (&br, 1);
++    gst_avs_bit_reader_get (&br, 1);    /* reserved_bits */
++  }
++  pic->fixed_picture_qp = gst_avs_bit_reader_get (&br, 1);
++  pic->picture_qp = gst_avs_bit_reader_get (&br, 7);
++
++  if (!intra) {
++    if (pic->picture_type != GST_AVS2_PICTURE_TYPE_B ||
++        !pic->picture_structure)
++      gst_avs_bit_reader_get (&br, 1);  /* reserved_bits */
++    pic->random_access_decodable = gst_avs_bit_reader_get (&br, 1);
++  }
++
++  if (!parse_picture_tail (&br, pic, seq))
++    goto invalid;
++
++  pic->header_size = packet->size;
++
++  GST_LOG ("picture type %u doi %u delay %u refs %u", pic->picture_type,
++      pic->decode_order_index, pic->picture_output_delay,
++      pic->rcs.num_of_reference_picture);
++
++  return GST_AVS2_PARSER_OK;
++
++invalid:
++  GST_WARNING ("invalid picture header");
++  return GST_AVS2_PARSER_ERROR;
++}
+diff --git a/gst-libs/gst/codecparsers/gstavs2parser.h b/gst-libs/gst/codecparsers/gstavs2parser.h
+new file mode 100644
+index 0000000..0306e89
+--- /dev/null
++++ b/gst-libs/gst/codecparsers/gstavs2parser.h
+@@ -0,0 +1,295 @@
++/* GStreamer
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++
++#pragma once
++
++#ifndef GST_USE_UNSTABLE_API
++#warning "The AVS2 parsing library is unstable API and may change in future."
++#warning "You can define GST_USE_UNSTABLE_API to avoid this warning."
++#endif
++
++#include <gst/gst.h>
++#include <gst/codecparsers/codecparsers-prelude.h>
++
++G_BEGIN_DECLS
++
++#define GST_AVS2_MAX_RCS              32
++#define GST_AVS2_MAX_REFS             7
++#define GST_AVS2_ALF_MAX_FILTERS      16
++#define GST_AVS2_ALF_NUM_COEFFS       9
++
++/**
++ * GstAvs2StartCode:
++ * @GST_AVS2_START_CODE_SLICE_MAX: the highest slice start code, slices use
++ *   0x00 to 0x8f
++ * @GST_AVS2_START_CODE_SEQUENCE: video_sequence_start_code
++ * @GST_AVS2_START_CODE_SEQUENCE_END: video_sequence_end_code
++ * @GST_AVS2_START_CODE_USER_DATA: user_data_start_code
++ * @GST_AVS2_START_CODE_INTRA_PICTURE: intra_picture_start_code
++ * @GST_AVS2_START_CODE_EXTENSION: extension_start_code
++ * @GST_AVS2_START_CODE_INTER_PICTURE: inter_picture_start_code
++ * @GST_AVS2_START_CODE_VIDEO_EDIT: video_edit_code
++ *
++ * The start code values of GB/T 33475.2 (AVS2).
++ *
++ * Since: 1.30
++ */
++typedef enum
++{
++  GST_AVS2_START_CODE_SLICE_MAX = 0x8f,
++  GST_AVS2_START_CODE_SEQUENCE = 0xb0,
++  GST_AVS2_START_CODE_SEQUENCE_END = 0xb1,
++  GST_AVS2_START_CODE_USER_DATA = 0xb2,
++  GST_AVS2_START_CODE_INTRA_PICTURE = 0xb3,
++  GST_AVS2_START_CODE_EXTENSION = 0xb5,
++  GST_AVS2_START_CODE_INTER_PICTURE = 0xb6,
++  GST_AVS2_START_CODE_VIDEO_EDIT = 0xb7,
++} GstAvs2StartCode;
++
++/**
++ * GstAvs2Profile:
++ * @GST_AVS2_PROFILE_MAIN_PICTURE: the main picture profile
++ * @GST_AVS2_PROFILE_MAIN: the main profile
++ * @GST_AVS2_PROFILE_MAIN10: the main 10 profile
++ *
++ * Since: 1.30
++ */
++typedef enum
++{
++  GST_AVS2_PROFILE_MAIN_PICTURE = 0x12,
++  GST_AVS2_PROFILE_MAIN = 0x20,
++  GST_AVS2_PROFILE_MAIN10 = 0x22,
++} GstAvs2Profile;
++
++/**
++ * GstAvs2PictureType:
++ * @GST_AVS2_PICTURE_TYPE_I: intra picture, G or GB for a background picture
++ * @GST_AVS2_PICTURE_TYPE_P: forward predicted picture, S with background_pred
++ * @GST_AVS2_PICTURE_TYPE_B: bi-predicted picture
++ * @GST_AVS2_PICTURE_TYPE_F: forward multi-hypothesis predicted picture
++ *
++ * Since: 1.30
++ */
++typedef enum
++{
++  GST_AVS2_PICTURE_TYPE_I = 0,
++  GST_AVS2_PICTURE_TYPE_P = 1,
++  GST_AVS2_PICTURE_TYPE_B = 2,
++  GST_AVS2_PICTURE_TYPE_F = 3,
++} GstAvs2PictureType;
++
++/**
++ * GstAvs2ParserResult:
++ * @GST_AVS2_PARSER_OK: the parsing succeeded
++ * @GST_AVS2_PARSER_ERROR: the data is not valid
++ * @GST_AVS2_PARSER_NO_PACKET: no start code was found
++ *
++ * Since: 1.30
++ */
++typedef enum
++{
++  GST_AVS2_PARSER_OK,
++  GST_AVS2_PARSER_ERROR,
++  GST_AVS2_PARSER_NO_PACKET,
++} GstAvs2ParserResult;
++
++typedef struct _GstAvs2Packet GstAvs2Packet;
++typedef struct _GstAvs2Rcs GstAvs2Rcs;
++typedef struct _GstAvs2SequenceHeader GstAvs2SequenceHeader;
++typedef struct _GstAvs2AlfParams GstAvs2AlfParams;
++typedef struct _GstAvs2PictureHeader GstAvs2PictureHeader;
++
++/**
++ * GstAvs2Packet:
++ * @data: the data the packet was found in
++ * @type: the start code value, see #GstAvs2StartCode
++ * @offset: offset in @data of the first byte after the start code
++ * @size: size of the packet after its start code, up to the next start
++ *   code or the end of the data
++ *
++ * Since: 1.30
++ */
++struct _GstAvs2Packet
++{
++  const guint8 *data;
++  guint8 type;
++  guint offset;
++  gint size;
++};
++
++/**
++ * GstAvs2Rcs:
++ * @refered_by_others: refered_by_others_flag
++ * @num_of_reference_picture: num_of_reference_picture
++ * @delta_doi_of_reference_picture: delta_doi_of_reference_picture[]
++ * @num_of_removed_picture: num_of_removed_picture
++ * @delta_doi_of_removed_picture: delta_doi_of_removed_picture[]
++ *
++ * A reference_configuration_set(), GB/T 33475.2 section 7.1.2.3.
++ *
++ * Since: 1.30
++ */
++struct _GstAvs2Rcs
++{
++  guint8 refered_by_others;
++  guint8 num_of_reference_picture;
++  guint8 delta_doi_of_reference_picture[GST_AVS2_MAX_REFS];
++  guint8 num_of_removed_picture;
++  guint8 delta_doi_of_removed_picture[GST_AVS2_MAX_REFS];
++};
++
++/**
++ * GstAvs2SequenceHeader:
++ *
++ * The sequence_header() of GB/T 33475.2 section 7.1.2.2. @wqm holds
++ * WeightQuantMatrix4x4 (@wqm[0], 16 entries) and WeightQuantMatrix8x8
++ * (@wqm[1]) of the sequence in raster order, the defaults when not loaded.
++ * @background_picture_enable is the inverse of background_picture_disable.
++ * @encoding_precision is 1 for profiles without it. @fps_n and @fps_d are
++ * the frame rate of @frame_rate_code, @fps_n is 0 if unknown.
++ *
++ * Since: 1.30
++ */
++struct _GstAvs2SequenceHeader
++{
++  guint8 profile_id;
++  guint8 level_id;
++  guint8 progressive_sequence;
++  guint8 field_coded_sequence;
++  guint16 horizontal_size;
++  guint16 vertical_size;
++  guint8 chroma_format;
++  guint8 sample_precision;
++  guint8 encoding_precision;
++  guint8 aspect_ratio;
++  guint8 frame_rate_code;
++  guint32 bit_rate;
++  guint8 low_delay;
++  guint8 temporal_id_enable;
++  guint32 bbv_buffer_size;
++  guint8 lcu_size;
++  guint8 weight_quant_enable;
++  guint8 wqm[2][64];
++  guint8 background_picture_enable;
++  guint8 mhp_skip_enable;
++  guint8 dhp_enable;
++  guint8 wsm_enable;
++  guint8 amp_enable;
++  guint8 nsqt_enable;
++  guint8 nsip_enable;
++  guint8 secondary_transform_enable;
++  guint8 sao_enable;
++  guint8 alf_enable;
++  guint8 pmvr_enable;
++  guint8 num_of_rcs;
++  GstAvs2Rcs rcs[GST_AVS2_MAX_RCS];
++  guint8 picture_reorder_delay;
++  guint8 cross_slice_loopfilter_enable;
++  guint8 bcbr_enable;
++
++  gint fps_n;
++  gint fps_d;
++};
++
++/**
++ * GstAvs2AlfParams:
++ * @enable: picture_alf_enable_flag[] of Y, Cb and Cr
++ * @num_luma_filters: alf_filter_num_minus1 + 1
++ * @luma_coeff: alf_coeff_luma[][]
++ * @chroma_coeff: alf_coeff_chroma[][] of Cb and Cr
++ * @region_filter: the luma filter of each of the 16 regions, derived from
++ *   alf_region_distance[]
++ *
++ * The alf_parameter_set() of GB/T 33475.2 section 7.1.8.
++ *
++ * Since: 1.30
++ */
++struct _GstAvs2AlfParams
++{
++  guint8 enable[3];
++  guint8 num_luma_filters;
++  gint16 luma_coeff[GST_AVS2_ALF_MAX_FILTERS][GST_AVS2_ALF_NUM_COEFFS];
++  gint16 chroma_coeff[2][GST_AVS2_ALF_NUM_COEFFS];
++  guint8 region_filter[16];
++};
++
++/**
++ * GstAvs2PictureHeader:
++ *
++ * The intra_picture_header() or inter_picture_header() of GB/T 33475.2
++ * sections 7.1.3.1 and 7.1.3.2. @picture_type is %GST_AVS2_PICTURE_TYPE_I
++ * for an intra picture header. @rcs is the reference configuration set of
++ * the picture, copied from the sequence header when the picture refers to
++ * one. @output_delay_present is set when picture_output_delay is coded.
++ * @wqm holds the weighting quantization matrices that apply to the picture,
++ * resolved from the sequence and picture headers, all 64 when weighting
++ * quantization is off for the picture. @header_size is the size in bytes of
++ * the picture header packet, its start code excluded.
++ *
++ * Since: 1.30
++ */
++struct _GstAvs2PictureHeader
++{
++  GstAvs2PictureType picture_type;
++  guint8 background_picture;
++  guint8 background_picture_output;
++  guint8 background_pred;
++  guint8 background_reference;
++  guint8 decode_order_index;
++  guint8 temporal_id;
++  guint8 output_delay_present;
++  guint8 picture_output_delay;
++  GstAvs2Rcs rcs;
++  guint8 progressive_frame;
++  guint8 picture_structure;
++  guint8 top_field_first;
++  guint8 repeat_first_field;
++  guint8 is_top_field;
++  guint8 fixed_picture_qp;
++  guint8 picture_qp;
++  guint8 random_access_decodable;
++  guint8 loop_filter_disable;
++  gint8 alpha_c_offset;
++  gint8 beta_offset;
++  gint8 chroma_quant_param_delta_cb;
++  gint8 chroma_quant_param_delta_cr;
++  guint8 weight_quant_enable;
++  guint8 wqm[2][64];
++  GstAvs2AlfParams alf;
++
++  guint header_size;
++};
++
++GST_CODEC_PARSERS_API
++GstAvs2ParserResult gst_avs2_parse (GstAvs2Packet * packet,
++                                    const guint8 * data,
++                                    gsize size,
++                                    guint offset);
++
++GST_CODEC_PARSERS_API
++GstAvs2ParserResult gst_avs2_parse_sequence_header (const GstAvs2Packet * packet,
++                                                    GstAvs2SequenceHeader * seq);
++
++GST_CODEC_PARSERS_API
++GstAvs2ParserResult gst_avs2_parse_picture_header (const GstAvs2Packet * packet,
++                                                   const GstAvs2SequenceHeader * seq,
++                                                   GstAvs2PictureHeader * pic);
++
++G_END_DECLS
+diff --git a/gst-libs/gst/codecparsers/gstavsbitreader-private.h b/gst-libs/gst/codecparsers/gstavsbitreader-private.h
+new file mode 100644
+index 0000000..a3df7ac
+--- /dev/null
++++ b/gst-libs/gst/codecparsers/gstavsbitreader-private.h
+@@ -0,0 +1,141 @@
++/* GStreamer
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#pragma once
++
++#include <glib.h>
++
++G_BEGIN_DECLS
++
++/*
++ * Bit reader for the headers of AVS1, AVS+ and AVS2 streams.
++ *
++ * Where an encoder would emulate a start code prefix in a header, the byte
++ * after two zero bytes reads 0x02 and its two least significant bits are
++ * stuffing (pseudo start code method, GB/T 20090.2 and GB/T 33475.2 annex).
++ * The reader skips those two bits. Reads past the end return zero bits and
++ * set @overrun.
++ */
++typedef struct
++{
++  const guint8 *data;
++  guint size;
++  guint byte;                   /* current byte */
++  guint bit;                    /* bits of it consumed, from the MSB */
++  guint nbits;                  /* bits of it that are data (8 or 6) */
++  guint zeros;                  /* zero bytes before the current byte */
++  gboolean overrun;
++} GstAvsBitReader;
++
++static inline void
++_gst_avs_bit_reader_load (GstAvsBitReader * br)
++{
++  br->bit = 0;
++  br->nbits = 8;
++  if (br->byte < br->size && br->zeros >= 2 && br->data[br->byte] == 0x02)
++    br->nbits = 6;
++}
++
++static inline void
++gst_avs_bit_reader_init (GstAvsBitReader * br, const guint8 * data,
++    guint size)
++{
++  br->data = data;
++  br->size = size;
++  br->byte = 0;
++  br->zeros = 0;
++  br->overrun = FALSE;
++  _gst_avs_bit_reader_load (br);
++}
++
++static inline guint
++gst_avs_bit_reader_get_bit (GstAvsBitReader * br)
++{
++  guint v;
++
++  if (br->byte >= br->size) {
++    br->overrun = TRUE;
++    return 0;
++  }
++
++  v = (br->data[br->byte] >> (7 - br->bit)) & 1;
++  if (++br->bit == br->nbits) {
++    if (br->nbits == 6)
++      br->zeros = 0;
++    else
++      br->zeros = br->data[br->byte] ? 0 : br->zeros + 1;
++    br->byte++;
++    _gst_avs_bit_reader_load (br);
++  }
++
++  return v;
++}
++
++static inline guint32
++gst_avs_bit_reader_get (GstAvsBitReader * br, guint n)
++{
++  guint32 v = 0;
++
++  while (n--)
++    v = (v << 1) | gst_avs_bit_reader_get_bit (br);
++
++  return v;
++}
++
++static inline guint32
++gst_avs_bit_reader_peek (const GstAvsBitReader * br, guint n)
++{
++  GstAvsBitReader copy = *br;
++
++  return gst_avs_bit_reader_get (&copy, n);
++}
++
++static inline guint32
++gst_avs_bit_reader_get_ue (GstAvsBitReader * br)
++{
++  guint lz = 0;
++
++  while (!gst_avs_bit_reader_get_bit (br)) {
++    if (br->overrun || ++lz > 31) {
++      br->overrun = TRUE;
++      return 0;
++    }
++  }
++
++  return ((1u << lz) - 1) + gst_avs_bit_reader_get (br, lz);
++}
++
++static inline gint32
++gst_avs_bit_reader_get_se (GstAvsBitReader * br)
++{
++  guint32 v = gst_avs_bit_reader_get_ue (br);
++
++  return (v & 1) ? (gint32) ((v + 1) / 2) : -(gint32) (v / 2);
++}
++
++static inline guint
++gst_avs_bit_reader_bits_left (const GstAvsBitReader * br)
++{
++  if (br->byte >= br->size)
++    return 0;
++  /* ignores stuffing further on, which only matters at the very end */
++  return (br->size - br->byte) * 8 - br->bit;
++}
++
++G_END_DECLS
+diff --git a/gst-libs/gst/codecparsers/gstavsparser.c b/gst-libs/gst/codecparsers/gstavsparser.c
+new file mode 100644
+index 0000000..af55773
+--- /dev/null
++++ b/gst-libs/gst/codecparsers/gstavsparser.c
+@@ -0,0 +1,343 @@
++/* GStreamer
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++/**
++ * SECTION:gstavsparser
++ * @title: GstAvsParser
++ * @short_description: Convenience library for parsing AVS1 and AVS+ video
++ * bitstreams.
++ *
++ * Parses the start code units, the sequence header and the picture headers
++ * of AVS1 (GB/T 20090.2, JiZhun profile) and AVS+ (GY/T 257.1, Guangdian
++ * profile) elementary streams.
++ *
++ * Since: 1.30
++ */
++
++#ifdef HAVE_CONFIG_H
++#include "config.h"
++#endif
++
++#include "gstavsparser.h"
++#include "gstavsbitreader-private.h"
++
++#include <gst/base/gstbytereader.h>
++
++#ifndef GST_DISABLE_GST_DEBUG
++#define GST_CAT_DEFAULT gst_avs_debug_category_get ()
++static GstDebugCategory *
++gst_avs_debug_category_get (void)
++{
++  static gsize cat_gonce = 0;
++
++  if (g_once_init_enter (&cat_gonce)) {
++    GstDebugCategory *cat = NULL;
++
++    GST_DEBUG_CATEGORY_INIT (cat, "codecparsers_avs", 0, "avs parser library");
++
++    g_once_init_leave (&cat_gonce, (gsize) cat);
++  }
++
++  return (GstDebugCategory *) cat_gonce;
++}
++#endif /* GST_DISABLE_GST_DEBUG */
++
++/* the headers are short, the start of a unit is enough to parse them */
++#define MAX_HEADER_SIZE 256
++
++static const struct
++{
++  gint n, d;
++} frame_rates[16] = {
++  {0, 1}, {24000, 1001}, {24, 1}, {25, 1}, {30000, 1001}, {30, 1}, {50, 1},
++  {60000, 1001}, {60, 1},
++};
++
++/**
++ * gst_avs_parse:
++ * @packet: (out): the #GstAvsPacket to fill
++ * @data: the data to parse
++ * @size: the size of @data
++ * @offset: the offset in @data from which to look for a start code
++ *
++ * Finds the next start code in @data from @offset and fills @packet with
++ * its type, the offset of the data after it and, if a further start code
++ * follows, its size.
++ *
++ * Returns: %GST_AVS_PARSER_OK if a start code was found.
++ *
++ * Since: 1.30
++ */
++GstAvsParserResult
++gst_avs_parse (GstAvsPacket * packet, const guint8 * data, gsize size,
++    guint offset)
++{
++  GstByteReader br;
++  gint off;
++
++  g_return_val_if_fail (packet != NULL, GST_AVS_PARSER_ERROR);
++
++  if (size <= offset + 3)
++    return GST_AVS_PARSER_NO_PACKET;
++
++  gst_byte_reader_init (&br, data, size);
++  off = gst_byte_reader_masked_scan_uint32 (&br, 0xffffff00, 0x00000100,
++      offset, size - offset);
++  if (off < 0)
++    return GST_AVS_PARSER_NO_PACKET;
++
++  packet->data = data;
++  packet->type = data[off + 3];
++  packet->offset = off + 4;
++  packet->size = size - packet->offset;
++
++  if (size > packet->offset + 3) {
++    off = gst_byte_reader_masked_scan_uint32 (&br, 0xffffff00, 0x00000100,
++        packet->offset, size - packet->offset);
++    if (off >= 0)
++      packet->size = off - packet->offset;
++  }
++
++  return GST_AVS_PARSER_OK;
++}
++
++static guint
++packet_size (const GstAvsPacket * packet)
++{
++  return MIN (packet->size, MAX_HEADER_SIZE);
++}
++
++/**
++ * gst_avs_parse_sequence_header:
++ * @packet: a #GstAvsPacket of type %GST_AVS_START_CODE_SEQUENCE
++ * @seq: (out): the #GstAvsSequenceHeader to fill
++ *
++ * Returns: %GST_AVS_PARSER_OK if the sequence header was parsed.
++ *
++ * Since: 1.30
++ */
++GstAvsParserResult
++gst_avs_parse_sequence_header (const GstAvsPacket * packet,
++    GstAvsSequenceHeader * seq)
++{
++  GstAvsBitReader br;
++  guint32 lower, upper;
++
++  g_return_val_if_fail (packet != NULL, GST_AVS_PARSER_ERROR);
++  g_return_val_if_fail (seq != NULL, GST_AVS_PARSER_ERROR);
++
++  if (packet->type != GST_AVS_START_CODE_SEQUENCE)
++    return GST_AVS_PARSER_ERROR;
++
++  gst_avs_bit_reader_init (&br, packet->data + packet->offset,
++      packet_size (packet));
++
++  memset (seq, 0, sizeof (*seq));
++  seq->profile_id = gst_avs_bit_reader_get (&br, 8);
++  seq->level_id = gst_avs_bit_reader_get (&br, 8);
++  seq->progressive_sequence = gst_avs_bit_reader_get (&br, 1);
++  seq->horizontal_size = gst_avs_bit_reader_get (&br, 14);
++  seq->vertical_size = gst_avs_bit_reader_get (&br, 14);
++  seq->chroma_format = gst_avs_bit_reader_get (&br, 2);
++  seq->sample_precision = gst_avs_bit_reader_get (&br, 3);
++  seq->aspect_ratio = gst_avs_bit_reader_get (&br, 4);
++  seq->frame_rate_code = gst_avs_bit_reader_get (&br, 4);
++  lower = gst_avs_bit_reader_get (&br, 18);
++  gst_avs_bit_reader_get (&br, 1);      /* marker_bit */
++  upper = gst_avs_bit_reader_get (&br, 12);
++  seq->bit_rate = (upper << 18) | lower;
++  seq->low_delay = gst_avs_bit_reader_get (&br, 1);
++  gst_avs_bit_reader_get (&br, 1);      /* marker_bit */
++  seq->bbv_buffer_size = gst_avs_bit_reader_get (&br, 18);
++
++  if (br.overrun) {
++    GST_WARNING ("sequence header too short");
++    return GST_AVS_PARSER_ERROR;
++  }
++
++  if (!seq->horizontal_size || !seq->vertical_size) {
++    GST_WARNING ("invalid size %ux%u", seq->horizontal_size,
++        seq->vertical_size);
++    return GST_AVS_PARSER_ERROR;
++  }
++
++  seq->fps_n = frame_rates[seq->frame_rate_code].n;
++  seq->fps_d = frame_rates[seq->frame_rate_code].d;
++
++  GST_LOG ("profile 0x%02x level 0x%02x %ux%u progressive %u low_delay %u",
++      seq->profile_id, seq->level_id, seq->horizontal_size,
++      seq->vertical_size, seq->progressive_sequence, seq->low_delay);
++
++  return GST_AVS_PARSER_OK;
++}
++
++static gboolean
++is_guangdian (const GstAvsSequenceHeader * seq)
++{
++  return seq->profile_id == GST_AVS_PROFILE_GUANGDIAN;
++}
++
++/**
++ * gst_avs_parse_picture_header:
++ * @packet: a #GstAvsPacket of type %GST_AVS_START_CODE_I_PICTURE or
++ *   %GST_AVS_START_CODE_PB_PICTURE
++ * @seq: the active #GstAvsSequenceHeader
++ * @final_revision: (inout): whether the stream follows the final revision
++ *   of the standard, which has a marker bit after the time_code of I
++ *   pictures; start with %FALSE for a new stream
++ * @pic: (out): the #GstAvsPictureHeader to fill
++ *
++ * Streams of a pre-final revision of GB/T 20090.2 have no marker bit after
++ * time_code. Those streams are progressive, have no low_delay and code
++ * top_field_first and repeat_first_field as 0, which tells them apart; once
++ * a final revision I picture header is seen, @final_revision stays set.
++ *
++ * Returns: %GST_AVS_PARSER_OK if the picture header was parsed.
++ *
++ * Since: 1.30
++ */
++GstAvsParserResult
++gst_avs_parse_picture_header (const GstAvsPacket * packet,
++    const GstAvsSequenceHeader * seq, gboolean * final_revision,
++    GstAvsPictureHeader * pic)
++{
++  GstAvsBitReader br;
++  gboolean pb, guangdian;
++  guint i;
++
++  g_return_val_if_fail (packet != NULL, GST_AVS_PARSER_ERROR);
++  g_return_val_if_fail (seq != NULL, GST_AVS_PARSER_ERROR);
++  g_return_val_if_fail (final_revision != NULL, GST_AVS_PARSER_ERROR);
++  g_return_val_if_fail (pic != NULL, GST_AVS_PARSER_ERROR);
++
++  if (packet->type == GST_AVS_START_CODE_PB_PICTURE)
++    pb = TRUE;
++  else if (packet->type == GST_AVS_START_CODE_I_PICTURE)
++    pb = FALSE;
++  else
++    return GST_AVS_PARSER_ERROR;
++
++  guangdian = is_guangdian (seq);
++  gst_avs_bit_reader_init (&br, packet->data + packet->offset,
++      packet_size (packet));
++  memset (pic, 0, sizeof (*pic));
++
++  gst_avs_bit_reader_get (&br, 16);     /* bbv_delay */
++  if (guangdian)
++    gst_avs_bit_reader_get (&br, 8);    /* marker_bit, bbv_delay_extension */
++
++  if (pb) {
++    pic->picture_type = gst_avs_bit_reader_get (&br, 2);
++    if (pic->picture_type != GST_AVS_PICTURE_TYPE_P &&
++        pic->picture_type != GST_AVS_PICTURE_TYPE_B) {
++      GST_WARNING ("invalid picture_coding_type %u", pic->picture_type);
++      return GST_AVS_PARSER_ERROR;
++    }
++  } else {
++    pic->picture_type = GST_AVS_PICTURE_TYPE_I;
++    pic->time_code_flag = gst_avs_bit_reader_get (&br, 1);
++    if (pic->time_code_flag)
++      pic->time_code = gst_avs_bit_reader_get (&br, 24);
++    if (guangdian || seq->low_delay || !(gst_avs_bit_reader_peek (&br, 9) & 1)
++        || (gst_avs_bit_reader_peek (&br, 11) & 3))
++      *final_revision = TRUE;
++    if (*final_revision)
++      gst_avs_bit_reader_get (&br, 1);  /* marker_bit */
++  }
++
++  pic->picture_distance = gst_avs_bit_reader_get (&br, 8);
++  if (seq->low_delay)
++    gst_avs_bit_reader_get_ue (&br);    /* bbv_check_times */
++  pic->progressive_frame = gst_avs_bit_reader_get (&br, 1);
++  pic->picture_structure = 1;
++  if (!pic->progressive_frame) {
++    pic->picture_structure = gst_avs_bit_reader_get (&br, 1);
++    if (pb && !pic->picture_structure)
++      pic->advanced_pred_mode_disable = gst_avs_bit_reader_get (&br, 1);
++  }
++  pic->top_field_first = gst_avs_bit_reader_get (&br, 1);
++  pic->repeat_first_field = gst_avs_bit_reader_get (&br, 1);
++  pic->fixed_picture_qp = gst_avs_bit_reader_get (&br, 1);
++  pic->picture_qp = gst_avs_bit_reader_get (&br, 6);
++
++  if (!pb) {
++    if (!pic->picture_structure)
++      pic->skip_mode_flag = gst_avs_bit_reader_get (&br, 1);
++    gst_avs_bit_reader_get (&br, 4);    /* reserved_bits */
++  } else {
++    pic->picture_reference_flag = 1;
++    if (!(pic->picture_type == GST_AVS_PICTURE_TYPE_B &&
++            pic->picture_structure))
++      pic->picture_reference_flag = gst_avs_bit_reader_get (&br, 1);
++    pic->no_forward_reference_flag = gst_avs_bit_reader_get (&br, 1);
++    pic->pb_field_enhanced_flag = gst_avs_bit_reader_get (&br, 1);
++    if (!guangdian) {
++      /* reserved bits in the JiZhun profile */
++      pic->no_forward_reference_flag = 0;
++      pic->pb_field_enhanced_flag = 0;
++    }
++    gst_avs_bit_reader_get (&br, 2);    /* reserved_bits */
++    pic->skip_mode_flag = gst_avs_bit_reader_get (&br, 1);
++  }
++
++  pic->loop_filter_disable = gst_avs_bit_reader_get (&br, 1);
++  if (!pic->loop_filter_disable) {
++    pic->loop_filter_parameter_flag = gst_avs_bit_reader_get (&br, 1);
++    if (pic->loop_filter_parameter_flag) {
++      pic->alpha_c_offset = gst_avs_bit_reader_get_se (&br);
++      pic->beta_offset = gst_avs_bit_reader_get_se (&br);
++    }
++  }
++
++  if (guangdian) {
++    pic->weighting_quant_flag = gst_avs_bit_reader_get (&br, 1);
++    if (pic->weighting_quant_flag) {
++      pic->chroma_quant_param_disable = gst_avs_bit_reader_get (&br, 1);
++      if (!pic->chroma_quant_param_disable) {
++        pic->chroma_quant_param_delta_cb = gst_avs_bit_reader_get_se (&br);
++        pic->chroma_quant_param_delta_cr = gst_avs_bit_reader_get_se (&br);
++      }
++      pic->weighting_quant_param_index = gst_avs_bit_reader_get (&br, 2);
++      pic->weighting_quant_model = gst_avs_bit_reader_get (&br, 2);
++      if (pic->weighting_quant_param_index == 1) {
++        for (i = 0; i < 6; i++)
++          pic->weighting_quant_param_delta1[i] =
++              gst_avs_bit_reader_get_se (&br);
++      } else if (pic->weighting_quant_param_index == 2) {
++        for (i = 0; i < 6; i++)
++          pic->weighting_quant_param_delta2[i] =
++              gst_avs_bit_reader_get_se (&br);
++      }
++    }
++    pic->aec_enable = gst_avs_bit_reader_get (&br, 1);
++  }
++
++  if (br.overrun) {
++    GST_WARNING ("picture header too short");
++    return GST_AVS_PARSER_ERROR;
++  }
++
++  pic->header_size = packet->size;
++
++  GST_LOG ("%c picture distance %u structure %u qp %u",
++      "IPB"[pic->picture_type], pic->picture_distance,
++      pic->picture_structure, pic->picture_qp);
++
++  return GST_AVS_PARSER_OK;
++}
+diff --git a/gst-libs/gst/codecparsers/gstavsparser.h b/gst-libs/gst/codecparsers/gstavsparser.h
+new file mode 100644
+index 0000000..bd81436
+--- /dev/null
++++ b/gst-libs/gst/codecparsers/gstavsparser.h
+@@ -0,0 +1,260 @@
++/* GStreamer
++ * Copyright (C) 2026 Arun Iyengar <aiyengar1990@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#pragma once
++
++#ifndef GST_USE_UNSTABLE_API
++#warning "The AVS parsing library is unstable API and may change in future."
++#warning "You can define GST_USE_UNSTABLE_API to avoid this warning."
++#endif
++
++#include <gst/gst.h>
++#include <gst/codecparsers/codecparsers-prelude.h>
++
++G_BEGIN_DECLS
++
++/**
++ * GstAvsStartCode:
++ * @GST_AVS_START_CODE_SLICE_MAX: the highest slice start code, slices use
++ *   0x00 to 0xaf (slice_vertical_position)
++ * @GST_AVS_START_CODE_SEQUENCE: video_sequence_start_code
++ * @GST_AVS_START_CODE_SEQUENCE_END: video_sequence_end_code
++ * @GST_AVS_START_CODE_USER_DATA: user_data_start_code
++ * @GST_AVS_START_CODE_I_PICTURE: i_picture_start_code
++ * @GST_AVS_START_CODE_EXTENSION: extension_start_code
++ * @GST_AVS_START_CODE_PB_PICTURE: pb_picture_start_code
++ * @GST_AVS_START_CODE_VIDEO_EDIT: video_edit_code
++ *
++ * The start code values of GB/T 20090.2 (AVS1) and GY/T 257.1 (AVS+).
++ *
++ * Since: 1.30
++ */
++typedef enum
++{
++  GST_AVS_START_CODE_SLICE_MAX = 0xaf,
++  GST_AVS_START_CODE_SEQUENCE = 0xb0,
++  GST_AVS_START_CODE_SEQUENCE_END = 0xb1,
++  GST_AVS_START_CODE_USER_DATA = 0xb2,
++  GST_AVS_START_CODE_I_PICTURE = 0xb3,
++  GST_AVS_START_CODE_EXTENSION = 0xb5,
++  GST_AVS_START_CODE_PB_PICTURE = 0xb6,
++  GST_AVS_START_CODE_VIDEO_EDIT = 0xb7,
++} GstAvsStartCode;
++
++/**
++ * GstAvsProfile:
++ * @GST_AVS_PROFILE_JIZHUN: the JiZhun (base) profile of AVS1
++ * @GST_AVS_PROFILE_GUANGDIAN: the Guangdian (broadcast) profile, AVS+
++ *
++ * Since: 1.30
++ */
++typedef enum
++{
++  GST_AVS_PROFILE_JIZHUN = 0x20,
++  GST_AVS_PROFILE_GUANGDIAN = 0x48,
++} GstAvsProfile;
++
++/**
++ * GstAvsPictureType:
++ * @GST_AVS_PICTURE_TYPE_I: intra picture
++ * @GST_AVS_PICTURE_TYPE_P: predicted picture
++ * @GST_AVS_PICTURE_TYPE_B: bi-predicted picture
++ *
++ * The picture_coding_type values; I pictures have their own start code.
++ *
++ * Since: 1.30
++ */
++typedef enum
++{
++  GST_AVS_PICTURE_TYPE_I = 0,
++  GST_AVS_PICTURE_TYPE_P = 1,
++  GST_AVS_PICTURE_TYPE_B = 2,
++} GstAvsPictureType;
++
++/**
++ * GstAvsParserResult:
++ * @GST_AVS_PARSER_OK: the parsing succeeded
++ * @GST_AVS_PARSER_ERROR: the data is not valid
++ * @GST_AVS_PARSER_NO_PACKET: no start code was found
++ *
++ * Since: 1.30
++ */
++typedef enum
++{
++  GST_AVS_PARSER_OK,
++  GST_AVS_PARSER_ERROR,
++  GST_AVS_PARSER_NO_PACKET,
++} GstAvsParserResult;
++
++typedef struct _GstAvsPacket GstAvsPacket;
++typedef struct _GstAvsSequenceHeader GstAvsSequenceHeader;
++typedef struct _GstAvsPictureHeader GstAvsPictureHeader;
++
++/**
++ * GstAvsPacket:
++ * @data: the data the packet was found in
++ * @type: the start code value, see #GstAvsStartCode
++ * @offset: offset in @data of the first byte after the start code
++ * @size: size of the packet after its start code, up to the next start
++ *   code or the end of the data
++ *
++ * A unit of an AVS1 or AVS+ elementary stream: a start code and the data
++ * up to the next start code.
++ *
++ * Since: 1.30
++ */
++struct _GstAvsPacket
++{
++  const guint8 *data;
++  guint8 type;
++  guint offset;
++  gint size;
++};
++
++/**
++ * GstAvsSequenceHeader:
++ * @profile_id: profile_id, see #GstAvsProfile
++ * @level_id: level_id
++ * @progressive_sequence: progressive_sequence
++ * @horizontal_size: horizontal_size, the width in luma samples
++ * @vertical_size: vertical_size, the height in luma samples
++ * @chroma_format: chroma_format, 1 for 4:2:0
++ * @sample_precision: sample_precision, 1 for 8-bit samples
++ * @aspect_ratio: aspect_ratio
++ * @frame_rate_code: frame_rate_code
++ * @bit_rate: the bit rate in units of 400 bit/s, from bit_rate_lower and
++ *   bit_rate_upper
++ * @low_delay: low_delay
++ * @bbv_buffer_size: bbv_buffer_size
++ * @fps_n: frame rate numerator of @frame_rate_code, 0 if unknown
++ * @fps_d: frame rate denominator of @frame_rate_code
++ *
++ * The video_sequence_header() of GB/T 20090.2 section 7.1.2.2.
++ *
++ * Since: 1.30
++ */
++struct _GstAvsSequenceHeader
++{
++  guint8 profile_id;
++  guint8 level_id;
++  guint8 progressive_sequence;
++  guint16 horizontal_size;
++  guint16 vertical_size;
++  guint8 chroma_format;
++  guint8 sample_precision;
++  guint8 aspect_ratio;
++  guint8 frame_rate_code;
++  guint32 bit_rate;
++  guint8 low_delay;
++  guint32 bbv_buffer_size;
++
++  gint fps_n;
++  gint fps_d;
++};
++
++/**
++ * GstAvsPictureHeader:
++ * @picture_type: see #GstAvsPictureType
++ * @time_code_flag: time_code_flag of I pictures
++ * @time_code: time_code of I pictures
++ * @picture_distance: picture_distance
++ * @progressive_frame: progressive_frame
++ * @picture_structure: picture_structure, 1 for a frame coded picture
++ * @advanced_pred_mode_disable: advanced_pred_mode_disable
++ * @top_field_first: top_field_first
++ * @repeat_first_field: repeat_first_field
++ * @fixed_picture_qp: fixed_picture_qp
++ * @picture_qp: picture_qp
++ * @skip_mode_flag: skip_mode_flag
++ * @picture_reference_flag: picture_reference_flag of P and B pictures, 1
++ *   when not coded (frame coded B pictures)
++ * @no_forward_reference_flag: no_forward_reference_flag (AVS+ only)
++ * @pb_field_enhanced_flag: pb_field_enhanced_flag (AVS+ only)
++ * @loop_filter_disable: loop_filter_disable
++ * @loop_filter_parameter_flag: loop_filter_parameter_flag
++ * @alpha_c_offset: alpha_c_offset
++ * @beta_offset: beta_offset
++ * @weighting_quant_flag: weighting_quant_flag (AVS+ only)
++ * @chroma_quant_param_disable: chroma_quant_param_disable
++ * @chroma_quant_param_delta_cb: chroma_quant_param_delta_cb
++ * @chroma_quant_param_delta_cr: chroma_quant_param_delta_cr
++ * @weighting_quant_param_index: weighting_quant_param_index
++ * @weighting_quant_model: weighting_quant_model
++ * @weighting_quant_param_delta1: weighting_quant_param_delta1
++ * @weighting_quant_param_delta2: weighting_quant_param_delta2
++ * @aec_enable: aec_enable (AVS+ only)
++ * @header_size: size in bytes of the picture header packet, its start code
++ *   excluded
++ *
++ * The i_picture_header() and pb_picture_header() of GB/T 20090.2 sections
++ * 7.1.3.1 and 7.1.3.2, with the AVS+ (GY/T 257.1) additions.
++ *
++ * Since: 1.30
++ */
++struct _GstAvsPictureHeader
++{
++  GstAvsPictureType picture_type;
++  guint8 time_code_flag;
++  guint32 time_code;
++  guint8 picture_distance;
++  guint8 progressive_frame;
++  guint8 picture_structure;
++  guint8 advanced_pred_mode_disable;
++  guint8 top_field_first;
++  guint8 repeat_first_field;
++  guint8 fixed_picture_qp;
++  guint8 picture_qp;
++  guint8 skip_mode_flag;
++  guint8 picture_reference_flag;
++  guint8 no_forward_reference_flag;
++  guint8 pb_field_enhanced_flag;
++  guint8 loop_filter_disable;
++  guint8 loop_filter_parameter_flag;
++  gint8 alpha_c_offset;
++  gint8 beta_offset;
++  guint8 weighting_quant_flag;
++  guint8 chroma_quant_param_disable;
++  gint8 chroma_quant_param_delta_cb;
++  gint8 chroma_quant_param_delta_cr;
++  guint8 weighting_quant_param_index;
++  guint8 weighting_quant_model;
++  gint16 weighting_quant_param_delta1[6];
++  gint16 weighting_quant_param_delta2[6];
++  guint8 aec_enable;
++
++  guint header_size;
++};
++
++GST_CODEC_PARSERS_API
++GstAvsParserResult gst_avs_parse (GstAvsPacket * packet,
++                                  const guint8 * data,
++                                  gsize size,
++                                  guint offset);
++
++GST_CODEC_PARSERS_API
++GstAvsParserResult gst_avs_parse_sequence_header (const GstAvsPacket * packet,
++                                                  GstAvsSequenceHeader * seq);
++
++GST_CODEC_PARSERS_API
++GstAvsParserResult gst_avs_parse_picture_header (const GstAvsPacket * packet,
++                                                 const GstAvsSequenceHeader * seq,
++                                                 gboolean * final_revision,
++                                                 GstAvsPictureHeader * pic);
++
++G_END_DECLS
+diff --git a/gst-libs/gst/codecparsers/meson.build b/gst-libs/gst/codecparsers/meson.build
+index 973af9e..8b5e8c6 100644
+--- a/gst-libs/gst/codecparsers/meson.build
++++ b/gst-libs/gst/codecparsers/meson.build
+@@ -23,6 +23,8 @@ codecparser_sources = files([
+   'gstvp9bitwriter.c',
+   'gstjpegbitwriter.c',
+   'gstlcevcmeta.c',
++  'gstavsparser.c',
++  'gstavs2parser.c',
+ ])
+ codecparser_headers = files([
+   'codecparsers-prelude.h',
+@@ -43,6 +45,8 @@ codecparser_headers = files([
+   'gstav1parser.h',
+   'gstlcevcmeta.h',
+   'gsth266parser.h',
++  'gstavsparser.h',
++  'gstavs2parser.h',
+ ])
+ install_headers(codecparser_headers, subdir : 'gstreamer-1.0/gst/codecparsers')
+ 
+-- 
+2.55.0
+

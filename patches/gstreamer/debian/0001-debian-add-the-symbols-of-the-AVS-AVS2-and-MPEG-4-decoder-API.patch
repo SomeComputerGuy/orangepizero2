@@ -1,0 +1,51 @@
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Subject: [PATCH] debian: add the symbols of the AVS, AVS2 and MPEG-4 decoder API
+
+The codecparsers and codecs libraries export the AVS1/AVS+ and AVS2
+parsers and the AVS, AVS2 and MPEG-4 Part 2 decoder base classes
+(patches 0203-0209). Adapted from the Orange Pi 5 build's packaging patch.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+--- a/debian/libgstreamer-plugins-extra1.0-0.symbols	2026-11-10 03:42:42.409523874 +0000
++++ b/debian/libgstreamer-plugins-extra1.0-0.symbols	2026-11-10 03:42:42.415524076 +0000
+@@ -31,6 +31,12 @@
+  gst_av1_parser_reset@Base 1.27.2
+  gst_av1_parser_reset_annex_b@Base 1.27.2
+  gst_av1_parser_set_operating_point@Base 1.27.2
++ gst_avs2_parse@Base 1.28.6-1ubuntu1+opiz2.3~
++ gst_avs2_parse_picture_header@Base 1.28.6-1ubuntu1+opiz2.3~
++ gst_avs2_parse_sequence_header@Base 1.28.6-1ubuntu1+opiz2.3~
++ gst_avs_parse@Base 1.28.6-1ubuntu1+opiz2.3~
++ gst_avs_parse_picture_header@Base 1.28.6-1ubuntu1+opiz2.3~
++ gst_avs_parse_sequence_header@Base 1.28.6-1ubuntu1+opiz2.3~
+  gst_buffer_add_lcevc_meta@Base 1.27.2
+  gst_buffer_add_mpeg_video_meta@Base 1.27.2
+  gst_buffer_get_lcevc_meta@Base 1.27.2
+@@ -235,6 +241,12 @@
+  gst_av1_dpb_new@Base 1.27.2
+  gst_av1_picture_get_type@Base 1.27.2
+  gst_av1_picture_new@Base 1.27.2
++ gst_avs2_decoder_get_type@Base 1.28.6-1ubuntu1+opiz2.3~
++ gst_avs2_picture_get_type@Base 1.28.6-1ubuntu1+opiz2.3~
++ gst_avs2_picture_new@Base 1.28.6-1ubuntu1+opiz2.3~
++ gst_avs_decoder_get_type@Base 1.28.6-1ubuntu1+opiz2.3~
++ gst_avs_picture_get_type@Base 1.28.6-1ubuntu1+opiz2.3~
++ gst_avs_picture_new@Base 1.28.6-1ubuntu1+opiz2.3~
+  gst_codec_picture_get_user_data@Base 1.27.2
+  gst_codec_picture_set_discont_state@Base 1.27.2
+  gst_codec_picture_set_user_data@Base 1.27.2
+@@ -325,6 +337,12 @@
+  gst_mpeg2_dpb_new@Base 1.27.2
+  gst_mpeg2_picture_get_type@Base 1.27.2
+  gst_mpeg2_picture_new@Base 1.27.2
++ gst_mpeg4_decoder_get_encoder_bugs@Base 1.28.6-1ubuntu1+opiz2.3~
++ gst_mpeg4_decoder_get_format@Base 1.28.6-1ubuntu1+opiz2.3~
++ gst_mpeg4_decoder_get_low_delay@Base 1.28.6-1ubuntu1+opiz2.3~
++ gst_mpeg4_decoder_get_type@Base 1.28.6-1ubuntu1+opiz2.3~
++ gst_mpeg4_picture_get_type@Base 1.28.6-1ubuntu1+opiz2.3~
++ gst_mpeg4_picture_new@Base 1.28.6-1ubuntu1+opiz2.3~
+  gst_vp8_decoder_get_type@Base 1.27.2
+  gst_vp8_picture_get_type@Base 1.27.2
+  gst_vp8_picture_new@Base 1.27.2

@@ -246,8 +246,7 @@ Kernel and system
   queries the screen console for its size, and when it takes the console's answer just before Plymouth reads it,
   Plymouth waits forever; console output then backs up and systemd blocks. A fix is already proposed upstream (Plymouth
   merge request !523: Plymouth reads the terminal without blocking); the image will carry it once 100 boots pass on the
-  board. Separately, systemd will skip the needless size query on a screen console. Patches that touch the boot path
-  are held back from upstream until then.
+  board. Separately, systemd will skip the needless size query on a screen console.
 - A deeper idle state that powers off the whole CPU cluster: planned after the TF-A review.
 
 Upstream

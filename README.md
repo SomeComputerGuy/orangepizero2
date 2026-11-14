@@ -248,7 +248,8 @@ Kernel and system
   Plymouth waits forever; console output then backs up and systemd blocks. Fixed in the build: our Plymouth rebuild
   carries the fix already proposed upstream (Plymouth merge request !523: Plymouth reads the terminal without
   blocking) plus upstream's fix for a related Plymouth hang; 0 hangs in 50 boots on the board with it. Separately,
-  systemd will skip the needless size query on a screen console.
+  our systemd rebuild carries systemd's own upstream fix (skip the size query on a screen console, systemd 261.4);
+  board test pending.
 - A deeper idle state that powers off the whole CPU cluster: planned after the TF-A review.
 
 Upstream

@@ -226,22 +226,27 @@ Kernel and system
 - Moved to the current Armbian main branch and Linux 7.3.4 on 2026-11-13; the build follows Armbian's newest `edge`
   kernel again.
 - Crypto engine RSA (512-4096 bit), ECDH and ECDSA verification: passed on the board on a test kernel. ECDSA
-  signing, ECDH P-521 and Diffie-Hellman: the board test fails (P-521, P-192 key generation and Diffie-Hellman
-  checks); being analysed. A kernel crypto fix so that `keyctl` signing picks an implementation that can sign:
-  the board test fails 5 checks; being analysed.
+  signing and Diffie-Hellman passed on the board (the RFC 7919 groups were missing from the kernel configuration;
+  added, rerun pending). ECDH P-521: the board test found two bugs in our software P-521 code (every
+  shared secret was wrong, and small keys gave wrong results); fixed and checked on the PC, board rerun pending.
+  A kernel crypto fix so that `keyctl` signing picks an implementation that can sign: board rerun pending (the
+  earlier failures were the P-521 bug and a wrong test expectation).
 - U-Boot keeps its environment in the SPI flash also when booting from the SD card, so `saveenv` works there:
   passed on the board. In the build for the next image, with `fw_printenv`/`fw_setenv` for Linux (not yet tested).
-- Secure boot, OP-TEE and a firmware TPM without burning eFuses, shared with the Orange Pi 5 work: started (port
-  plan and host builds).
+- Secure boot, OP-TEE and a firmware TPM without burning eFuses, shared with the Orange Pi 5 work: first round
+  built on the PC (OP-TEE 4.11 port for the H616, TPM in OP-TEE, TF-A and U-Boot changes); board test pending.
 - SPI 3-wire mode and frame sizes other than 8 bits.
 - PWM capture, I2C DMA transfers, SPI and I2C target (slave) modes: in the build, not yet tested with a real
   signal or a second device.
 - Out-of-memory handling on 1 GB: a process that runs out of memory can stall the board until the hardware watchdog
   resets it. Fix not started.
-- About 5-8 % of boots hang shortly after Linux starts until the hardware watchdog resets the board (first seen
-  2026-11-05 on the 2026-11-04 build; none in about 280 boots of the builds before it). The cause is not known yet;
-  it is the top priority now: a repeated-boot test with full kernel logging and lockup detection will capture what
-  Linux is stuck on. Patches that touch the boot path are held back from upstream until it is understood.
+- About 5-8 % of boots of the server image (the desktop image has the same Plymouth) hang shortly after Linux starts until the hardware watchdog
+  resets the board (first seen 2026-11-05, when the server image brought in the Plymouth boot splash; the minimal
+  image has no Plymouth). Cause found with a repeated-boot test (4 hangs in 72 boots): systemd queries the screen
+  console for its size, and when it takes the console's answer just before Plymouth reads it, Plymouth waits
+  forever; console output then backs up and systemd blocks. No upstream fix found so far.
+  Being fixed on both sides (Plymouth no longer waits in that read; systemd skips the size query on a screen
+  console), then proven with 100 boots. Patches that touch the boot path are held back from upstream until then.
 - A deeper idle state that powers off the whole CPU cluster: planned after the TF-A review.
 
 Upstream

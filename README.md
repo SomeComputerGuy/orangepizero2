@@ -178,8 +178,8 @@ GPU
 Video
 - H.264 encoder: intra refresh works on the board. Regions of interest (4, the hardware's limit): retest queued.
   8x8 transform: a register sweep on the board (269 runs) found no setting that produces it; the engine reports
-  version 0x12011, the revision the vendor's software never enables 8x8 on. The sweep also hit kernel warnings and
-  video engine memory faults, which are being analysed before the next probe.
+  version 0x12011, the revision the vendor's software never enables 8x8 on. The sweep also exposed a driver bug (a padded
+  line stride overran a buffer), fixed on a test kernel; a wider probe is next.
 - AVS2 background and S pictures: bit-exact on the board with new test streams (the official reference encoder is
   not public; streams made with an extended open encoder).
 - GStreamer elements for MPEG-4, H.263, Sorenson Spark, AVS and AVS2: in the build; MPEG-4, H.263 and Spark are

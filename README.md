@@ -237,8 +237,8 @@ Kernel and system
   signal or a second device.
 - Out-of-memory handling on 1 GB: a process that runs out of memory can stall the board until the hardware watchdog
   resets it. Fix not started.
-- About 5-8 % of boots hang shortly after Linux starts until the hardware watchdog resets the board (seen in the
-  serial logs since 2026-11-04); the cause is not known yet.
+- About 5-8 % of boots hang shortly after Linux starts until the hardware watchdog resets the board (first seen
+  2026-11-05 on the 2026-11-04 build; none in about 280 boots of the builds before it); the cause is not known yet.
 - A deeper idle state that powers off the whole CPU cluster: planned after the TF-A review.
 
 Upstream

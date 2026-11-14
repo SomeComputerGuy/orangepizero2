@@ -17,7 +17,7 @@ cd8274434db99ec6ff562e9ca7f4dc40dd1102bae8f08e098cfca2f6f2c3b92c  0012-avcodec-v
 a09885884f458cbd823ac28a152649985ae65af41eaf79afee1486998595e0da  0202-avcodec-vc1_pred-pull-back-the-co-located-MV-of-Simp.patch
 ea9c1e89349c72c03cae28f34c5eee250b2e06e63e13d70197e5d84009e9f3c5  0203-avcodec-vc1-read-RESPIC-only-in-I-and-P-pictures.patch
 793e31c73c282cd1bc24831048eca978eb8f9a9a2ca39ca544de745d0d810c9b  0204-avcodec-vc1-size-the-bitplanes-of-reduced-resolution.patch
-4b1e36783250600d3b7914cde9eb43621c616445ba3d707ee117b64eb9d0d652  0205-avcodec-add-V4L2-Request-API-VC-1-WMV3-hwaccel.patch
+2d89a125d8458c4d123f642d1c5dfe4a51a5dce30d42056e95771e95f4857284  0205-avcodec-add-V4L2-Request-API-VC-1-WMV3-hwaccel.patch
 e43fa54ad028bd028cfe8a054af9643aa23ba749183f1bd4cd0dab3709c9b7c7  0206-avcodec-h263dec-let-hwaccels-decode-a-picture-segmen.patch
 b3c6612b81464fb81841ceb2ab112c0cc4e305397939b6486f8114cd456bb3da  0207-avcodec-h263dec-detect-MPEG-4-encoder-bugs-before-ge.patch
 bac91cfc20ea6528f3ba45bcc549ea9d178d43f1b871052824ef2c9f94ae14cf  0208-avcodec-add-V4L2-Request-API-MPEG-4-Part-2-H.263-and.patch
@@ -52,5 +52,6 @@ d6b5dd27936be65c62990ea417a943c7226c374a9da49e848eee6d1af7f487d5  0328-avcodec-v
 5e5266e88c6d54fc4276927a76c9f6c00c4dfa46bbde60c3d163a563fceb7775  0330-avcodec-v4l2_request_hevc-size-High-tier-coded-data-buffers-by-the-Main-tier-CPB.patch
 aae82f28237d54c5b442c9da2eea8fa84c300a2ec9191215c73892b6668a8f98  0331-avcodec-h263-do-not-overwrite-a-stored-motion-vector.patch
 d0aa6f9945ffb0d439a48645f954f9050cd2d60dc3bb5526ae647df2109eedd7  0332-avcodec-mpegvideo_motion-clip-8x8-and-4MV-chroma-ref.patch
+455dd62010d21a4a38a6d1bb5c5a3ab204be13d14b69d1d90d254dc403420bc2  0339-avutil-hwcontext_v4l2request-download-NV15-and-NV20-.patch
 bc4e47dc691c4aeb0a1da47504213ca2e0a53a0535211951e156332bf94232cb  debian/0001-debian-Enable-the-V4L2-Request-API-hwaccels-on-Linux.patch
-6f353295f9ebdf4218bf7fc5e02998cd3328eff723eef4b4dd43742f1717742b  README.md
+22a7f14bdd150174db0570ed9e2f722fde67ac7b0b62729f05032217398f9c83  README.md

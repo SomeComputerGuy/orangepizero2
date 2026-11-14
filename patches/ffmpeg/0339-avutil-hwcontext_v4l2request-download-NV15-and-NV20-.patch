@@ -1,0 +1,189 @@
+From 87805520aa5c5ff8118dabec876cbb5e5bd0e834 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Fri, 13 Nov 2026 22:54:00 +0000
+Subject: [PATCH] avutil/hwcontext_v4l2request: download NV15 and NV20 frames
+
+Rockchip rkvdec decodes 10-bit video to NV15/NV20 (four 10-bit samples
+in five bytes). av_frame_copy() cannot read them, so transfers failed
+and 10-bit frames could not reach system memory.
+
+Unpack them to P010/P210 or yuv420p10/yuv422p10.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ libavutil/hwcontext_v4l2request.c | 120 +++++++++++++++++++++++++++++-
+ 1 file changed, 119 insertions(+), 1 deletion(-)
+
+diff --git a/libavutil/hwcontext_v4l2request.c b/libavutil/hwcontext_v4l2request.c
+index efe6311cae..c4c43d0a09 100644
+--- a/libavutil/hwcontext_v4l2request.c
++++ b/libavutil/hwcontext_v4l2request.c
+@@ -33,6 +33,7 @@
+ #include "hwcontext_drm.h"
+ #include "hwcontext_internal.h"
+ #include "hwcontext_v4l2request_internal.h"
++#include "intreadwrite.h"
+ #include "mem.h"
+ #include "thread.h"
+ 
+@@ -1486,22 +1487,46 @@ fail:
+     return ret;
+ }
+ 
++static uint32_t v4l2request_capture_pixelformat(AVHWFramesContext *hwfc)
++{
++    AVV4L2RequestFramesContext *fctx = hwfc->hwctx;
++    const struct v4l2_format *format = &fctx->internal->capture.format;
++
++    return V4L2_TYPE_IS_MULTIPLANAR(format->type) ?
++           format->fmt.pix_mp.pixelformat : format->fmt.pix.pixelformat;
++}
++
+ static int v4l2request_transfer_get_formats(AVHWFramesContext *hwfc,
+                                             enum AVHWFrameTransferDirection dir,
+                                             enum AVPixelFormat **formats)
+ {
+     enum AVPixelFormat *fmts;
++    uint32_t pixelformat;
+ 
+     if (dir == AV_HWFRAME_TRANSFER_DIRECTION_TO)
+         return AVERROR(ENOSYS);
+ 
+-    fmts = av_malloc_array(2, sizeof(*fmts));
++    fmts = av_malloc_array(3, sizeof(*fmts));
+     if (!fmts)
+         return AVERROR(ENOMEM);
+ 
+     fmts[0] = hwfc->sw_format;
+     fmts[1] = AV_PIX_FMT_NONE;
++    fmts[2] = AV_PIX_FMT_NONE;
+ 
++    pixelformat = v4l2request_capture_pixelformat(hwfc);
++#if defined(V4L2_PIX_FMT_NV15) && defined(DRM_FORMAT_NV15)
++    if (pixelformat == V4L2_PIX_FMT_NV15) {
++        fmts[0] = AV_PIX_FMT_P010;
++        fmts[1] = AV_PIX_FMT_YUV420P10;
++    } else
++#endif
++#if defined(V4L2_PIX_FMT_NV20) && defined(DRM_FORMAT_NV20)
++    if (pixelformat == V4L2_PIX_FMT_NV20) {
++        fmts[0] = AV_PIX_FMT_P210;
++        fmts[1] = AV_PIX_FMT_YUV422P10;
++    } else
++#endif
+     if (hwfc->sw_format == AV_PIX_FMT_YUV420P ||
+         hwfc->sw_format == AV_PIX_FMT_YUV420P10 ||
+         hwfc->sw_format == AV_PIX_FMT_YUV422P10)
+@@ -1511,15 +1536,108 @@ static int v4l2request_transfer_get_formats(AVHWFramesContext *hwfc,
+     return 0;
+ }
+ 
++#if defined(DRM_FORMAT_NV15) || defined(DRM_FORMAT_NV20)
++/* NV15/NV20 line: four 10-bit samples in five bytes, little endian. */
++static void v4l2request_unpack_10bit(uint16_t *dst, const uint8_t *src,
++                                     int n, int shift)
++{
++    int i;
++
++    for (i = 0; i + 4 <= n; i += 4, src += 5) {
++        uint64_t v = AV_RL32(src) | (uint64_t)src[4] << 32;
++
++        dst[i + 0] = ( v        & 0x3ff) << shift;
++        dst[i + 1] = ((v >> 10) & 0x3ff) << shift;
++        dst[i + 2] = ((v >> 20) & 0x3ff) << shift;
++        dst[i + 3] = ((v >> 30) & 0x3ff) << shift;
++    }
++    for (int j = 0; i < n; i++, j++)
++        dst[i] = ((AV_RL16(src + j * 10 / 8) >> (j * 10 % 8)) & 0x3ff) << shift;
++}
++
++static int v4l2request_transfer_10bit_packed(AVHWFramesContext *hwfc,
++                                             AVFrame *dst, const AVFrame *src,
++                                             int chroma_h)
++{
++    int semi = dst->format == AV_PIX_FMT_P010 || dst->format == AV_PIX_FMT_P210;
++    int w = FFMIN(dst->width, src->width), h = FFMIN(dst->height, src->height);
++    int cw = (w + 1) >> 1, ch = chroma_h ? h : (h + 1) >> 1;
++    uint8_t *raw = NULL;
++    uint16_t *tmp = NULL;
++    AVFrame *map;
++    int ret;
++
++    map = av_frame_alloc();
++    if (!map)
++        return AVERROR(ENOMEM);
++
++    ret = v4l2request_map_frame(hwfc, map, src);
++    if (ret)
++        goto fail;
++
++    /* Unpack from a cached copy, the CAPTURE buffer may be uncached. */
++    raw = av_malloc((2 * cw * 10 + 7) / 8 + 8);
++    tmp = av_malloc_array(2 * cw, sizeof(*tmp));
++    if (!raw || !tmp) {
++        ret = AVERROR(ENOMEM);
++        goto fail;
++    }
++
++    for (int y = 0; y < h; y++) {
++        memcpy(raw, map->data[0] + y * map->linesize[0], (w * 10 + 7) / 8);
++        v4l2request_unpack_10bit((uint16_t *)(dst->data[0] + y * dst->linesize[0]),
++                                 raw, w, semi ? 6 : 0);
++    }
++
++    for (int y = 0; y < ch; y++) {
++        memcpy(raw, map->data[1] + y * map->linesize[1], (2 * cw * 10 + 7) / 8);
++        if (semi) {
++            v4l2request_unpack_10bit((uint16_t *)(dst->data[1] + y * dst->linesize[1]),
++                                     raw, 2 * cw, 6);
++            continue;
++        }
++        v4l2request_unpack_10bit(tmp, raw, 2 * cw, 0);
++        for (int x = 0; x < cw; x++) {
++            ((uint16_t *)(dst->data[1] + y * dst->linesize[1]))[x] = tmp[2 * x];
++            ((uint16_t *)(dst->data[2] + y * dst->linesize[2]))[x] = tmp[2 * x + 1];
++        }
++    }
++
++    ret = 0;
++fail:
++    av_free(raw);
++    av_free(tmp);
++    av_frame_free(&map);
++    return ret;
++}
++#endif
++
+ static int v4l2request_transfer_data_from(AVHWFramesContext *hwfc,
+                                           AVFrame *dst, const AVFrame *src)
+ {
++    const AVDRMFrameDescriptor *desc = (AVDRMFrameDescriptor *)src->data[0];
++    uint32_t drm_format = desc->layers[0].format;
+     AVFrame *map;
+     int ret;
+ 
+     if (dst->width > hwfc->width || dst->height > hwfc->height)
+         return AVERROR(EINVAL);
+ 
++#if defined(DRM_FORMAT_NV15)
++    if (drm_format == DRM_FORMAT_NV15) {
++        if (dst->format != AV_PIX_FMT_P010 && dst->format != AV_PIX_FMT_YUV420P10)
++            return AVERROR(EINVAL);
++        return v4l2request_transfer_10bit_packed(hwfc, dst, src, 0);
++    }
++#endif
++#if defined(DRM_FORMAT_NV20)
++    if (drm_format == DRM_FORMAT_NV20) {
++        if (dst->format != AV_PIX_FMT_P210 && dst->format != AV_PIX_FMT_YUV422P10)
++            return AVERROR(EINVAL);
++        return v4l2request_transfer_10bit_packed(hwfc, dst, src, 1);
++    }
++#endif
++
+     map = av_frame_alloc();
+     if (!map)
+         return AVERROR(ENOMEM);
+-- 
+2.55.0
+

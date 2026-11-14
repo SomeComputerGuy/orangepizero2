@@ -1,7 +1,7 @@
 # FFmpeg v4l2-request patches
 
 Base: Ubuntu `ffmpeg 7:8.1.2-2ubuntu2` (= FFmpeg tag n8.1.2). Applied in file-name order, appended to
-debian/patches/series (scripts/build-media-debs.sh). All 54 apply with fuzz 0 on the Ubuntu source.
+debian/patches/series (scripts/build-media-debs.sh). All 55 apply with fuzz 0 on the Ubuntu source.
 
 | range | source |
 |---|---|
@@ -9,7 +9,7 @@ debian/patches/series (scripts/build-media-debs.sh). All 54 apply with fuzz 0 on
 | 0012 | HEVC SPS short/long-term RPS controls (probes the controls, no-op on cedrus) |
 | 0013 | Alexander Kanavin: ffbuild race fix (upstream backport) |
 | 0101-0102 | Kwiboo v4l2-request-n8.1: AFBC_16X16_SPLIT (Jernej Skrabec) and BROADCOM_SAND128 (Jonas Karlman) capture formats |
-| 0201-0208 | Jernej Skrabec, github.com/jernejsk/FFmpeg v4l2request-mpeg4 a56a208b07: VC-1 fixes + VC-1/WMV3 hwaccel, MPEG-4 Part 2/H.263/Sorenson Spark hwaccels (patch-id identical to his commits) |
+| 0201-0208 | Jernej Skrabec, github.com/jernejsk/FFmpeg v4l2request-mpeg4 a56a208b07: VC-1 fixes + VC-1/WMV3 hwaccel, MPEG-4 Part 2/H.263/Sorenson Spark hwaccels (patch-id identical to his commits; 0205 except its VC-1 profile/level fallback control IDs, 660-661) |
 | 0301-0308 | MPEG-4 field-direct fix, interlaced-B software fallback, GMC1 rshift, MPEG-1 hwaccel, AVS1/AVS+ (cavs) hwaccel, native hwaccel-only AVS2 decoder + AVS2 hwaccel |
 | 0309 | D-pictures only reach hwaccels that declare HWACCEL_CAP_MPEG1_D_PICTURES and whose device accepts coding type D in VIDIOC_TRY_EXT_CTRLS (fixes 0304; Hantro: D-pictures rejected like in software) |
 | 0310 | FATE vc1test_smm0005 reference for Jernej's 0201/0202 B-picture fixes |
@@ -32,10 +32,11 @@ debian/patches/series (scripts/build-media-debs.sh). All 54 apply with fuzz 0 on
 | 0330 | H.265 High tier streams: coded-data buffers sized by the Main tier CPB like 0327 (High tier at level 6 kept the 31.8 MB default and ran out of memory at 6K) |
 | 0331 | MPEG-4 Part 2 / H.263 software decoder: a video packet start no longer overwrites the left macroblock's stored block-3 vector, which B-VOP direct mode reads |
 | 0332 | MPEG-4 Part 2 software decoder: 8x8 and 4MV chroma references are clipped to the padded edge (1088 for 1080p), not the picture height |
+| 0339 | NV15/NV20 CAPTURE frames (Rockchip rkvdec 10-bit) download to P010/P210 or yuv420p10/yuv422p10; no-op on cedrus. Shared with the Orange Pi 5 build |
 | debian/0001 | packaging: --enable-v4l2-request --enable-libudev |
 
 uAPIs expected by the add-on hwaccels (local copies in libavcodec/v4l2-stateless-*.h, used only when the kernel
-headers lack them): VC-1 600-604 + profile/level 658-659, MPEG-4 700-704, H.263 800-801, AVS2 900-903, AVS 1000-1002,
+headers lack them): VC-1 600-604 + profile/level 660-661, MPEG-4 700-704, H.263 800-801, AVS2 900-903, AVS 1000-1002,
 MPEG-1 flags in the MPEG-2 controls. For MPEG-1, 0304 probes `V4L2_PIX_FMT_MPEG1_SLICE` ('MG1S', 0x5331474d), so
 kernels whose decoders only offer `V4L2_PIX_FMT_MPEG2_SLICE` fall back to software.
 

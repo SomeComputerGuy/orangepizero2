@@ -240,13 +240,14 @@ Kernel and system
   signal or a second device.
 - Out-of-memory handling on 1 GB: a process that runs out of memory can stall the board until the hardware watchdog
   resets it. Fix not started.
-- About 5-8 % of boots of the server image (the desktop image has the same Plymouth) hang shortly after Linux
-  starts until the hardware watchdog resets the board (first seen 2026-11-05, when the server image brought in the Plymouth boot splash; the minimal
-  image has no Plymouth). Cause found with a repeated-boot test (4 hangs in 72 boots): systemd queries the screen
-  console for its size, and when it takes the console's answer just before Plymouth reads it, Plymouth waits
-  forever; console output then backs up and systemd blocks. No upstream fix found so far.
-  Being fixed on both sides (Plymouth no longer waits in that read; systemd skips the size query on a screen
-  console), then proven with 100 boots. Patches that touch the boot path are held back from upstream until then.
+- About 5-8 % of boots of the server image (the desktop image has the same Plymouth) hang shortly after Linux starts
+  until the hardware watchdog resets the board (first seen 2026-11-05, when the server image brought in the Plymouth
+  boot splash; the minimal image has no Plymouth). Cause found with a repeated-boot test (4 hangs in 72 boots): systemd
+  queries the screen console for its size, and when it takes the console's answer just before Plymouth reads it,
+  Plymouth waits forever; console output then backs up and systemd blocks. A fix is already proposed upstream (Plymouth
+  merge request !523: Plymouth reads the terminal without blocking); the image will carry it once 100 boots pass on the
+  board. Separately, systemd will skip the needless size query on a screen console. Patches that touch the boot path
+  are held back from upstream until then.
 - A deeper idle state that powers off the whole CPU cluster: planned after the TF-A review.
 
 Upstream

@@ -173,10 +173,11 @@ GPU
   exposes OpenGL ES 3.1.
 - OpenCL 2.0 features (shared virtual memory, generic address space, pipes, device-side enqueue): implemented in a
   fork branch and passed on the board; not in the build yet. The kernel part is already in the build.
-- Vulkan 1.3: the full conformance run on the board is in progress.
+- Vulkan 1.3: the full conformance run on the board is at its last of 64 parts.
 
 Video
-- H.264 encoder: intra refresh works on the board. Regions of interest (4, the hardware's limit): retest queued.
+- H.264 encoder: intra refresh works on the board. Regions of interest (4, the hardware's limit): the feature
+  retest fails 2 checks; being analysed.
   8x8 transform: a register sweep on the board (269 runs) found no setting that produces it; the engine reports
   version 0x12011, the revision the vendor's software never enables 8x8 on. The sweep also exposed a driver bug (a padded
   line stride overran a buffer), fixed on a test kernel; a wider probe is next.
@@ -189,32 +190,34 @@ Video
 - The hardware JPEG encoder and 1080p JPEG decoding through GStreamer needed kernel fixes; both now run on a test
   kernel, with two output mismatches left.
 - G2D (2D graphics accelerator): the vendor's own drivers program it as we do, and the chip reports no mixer. A
-  driver for the rotation unit is written; its first board run was stopped by a test-only register sweep that hung
-  the chip, and a safer rerun is queued.
+  driver for the rotation unit is written; the rerun on the board still fails 4 checks.
 - Protected video playback in browsers (Widevine): not started.
 
 Display
 - 10-bit, YUV 4:4:4/4:2:2/4:2:0 and HDR10/HLG HDMI output: the code is in the build and passes register and
   capture checks on the board (rechecked 2026-11-13); it has not been tested with a real display.
-- HDMI 3D (frame packing, top-and-bottom, side-by-side half): all modes and register values pass on the board; the
-  frame capture used to check the picture fails, also in 2D, so the capture path is being fixed first.
-- HDR to SDR conversion in the display engine (3D lookup table with colour matrices): first board run fails (the
-  lookup table does not match the model); being fixed.
+- HDMI 3D (frame packing, top-and-bottom, side-by-side half): passes on the board on a test kernel (modes,
+  registers and captured frames); it has not been tested with a 3D TV.
+- HDR to SDR conversion in the display engine (3D lookup table with colour matrices): the first board run found
+  kernel bugs (negative colour matrix values were rejected, wrong offset format, wrong interpolation reported);
+  fixed, retest pending.
 - Input format check of the display engine's video and UI layers: the first run after two scaler fixes still shows
   colour differences (small for 16-bit RGB formats, larger for YUV); being fixed.
-- All 4 overlay layers per channel as planes: written, board test queued.
+- All 4 overlay layers per channel as planes: the first board run fails one of four checks (11
+  cases); being analysed.
 - Interlaced frame packing and side-by-side full output need changes to the shared DRM core: planned. 4K frame
   packing does not fit the display controller's 12-bit line counter.
 
 Networking
 - Jumbo frames up to the datasheet's 16 KB (MTU 16358): on a test kernel an idle link works both ways (TCP 982
   Mbit/s, no retransmits) and receive checksum offload is correct at every MTU tested. The earlier receive stall was the PC's
-  USB adapter (its driver cannot send above MTU 16354). Still failing: traffic while memory and the video engine are
-  busy, and 16384-byte QinQ frames. Until fixed the limit stays MTU 4070.
+  USB adapter (its driver cannot send above MTU 16354). Traffic while memory and the video engine are busy failed:
+  the memory controller gave Ethernet no priority, and 16 KB frames overflowed the receive buffer. Fixes written
+  (U-Boot and kernel), board proof pending. Until then the limit stays MTU 4070.
 - Hardware checksums for frames larger than 1500 bytes: some sizes come out corrupted, so above MTU 1500 the kernel
   computes checksums in software. Not investigated yet.
 - An Ethernet receive fix (a frame spread over several buffers was split when memory allocation failed): passed on
-  the board and sent upstream; not yet in the image.
+  the board, sent upstream, and in the build for the next image.
 - Bluetooth LE connections: waiting for a test device. Wake-up from suspend by WiFi, Bluetooth or USB: not started.
 - A mainline WiFi/Bluetooth driver for the UWE5622: long term.
 
@@ -222,16 +225,20 @@ Kernel and system
 - Moved to the current Armbian main branch and Linux 7.3.4 on 2026-11-13; the build follows Armbian's newest `edge`
   kernel again.
 - Crypto engine RSA (512-4096 bit), ECDH and ECDSA verification: passed on the board on a test kernel. ECDSA
-  signing, ECDH P-521 and Diffie-Hellman: written, board test queued. A kernel crypto fix so that `keyctl` signing
-  picks an implementation that can sign: written, board test queued.
+  signing, ECDH P-521 and Diffie-Hellman: the board test fails (P-521, P-192 key generation and Diffie-Hellman
+  checks); being analysed. A kernel crypto fix so that `keyctl` signing picks an implementation that can sign:
+  the board test fails 5 checks; being analysed.
 - U-Boot keeps its environment in the SPI flash also when booting from the SD card, so `saveenv` works there:
-  passed on the board; not in the image yet.
-- Secure boot, OP-TEE and a firmware TPM without burning eFuses, shared with the Orange Pi 5 work: planned.
+  passed on the board. In the build for the next image, with `fw_printenv`/`fw_setenv` for Linux (not yet tested).
+- Secure boot, OP-TEE and a firmware TPM without burning eFuses, shared with the Orange Pi 5 work: started (port
+  plan and host builds).
 - SPI 3-wire mode and frame sizes other than 8 bits.
 - PWM capture, I2C DMA transfers, SPI and I2C target (slave) modes: in the build, not yet tested with a real
   signal or a second device.
 - Out-of-memory handling on 1 GB: a process that runs out of memory can stall the board until the hardware watchdog
   resets it. Fix not started.
+- About 5-8 % of boots hang shortly after Linux starts until the hardware watchdog resets the board (seen in the
+  serial logs since 2026-11-04); the cause is not known yet.
 - A deeper idle state that powers off the whole CPU cluster: planned after the TF-A review.
 
 Upstream

@@ -160,8 +160,8 @@ seed change is not sent to U-Boot yet.
 - The 56-bit high-speed timer and the two A/V sync counters.
 - UART FIFO configuration for the H616 (James Hilliard's series, tested here).
 
-Upstream status: AES-XTS sent (v2), SPI dual read sent. The rest is not sent yet. The UART series is posted by
-its author.
+Upstream status: AES-XTS sent (v2), SPI dual read sent (the patch as sent passed on the board). The rest is not
+sent yet. The UART series is posted by its author.
 
 ## Work in progress and pending
 
@@ -176,10 +176,10 @@ GPU
 - Vulkan 1.3: the full conformance run on the board is in progress.
 
 Video
-- H.264 encoder: intra refresh works on the board. Regions of interest (4, the hardware's limit): a test-tool bug
-  stopped the first board run; retest pending. 8x8 transform: setting the documented register bit does not change
-  the coded data, and the vendor's software never enables 8x8 on this engine revision; a register sweep on the
-  board is next, since the H616 manual lists 8x8.
+- H.264 encoder: intra refresh works on the board. Regions of interest (4, the hardware's limit): retest queued.
+  8x8 transform: a register sweep on the board (269 runs) found no setting that produces it; the engine reports
+  version 0x12011, the revision the vendor's software never enables 8x8 on. The sweep also hit kernel warnings and
+  video engine memory faults, which are being analysed before the next probe.
 - AVS2 background and S pictures: bit-exact on the board with new test streams (the official reference encoder is
   not public; streams made with an extended open encoder).
 - GStreamer elements for MPEG-4, H.263, Sorenson Spark, AVS and AVS2: in the build; MPEG-4, H.263 and Spark are
@@ -195,11 +195,16 @@ Video
 
 Display
 - 10-bit, YUV 4:4:4/4:2:2/4:2:0 and HDR10/HLG HDMI output: the code is in the build and passes register and
-  capture checks on the board; it has not been tested with a real display.
-- HDR to SDR conversion in the display engine (3D lookup table with colour matrices), all 4 overlay layers per
-  channel as planes, HDMI 3D (frame packing, top-and-bottom, side-by-side half) and two scaler fixes for YUV planes:
-  written, board tests pending. Interlaced frame packing and side-by-side full output need changes to the shared
-  DRM core: planned. 4K frame packing does not fit the display controller's 12-bit line counter.
+  capture checks on the board (rechecked 2026-11-13); it has not been tested with a real display.
+- HDMI 3D (frame packing, top-and-bottom, side-by-side half): all modes and register values pass on the board; the
+  frame capture used to check the picture fails, also in 2D, so the capture path is being fixed first.
+- HDR to SDR conversion in the display engine (3D lookup table with colour matrices): first board run fails (the
+  lookup table does not match the model); being fixed.
+- Input format check of the display engine's video and UI layers: the first run after two scaler fixes still shows
+  colour differences (small for 16-bit RGB formats, larger for YUV); being fixed.
+- All 4 overlay layers per channel as planes: written, board test queued.
+- Interlaced frame packing and side-by-side full output need changes to the shared DRM core: planned. 4K frame
+  packing does not fit the display controller's 12-bit line counter.
 
 Networking
 - Jumbo frames up to the datasheet's 16 KB (MTU 16358): on a test kernel an idle link works both ways (TCP 982
@@ -217,8 +222,10 @@ Kernel and system
 - Moved to the current Armbian main branch and Linux 7.3.4 on 2026-11-13; the build follows Armbian's newest `edge`
   kernel again.
 - Crypto engine RSA (512-4096 bit), ECDH and ECDSA verification: passed on the board on a test kernel. ECDSA
-  signing, ECDH P-521 and Diffie-Hellman: written, board test pending. A kernel crypto fix so that `keyctl` signing
-  picks an implementation that can sign: in progress.
+  signing, ECDH P-521 and Diffie-Hellman: written, board test queued. A kernel crypto fix so that `keyctl` signing
+  picks an implementation that can sign: written, board test queued.
+- U-Boot keeps its environment in the SPI flash also when booting from the SD card, so `saveenv` works there:
+  passed on the board; not in the image yet.
 - Secure boot, OP-TEE and a firmware TPM without burning eFuses, shared with the Orange Pi 5 work: planned.
 - SPI 3-wire mode and frame sizes other than 8 bits.
 - PWM capture, I2C DMA transfers, SPI and I2C target (slave) modes: in the build, not yet tested with a real
@@ -235,8 +242,9 @@ Upstream
 
 All testing is done on one board, driven over serial, Ethernet and a switched power plug.
 
-- The first Linux 7.3.4 image (desktop) was built on 2026-11-13; all three variants are being built now, then the
-  image check runs.
+- All three Linux 7.3.4 images were built on 2026-11-13. The image check now covers all three variants in one run
+  (the desktop gets its own checks: login, XFCE session, GPU, Vulkan and OpenCL, media players); it runs after the
+  Vulkan conformance run.
 - The 2026-11-12 images: the minimal image passed the full image check (kernel, boot, device checks, GLES, Vulkan,
   OpenCL, hardware decoding, JPEG; display tests not run without a monitor); the server image was flashed and
   booted.

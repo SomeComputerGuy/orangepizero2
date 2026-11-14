@@ -150,7 +150,8 @@ the vendor driver repository (armbian/uwe5622#31).
 - Kernel address space randomisation (KASLR) seeded from the hardware random number generator in U-Boot.
 
 Upstream status: the RSB and memory training changes are sent to the U-Boot list and wait for review. The random
-seed change is not sent to U-Boot yet.
+seed change is proposed to Armbian (PR #11320); it is not planned for mainline U-Boot, because it depends on an
+unmerged crypto engine clock patch and U-Boot does not take AI-written code.
 
 ### Crypto engine and other SoC blocks
 

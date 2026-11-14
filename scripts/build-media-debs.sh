@@ -17,6 +17,9 @@
 #                       (every variant)
 #   mesa                our Mesa fork for the Mali-G31 (panfrost/panvk/rusticl fixes, patches/mesa/README.md;
 #                       every variant)
+#   plymouth            upstream 0001: no spin on an incomplete CSI input sequence; 0002 (upstream MR !523):
+#                       plymouthd never blocks reading the terminal (boot hang when PID 1 reads or flushes the
+#                       console VT's input; server and desktop variants)
 # A build stamp makes sure an unchanged source is not rebuilt.
 # Rootless: mmdebstrap --mode=unshare + qemu-user binfmt, no sudo.
 # Usage: build-media-debs.sh [--force] [source...]     (default: every source below, in the SOURCES order)
@@ -116,8 +119,9 @@ declare -A VERSION=(
   [gst-plugins-bad1.0]=1.28.6-1ubuntu1
   [gst-plugins-good1.0]=1.28.7-1ubuntu0.1
   [mesa]=26.3.0-0ubuntu1
+  [plymouth]=24.004.60+git20250831.4a3c171d-0ubuntu10
 )
-declare -A REV=([ffmpeg]=15 [mpv]=1 [gst-plugins-bad1.0]=5 [gst-plugins-good1.0]=7 [mesa]=2)
+declare -A REV=([ffmpeg]=15 [mpv]=1 [gst-plugins-bad1.0]=5 [gst-plugins-good1.0]=7 [mesa]=2 [plymouth]=1)
 # Sources built from a newer upstream release than the archive has: the archive source package whose debian/
 # directory is used (patches/<dir>/debian/*.patch adapt it), and the upstream tarballs unpacked in place of its
 # source ("file sha256 directory url" per tarball; directory relative to the source tree)
@@ -125,7 +129,7 @@ declare -A DEBIAN_FROM=([mesa]=26.2.4-1ubuntu1)
 declare -A UPSTREAM=([mesa]="mesa-26.3.0.tar.xz 91d729aa68bb89e4ec857841300bbe922bcb3e52b1f97566ca83930d3b28343a . https://archive.mesa3d.org/mesa-26.3.0.tar.xz
 venus-protocol-v1.1.3.tar.gz c5a362ca28e0a35042db1baeadaf9183500b216841e49d72714b80bae50b4445 subprojects/venus-protocol-1.1.3 https://gitlab.freedesktop.org/virgl/venus-protocol/-/archive/v1.1.3/venus-protocol-v1.1.3.tar.gz")
 DL=$TOP/build/media-dl         # download cache of the upstream tarballs
-declare -A PDIR=([ffmpeg]=ffmpeg [mpv]=mpv [gst-plugins-bad1.0]=gstreamer [gst-plugins-good1.0]=gst-plugins-good1.0 [mesa]=mesa)
+declare -A PDIR=([ffmpeg]=ffmpeg [mpv]=mpv [gst-plugins-bad1.0]=gstreamer [gst-plugins-good1.0]=gst-plugins-good1.0 [mesa]=mesa [plymouth]=plymouth)
 # Architecture: all sources (built with -A); the rest build their arm64 packages
 declare -A BUILD=()
 # Extra archive pockets a source needs (its VERSION is only there, e.g. a security update); they are added to that
@@ -137,7 +141,7 @@ if [ "${1:-}" = --force ]; then FORCE=1; shift; fi
 if [ $# -gt 0 ]; then
   SOURCES=("$@")
 else
-  SOURCES=(ffmpeg mpv gst-plugins-bad1.0 gst-plugins-good1.0 mesa)
+  SOURCES=(ffmpeg mpv gst-plugins-bad1.0 gst-plugins-good1.0 mesa plymouth)
 fi
 
 # apt cache: apt-cacher-ng on 127.0.0.1:3142 is used if it is listening

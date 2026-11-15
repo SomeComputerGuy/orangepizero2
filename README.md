@@ -148,6 +148,9 @@ the vendor driver repository (armbian/uwe5622#31).
 
 - U-Boot talks to the power controller over RSB in the SPL, and retries transient memory training failures.
 - Kernel address space randomisation (KASLR) seeded from the hardware random number generator in U-Boot.
+- Reboots that hang in the kernel are reset by the watchdog: TF-A now restarts the watchdog counter when it resets
+  the board (a reboot could otherwise end in a TF-A panic) and stops the watchdog on power-off; the kernel ignores
+  userspace watchdog pings once the system is going down; the image keeps the watchdog armed through reboots.
 
 Upstream status: the RSB and memory training changes are sent to the U-Boot list and wait for review. The random
 seed change is proposed to Armbian (PR #11320); it is not planned for mainline U-Boot, because it depends on an
@@ -197,7 +200,7 @@ Video
 
 Display
 - 10-bit, YUV 4:4:4/4:2:2/4:2:0 and HDR10/HLG HDMI output: the code is in the build and passes register and
-  capture checks on the board (rechecked 2026-11-13); it has not been tested with a real display.
+  capture checks on the board (rechecked 2026-11-13); testing on a real TV is in progress (see Testing).
 - HDMI 3D (frame packing, top-and-bottom, side-by-side half): passes on the board on a test kernel (modes,
   registers and captured frames); it has not been tested with a 3D TV.
 - HDR to SDR conversion in the display engine (3D lookup table with colour matrices): the first board run found
@@ -218,8 +221,9 @@ Networking
   (U-Boot and kernel), board proof pending. Until then the limit stays MTU 4070.
 - Hardware checksums for frames larger than 1500 bytes: some sizes come out corrupted, so above MTU 1500 the kernel
   computes checksums in software. Not investigated yet.
-- An Ethernet receive fix (a frame spread over several buffers was split when memory allocation failed): passed on
-  the board, sent upstream, and in the build for the next image.
+- An Ethernet receive fix (a frame spread over several buffers was split when memory allocation failed): the build
+  now carries the upstream fix (backport of 834ec9530832) instead of our own; one boot plus traffic passed on the
+  board (930/940 Mbit/s at MTU 1500, no retransmits). In the build for the next image.
 - Bluetooth LE connections: waiting for a test device. Wake-up from suspend by WiFi, Bluetooth or USB: not started.
 - A mainline WiFi/Bluetooth driver for the UWE5622: long term.
 
@@ -276,8 +280,12 @@ All testing is done on one board, driven over serial, Ethernet and a switched po
 - Mesa 26.3.0 was compared on the board against the previous 26.2.4 build: no regressions in the GLES, Vulkan and
   OpenCL conformance subsets.
 - Video decoders are checked bit-exact against reference decoders where the standard defines exact output.
+- HDMI on a real TV (in progress, judged by a camera filming the screen): the mode, colour format and HDR matrix
+  has 335 cases passed and 34 failed so far (the failures are not analysed yet; one
+  known cause is an IOMMU fault at 4096x2160@60).
+  8-channel HDMI audio and compressed audio passthrough are written and waiting for their board run.
 
-Not tested yet, mostly for lack of hardware on the test bench: HDMI with a real display (output, audio, CEC),
+Not tested yet, mostly for lack of hardware on the test bench: HDMI CEC,
 composite video output, USB devices and USB boot, the 13-pin expansion board (IR receiver, line-out, two USB
 ports), header pin loopbacks (I2C, SPI, UART, PWM), Bluetooth LE connections, the desktop on a display, and
 end-to-end printing.

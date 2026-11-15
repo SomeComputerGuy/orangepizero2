@@ -26,13 +26,28 @@ ExecStart=/usr/lib/systemd/systemd-networkd-wait-online --any
 CONF
 fi
 
-# 2. Hardware watchdog: sun4i wdt maximum is 16 s, so stay below it.
+# 2. Hardware watchdog: the sunxi wdt maximum is 16 s, so stay below it, also for reboots (a longer
+# RebootWatchdogSec is refused with EINVAL and systemd then disarms the watchdog for the whole shutdown).
+# The kernel stops a running watchdog in its reboot notifier, before device_shutdown(), unless
+# watchdog.stop_on_reboot=0: keep it running so a reboot that hangs in the kernel (e.g. on a device lock
+# left held by an earlier oops) still resets within 16 s. Power-off and halt are unaffected: systemd
+# disarms the watchdog for them before it calls the kernel. Needs the image branch's TF-A watchdog fixes
+# (SYSTEM_RESET restarts the counter, SYSTEM_OFF stops it) and the kernel's keepalive fix, or forced reboots hang.
 mkdir -p /etc/systemd/system.conf.d
 cat > /etc/systemd/system.conf.d/watchdog.conf <<'CONF'
 [Manager]
 RuntimeWatchdogSec=15
-RebootWatchdogSec=2min
+RebootWatchdogSec=15
 CONF
+if [ -f /boot/armbianEnv.txt ] && ! grep -q 'watchdog.stop_on_reboot=' /boot/armbianEnv.txt; then
+	if grep -q '^extraargs=' /boot/armbianEnv.txt; then
+		sed -i 's/^extraargs=\(.*\)$/extraargs=\1 watchdog.stop_on_reboot=0/' /boot/armbianEnv.txt
+	else
+		echo 'extraargs=watchdog.stop_on_reboot=0' >> /boot/armbianEnv.txt
+	fi
+elif [ ! -f /boot/armbianEnv.txt ]; then
+	echo "customize-image: no /boot/armbianEnv.txt, watchdog.stop_on_reboot=0 not set" >&2
+fi
 
 # DHCP: one identity (01:<MAC>) for U-Boot (netboot/PXE), kernel ip=dhcp and the OS. With the
 # default DUID client ID, a server that keys leases by client ID (systemd-networkd's) refuses the

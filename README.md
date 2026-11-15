@@ -271,7 +271,8 @@ All testing is done on one board, driven over serial, Ethernet and a switched po
 - Verified on the board over the course of the project: boot from SD card and from the SPI flash, network boot,
   CPU frequency scaling, thermal, CPU idle, suspend, Gigabit Ethernet (also 100 and 10 Mbit/s), WiFi client and
   access point on both bands, Bluetooth classic pairing and data transfer, the crypto engine and the random number
-  generator, the watchdog.
+  generator, the watchdog. Reboots: 60 of 60 normal, forced and `reboot -ff` reboots came back, and a kernel
+  oops during shutdown is reset by the watchdog in all three cases.
 - Mesa 26.3.0 was compared on the board against the previous 26.2.4 build: no regressions in the GLES, Vulkan and
   OpenCL conformance subsets.
 - Video decoders are checked bit-exact against reference decoders where the standard defines exact output.

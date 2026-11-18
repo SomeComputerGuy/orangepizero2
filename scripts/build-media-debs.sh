@@ -124,7 +124,7 @@ declare -A VERSION=(
   [plymouth]=24.004.60+git20250831.4a3c171d-0ubuntu10
   [systemd]=261.3-0ubuntu3
 )
-declare -A REV=([ffmpeg]=15 [mpv]=1 [gst-plugins-bad1.0]=5 [gst-plugins-good1.0]=7 [mesa]=2 [plymouth]=1 [systemd]=1)
+declare -A REV=([ffmpeg]=15 [mpv]=1 [gst-plugins-bad1.0]=6 [gst-plugins-good1.0]=7 [mesa]=2 [plymouth]=1 [systemd]=1)
 # Sources built from a newer upstream release than the archive has: the archive source package whose debian/
 # directory is used (patches/<dir>/debian/*.patch adapt it), and the upstream tarballs unpacked in place of its
 # source ("file sha256 directory url" per tarball; directory relative to the source tree)

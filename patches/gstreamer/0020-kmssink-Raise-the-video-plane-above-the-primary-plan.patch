@@ -1,0 +1,182 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arun Iyengar <aiyengar1990@gmail.com>
+Date: Sun, 15 Nov 2026 17:41:17 +0000
+Subject: [PATCH] kmssink: Raise the video plane above the primary plane
+
+On sun4i-drm the primary plane is a UI layer stacked above the VI
+overlay planes that scan out YUV. Video on an overlay plane is then
+hidden by the console, or by the black buffer the sink puts on the
+primary plane when it sets the mode or takes over the CRTC: the screen
+stays black while frames are shown.
+
+When the primary plane of the CRTC is stacked at or above the selected
+overlay plane and the plane's zpos is mutable, raise the plane just
+above the primary, and restore its zpos when the sink stops or moves to
+another plane. A zpos set with plane-properties still wins.
+
+Assisted-by: LLM
+Signed-off-by: Arun Iyengar <aiyengar1990@gmail.com>
+---
+ sys/kms/gstkmssink.c | 110 +++++++++++++++++++++++++++++++++++++++++++
+ sys/kms/gstkmssink.h |   3 ++
+ 2 files changed, 113 insertions(+)
+
+diff --git a/sys/kms/gstkmssink.c b/sys/kms/gstkmssink.c
+index ca19dc8..a087cca 100644
+--- a/sys/kms/gstkmssink.c
++++ b/sys/kms/gstkmssink.c
+@@ -1517,6 +1517,110 @@ gst_kms_sink_update_plane_properties (GstKMSSink * self)
+   gst_kms_sink_update_properties (&iter, self->plane_props);
+ }
+ 
++static gboolean
++get_plane_zpos (gint fd, guint32 plane_id, guint32 * prop_id, guint64 * value,
++    gboolean * is_mutable, guint64 * max)
++{
++  drmModeObjectProperties *props;
++  gboolean found = FALSE;
++  guint i;
++
++  props = drmModeObjectGetProperties (fd, plane_id, DRM_MODE_OBJECT_PLANE);
++  if (!props)
++    return FALSE;
++
++  for (i = 0; i < props->count_props && !found; i++) {
++    drmModePropertyRes *prop = drmModeGetProperty (fd, props->props[i]);
++
++    if (prop && !g_strcmp0 (prop->name, "zpos")) {
++      found = TRUE;
++      *prop_id = prop->prop_id;
++      *value = props->prop_values[i];
++      *is_mutable = !(prop->flags & DRM_MODE_PROP_IMMUTABLE) &&
++          drm_property_type_is (prop, DRM_MODE_PROP_RANGE) &&
++          prop->count_values == 2;
++      *max = *is_mutable ? prop->values[1] : *value;
++    }
++    drmModeFreeProperty (prop);
++  }
++
++  drmModeFreeObjectProperties (props);
++
++  return found;
++}
++
++static void
++gst_kms_sink_restore_plane_zpos (GstKMSSink * self)
++{
++  guint32 prop_id;
++  guint64 value, max;
++  gboolean is_mutable;
++
++  if (self->raised_plane_id < 0)
++    return;
++
++  if (self->fd >= 0 && get_plane_zpos (self->fd, self->raised_plane_id,
++          &prop_id, &value, &is_mutable, &max))
++    drmModeObjectSetProperty (self->fd, self->raised_plane_id,
++        DRM_MODE_OBJECT_PLANE, prop_id, self->raised_plane_zpos);
++
++  self->raised_plane_id = -1;
++}
++
++/* Some drivers stack the primary plane above overlay planes (sun4i-drm: the
++ * primary is a UI layer above the VI layers that scan out YUV), which hides
++ * the video under the console or the sink's black buffer */
++static void
++gst_kms_sink_raise_plane (GstKMSSink * self)
++{
++  drmModePlaneRes *pres;
++  guint32 prop_id, primary_prop_id;
++  guint64 zpos, max, primary_zpos = 0, primary_max, new_zpos;
++  gboolean is_mutable, primary_mutable, have_primary = FALSE;
++  guint i;
++
++  if (self->plane_is_primary)
++    return;
++
++  if (!get_plane_zpos (self->fd, self->plane_id, &prop_id, &zpos, &is_mutable,
++          &max) || !is_mutable)
++    return;
++
++  pres = drmModeGetPlaneResources (self->fd);
++  if (!pres)
++    return;
++
++  for (i = 0; i < pres->count_planes && !have_primary; i++) {
++    drmModePlane *plane = drmModeGetPlane (self->fd, pres->planes[i]);
++
++    if (plane && (plane->possible_crtcs & (1 << self->pipe)) &&
++        get_plane_type (self->fd, plane->plane_id) == DRM_PLANE_TYPE_PRIMARY)
++      have_primary = get_plane_zpos (self->fd, plane->plane_id,
++          &primary_prop_id, &primary_zpos, &primary_mutable, &primary_max);
++    drmModeFreePlane (plane);
++  }
++  drmModeFreePlaneResources (pres);
++
++  if (!have_primary || primary_zpos < zpos)
++    return;
++
++  new_zpos = MIN (primary_zpos + 1, max);
++  if (new_zpos <= zpos ||
++      drmModeObjectSetProperty (self->fd, self->plane_id,
++          DRM_MODE_OBJECT_PLANE, prop_id, new_zpos)) {
++    GST_WARNING_OBJECT (self, "plane %d (zpos %" G_GUINT64_FORMAT
++        ") is below the primary plane (zpos %" G_GUINT64_FORMAT
++        ") and can't be raised", self->plane_id, zpos, primary_zpos);
++    return;
++  }
++
++  GST_INFO_OBJECT (self, "plane %d: zpos %" G_GUINT64_FORMAT " -> %"
++      G_GUINT64_FORMAT " (above the primary plane)", self->plane_id, zpos,
++      new_zpos);
++  self->raised_plane_id = self->plane_id;
++  self->raised_plane_zpos = zpos;
++}
++
+ /* Set up everything that depends on the plane frames are shown on */
+ static void
+ gst_kms_sink_setup_plane (GstKMSSink * self)
+@@ -1542,6 +1646,9 @@ gst_kms_sink_setup_plane (GstKMSSink * self)
+       "drmModeSetPlane waits for vblank (%s)", self->plane_id,
+       self->is_atomic ? "✓" : "✗", self->use_atomic ? "✓" : "✗",
+       self->setplane_is_sync ? "✓" : "✗");
++
++  gst_kms_sink_restore_plane_zpos (self);
++  gst_kms_sink_raise_plane (self);
+ }
+ 
+ /* With an automatically selected plane, switch to the first candidate plane
+@@ -1855,6 +1962,8 @@ gst_kms_sink_stop (GstBaseSink * bsink)
+ 
+   g_clear_pointer (&self->tmp_kmsmem, gst_memory_unref);
+ 
++  gst_kms_sink_restore_plane_zpos (self);
++
+   if (self->fd >= 0) {
+     if (self->is_internal_fd)
+       drmClose (self->fd);
+@@ -3051,6 +3160,7 @@ gst_kms_sink_init (GstKMSSink * sink)
+   sink->is_internal_fd = TRUE;
+   sink->conn_id = -1;
+   sink->plane_id = -1;
++  sink->raised_plane_id = -1;
+   sink->can_scale = TRUE;
+   gst_poll_fd_init (&sink->pollfd);
+   sink->poll = gst_poll_new (TRUE);
+diff --git a/sys/kms/gstkmssink.h b/sys/kms/gstkmssink.h
+index 8ad3be7..9445828 100644
+--- a/sys/kms/gstkmssink.h
++++ b/sys/kms/gstkmssink.h
+@@ -78,6 +78,9 @@ struct _GstKMSSink {
+ 
+   gboolean modesetting_enabled;
+   gboolean plane_is_primary;
++  /* zpos of the video plane before the sink raised it above the primary */
++  gint raised_plane_id;
++  guint64 raised_plane_zpos;
+   /* planes the automatic plane selection can pick from */
+   GArray *plane_candidates;
+   gboolean restore_crtc;
+-- 
+2.55.0
+

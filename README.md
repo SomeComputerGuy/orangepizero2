@@ -284,26 +284,34 @@ All testing is done on one board, driven over serial, Ethernet and a switched po
   has 335 cases passed and 34 failed so far (the failures are not analysed yet; one
   known cause is an IOMMU fault at 4096x2160@60).
   8-channel HDMI audio and compressed audio passthrough are written and waiting for their board run.
+- Video playback through GStreamer on the TV: with two kmssink fixes the picture is right in all 7 cases;
+  1080p H.264 and VP9 play at full rate, 4K HEVC is far too slow (being fixed) and 1080p60 MJPEG drops a few frames.
+- HDMI CEC: the test bench switches the TV on and to the board's input with it.
 
-Not tested yet, mostly for lack of hardware on the test bench: HDMI CEC,
+Not tested yet, mostly for lack of hardware on the test bench:
 composite video output, USB devices and USB boot, the 13-pin expansion board (IR receiver, line-out, two USB
 ports), header pin loopbacks (I2C, SPI, UART, PWM), Bluetooth LE connections, the desktop on a display, and
 end-to-end printing.
 
 ## Upstream status
 
-As of 2026-11-13. Nothing is merged in mainline Linux, U-Boot, TF-A or FFmpeg yet.
+As of 2026-11-18.
 
-- Linux kernel, sent and waiting: Zero2 device tree fixes and GPU frequency scaling (v3), Ethernet jumbo frames
-  (v2), an Ethernet driver error-path fix, an stmmac receive fix, panfrost long-running jobs (v3), crypto AES-XTS (v2), SPI dual read, I2C
-  EEPROM-target autoload, cedrus VP8 fix, H616 clock fixes (acked). On hold at a maintainer's request until the H616
-  display driver is merged: an IOMMU fault-report fix.
+- Linux kernel, applied: the H616 EMAC 25 MHz and S/PDIF clock fixes (sunxi clk-for-7.5).
+- Linux kernel, sent and waiting: Zero2 device tree fixes and GPU frequency scaling (v3), Zero2 SPI NOR dual
+  read, SPI dual read (v2), Ethernet jumbo frames (v2), an Ethernet driver error-path fix, an stmmac receive fix
+  (reviewed), panfrost long-running jobs (v3), crypto AES-XTS (v2), a P-521 elliptic curve fix, an H616 PLL gate
+  fix, I2C EEPROM-target autoload, cedrus VP8 fix. On hold at a maintainer's request until the H616 display
+  driver is merged: an IOMMU fault-report fix.
 - TF-A: H616 CPU idle and suspend, Gerrit changes 56325 and 56326, in review.
-- U-Boot: power controller access over RSB in the SPL, memory training retry, USB hub scan; waiting for review.
+- U-Boot: power controller access over RSB in the SPL, memory training retry, MBUS priority for the MAHB port;
+  waiting for review.
 - FFmpeg: MPEG-4 software decoder and encoder fixes in pull requests 25898, 25903 and 25978; hardware decoding
   fixes posted on pull request 20847.
-- Armbian: pull requests #11308, #11309, #11311 and #11315 are merged; #11310, #11312, #11313, #11314, #11316,
-  #11317, #11320, #11321 and #11352 are open.
+- Armbian: pull requests #11308, #11309, #11311, #11315, #11316, #11320, #11369, #11376 and #11377 are merged,
+  and the WiFi/Bluetooth fixes of #11318 and #11319 went in through armbian/uwe5622#31; #11310, #11312, #11313,
+  #11314, #11317, #11321, #11345, #11352, #11378, #11390 and #11422 are open.
+- Driver repositories: xradio#33 and rtl8189ES_linux#11 are open.
 - Mesa and GStreamer: nothing sent.
 
 ## Repository contents

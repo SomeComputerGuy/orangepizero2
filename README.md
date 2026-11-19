@@ -280,13 +280,16 @@ All testing is done on one board, driven over serial, Ethernet and a switched po
 - Mesa 26.3.0 was compared on the board against the previous 26.2.4 build: no regressions in the GLES, Vulkan and
   OpenCL conformance subsets.
 - Video decoders are checked bit-exact against reference decoders where the standard defines exact output.
-- HDMI on a real TV (in progress, judged by a camera filming the screen): the mode, colour format and HDR matrix
-  has 335 cases passed and 34 failed so far (the failures are not analysed yet; one
-  known cause is an IOMMU fault at 4096x2160@60).
-  8-channel HDMI audio and compressed audio passthrough are written and waiting for their board run.
+- HDMI on a real TV (judged by a camera filming the screen): the latest mode, colour format and HDR run passed
+  222 of 243 cases with no display underruns; the screen flashes at 4096 wide are fixed by an MBUS priority
+  change. Open: Game picture mode blanking on this TV (fix being tested) and a few odd modes shown stretched.
+  HDMI audio: 161 of 162 cases pass (LPCM up to 8 channels, compressed passthrough); one 8-channel case is
+  being rechecked.
 - Video playback through GStreamer on the TV: with two kmssink fixes the picture is right in all 7 cases;
   1080p H.264 and VP9 play at full rate, 4K HEVC is far too slow (being fixed) and 1080p60 MJPEG drops a few frames.
 - HDMI CEC: the test bench switches the TV on and to the board's input with it.
+- U-Boot environment in the SPI flash on SD boots: 29 of 29 board checks pass, and booting from the SPI flash
+  still works.
 
 Not tested yet, mostly for lack of hardware on the test bench:
 composite video output, USB devices and USB boot, the 13-pin expansion board (IR receiver, line-out, two USB
@@ -295,11 +298,11 @@ end-to-end printing.
 
 ## Upstream status
 
-As of 2026-11-18.
+As of 2026-11-19.
 
 - Linux kernel, applied: the H616 EMAC 25 MHz and S/PDIF clock fixes (sunxi clk-for-7.5).
 - Linux kernel, sent and waiting: Zero2 device tree fixes and GPU frequency scaling (v3), Zero2 SPI NOR dual
-  read, SPI dual read (v2), Ethernet jumbo frames (v2), an Ethernet driver error-path fix, an stmmac receive fix
+  read (v2), SPI dual read (v2), Ethernet jumbo frames (v2), an Ethernet driver error-path fix, an stmmac receive fix
   (reviewed), panfrost long-running jobs (v3), crypto AES-XTS (v2), a P-521 elliptic curve fix, an H616 PLL gate
   fix, I2C EEPROM-target autoload, cedrus VP8 fix. On hold at a maintainer's request until the H616 display
   driver is merged: an IOMMU fault-report fix.
@@ -308,9 +311,10 @@ As of 2026-11-18.
   waiting for review.
 - FFmpeg: MPEG-4 software decoder and encoder fixes in pull requests 25898, 25903 and 25978; hardware decoding
   fixes posted on pull request 20847.
-- Armbian: pull requests #11308, #11309, #11311, #11315, #11316, #11320, #11369, #11376 and #11377 are merged,
-  and the WiFi/Bluetooth fixes of #11318 and #11319 went in through armbian/uwe5622#31; #11310, #11312, #11313,
-  #11314, #11317, #11321, #11345, #11352, #11378, #11390 and #11422 are open.
+- Armbian: pull requests #11308, #11309, #11310, #11311, #11312, #11313, #11315, #11316, #11320, #11345, #11369,
+  #11376, #11377 and #11422 are merged, and the WiFi/Bluetooth fixes of #11318 and #11319 went in through
+  armbian/uwe5622#31; #11314, #11317, #11321, #11352, #11378, #11390 and #11434 (U-Boot environment in the SPI
+  flash) are open.
 - Driver repositories: xradio#33 and rtl8189ES_linux#11 are open.
 - Mesa and GStreamer: nothing sent.
 

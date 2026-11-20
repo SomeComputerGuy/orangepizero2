@@ -127,9 +127,13 @@ Upstream status: not sent; most of it waits for the H616 display support itself 
 
 - CPU idle states and suspend to RAM, implemented natively in TF-A (the H616 has no separate power controller
   firmware). 100 of 100 suspend/resume cycles passed with RTC wake-up.
+- Bringing a CPU core back online while the others use the deep idle state could reset the board (3 of 3 runs,
+  at about the 200th of 5000 hotplug cycles). Fixed in TF-A: 5000 of 5000 cycles clean, plus 50 suspend cycles.
 - Thermal sensor alarm and shutdown interrupts.
 
-Upstream status: the TF-A changes are in review (Gerrit 56325 and 56326). The thermal interrupts are not sent yet.
+Upstream status: the TF-A changes are in review (Gerrit 56325 and 56326, with the hotplug fix). Armbian merged
+the idle and suspend support (#11317) with the earlier code; a follow-up with the fix is prepared. The thermal
+interrupts are not sent yet.
 
 ### Networking
 
@@ -138,7 +142,9 @@ Upstream status: the TF-A changes are in review (Gerrit 56325 and 56326). The th
 - A fix for the Ethernet PHY's 25 MHz clock.
 - WiFi and Bluetooth (UWE5622): no mainline driver exists; the build uses the out-of-tree vendor driver with our
   fixes: 5 GHz access point mode, regulatory domain handling for all countries, and Bluetooth start-up without the
-  closed vendor helper program.
+  closed vendor helper program. A memory error check (KASAN) found an out-of-bounds read on every WiFi command;
+  fixed on a test kernel (7 reports before, none after). A second bug (memory used after free when a WiFi
+  command times out) is not fixed yet.
 
 Upstream status: Ethernet device tree fix sent (v3), jumbo frames sent (net-next, v2; a reworked v3 is queued),
 clock fix sent and acked, waiting to be applied. The WiFi and Bluetooth fixes are in an open pull request against
@@ -149,8 +155,8 @@ the vendor driver repository (armbian/uwe5622#31).
 - U-Boot talks to the power controller over RSB in the SPL, and retries transient memory training failures.
 - Kernel address space randomisation (KASLR) seeded from the hardware random number generator in U-Boot.
 - Reboots that hang in the kernel are reset by the watchdog: TF-A now restarts the watchdog counter when it resets
-  the board (a reboot could otherwise end in a TF-A panic) and stops the watchdog on power-off; the kernel ignores
-  userspace watchdog pings once the system is going down; the image keeps the watchdog armed through reboots.
+  the board (a reboot could otherwise end in a TF-A panic) and stops the watchdog on power-off; the image keeps
+  the watchdog armed through reboots.
 
 Upstream status: the RSB and memory training changes are sent to the U-Boot list and wait for review. The random
 seed change is proposed to Armbian (PR #11320); it is not planned for mainline U-Boot, because it depends on an
@@ -244,7 +250,11 @@ Kernel and system
 - PWM capture, I2C DMA transfers, SPI and I2C target (slave) modes: in the build, not yet tested with a real
   signal or a second device.
 - Out-of-memory handling on 1 GB: a process that runs out of memory can stall the board until the hardware watchdog
-  resets it. Fix not started.
+  resets it. Seen again on 2026-11-20 under heavy combined load (the board reset with nothing logged). Fix not
+  started.
+- Megastress test: every engine of the chip loaded at the same time (several video decodes and the encoder, GPU,
+  display, CPUs, memory, Ethernet, WiFi, USB camera, SD card, SPI flash, audio, crypto), each load checking its
+  own output. Being written; the first combined-load runs ran out of memory, so the loads get a memory budget.
 - About 5-8 % of boots of the server image (the desktop image has the same Plymouth) hang shortly after Linux starts
   until the hardware watchdog resets the board (first seen 2026-11-05, when the server image brought in the Plymouth
   boot splash; the minimal image has no Plymouth). Cause found with a repeated-boot test (4 hangs in 72 boots): systemd
@@ -282,7 +292,8 @@ All testing is done on one board, driven over serial, Ethernet and a switched po
 - Video decoders are checked bit-exact against reference decoders where the standard defines exact output.
 - HDMI on a real TV (judged by a camera filming the screen): the latest mode, colour format and HDR run passed
   222 of 243 cases with no display underruns; the screen flashes at 4096 wide are fixed by an MBUS priority
-  change. Open: Game picture mode blanking on this TV (fix being tested) and a few odd modes shown stretched.
+  change. Game picture mode blanking on this TV is fixed on a test kernel (not in the build yet). Open: a few odd
+  modes shown stretched.
   HDMI audio: 161 of 162 cases pass (LPCM up to 8 channels, compressed passthrough); one 8-channel case is
   being rechecked.
 - Video playback through GStreamer on the TV: with two kmssink fixes the picture is right in all 7 cases;
@@ -290,6 +301,10 @@ All testing is done on one board, driven over serial, Ethernet and a switched po
 - HDMI CEC: the test bench switches the TV on and to the board's input with it.
 - U-Boot environment in the SPI flash on SD boots: 29 of 29 board checks pass, and booting from the SPI flash
   still works.
+- The display engine behind the IOMMU: no IOMMU faults over console use, a 1080p60 mode change, 4K HEVC decoding
+  (frames match the reference) and 4K HEVC playback on the TV.
+- CPU hotplug with the deep idle state: 5000 of 5000 cycles with the fixed TF-A (the old code reset the board in 3
+  of 3 runs), 12 of 12 clean first core start-ups, 50 of 50 suspend cycles.
 
 Not tested yet, mostly for lack of hardware on the test bench:
 composite video output, USB devices and USB boot, the 13-pin expansion board (IR receiver, line-out, two USB
@@ -298,23 +313,24 @@ end-to-end printing.
 
 ## Upstream status
 
-As of 2026-11-19.
+As of 2026-11-20.
 
 - Linux kernel, applied: the H616 EMAC 25 MHz and S/PDIF clock fixes (sunxi clk-for-7.5).
-- Linux kernel, sent and waiting: Zero2 device tree fixes and GPU frequency scaling (v3), Zero2 SPI NOR dual
-  read (v2), SPI dual read (v2), Ethernet jumbo frames (v2), an Ethernet driver error-path fix, an stmmac receive fix
+- Linux kernel, sent and waiting: Zero2 device tree fixes and GPU frequency scaling (v3), SPI dual read (v2), Ethernet jumbo frames (v2), an Ethernet driver error-path fix, an stmmac receive fix
   (reviewed), panfrost long-running jobs (v3), crypto AES-XTS (v2), a P-521 elliptic curve fix, an H616 PLL gate
-  fix, I2C EEPROM-target autoload, cedrus VP8 fix. On hold at a maintainer's request until the H616 display
+  fix, I2C EEPROM-target autoload, cedrus VP8 fix, nine generic cedrus fixes, a vt screen buffer allocation fix,
+  Zero2 SPI NOR dual read (v3). Sent as RFC: MPEG-1 decoding for cedrus with a v4l-utils companion. On hold at a maintainer's request until the H616 display
   driver is merged: an IOMMU fault-report fix.
-- TF-A: H616 CPU idle and suspend, Gerrit changes 56325 and 56326, in review.
+- TF-A: H616 CPU idle and suspend, Gerrit changes 56325 and 56326, in review; watchdog restart on reset,
+  Gerrit 56720, sent.
 - U-Boot: power controller access over RSB in the SPL, memory training retry, MBUS priority for the MAHB port;
   waiting for review.
 - FFmpeg: MPEG-4 software decoder and encoder fixes in pull requests 25898, 25903 and 25978; hardware decoding
   fixes posted on pull request 20847.
 - Armbian: pull requests #11308, #11309, #11310, #11311, #11312, #11313, #11315, #11316, #11320, #11345, #11369,
-  #11376, #11377 and #11422 are merged, and the WiFi/Bluetooth fixes of #11318 and #11319 went in through
-  armbian/uwe5622#31; #11314, #11317, #11321, #11352, #11378, #11390 and #11434 (U-Boot environment in the SPI
-  flash) are open.
+  #11376, #11377, #11422, #11317, #11352 and #11378 are merged, and the WiFi/Bluetooth fixes of #11318 and #11319 went in through
+  armbian/uwe5622#31; #11314, #11321, #11390 (approved) and #11434 (U-Boot environment in the SPI flash) are
+  open.
 - Driver repositories: xradio#33 and rtl8189ES_linux#11 are open.
 - Mesa and GStreamer: nothing sent.
 
